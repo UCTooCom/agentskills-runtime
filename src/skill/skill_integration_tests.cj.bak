@@ -1,0 +1,126 @@
+/*
+ * Copyright (c) UCToo Co., Ltd. 2026. All rights reserved.
+ */
+package magic.skill.tests
+
+import std.unittest.Test
+import std.unittest.Assert
+import std.collection.HashMap
+import stdx.encoding.json.JsonValue
+import magic.skill.api.{SkillExecutionService, SkillExecutionRequest}
+
+/**
+ * Integration tests covering all user stories
+ */
+public class SkillIntegrationTests {
+    @Test
+    public func testUserStory1_IntegrateAgentskillsStandard() {
+        // Create a sample skill
+        let sampleSkill = BaseSkill(
+            name: "test-skill",
+            description: "A test skill that verifies integration with agentskills standard",
+            license: Some("MIT"),
+            compatibility: None,
+            metadata: HashMap<String, String>([("author", "Test"), ("version", "1.0")]),
+            allowedTools: None,
+            instructions: "# Test Skill\n\nThis skill verifies integration.",
+            skillPath: "./test-skill"
+        )
+
+        // Verify the skill conforms to the agentskills standard
+        let validator = StandardSkillValidator()
+        let (isValid, issues) = validator.validateSkill(sampleSkill)
+        
+        Assert.isTrue(isValid, "Skill should conform to agentskills standard")
+        Assert.isTrue(issues.isEmpty(), "No validation issues should exist")
+    }
+
+    @Test
+    public func testUserStory2_AccessAgentskillsStandardDefinitions() {
+        // Test that we can read the agentskills standard specification
+        let specContent = StandardReader.readStandardSpec()
+        
+        Assert.isTrue(specContent.isDefined(), "Should be able to read agentskills standard specification")
+        Assert.isTrue(specContent.getOrThrow().size > 0, "Specification content should not be empty")
+    }
+
+    @Test
+    public func testUserStory3_UtilizeAgentSkillsExamples() {
+        // Create a skill manager
+        let skillManager = SimpleSkillManager()
+        
+        // Add an example skill
+        let exampleSkill = BaseSkill(
+            name: "example-skill",
+            description: "An example skill demonstrating usage patterns",
+            license: Some("MIT"),
+            compatibility: None,
+            metadata: HashMap<String, String>([("author", "Example"), ("version", "1.0")]),
+            allowedTools: None,
+            instructions: "# Example Skill\n\nThis is an example skill.",
+            skillPath: "./example-skill"
+        )
+        
+        skillManager.addSkill(exampleSkill)
+        
+        // Verify the skill was added
+        let retrievedSkill = skillManager.getSkill("example-skill")
+        Assert.isTrue(retrievedSkill.isDefined(), "Skill should be retrievable from manager")
+        Assert.equals("example-skill", retrievedSkill.getOrThrow().name, "Retrieved skill should have correct name")
+    }
+
+    @Test
+    public func testSkillExecutionThroughToolManager() {
+        // Create a skill that implements the Tool interface
+        let executableSkill = BaseSkill(
+            name: "execution-test-skill",
+            description: "A skill to test execution through ToolManager",
+            license: Some("MIT"),
+            compatibility: None,
+            metadata: HashMap<String, String>(),
+            allowedTools: None,
+            instructions: "# Execution Test Skill\n\nThis skill tests execution.",
+            skillPath: "./execution-test-skill"
+        )
+
+        // Add to skill manager
+        let skillManager = SimpleSkillManager([executableSkill])
+        
+        // Execute through the tool interface
+        if (let Some(tool) <- skillManager.findTool("execution-test-skill")) {
+            let args = HashMap<String, JsonValue>()
+            args.add("test", JsonValue.StringValue("value"))
+            
+            let response = tool.invoke(args)
+            Assert.isTrue(response.content.size > 0, "Execution should return content")
+        } else {
+            Assert.fail("Skill should be found in manager")
+        }
+    }
+
+    @Test
+    public func testSkillExecutionService() {
+        // Create a skill
+        let testSkill = BaseSkill(
+            name: "service-test-skill",
+            description: "A skill to test execution service",
+            license: Some("MIT"),
+            compatibility: None,
+            metadata: HashMap<String, String>(),
+            allowedTools: None,
+            instructions: "# Service Test Skill\n\nThis skill tests the execution service.",
+            skillPath: "./service-test-skill"
+        )
+        
+        // Create execution service
+        let executionService = SkillExecutionService()
+        let request = SkillExecutionRequest(HashMap<String, JsonValue>())
+        
+        // Execute the skill
+        let result = executionService.executeSkill(testSkill, request)
+        
+        // Verify the result
+        Assert.equals("service-test-skill", result.skillName, "Result should have correct skill name")
+        Assert.equals(ExecutionStatus.Success, result.status, "Execution should be successful")
+    }
+}

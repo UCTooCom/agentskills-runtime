@@ -384,10 +384,10 @@ let skill_result = runtime.execute(manifest, {})
 - [API Reference](docs/api-reference.md)
 - [Development Guide](docs/skill-development.md)
 
-### Specification Documents
-- [AgentSkills Standard Specification](specs/004-agent-skill-runtime/spec.md)
-- [Data Model Definition](specs/004-agent-skill-runtime/data-model.md)
-- [Implementation Plan](specs/004-agent-skill-runtime/plan.md)
+### Specification Driven Development Documents
+- [AgentSkills Standard Specification](specs/003-agentskills-enhancement/spec.md)
+- [Data Model Definition](specs/003-agentskills-enhancement/data-model.md)
+- [Implementation Plan](specs/003-agentskills-enhancement/plan.md)
 
 ## Contribution Guide
 
@@ -484,5 +484,10 @@ Thanks for the support from the following open source projects and communities:
 - [UCToo](https://gitee.com/uctoo/uctoo)
 - [CangjieMagic](https://gitcode.com/Cangjie-TPC/CangjieMagic)
 - Various excellent open source libraries and tools
+
+### References
+- [Developing Powerful Agents with Cangjie Using Only Free AI](https://mp.weixin.qq.com/s/jcUVuj7bLs9DaHLhol4-Hg)
+- [In-depth Analysis of Agent Skill Standards](https://mp.weixin.qq.com/s/qFae5uqJsOAEkn1LN12tuA)
+
 ---
 **AgentSkills Runtime - Making AI Development Simpler, Safer, and Faster!**

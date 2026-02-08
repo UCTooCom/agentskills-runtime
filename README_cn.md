@@ -384,10 +384,10 @@ let skill_result = runtime.execute(manifest, {})
 - [API 参考](docs/api-reference.md)
 - [开发指南](docs/skill-development.md)
 
-### 规范文档
-- [AgentSkills 标准规范](specs/004-agent-skill-runtime/spec.md)
-- [数据模型定义](specs/004-agent-skill-runtime/data-model.md)
-- [实现计划](specs/004-agent-skill-runtime/plan.md)
+### 规范驱动开发文档
+- [AgentSkills 标准规范](specs/003-agentskills-enhancement/spec.md)
+- [数据模型定义](specs/003-agentskills-enhancement/data-model.md)
+- [实现计划](specs/003-agentskills-enhancement/plan.md)
 
 ## 贡献指南
 
@@ -484,5 +484,10 @@ git push origin feature/your-feature
 - [UCToo](https://gitee.com/uctoo/uctoo)
 - [CangjieMagic](https://gitcode.com/Cangjie-TPC/CangjieMagic)
 - 各种优秀的开源库和工具
+
+### 参考资料
+- [只需免费AI就能用仓颉开发强大Agent](https://mp.weixin.qq.com/s/jcUVuj7bLs9DaHLhol4-Hg)
+- [深度解析agent skill标准](https://mp.weixin.qq.com/s/qFae5uqJsOAEkn1LN12tuA)
+
 ---
 **AgentSkills Runtime - 让 AI 开发更简单、更安全、更快捷！**

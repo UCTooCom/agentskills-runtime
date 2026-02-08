@@ -35,7 +35,7 @@
   compile-option = "-Woff unused -Woff deprecated --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=curl\" "
   description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
   link-option = ""
-  name = "agentskills_runtime"
+  name = "magic"
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""

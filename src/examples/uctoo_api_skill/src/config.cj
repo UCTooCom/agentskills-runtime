@@ -8,6 +8,7 @@ import std.console.Console
 import std.env.*
 import std.env.getVariable
 import std.convert.*
+import magic.config.Config as GlobalConfig
 
 /**
  * Configuration management for UCToo API Skills

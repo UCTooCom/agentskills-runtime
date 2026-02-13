@@ -141,6 +141,30 @@ cjpm run --skip-build --name magic.examples.uctoo_api_mcp_server
 cjpm run --skip-build --name magic.examples.uctoo_api_mcp_client
 ```
 
+### 运行 API 服务
+```bash
+# 在默认端口 8080 上运行 API 服务
+cjpm run --skip-build --name magic.api
+
+# 或在指定端口上运行
+cjpm run --skip-build --name magic.api 8081
+```
+
+有关运行 API 服务的详细说明，请参见 [API 服务运行指南](docs/api-service-run.md)。
+
+### API 端点
+启动 API 服务后，以下端点将可用：
+
+- **GET /**/hello** - 健康检查端点，返回 "Hello World"
+- **GET /skills** - 获取可用技能列表
+- **GET /skills/:id** - 获取特定技能的详细信息
+- **POST /skills/add** - 添加新技能
+- **POST /skills/edit** - 编辑现有技能
+- **POST /skills/del** - 删除技能
+- **POST /skills/execute** - 执行技能
+- **POST /skills/search** - 搜索技能
+- **GET /mcp/stream** - MCP 服务器流式接口
+
 ## 使用方法
 
 ### 使用 DSL 创建技能

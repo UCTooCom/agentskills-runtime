@@ -12,7 +12,7 @@ This guide provides a quick introduction to using the enhanced CangjieMagic fram
 ### 1. Clone the Repository
 ```bash
 git clone <repository-url>
-cd qintong-admin
+cd uctoo-admin
 ```
 
 ### 2. Navigate to the Enhancement Directory

@@ -67,6 +67,8 @@
   output-type = "executable"
 [package.package-configuration."magic.examples.uctoo_api_skill"]
   output-type = "executable"
+[package.package-configuration."magic.api"]
+  output-type = "executable"
 
 #----------------------------------------
 #  Setting FFI libs

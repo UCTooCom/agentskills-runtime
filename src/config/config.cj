@@ -229,6 +229,41 @@ public class Config {
     public static var BASE_URL: Option<String> = None
 
     /**
+     * Model configuration properties
+     */
+    public static var MODEL_PROVIDER: String = getEnv("MODEL_PROVIDER").getOrDefault({ => "stepfun" })
+    public static var MODEL_NAME: String = getEnv("MODEL_NAME").getOrDefault({ => "step-3" })
+    public static var MODEL_CONFIG: String = getEnv("MODEL_CONFIG").getOrDefault({ => "stepfun:step-3" })
+
+    /**
+     * Get API key for the configured model provider
+     */
+    public static func getModelApiKey(): String {
+        let varName = "${MODEL_PROVIDER.toAsciiUpper()}_API_KEY"
+        return getEnv(varName).getOrDefault({ => "" })
+    }
+
+    /**
+     * Get base URL for the configured model provider
+     */
+    public static func getModelBaseUrl(): String {
+        let varName = "${MODEL_PROVIDER.toAsciiUpper()}_BASE_URL"
+        return getEnv(varName).getOrDefault({ => "https://api.stepfun.com/v1" })
+    }
+
+    /**
+     * Validate that required model configuration is present
+     */
+    public static func validateModelConfig(): Bool {
+        let apiKey = getModelApiKey()
+        if (apiKey.isEmpty()) {
+            eprintln("Warning: No API key found for model provider: ${MODEL_PROVIDER}")
+            return false
+        }
+        return true
+    }
+
+    /**
      * Register uncaught exception handler for threads spawn by `Agent.asyncChat`
      * A bug in Cangjie std.core.Thread?
      * If we use Thread.handleUncaughtExceptionBy outside this project,

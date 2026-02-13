@@ -141,6 +141,30 @@ cjpm run --skip-build --name magic.examples.uctoo_api_mcp_server
 cjpm run --skip-build --name magic.examples.uctoo_api_mcp_client
 ```
 
+### Running API Service
+```bash
+# Run the API service on default port 8080
+cjpm run --skip-build --name magic.api
+
+# Or run on a specific port
+cjpm run --skip-build --name magic.api 8081
+```
+
+For detailed instructions on running the API service, see [API Service Run Guide](docs/api-service-run.md).
+
+### API Endpoints
+After starting the API service, the following endpoints will be available:
+
+- **GET /**/hello** - Health check endpoint returning "Hello World"
+- **GET /skills** - Get list of available skills
+- **GET /skills/:id** - Get details of a specific skill
+- **POST /skills/add** - Add a new skill
+- **POST /skills/edit** - Edit an existing skill
+- **POST /skills/del** - Delete a skill
+- **POST /skills/execute** - Execute a skill
+- **POST /skills/search** - Search for skills
+- **GET /mcp/stream** - MCP server streaming interface
+
 ## Usage
 
 ### Creating Skills with DSL

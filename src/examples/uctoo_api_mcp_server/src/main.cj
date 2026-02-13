@@ -10,10 +10,12 @@ package magic.examples.uctoo_api_mcp_server.src
 import magic.dsl.*
 import magic.prelude.*
 import magic.mcp.StdioMCPServer
+import magic.config.Config
 import std.collection.HashMap
 import std.time.DateTime
 import magic.log.LogUtils
 import std.regex.Regex
+import std.fs.Path
 
 // Helper function to log messages using the standard logging system
 func logToFile(filename: String, message: String): Unit {
@@ -412,7 +414,7 @@ func listApiMappings(): String {
 }
 
 @agent[
-    model: "dashscope:qwen3-max-preview",
+    model: "stepfun:step-3",
     description: "Direct MCP adapter for UCToo backend APIs, processing natural language to API calls",
     tools: [processNaturalLanguageRequest, getMcpServiceById, listApiMappings]
 ]
@@ -700,7 +702,15 @@ public class DirectUctooMCPAdapterAgent {
 
 // Main entry point
 main(): Unit {
-    // Setup configuration
+    // Load environment variables from .env file
+    Config.env.load(Path("./.env"))
+
+    // Verify that required API key is available using integrated config
+    if (!Config.validateModelConfig()) {
+        println("Error: Model configuration is incomplete. Please check your .env file.")
+        return
+    }
+
     // Create an instance of the MCP adapter agent
     let agent = UctooMCPAdapterAgent()
 

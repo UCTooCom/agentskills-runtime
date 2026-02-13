@@ -10,9 +10,10 @@ package magic.examples.uctoo_api_mcp_client
 import magic.dsl.*
 import magic.prelude.*
 import magic.config.Config
+import std.fs.Path
 
 @agent[
-    model: "dashscope:qwen3-max-preview",
+    model: "stepfun:step-3",
     tools: [
         // Use stdioMCP to connect to the uctoo_api_mcp_server
         stdioMCP("cjpm run --skip-build --name magic.examples.uctoo_api_mcp_server")
@@ -55,9 +56,26 @@ class EnhancedUctooMCPTestAgent {
 }
 
 main() {
+    // Load environment variables from .env file
+    Config.env.load(Path("./.env"))
+
     Config.logLevel = "INFO"
     Config.logFile = "./logs/uctoo-mcp-client-enhanced.log"
-    Config.env["DASHSCOPE_API_KEY"] = "sk-025f7e910bce4231ab320fa4d838f426"
+
+    // Set STEPFUN API key from environment variable
+    let stepfunApiKey = Config.env["STEPFUN_API_KEY"]
+    if (stepfunApiKey.isSome()) {
+        Config.env["STEPFUN_API_KEY"] = stepfunApiKey.getOrThrow()
+    } else {
+        println("Warning: STEPFUN_API_KEY not found in environment variables")
+    }
+
+    // Verify that required API key is available using integrated config
+    if (!Config.validateModelConfig()) {
+        println("Error: Model configuration is incomplete. Please check your .env file.")
+        return
+    }
+
     let agent = EnhancedUctooMCPTestAgent()
 
     // Test the hello endpoint

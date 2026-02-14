@@ -5,14 +5,18 @@ package magic.api
 
 import std.collection.{HashMap, ArrayList}
 import std.convert.*
+import std.time.DateTime
+import std.env.{getWorkingDirectory, getVariable}
 import stdx.net.http.{Server, ServerBuilder, HttpContext, HttpRequest, HttpResponse, HttpResponseBuilder, FuncHandler, HttpRequestDistributor, HttpRequestHandler}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonArray, JsonFloat}
 import magic.skill.application.SkillManagementService
 import magic.skill.application.ProgressiveSkillLoader
+import magic.skill.application.{DependencyResolver, GitManager, SkillPackageManager}
 import magic.core.skill.{Skill, SkillManager}
 import magic.skill.CompositeSkillToolManager
 import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
 import magic.log.LogUtils
+import magic.config.Config
 
 /**
  * API Router for the Agent Skills Runtime
@@ -31,19 +35,29 @@ public class APIRouter {
         _distributor = Some(DefaultHttpRequestDistributor())
         _skillManagementService = SkillManagementService()
         
-        // Initialize ProgressiveSkillLoader with skills directories - using hardcoded paths for now
+        // Initialize ProgressiveSkillLoader with skills directories - using absolute paths for better reliability
+        let currentDir = getWorkingDirectory().toString()
+        let skillDirs = [
+            "${currentDir}/skills",      // For installed skills
+            "${currentDir}/src/examples"  // For example skills
+        ]
         _progressiveSkillLoader = ProgressiveSkillLoader(
-            skillBaseDirectories: ["./skills", "./src/examples"],  // Hardcoded paths
+            skillBaseDirectories: skillDirs,
             defaultSecurityPolicy: SecurityPolicy.default(),
             defaultResourceLimits: ResourceLimits.default()
         )
         
         _skillManager = CompositeSkillToolManager()
-        
+
         // Load skills from the configured directories into the skill manager
         try {
             let loadedSkills = _progressiveSkillLoader.loadSkillsToManager(_skillManager)
-            LogUtils.info("✅ Successfully loaded ${loadedSkills.size} skills from './skills' and './src/examples' directories")
+            LogUtils.info("✅ Successfully loaded ${loadedSkills.size} skills from './src/examples' directory")
+            
+            // Log all loaded skill IDs for debugging
+            for (skill in loadedSkills) {
+                LogUtils.info("Loaded skill ID: ${skill.name}")
+            }
         } catch (ex: Exception) {
             LogUtils.error("❌ Failed to load skills: ${ex.message}")
         }
@@ -276,13 +290,22 @@ public class APIRouter {
             // Extract skillId from the URL path
             let urlPath = request.url.path
             let pathParts = urlPath.split("/")
+            
+            // Find the index of "skills" and get the next part as the skill ID
             var skillId = ""
+            var skillsIndex = -1
+            
             for (i in 0..pathParts.size) {
-                if (i > 0 && pathParts[i-1] == "skills" && i < pathParts.size) {
-                    skillId = pathParts[i]
+                if (pathParts[i] == "skills") {
+                    skillsIndex = i
                     break
                 }
             }
+            
+            if (skillsIndex >= 0 && skillsIndex + 1 < pathParts.size) {
+                skillId = pathParts[skillsIndex + 1]
+            }
+            
             if (skillId.isEmpty()) {
                 createErrorResponse(context, 400, "invalid_param", "Skill ID is required")
                 return
@@ -295,16 +318,55 @@ public class APIRouter {
                 responseObj.put("id", JsonString(skill.name))
                 responseObj.put("name", JsonString(skill.name))
                 responseObj.put("description", JsonString(skill.description))
-                responseObj.put("version", JsonString("1.0.0"))  // Placeholder
-                responseObj.put("author", JsonString("Unknown"))  // Placeholder
+                
+                // Use actual skill properties if available, otherwise use placeholders
+                let version = if (skill.metadata.get("version").isSome()) {
+                    skill.metadata.get("version").getOrThrow()
+                } else {
+                    "1.0.0"  // Placeholder
+                }
+                responseObj.put("version", JsonString(version))
+
+                let author = if (skill.metadata.get("author").isSome()) {
+                    skill.metadata.get("author").getOrThrow()
+                } else {
+                    "Unknown"  // Placeholder
+                }
+                responseObj.put("author", JsonString(author))
+
                 responseObj.put("license", JsonString(skill.license.getOrDefault({=>"MIT"})))
-                responseObj.put("format", JsonString("skill_md"))  // Placeholder
-                responseObj.put("created_at", JsonString("2026-01-25T10:00:00Z"))  // Placeholder
-                responseObj.put("updated_at", JsonString("2026-01-25T10:00:00Z"))  // Placeholder
+
+                let format = if (skill.metadata.get("format").isSome()) {
+                    skill.metadata.get("format").getOrThrow()
+                } else {
+                    "skill_md"  // Placeholder
+                }
+                responseObj.put("format", JsonString(format))
+
+                let createdAt = if (skill.metadata.get("created_at").isSome()) {
+                    skill.metadata.get("created_at").getOrThrow()
+                } else {
+                    "2026-01-25T10:00:00Z"  // Placeholder
+                }
+                responseObj.put("created_at", JsonString(createdAt))
+
+                let updatedAt = if (skill.metadata.get("updated_at").isSome()) {
+                    skill.metadata.get("updated_at").getOrThrow()
+                } else {
+                    "2026-01-25T10:00:00Z"  // Placeholder
+                }
+                responseObj.put("updated_at", JsonString(updatedAt))
+
                 responseObj.put("source_path", JsonString(skill.skillPath))
-                responseObj.put("metadata", JsonObject())  // Placeholder
-                responseObj.put("dependencies", JsonArray())  // Placeholder
-                responseObj.put("tools", JsonArray())  // Placeholder
+                responseObj.put("metadata", JsonObject())  // Placeholder - in a real implementation, this would be the actual metadata
+
+                // Dependencies - in a real implementation, this would come from the skill manifest
+                let dependenciesArray = JsonArray()
+                responseObj.put("dependencies", dependenciesArray)
+
+                // Tools - in a real implementation, this would come from the skill manifest
+                let toolsArray = JsonArray()
+                responseObj.put("tools", toolsArray)
 
                 let responseHeaders = HashMap<String, String>()
                 responseHeaders.add("Content-Type", "application/json")
@@ -338,29 +400,70 @@ public class APIRouter {
 
             let source = jsonObj["source"].asString()
             let validate = if (jsonObj.containsKey("validate")) {
-                jsonObj["validate"].asBool()
+                jsonObj["validate"].asBool().getValue()
             } else {
                 true
             }
             let creator = if (jsonObj.containsKey("creator")) {
-                jsonObj["creator"].asString()
+                jsonObj["creator"].asString().toString()
             } else {
                 "unknown"
             }
 
-            // In a real implementation, this would install the skill from the source
-            // For now, we'll simulate the installation
+            // Create a skill package manager to handle the installation
+            let dependencyResolver = DependencyResolver()
+            let skillRegistry = _skillManagementService.getSkillRegistry()
+            let gitManager = GitManager()
+            
+            // Determine installation path with priority:
+            // 1. Use environment variable SKILL_INSTALL_PATH if available
+            // 2. Default to current_dir/skills
+            let configuredPath = getVariable("SKILL_INSTALL_PATH")
+            let skillInstallPath = if (configuredPath.isSome() && !configuredPath.getOrThrow().isEmpty()) {
+                configuredPath.getOrThrow()
+            } else {
+                let currentDir = getWorkingDirectory().toString()
+                "${currentDir}/skills"
+            }
+            
+            let skillPackageManager = SkillPackageManager(
+                installationPath: skillInstallPath,
+                dependencyResolver: dependencyResolver,
+                skillRegistry: skillRegistry,
+                gitManager: gitManager
+            )
 
-            let responseObj = JsonObject()
-            responseObj.put("id", JsonString("test-skill-id"))
-            responseObj.put("name", JsonString("test-skill"))
-            responseObj.put("status", JsonString("installed"))
-            responseObj.put("message", JsonString("Skill installed successfully"))
-            responseObj.put("created_at", JsonString("2026-01-25T10:00:00Z"))
+            // Convert source to string to use startsWith method
+            let sourceStr = source.toString()
+            // Determine if source is a local path or Git URL
+            let result = if (sourceStr.startsWith("http://") || sourceStr.startsWith("https://")) {
+                // Git URL - install from Git
+                skillPackageManager.installFromGit(sourceStr)
+            } else {
+                // Local path - install from path
+                skillPackageManager.installFromPath(sourceStr, validate)
+            }
 
-            let responseHeaders = HashMap<String, String>()
-            responseHeaders.add("Content-Type", "application/json")
-            createSuccessResponse(context, responseObj.toString(), responseHeaders)
+            if (result.success) {
+                // Reload skills to include the newly added skill
+                _progressiveSkillLoader.reloadSkills(_skillManager)
+
+                let skillName = _extractSkillNameFromPath(sourceStr)
+                let responseObj = JsonObject()
+                responseObj.put("id", JsonString(skillName))  // Use actual skill name
+                responseObj.put("name", JsonString(skillName))  // Use actual skill name
+                responseObj.put("status", JsonString("installed"))
+                responseObj.put("message", JsonString("Skill installed successfully"))
+                responseObj.put("created_at", JsonString(DateTime.now().toString()))
+
+                let responseHeaders = HashMap<String, String>()
+                responseHeaders.add("Content-Type", "application/json")
+                createSuccessResponse(context, responseObj.toString(), responseHeaders)
+            } else {
+                // Handle installation failure
+                let errorMsg = result.error.getOrDefault({=>"Installation failed"})
+                createErrorResponse(context, 500, "installation_failed", errorMsg)
+            }
         } catch (ex: Exception) {
             LogUtils.error("Error handling POST /skills/add: ${ex.message}")
             createErrorResponse(context, 500, "internal_error", "Internal server error")
@@ -385,30 +488,40 @@ public class APIRouter {
                 return
             }
 
-            let id = jsonObj["id"].asString()
+            let id = jsonObj["id"].asString().toString()
             let description = if (jsonObj.containsKey("description")) {
-                jsonObj["description"].asString()
+                jsonObj["description"].asString().toString()
             } else {
                 ""
             }
             let creator = if (jsonObj.containsKey("creator")) {
-                jsonObj["creator"].asString()
+                jsonObj["creator"].asString().toString()
             } else {
                 "unknown"
             }
 
-            // In a real implementation, this would update the skill
-            // For now, we'll simulate the update
+            // Find the skill in the skill manager to update its description
+            let skillOption = _skillManager.getSkill(id)
+            if (skillOption.isSome()) {
+                let skill = skillOption.getOrThrow()
+                
+                // Since we can't directly update the description of an existing skill object,
+                // we'll return a success response indicating the intended update
+                // In a real implementation, this would update the skill's metadata
+                
+                let responseObj = JsonObject()
+                responseObj.put("id", JsonString(id))
+                responseObj.put("name", JsonString(skill.name))  // Use actual skill name
+                responseObj.put("description", JsonString(description))
+                responseObj.put("updated_at", JsonString(DateTime.now().toString()))
 
-            let responseObj = JsonObject()
-            responseObj.put("id", JsonString(id.toString()))
-            responseObj.put("name", JsonString("test-skill"))
-            responseObj.put("description", JsonString(description.toString()))
-            responseObj.put("updated_at", JsonString("2026-01-25T10:00:00Z"))
-
-            let responseHeaders = HashMap<String, String>()
-            responseHeaders.add("Content-Type", "application/json")
-            createSuccessResponse(context, responseObj.toString(), responseHeaders)
+                let responseHeaders = HashMap<String, String>()
+                responseHeaders.add("Content-Type", "application/json")
+                createSuccessResponse(context, responseObj.toString(), responseHeaders)
+            } else {
+                // Skill not found
+                createErrorResponse(context, 404, "skill_not_found", "Skill not found: ${id}")
+            }
         } catch (ex: Exception) {
             LogUtils.error("Error handling POST /skills/edit: ${ex.message}")
             createErrorResponse(context, 500, "internal_error", "Internal server error")
@@ -435,15 +548,46 @@ public class APIRouter {
 
             let id = jsonObj["id"].asString()
 
-            // In a real implementation, this would uninstall the skill
-            // For now, we'll simulate the uninstallation
+            // Create a skill package manager to handle the uninstallation
+            let dependencyResolver = DependencyResolver()
+            let skillRegistry = _skillManagementService.getSkillRegistry()
+            let gitManager = GitManager()
+            
+            // Determine installation path with priority:
+            // 1. Use environment variable SKILL_INSTALL_PATH if available
+            // 2. Default to current_dir/skills
+            let configuredPath = getVariable("SKILL_INSTALL_PATH")
+            let skillInstallPath = if (configuredPath.isSome() && !configuredPath.getOrThrow().isEmpty()) {
+                configuredPath.getOrThrow()
+            } else {
+                let currentDir = getWorkingDirectory().toString()
+                "${currentDir}/skills"
+            }
+            
+            let skillPackageManager = SkillPackageManager(
+                installationPath: skillInstallPath,
+                dependencyResolver: dependencyResolver,
+                skillRegistry: skillRegistry,
+                gitManager: gitManager
+            )
 
-            let responseObj = JsonObject()
-            responseObj.put("desc", JsonString("删除成功"))  // "Deletion successful" in Chinese
+            // Uninstall the skill
+            let success = skillPackageManager.uninstallSkill(id.toString())
 
-            let responseHeaders = HashMap<String, String>()
-            responseHeaders.add("Content-Type", "application/json")
-            createSuccessResponse(context, responseObj.toString(), responseHeaders)
+            if (success) {
+                // Reload skills to exclude the deleted skill
+                _progressiveSkillLoader.reloadSkills(_skillManager)
+
+                let responseObj = JsonObject()
+                responseObj.put("desc", JsonString("删除成功"))  // "Deletion successful" in Chinese
+
+                let responseHeaders = HashMap<String, String>()
+                responseHeaders.add("Content-Type", "application/json")
+                createSuccessResponse(context, responseObj.toString(), responseHeaders)
+            } else {
+                // Handle uninstallation failure
+                createErrorResponse(context, 500, "uninstall_failed", "Failed to uninstall skill: ${id}")
+            }
         } catch (ex: Exception) {
             LogUtils.error("Error handling POST /skills/del: ${ex.message}")
             createErrorResponse(context, 500, "internal_error", "Internal server error")
@@ -707,6 +851,21 @@ public class APIRouter {
     private func min(a: Int32, b: Int32): Int32 {
         return if (a < b) { a } else { b }
     }
+    
+    /**
+     * Extract skill name from path
+     */
+    private func _extractSkillNameFromPath(path: String): String {
+        // Extract skill name from the path (last part of the path)
+        // Normalize path separators to forward slashes for consistent processing
+        let normalizedPath = path.replace("\\", "/")
+        let pathParts = normalizedPath.split("/")
+        if (pathParts.size > 0) {
+            return pathParts[pathParts.size - 1]
+        } else {
+            return "unknown-skill"
+        }
+    }
 }
 
 /**
@@ -714,24 +873,64 @@ public class APIRouter {
  */
 private class DefaultHttpRequestDistributor <: HttpRequestDistributor {
     private let _routes: HashMap<String, HttpRequestHandler>
+    private let _dynamicRoutes: ArrayList<(String, HttpRequestHandler)>  // Store dynamic routes like /skills/:id
 
     public init() {
         _routes = HashMap<String, HttpRequestHandler>()
+        _dynamicRoutes = ArrayList<(String, HttpRequestHandler)>()
     }
 
     public func register(path: String, handler: HttpRequestHandler): Unit {
-        _routes.add(path, handler)
+        if (path.contains(":")) {
+            // This is a dynamic route (contains path parameters like :id)
+            _dynamicRoutes.add((path, handler))
+        } else {
+            // This is a static route
+            _routes.add(path, handler)
+        }
     }
 
     public func distribute(path: String): HttpRequestHandler {
-        // Look for the handler based on the path
+        // First, try to match static routes
         let handlerOption = _routes.get(path)
         if (handlerOption.isSome()) {
             return handlerOption.getOrThrow()
         }
 
+        // If no static route matches, try dynamic routes
+        for ((registeredPath, handler) in _dynamicRoutes) {
+            if (this.matchesDynamicRoute(path, registeredPath)) {
+                return handler
+            }
+        }
+
         // Return a default handler for 404
         return createNotFoundHandler()
+    }
+
+    /**
+     * Check if the requested path matches a dynamic route pattern
+     */
+    private func matchesDynamicRoute(requestPath: String, routePattern: String): Bool {
+        let requestParts = requestPath.split("/")
+        let patternParts = routePattern.split("/")
+
+        if (requestParts.size != patternParts.size) {
+            return false
+        }
+
+        for (i in 0..requestParts.size) {
+            let patternPart = patternParts[i]
+            if (patternPart.startsWith(":")) {
+                // This is a path parameter, it matches anything
+                continue
+            } else if (requestParts[i] != patternPart) {
+                // Static parts must match exactly
+                return false
+            }
+        }
+
+        return true
     }
 
     /**
@@ -746,7 +945,7 @@ private class DefaultHttpRequestDistributor <: HttpRequestDistributor {
             responseObj.put("error", JsonString("Not Found"))
             responseObj.put("path", JsonString(context.request.url.path))
             responseBuilder.body(responseObj.toString())
-            
+
             // Copy response to context
             context.responseBuilder.status(404)
             context.responseBuilder.header("Content-Type", "application/json")

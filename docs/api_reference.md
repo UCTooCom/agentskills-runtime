@@ -35,3 +35,4 @@
 - 📁 [tokenizer](./package_docs/tokenizer.md)
 - 📁 [tool](./package_docs/tool.md)
 - 📁 [vdb](./package_docs/vdb.md)
+- 📁 [agentskills](./agentskills-api-reference.md)

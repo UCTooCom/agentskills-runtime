@@ -4,7 +4,7 @@
 package magic.skill.application
 
 import std.collection.{HashMap, ArrayList}
-import std.fs.{exists, Directory, FileInfo, Path}
+import std.fs.{exists, Directory, FileInfo, Path, File, copy}
 import std.process.Process
 import std.env.{getWorkingDirectory, getVariable}
 import std.time.DateTime
@@ -28,10 +28,51 @@ public class SkillPackageManager {
         skillRegistry!: SkillRegistry,
         gitManager!: GitManager
     ) {
-        _installationPath = installationPath
         _dependencyResolver = dependencyResolver
         _skillRegistry = skillRegistry
         _gitManager = gitManager
+        
+        // Determine the installation path with priority
+        // Priority 1: Use provided path if not empty
+        if (!installationPath.isEmpty()) {
+            _installationPath = installationPath
+        } else {
+            // Priority 2: Use environment variable
+            if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
+                if (!configuredPath.isEmpty()) {
+                    _installationPath = configuredPath
+                    return
+                }
+            }
+            
+            // Priority 3: Default to "./skills" directory
+            let currentDir = getWorkingDirectory().toString()
+            _installationPath = "${currentDir}/skills"
+        }
+    }
+
+    /**
+     * Determine the actual installation path based on priority:
+     * 1. Provided path (if not empty)
+     * 2. Environment variable SKILL_INSTALL_PATH
+     * 3. Default path "./skills"
+     */
+    private func _determineInstallationPath(providedPath: String): String {
+        // Priority 1: Use provided path if not empty
+        if (!providedPath.isEmpty()) {
+            return providedPath
+        }
+
+        // Priority 2: Use environment variable
+        if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
+            if (!configuredPath.isEmpty()) {
+                return configuredPath
+            }
+        }
+
+        // Priority 3: Default to "./skills" directory
+        let currentDir = getWorkingDirectory().toString()
+        return "${currentDir}/skills"
     }
 
     /**
@@ -55,17 +96,68 @@ public class SkillPackageManager {
         }
 
         // Copy skill to installation directory
-        let skillName = _extractSkillName(path)
-        let installPath = "${_installationPath}/skills/${skillName}"
+        LogUtils.info("Attempting to install skill from: ${path}")
+        LogUtils.info("Installation path base: ${_installationPath}")
         
+        let skillName = _extractSkillName(path)
+        LogUtils.info("Extracted skill name: ${skillName}")
+        
+        let installPath = "${_installationPath}/${skillName}"
+        LogUtils.info("Calculated install path: ${installPath}")
+
         // Create installation directory if it doesn't exist
         if (!exists(Path(installPath).parent)) {
+            LogUtils.info("Creating parent directory: ${Path(installPath).parent}")
             Directory.create(Path(installPath).parent, recursive: true)
         }
-        
-        // In a real implementation, this would copy the skill files to the installation directory
-        // For now, we'll just log the intended action
-        LogUtils.info("Skill would be copied to: ${installPath}")
+
+        // Actually copy the skill files to the installation directory
+        try {
+            // Create destination directory
+            LogUtils.info("Creating destination directory: ${Path(installPath)}")
+            Directory.create(Path(installPath), recursive: true)
+
+            // Check if source exists before copying
+            LogUtils.info("Checking if source path exists: ${path}")
+            if (exists(path)) {
+                let sourcePath = Path(path)
+                let sourceInfo = FileInfo(sourcePath.toString())
+                LogUtils.info("Source is directory: ${sourceInfo.isDirectory()}")
+
+                if (sourceInfo.isDirectory()) {
+                    // Copy directory contents recursively using std.fs.copy
+                    LogUtils.info("Copying directory from ${sourcePath} to ${Path(installPath)}")
+                    copy(sourcePath, to: Path(installPath), overwrite: true)
+                } else {
+                    // Copy single file using std.fs.copy
+                    LogUtils.info("Copying file from ${sourcePath} to ${Path(installPath).join(sourcePath.fileName)}")
+                    copy(sourcePath, to: Path(installPath).join(sourcePath.fileName), overwrite: true)
+                }
+                
+                // Verify that files were copied
+                let destInfo = FileInfo(installPath)
+                if (destInfo.isDirectory()) {
+                    LogUtils.info("Successfully copied to destination directory")
+                    let destFiles = ArrayList<String>()
+                    Directory.walk(installPath) { fileInfo =>
+                        destFiles.add(fileInfo.path.toString())
+                        true
+                    }
+                    LogUtils.info("Files in destination: ${String.join(destFiles.toArray(), delimiter: ", ")}")
+                } else {
+                    LogUtils.info("Successfully copied to destination file")
+                }
+            } else {
+                LogUtils.error("Source path does not exist: ${path}")
+                return SkillInstallResult.failureResult(["Source path does not exist: ${path}"])
+            }
+
+            LogUtils.info("Skill successfully copied to: ${installPath}")
+        } catch (ex: Exception) {
+            LogUtils.error("Failed to copy skill from ${path} to ${installPath}: ${ex.message}")
+            LogUtils.error("Exception details: ${ex.message}")
+            return SkillInstallResult.failureResult(["Failed to copy skill files: ${ex.message}"])
+        }
 
         // Register skill in the registry
         _skillRegistry.registerSkill(skillName, installPath)
@@ -148,7 +240,7 @@ public class SkillPackageManager {
         _skillRegistry.unregisterSkill(skillName)
 
         // Remove skill files from installation directory
-        let skillPath = "${_installationPath}/skills/${skillName}"
+        let skillPath = "${_installationPath}/${skillName}"
         if (exists(skillPath)) {
             // In a real implementation, this would remove the skill directory
             // For now, we'll just log the intended action
@@ -208,7 +300,9 @@ public class SkillPackageManager {
     private func _extractSkillName(path: String): String {
         // In a real implementation, this would extract the skill name from the skill definition
         // For now, we'll extract it from the directory name
-        let pathParts = path.split("/")
+        // Normalize path separators to forward slashes for consistent processing
+        let normalizedPath = path.replace("\\", "/")
+        let pathParts = normalizedPath.split("/")
         return pathParts[pathParts.size - 1]
     }
 

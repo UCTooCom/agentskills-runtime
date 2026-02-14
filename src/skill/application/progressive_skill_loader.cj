@@ -365,5 +365,12 @@ public class ProgressiveSkillLoader {
         }
         return absolutePaths.toArray()
     }
+
+    /**
+     * Get the skill base directory
+     */
+    public func getSkillBaseDirectory(): String {
+        return this.skillBaseDirectory
+    }
 }
 

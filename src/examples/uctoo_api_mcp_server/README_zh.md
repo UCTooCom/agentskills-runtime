@@ -138,7 +138,7 @@ apps/CangjieMagic/src/examples/uctoo_api_mcp_server/
 
 ```cangjie
 @agent[
-  model: "deepseek:deepseek-chat",
+  model: "stepfun:step-3",
   description: "MCP adapter for UCToo backend APIs, supporting natural language queries",
   tools: [processNaturalLanguageRequest, getMcpServiceById, listApiMappings]
 ]

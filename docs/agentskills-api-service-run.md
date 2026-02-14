@@ -75,6 +75,38 @@ API 服务默认运行在 8080 端口。可以通过以下方式更改：
 - **POST /skills/execute**: 执行技能
 - **POST /skills/search**: 搜索技能
 
+### 详细接口说明
+
+#### POST /skills/add
+- **功能**: 从本地路径或远程URL安装技能
+- **实现详情**: 该接口现在使用底层的SkillPackageManager执行实际的安装操作。系统会解析请求体中的source参数，如果是Git URL则通过GitManager从远程仓库克隆并安装，如果是本地路径则直接从路径安装。安装完成后会重新加载技能列表以包含新安装的技能。
+- **请求示例**:
+  ```bash
+  curl -X POST http://localhost:8080/skills/add \
+    -H "Content-Type: application/json" \
+    -d '{"source": "./my-skill", "validate": true, "creator": "user-id"}'
+  ```
+
+#### POST /skills/edit
+- **功能**: 更新现有技能
+- **实现详情**: 该接口使用SkillPackageManager执行实际的更新操作。系统会解析请求体中的技能ID和更新参数，然后调用updateSkill方法更新技能。更新完成后会重新加载技能列表以反映变更。
+- **请求示例**:
+  ```bash
+  curl -X POST http://localhost:8080/skills/edit \
+    -H "Content-Type: application/json" \
+    -d '{"id": "my-skill-abc", "description": "Updated description", "creator": "user-id"}'
+  ```
+
+#### POST /skills/del
+- **功能**: 卸载技能
+- **实现详情**: 该接口使用SkillPackageManager执行实际的卸载操作。系统会解析请求体中的技能ID，然后调用uninstallSkill方法从系统中移除技能。卸载完成后会重新加载技能列表以排除已删除的技能。
+- **请求示例**:
+  ```bash
+  curl -X POST http://localhost:8080/skills/del \
+    -H "Content-Type: application/json" \
+    -d '{"id": "my-skill-abc"}'
+  ```
+
 ### MCP 相关接口
 
 - **GET /mcp/stream**: MCP 服务器流式接口

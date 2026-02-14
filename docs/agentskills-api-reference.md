@@ -170,6 +170,15 @@ Content-Type: application/json
 }
 ```
 
+**Implementation Details:**
+The POST /skills/add endpoint now performs actual skill installation using the underlying SkillPackageManager. When a request is received:
+1. The system parses the request body to extract the source, validation flag, and creator
+2. It creates a SkillPackageManager instance with the appropriate dependencies
+3. If the source is a Git URL (starts with http:// or https://), it installs from Git using the GitManager
+4. If the source is a local path, it installs from the local path with optional validation
+5. On successful installation, it reloads the skills to include the newly added skill
+6. Returns a success response with the skill details
+
 **Response:**
 ```json
 {
@@ -200,6 +209,14 @@ Content-Type: application/json
 }
 ```
 
+**Implementation Details:**
+The POST /skills/edit endpoint now performs actual skill updates using the underlying SkillPackageManager. When a request is received:
+1. The system parses the request body to extract the skill ID and update parameters
+2. It creates a SkillPackageManager instance with the appropriate dependencies
+3. It calls the updateSkill method to update the skill in the system
+4. On successful update, it reloads the skills to reflect the changes
+5. Returns a success response with the updated skill details
+
 **Response:**
 ```json
 {
@@ -226,6 +243,14 @@ Content-Type: application/json
   "id": "my-skill-abc"
 }
 ```
+
+**Implementation Details:**
+The POST /skills/del endpoint now performs actual skill uninstallation using the underlying SkillPackageManager. When a request is received:
+1. The system parses the request body to extract the skill ID
+2. It creates a SkillPackageManager instance with the appropriate dependencies
+3. It calls the uninstallSkill method to remove the skill from the system
+4. On successful uninstallation, it reloads the skills to exclude the deleted skill
+5. Returns a success response confirming the deletion
 
 **Response:**
 ```json

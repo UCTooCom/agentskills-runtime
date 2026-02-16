@@ -1,6 +1,6 @@
 {
   "name": "@opencangjie/skills",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "JavaScript/TypeScript SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -42,11 +42,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/UCTooCom/agentskills-runtime.git"
+    "url": "git+https://atomgit.com/uctoo/agentskills-runtime.git"
   },
-  "homepage": "https://github.com/UCTooCom/agentskills-runtime#readme",
+  "homepage": "https://atomgit.com/uctoo/agentskills-runtime",
   "bugs": {
-    "url": "https://github.com/UCTooCom/agentskills-runtime/issues"
+    "url": "https://atomgit.com/uctoo/agentskills-runtime/issues"
   },
   "publishConfig": {
     "access": "public",

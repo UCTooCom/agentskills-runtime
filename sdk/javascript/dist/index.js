@@ -49,7 +49,7 @@ function getRuntimeDir() {
 }
 function getRuntimePath() {
     const { platform, arch, suffix } = getPlatformInfo();
-    return path.join(getRuntimeDir(), `${platform}-${arch}`, `agentskills-runtime${suffix}`);
+    return path.join(getRuntimeDir(), `${platform}-${arch}`, 'bin', `agentskills-runtime${suffix}`);
 }
 function isRuntimeInstalled() {
     return fs.existsSync(getRuntimePath());

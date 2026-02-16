@@ -405,9 +405,16 @@ public class APIRouter {
                 true
             }
             let creator = if (jsonObj.containsKey("creator")) {
-                jsonObj["creator"].asString().toString()
+                jsonObj["creator"].asString().getValue()
             } else {
                 "unknown"
+            }
+            
+            // Get optional install_path from request (Priority 1)
+            let requestInstallPath: Option<String> = if (jsonObj.containsKey("install_path")) {
+                Some(jsonObj["install_path"].asString().getValue())
+            } else {
+                None
             }
 
             // Create a skill package manager to handle the installation
@@ -415,16 +422,13 @@ public class APIRouter {
             let skillRegistry = _skillManagementService.getSkillRegistry()
             let gitManager = GitManager()
             
-            // Determine installation path with priority:
-            // 1. Use environment variable SKILL_INSTALL_PATH if available
-            // 2. Default to current_dir/skills
-            let configuredPath = getVariable("SKILL_INSTALL_PATH")
-            let skillInstallPath = if (configuredPath.isSome() && !configuredPath.getOrThrow().isEmpty()) {
-                configuredPath.getOrThrow()
-            } else {
-                let currentDir = getWorkingDirectory().toString()
-                "${currentDir}/skills"
-            }
+            // Use the unified path determination logic from SkillPackageManager
+            // Priority 1: install_path from request parameter
+            // Priority 2: SKILL_INSTALL_PATH from .env file
+            // Priority 3: Default to current_dir/skills
+            let skillInstallPath = SkillPackageManager.determineInstallationPath(
+                requestInstallPath.getOrDefault({=>""})
+            )
             
             let skillPackageManager = SkillPackageManager(
                 installationPath: skillInstallPath,
@@ -434,7 +438,7 @@ public class APIRouter {
             )
 
             // Convert source to string to use startsWith method
-            let sourceStr = source.toString()
+            let sourceStr = source.getValue()
             // Determine if source is a local path or Git URL
             let result = if (sourceStr.startsWith("http://") || sourceStr.startsWith("https://")) {
                 // Git URL - install from Git
@@ -488,39 +492,65 @@ public class APIRouter {
                 return
             }
 
-            let id = jsonObj["id"].asString().toString()
-            let description = if (jsonObj.containsKey("description")) {
-                jsonObj["description"].asString().toString()
-            } else {
-                ""
+            let id = jsonObj["id"].asString().getValue()
+            
+            // Collect all fields to update (excluding 'id')
+            let updates = HashMap<String, String>()
+            if (jsonObj.containsKey("description")) {
+                updates.add("description", jsonObj["description"].asString().getValue())
             }
-            let creator = if (jsonObj.containsKey("creator")) {
-                jsonObj["creator"].asString().toString()
-            } else {
-                "unknown"
+            if (jsonObj.containsKey("creator")) {
+                updates.add("creator", jsonObj["creator"].asString().getValue())
+            }
+            if (jsonObj.containsKey("name")) {
+                updates.add("name", jsonObj["name"].asString().getValue())
+            }
+            if (jsonObj.containsKey("version")) {
+                updates.add("version", jsonObj["version"].asString().getValue())
             }
 
-            // Find the skill in the skill manager to update its description
-            let skillOption = _skillManager.getSkill(id)
-            if (skillOption.isSome()) {
-                let skill = skillOption.getOrThrow()
-                
-                // Since we can't directly update the description of an existing skill object,
-                // we'll return a success response indicating the intended update
-                // In a real implementation, this would update the skill's metadata
-                
+            // Create a skill package manager to handle the edit
+            let dependencyResolver = DependencyResolver()
+            let skillRegistry = _skillManagementService.getSkillRegistry()
+            let gitManager = GitManager()
+            
+            // Get optional install_path from request (Priority 1)
+            let requestInstallPath: Option<String> = if (jsonObj.containsKey("install_path")) {
+                Some(jsonObj["install_path"].asString().getValue())
+            } else {
+                None
+            }
+
+            // Use the unified path determination logic from SkillPackageManager
+            let skillInstallPath = SkillPackageManager.determineInstallationPath(
+                requestInstallPath.getOrDefault({=>""})
+            )
+            
+            let skillPackageManager = SkillPackageManager(
+                installationPath: skillInstallPath,
+                dependencyResolver: dependencyResolver,
+                skillRegistry: skillRegistry,
+                gitManager: gitManager
+            )
+
+            // Edit the skill
+            let success = skillPackageManager.editSkill(id, updates)
+
+            if (success) {
+                // Reload skills to reflect the changes
+                _progressiveSkillLoader.reloadSkills(_skillManager)
+
                 let responseObj = JsonObject()
                 responseObj.put("id", JsonString(id))
-                responseObj.put("name", JsonString(skill.name))  // Use actual skill name
-                responseObj.put("description", JsonString(description))
+                responseObj.put("status", JsonString("updated"))
+                responseObj.put("message", JsonString("Skill updated successfully"))
                 responseObj.put("updated_at", JsonString(DateTime.now().toString()))
 
                 let responseHeaders = HashMap<String, String>()
                 responseHeaders.add("Content-Type", "application/json")
                 createSuccessResponse(context, responseObj.toString(), responseHeaders)
             } else {
-                // Skill not found
-                createErrorResponse(context, 404, "skill_not_found", "Skill not found: ${id}")
+                createErrorResponse(context, 500, "edit_failed", "Failed to edit skill: ${id}")
             }
         } catch (ex: Exception) {
             LogUtils.error("Error handling POST /skills/edit: ${ex.message}")
@@ -546,23 +576,24 @@ public class APIRouter {
                 return
             }
 
-            let id = jsonObj["id"].asString()
+            let id = jsonObj["id"].asString().getValue()
 
             // Create a skill package manager to handle the uninstallation
             let dependencyResolver = DependencyResolver()
             let skillRegistry = _skillManagementService.getSkillRegistry()
             let gitManager = GitManager()
             
-            // Determine installation path with priority:
-            // 1. Use environment variable SKILL_INSTALL_PATH if available
-            // 2. Default to current_dir/skills
-            let configuredPath = getVariable("SKILL_INSTALL_PATH")
-            let skillInstallPath = if (configuredPath.isSome() && !configuredPath.getOrThrow().isEmpty()) {
-                configuredPath.getOrThrow()
+            // Get optional install_path from request (Priority 1)
+            let requestInstallPath: Option<String> = if (jsonObj.containsKey("install_path")) {
+                Some(jsonObj["install_path"].asString().getValue())
             } else {
-                let currentDir = getWorkingDirectory().toString()
-                "${currentDir}/skills"
+                None
             }
+
+            // Use the unified path determination logic from SkillPackageManager
+            let skillInstallPath = SkillPackageManager.determineInstallationPath(
+                requestInstallPath.getOrDefault({=>""})
+            )
             
             let skillPackageManager = SkillPackageManager(
                 installationPath: skillInstallPath,
@@ -572,14 +603,14 @@ public class APIRouter {
             )
 
             // Uninstall the skill
-            let success = skillPackageManager.uninstallSkill(id.toString())
+            let success = skillPackageManager.uninstallSkill(id)
 
             if (success) {
                 // Reload skills to exclude the deleted skill
                 _progressiveSkillLoader.reloadSkills(_skillManager)
 
                 let responseObj = JsonObject()
-                responseObj.put("desc", JsonString("删除成功"))  // "Deletion successful" in Chinese
+                responseObj.put("desc", JsonString("删除成功"))
 
                 let responseHeaders = HashMap<String, String>()
                 responseHeaders.add("Content-Type", "application/json")
@@ -600,7 +631,6 @@ public class APIRouter {
     private func handleExecuteSkill(context: HttpContext): Unit {
         try {
             let request = context.request
-            // Parse request body
             let bodySize = request.bodySize.getOrThrow()
             let buffer = Array<UInt8>(bodySize, repeat: 0)
             request.body.read(buffer)
@@ -612,36 +642,49 @@ public class APIRouter {
                 return
             }
 
-            let skillId = jsonObj["skill_id"].asString()
-            let parameters = if (jsonObj.containsKey("parameters")) {
-                jsonObj["parameters"].asObject()
-            } else {
-                JsonObject()
+            let skillId = jsonObj["skill_id"].asString().getValue()
+            
+            let skillOpt = _skillManager.getSkill(skillId)
+            if (skillOpt.isNone()) {
+                createErrorResponse(context, 404, "not_found", "Skill not found: ${skillId}")
+                return
             }
-            let capabilities = if (jsonObj.containsKey("capabilities")) {
-                jsonObj["capabilities"].asArray()
-            } else {
-                JsonArray()
+            
+            let skill = skillOpt.getOrThrow()
+            
+            let args = HashMap<String, JsonValue>()
+            if (jsonObj.containsKey("parameters")) {
+                let paramsObj = jsonObj["parameters"].asObject()
+                for ((key, value) in paramsObj.getFields()) {
+                    args.add(key, value)
+                }
             }
-            let timeout = if (jsonObj.containsKey("timeout")) {
-                jsonObj["timeout"].asString()
+            
+            let timeoutStr = if (jsonObj.containsKey("timeout")) {
+                jsonObj["timeout"].asString().getValue()
             } else {
                 "30s"
             }
-
-            // In a real implementation, this would execute the skill
-            // For now, we'll simulate the execution
+            
+            let timeoutMs = _parseTimeout(timeoutStr)
+            
+            let startTime = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
+            
+            let output = skill.execute(args)
+            
+            let endTime = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
+            let executionTime = endTime - startTime
 
             let responseObj = JsonObject()
-            responseObj.put("id", JsonString("exec-test-123"))
+            responseObj.put("id", JsonString("exec-${skillId}-${endTime}"))
             responseObj.put("success", JsonString("true"))
-            responseObj.put("output", JsonString("Skill executed successfully"))
+            responseObj.put("output", JsonString(output))
             responseObj.put("error", JsonString(""))
-            responseObj.put("execution_time", JsonString("123ms"))
+            responseObj.put("execution_time", JsonString("${executionTime}ms"))
 
             let resourcesUsedObj = JsonObject()
-            resourcesUsedObj.put("cpu_time", JsonString("50ms"))
-            resourcesUsedObj.put("memory_peak", JsonInt(1048576))
+            resourcesUsedObj.put("cpu_time", JsonString("${executionTime}ms"))
+            resourcesUsedObj.put("memory_peak", JsonInt(0))
             resourcesUsedObj.put("network_bytes_in", JsonInt(0))
             resourcesUsedObj.put("network_bytes_out", JsonInt(0))
             resourcesUsedObj.put("file_operations", JsonInt(0))
@@ -652,7 +695,25 @@ public class APIRouter {
             createSuccessResponse(context, responseObj.toString(), responseHeaders)
         } catch (ex: Exception) {
             LogUtils.error("Error handling POST /skills/execute: ${ex.message}")
-            createErrorResponse(context, 500, "internal_error", "Internal server error")
+            createErrorResponse(context, 500, "internal_error", "Internal server error: ${ex.message}")
+        }
+    }
+
+    /**
+     * Parse timeout string to milliseconds
+     */
+    private func _parseTimeout(timeoutStr: String): Int64 {
+        try {
+            if (timeoutStr.endsWith("ms")) {
+                return Int64.parse(timeoutStr[0..timeoutStr.size - 2])
+            } else if (timeoutStr.endsWith("s")) {
+                let seconds = Int64.parse(timeoutStr[0..timeoutStr.size - 1])
+                return seconds * 1000
+            } else {
+                return Int64.parse(timeoutStr)
+            }
+        } catch (ex: Exception) {
+            return 30000
         }
     }
 

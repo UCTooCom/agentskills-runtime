@@ -48,8 +48,8 @@ private let DEFAULT_PROVIDER_MAP = HashMap<String, ProviderConfig>([
     ("zhipuai",   ProviderConfig("ZHIPU_BASE_URL", // openai-compatible
                                  "https://open.bigmodel.cn/api/paas/v4",
                                  "ZHIPU_API_KEY")),
-    ("maas",   ProviderConfig("MAAS_BASE_URL", // openai-compatible
-                              "",
+    ("maas",   ProviderConfig("MAAS_BASE_URL", // 华为云 ModelArts Studio MaaS (OpenAI兼容)
+                              "https://api.modelarts-maas.com/v2",
                               "MAAS_API_KEY")),
     ("google", ProviderConfig("GOOGLE_BASE_URL", // openai-compatible
                               "https://generativelanguage.googleapis.com/v1beta/openai",
@@ -85,11 +85,6 @@ private func getDefaultBaseURL(provider: String, kind: String): String {
     // Special cases of default values
     let defaultValue = if (kind == "embedding" && provider == "dashscope") {
         "https://dashscope.aliyuncs.com/api/v1"
-    } else if (provider == "maas") {
-        match (getEnv(envVarName)) {
-            case Some(v) => v
-            case None => throw Exception("Fail to get env variable ${envVarName}.")
-        }
     } else {
         config.urlEnvValue
     }

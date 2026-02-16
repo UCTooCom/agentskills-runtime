@@ -3,14 +3,16 @@
  */
 package magic.skill.application
 
-import std.collection.{HashMap, ArrayList}
-import std.fs.{exists, Directory, FileInfo, Path, File, copy}
+import std.collection.{HashMap, ArrayList, HashSet}
+import std.fs.{exists, Directory, FileInfo, Path, File, copy, remove, OpenMode}
 import std.process.Process
 import std.env.{getWorkingDirectory, getVariable}
 import std.time.DateTime
+import std.io.{StringReader, StringWriter}
 import magic.core.skill.SkillManager
 import magic.log.LogUtils
 import magic.skill.domain.models.ValidationResult
+import magic.utils.{move}
 
 /**
  * SkillPackageManager handles the installation, update, and uninstallation of skills
@@ -22,6 +24,36 @@ public class SkillPackageManager {
     private let _skillRegistry: SkillRegistry
     private let _gitManager: GitManager
 
+    /**
+     * Determine the installation path based on priority:
+     * Priority 1: Provided path parameter (if not empty)
+     * Priority 2: Environment variable SKILL_INSTALL_PATH from .env file
+     * Priority 3: Default path "./skills"
+     * 
+     * This is a static utility method that can be used by CLI, API, or any other caller.
+     */
+    public static func determineInstallationPath(providedPath: String): String {
+        // Priority 1: Use provided path if not empty
+        if (!providedPath.isEmpty()) {
+            LogUtils.info("Using provided installation path: ${providedPath}")
+            return Path(providedPath).toString()
+        }
+
+        // Priority 2: Use environment variable SKILL_INSTALL_PATH
+        if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
+            if (!configuredPath.isEmpty()) {
+                LogUtils.info("Using SKILL_INSTALL_PATH from environment: ${configuredPath}")
+                return Path(configuredPath).toString()
+            }
+        }
+
+        // Priority 3: Default to "./skills" directory
+        let currentDir = getWorkingDirectory().toString()
+        let defaultPath = Path(currentDir).join("skills").toString()
+        LogUtils.info("Using default installation path: ${defaultPath}")
+        return defaultPath
+    }
+
     public init(
         installationPath!: String,
         dependencyResolver!: DependencyResolver,
@@ -32,47 +64,8 @@ public class SkillPackageManager {
         _skillRegistry = skillRegistry
         _gitManager = gitManager
         
-        // Determine the installation path with priority
-        // Priority 1: Use provided path if not empty
-        if (!installationPath.isEmpty()) {
-            _installationPath = installationPath
-        } else {
-            // Priority 2: Use environment variable
-            if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
-                if (!configuredPath.isEmpty()) {
-                    _installationPath = configuredPath
-                    return
-                }
-            }
-            
-            // Priority 3: Default to "./skills" directory
-            let currentDir = getWorkingDirectory().toString()
-            _installationPath = "${currentDir}/skills"
-        }
-    }
-
-    /**
-     * Determine the actual installation path based on priority:
-     * 1. Provided path (if not empty)
-     * 2. Environment variable SKILL_INSTALL_PATH
-     * 3. Default path "./skills"
-     */
-    private func _determineInstallationPath(providedPath: String): String {
-        // Priority 1: Use provided path if not empty
-        if (!providedPath.isEmpty()) {
-            return providedPath
-        }
-
-        // Priority 2: Use environment variable
-        if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
-            if (!configuredPath.isEmpty()) {
-                return configuredPath
-            }
-        }
-
-        // Priority 3: Default to "./skills" directory
-        let currentDir = getWorkingDirectory().toString()
-        return "${currentDir}/skills"
+        // Use the unified path determination logic
+        _installationPath = SkillPackageManager.determineInstallationPath(installationPath)
     }
 
     /**
@@ -102,21 +95,23 @@ public class SkillPackageManager {
         let skillName = _extractSkillName(path)
         LogUtils.info("Extracted skill name: ${skillName}")
         
-        let installPath = "${_installationPath}/${skillName}"
+        let installPath = Path(_installationPath).join(skillName).toString()
         LogUtils.info("Calculated install path: ${installPath}")
 
+        // Check if destination already exists - will overwrite
+        let installPathObj = Path(installPath)
+        if (exists(installPathObj)) {
+            LogUtils.info("Destination already exists, will overwrite: ${installPath}")
+        }
+
         // Create installation directory if it doesn't exist
-        if (!exists(Path(installPath).parent)) {
-            LogUtils.info("Creating parent directory: ${Path(installPath).parent}")
-            Directory.create(Path(installPath).parent, recursive: true)
+        if (!exists(installPathObj.parent)) {
+            LogUtils.info("Creating parent directory: ${installPathObj.parent}")
+            Directory.create(installPathObj.parent, recursive: true)
         }
 
         // Actually copy the skill files to the installation directory
         try {
-            // Create destination directory
-            LogUtils.info("Creating destination directory: ${Path(installPath)}")
-            Directory.create(Path(installPath), recursive: true)
-
             // Check if source exists before copying
             LogUtils.info("Checking if source path exists: ${path}")
             if (exists(path)) {
@@ -125,25 +120,41 @@ public class SkillPackageManager {
                 LogUtils.info("Source is directory: ${sourceInfo.isDirectory()}")
 
                 if (sourceInfo.isDirectory()) {
-                    // Copy directory contents recursively using std.fs.copy
-                    LogUtils.info("Copying directory from ${sourcePath} to ${Path(installPath)}")
-                    copy(sourcePath, to: Path(installPath), overwrite: true)
+                    // Copy directory contents (create dest if not exists)
+                    LogUtils.info("Copying directory from ${sourcePath} to ${installPathObj}")
+                    if (!exists(installPathObj)) {
+                        Directory.create(installPathObj, recursive: true)
+                    }
+                    
+                    // Copy all files from source to destination
+                    Directory.walk(sourcePath.toString()) { fileInfo =>
+                        if (!fileInfo.isDirectory()) {
+                            let relativePath = fileInfo.path.toString().replace(sourcePath.toString(), "")
+                            // Remove leading slash or backslash from relative path
+                            var cleanRelativePath = relativePath
+                            if (cleanRelativePath.startsWith("/") || cleanRelativePath.startsWith("\\")) {
+                                cleanRelativePath = cleanRelativePath[1..cleanRelativePath.size]
+                            }
+                            let destFilePath = Path(installPath).join(cleanRelativePath.replace("\\", "/"))
+                            if (!exists(destFilePath.parent)) {
+                                Directory.create(destFilePath.parent, recursive: true)
+                            }
+                            copy(fileInfo.path.toString(), to: destFilePath.toString(), overwrite: true)
+                        }
+                        true
+                    }
                 } else {
-                    // Copy single file using std.fs.copy
-                    LogUtils.info("Copying file from ${sourcePath} to ${Path(installPath).join(sourcePath.fileName)}")
-                    copy(sourcePath, to: Path(installPath).join(sourcePath.fileName), overwrite: true)
+                    // Copy single file
+                    Directory.create(installPathObj, recursive: true)
+                    let destFilePath = Path(installPath).join(sourcePath.fileName)
+                    LogUtils.info("Copying file from ${sourcePath} to ${destFilePath}")
+                    copy(sourcePath.toString(), to: destFilePath.toString(), overwrite: true)
                 }
-                
+
                 // Verify that files were copied
                 let destInfo = FileInfo(installPath)
                 if (destInfo.isDirectory()) {
                     LogUtils.info("Successfully copied to destination directory")
-                    let destFiles = ArrayList<String>()
-                    Directory.walk(installPath) { fileInfo =>
-                        destFiles.add(fileInfo.path.toString())
-                        true
-                    }
-                    LogUtils.info("Files in destination: ${String.join(destFiles.toArray(), delimiter: ", ")}")
                 } else {
                     LogUtils.info("Successfully copied to destination file")
                 }
@@ -232,6 +243,7 @@ public class SkillPackageManager {
 
     /**
      * Uninstall a skill
+     * Searches for the skill in multiple paths based on priority
      */
     public func uninstallSkill(skillName: String): Bool {
         LogUtils.info("Uninstalling skill: ${skillName}")
@@ -239,16 +251,60 @@ public class SkillPackageManager {
         // Remove skill from registry
         _skillRegistry.unregisterSkill(skillName)
 
-        // Remove skill files from installation directory
-        let skillPath = "${_installationPath}/${skillName}"
-        if (exists(skillPath)) {
-            // In a real implementation, this would remove the skill directory
-            // For now, we'll just log the intended action
-            LogUtils.info("Skill directory would be removed: ${skillPath}")
-            return true
+        // Try to find the skill in multiple paths based on priority
+        let skillPath = _findSkillPath(skillName)
+        
+        if (skillPath.isSome()) {
+            let foundPath = skillPath.getOrThrow()
+            LogUtils.info("Found skill to uninstall at: ${foundPath}")
+            
+            try {
+                // Remove the skill directory and all its contents recursively
+                _removeDirectoryRecursively(Path(foundPath))
+                LogUtils.info("Skill directory removed: ${foundPath}")
+                return true
+            } catch (ex: Exception) {
+                LogUtils.error("Failed to remove skill directory: ${ex.message}")
+                return false
+            }
         }
         
-        return false
+        LogUtils.info("Skill directory not found for: ${skillName}")
+        return true
+    }
+
+    /**
+     * Remove a directory and all its contents recursively
+     */
+    private func _removeDirectoryRecursively(dirPath: Path): Unit {
+        if (!exists(dirPath)) {
+            return
+        }
+        
+        let dirInfo = FileInfo(dirPath)
+        if (dirInfo.isDirectory()) {
+            // Walk through all files and delete them first
+            Directory.walk(dirPath.toString()) { fileInfo =>
+                if (!fileInfo.isDirectory()) {
+                    remove(fileInfo.path.toString())
+                }
+                true
+            }
+            // Now walk again to delete empty directories (in reverse order would be better but walk should work)
+            Directory.walk(dirPath.toString()) { fileInfo =>
+                if (fileInfo.isDirectory()) {
+                    let subDirInfo = FileInfo(fileInfo.path)
+                    if (subDirInfo.isDirectory()) {
+                        remove(fileInfo.path.toString())
+                    }
+                }
+                true
+            }
+            // Finally delete the root directory
+            remove(dirPath.toString())
+        } else {
+            remove(dirPath.toString())
+        }
     }
 
     /**
@@ -311,7 +367,168 @@ public class SkillPackageManager {
      */
     private func _cleanupTempDirectory(tempPath: String): Unit {
         LogUtils.info("Cleaning up temporary directory: ${tempPath}")
-        // In a real implementation, this would remove the temporary directory
+    }
+
+    /**
+     * Edit a skill's SKILL.md file
+     * Updates the YAML frontmatter fields with provided values
+     * Searches for the skill in multiple paths based on priority
+     */
+    public func editSkill(skillName: String, updates: HashMap<String, String>): Bool {
+        LogUtils.info("Editing skill: ${skillName}")
+        
+        // Try to find the skill in multiple paths based on priority
+        let skillPath = _findSkillPath(skillName)
+        
+        if (skillPath.isNone()) {
+            LogUtils.error("Skill directory not found for: ${skillName}")
+            return false
+        }
+        
+        let foundPath = skillPath.getOrThrow()
+        LogUtils.info("Found skill at: ${foundPath}")
+        
+        // Find SKILL.md file
+        let skillMdPath = Path(foundPath).join("SKILL.md")
+        if (!exists(skillMdPath)) {
+            LogUtils.error("SKILL.md not found at: ${skillMdPath}")
+            return false
+        }
+        
+        try {
+            // Read the current content
+            let content = _readFileContent(skillMdPath)
+            
+            // Update the frontmatter
+            let updatedContent = _updateYamlFrontmatter(content, updates)
+            
+            // Write back
+            _writeFileContent(skillMdPath, updatedContent)
+            
+            LogUtils.info("Successfully updated SKILL.md for skill: ${skillName}")
+            return true
+        } catch (ex: Exception) {
+            LogUtils.error("Failed to edit skill: ${ex.message}")
+            return false
+        }
+    }
+
+    /**
+     * Find skill path by searching in multiple directories based on priority
+     * Priority 1: Provided path parameter (from request)
+     * Priority 2: Environment variable SKILL_INSTALL_PATH from .env file
+     * Priority 3: Default path "./skills"
+     */
+    private func _findSkillPath(skillName: String): Option<String> {
+        var searchPaths = HashSet<String>()
+        
+        if (!_installationPath.isEmpty()) {
+            searchPaths.add(_installationPath)
+        }
+        
+        if (let Some(envPath) <- getVariable("SKILL_INSTALL_PATH")) {
+            if (!envPath.isEmpty()) {
+                searchPaths.add(envPath)
+            }
+        }
+        
+        let currentDir = getWorkingDirectory().toString()
+        let defaultPath = Path(currentDir).join("skills").toString()
+        searchPaths.add(defaultPath)
+        
+        for (searchPath in searchPaths) {
+            let skillDir = Path(searchPath).join(skillName)
+            if (exists(skillDir)) {
+                LogUtils.info("Found skill '${skillName}' at: ${skillDir}")
+                return Some(skillDir.toString())
+            }
+        }
+        
+        LogUtils.info("Skill '${skillName}' not found in any search path")
+        return None
+    }
+
+    /**
+     * Read file content
+     */
+    private func _readFileContent(path: Path): String {
+        let file = File(path, OpenMode.Read)
+        let reader = StringReader(file)
+        let content = reader.readToEnd()
+        file.close()
+        return content
+    }
+
+    /**
+     * Write content to file
+     */
+    private func _writeFileContent(path: Path, content: String): Unit {
+        let file = File(path, OpenMode.Write)
+        let writer = StringWriter(file)
+        writer.write(content)
+        writer.flush()
+        file.close()
+    }
+
+    /**
+     * Update YAML frontmatter in SKILL.md content
+     */
+    private func _updateYamlFrontmatter(content: String, updates: HashMap<String, String>): String {
+        // Find frontmatter boundaries
+        let lines = content.split('\n')
+        let result = ArrayList<String>()
+        var inFrontmatter = false
+        var frontmatterEnded = false
+        
+        for (i in 0..lines.size) {
+            let line = lines[i]
+            
+            if (i == 0 && line.trimAscii() == "---") {
+                inFrontmatter = true
+                result.add(line)
+                continue
+            }
+            
+            if (inFrontmatter && line.trimAscii() == "---") {
+                // Add any updates that weren't in the original frontmatter
+                for ((key, value) in updates) {
+                    var keyFound = false
+                    for (j in 0..result.size) {
+                        let existingLine = result[j]
+                        if (existingLine.startsWith("${key}:")) {
+                            keyFound = true
+                            break
+                        }
+                    }
+                    if (!keyFound) {
+                        result.add("${key}: ${value}")
+                    }
+                }
+                result.add(line)
+                inFrontmatter = false
+                frontmatterEnded = true
+                continue
+            }
+            
+            if (inFrontmatter) {
+                // Check if this line should be updated
+                var lineUpdated = false
+                for ((key, value) in updates) {
+                    if (line.startsWith("${key}:")) {
+                        result.add("${key}: ${value}")
+                        lineUpdated = true
+                        break
+                    }
+                }
+                if (!lineUpdated) {
+                    result.add(line)
+                }
+            } else {
+                result.add(line)
+            }
+        }
+        
+        return String.join(result.toArray(), delimiter: "\n")
     }
 }
 

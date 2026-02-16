@@ -16,6 +16,8 @@ import std.time.DateTime
 import magic.log.LogUtils
 import std.regex.Regex
 import std.fs.Path
+import stdx.encoding.json.{JsonValue, JsonString, JsonObject}
+import std.core.StringBuilder
 
 // Helper function to log messages using the standard logging system
 func logToFile(filename: String, message: String): Unit {
@@ -688,16 +690,114 @@ private func convertToString(value: Any): String {
     }
 }
 
+@tool[description: "Execute a skill by name with given parameters. Use this when the user asks to find skills, search for skills, or execute any installed skill."]
+func executeSkill(skillId: String, parameters: String): String {
+    Utils.logMessage("DEBUG", "executeSkill called with skillId: " + skillId + ", parameters: " + parameters)
+    logToFile("uctoo-mcp-server.log", "executeSkill called with skillId: " + skillId)
+
+    try {
+        let skillManager = SkillExecutionAdapter.getSkillManager()
+        
+        let skillOpt = skillManager.getSkill(skillId)
+        if (skillOpt.isNone()) {
+            let errorResponse = "{\"error\":\"Skill not found\",\"skillId\":\"" + skillId + "\",\"status\":\"error\"}"
+            Utils.logMessage("ERROR", "Skill not found: " + skillId)
+            return errorResponse
+        }
+
+        let skill = skillOpt.getOrThrow()
+        Utils.logMessage("DEBUG", "Found skill: " + skill.name)
+
+        let args = HashMap<String, JsonValue>()
+        if (!parameters.isEmpty()) {
+            try {
+                let paramsJson = JsonValue.fromStr(parameters)
+                match (paramsJson.kind) {
+                    case JsonObject =>
+                        let paramsObj = paramsJson.asObject()
+                        for ((key, value) in paramsObj.getFields()) {
+                            args.add(key, value)
+                        }
+                    case _ =>
+                        args.add("query", JsonString(parameters))
+                }
+            } catch (jsonEx: Exception) {
+                args.add("query", JsonString(parameters))
+            }
+        }
+
+        let startTime = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
+        let output = skill.execute(args)
+        let endTime = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
+        let executionTime = endTime - startTime
+
+        Utils.logMessage("DEBUG", "Skill executed successfully in " + executionTime.toString() + "ms")
+
+        let response = StringBuilder()
+        response.append("{")
+        response.append("\"status\": \"success\",")
+        response.append("\"skillId\": \"" + skillId + "\",")
+        response.append("\"output\": " + escapeJsonString(output) + ",")
+        response.append("\"executionTime\": " + executionTime.toString())
+        response.append("}")
+        return response.toString()
+    } catch (ex: Exception) {
+        Utils.logMessage("ERROR", "Error executing skill: " + ex.message)
+        return "{\"error\":\"" + ex.message.replace("\"", "\\\"") + "\",\"skillId\":\"" + skillId + "\",\"status\":\"error\"}"
+    }
+}
+
+@tool[description: "List all available skills that can be executed"]
+func listAvailableSkills(): String {
+    Utils.logMessage("DEBUG", "listAvailableSkills called")
+    
+    try {
+        let skillManager = SkillExecutionAdapter.getSkillManager()
+        let skills = skillManager.availableSkills
+        
+        let response = StringBuilder()
+        response.append("{\"status\": \"success\", \"skills\": [")
+        
+        var first = true
+        for ((name, skill) in skills) {
+            if (!first) {
+                response.append(", ")
+            }
+            first = false
+            response.append("{")
+            response.append("\"name\": \"" + escapeJsonString(name) + "\",")
+            response.append("\"description\": \"" + escapeJsonString(skill.description) + "\"")
+            response.append("}")
+        }
+        
+        response.append("]}")
+        return response.toString()
+    } catch (ex: Exception) {
+        Utils.logMessage("ERROR", "Error listing skills: " + ex.message)
+        return "{\"error\":\"" + ex.message.replace("\"", "\\\"") + "\",\"status\":\"error\"}"
+    }
+}
+
+private func escapeJsonString(str: String): String {
+    return "\"" + str.replace("\\", "\\\\")
+                     .replace("\"", "\\\"")
+                     .replace("\n", "\\n")
+                     .replace("\r", "\\r")
+                     .replace("\t", "\\t") + "\""
+}
+
 @agent[
     description: "Direct MCP adapter for UCToo backend APIs, processing natural language to API calls without AI interpretation",
-    tools: [processNaturalLanguageRequestDirect, getMcpServiceById, listApiMappings]
+    tools: [processNaturalLanguageRequestDirect, getMcpServiceById, listApiMappings, executeSkill, listAvailableSkills]
 ]
 public class DirectUctooMCPAdapterAgent {
     @prompt("You are a direct MCP adapter that processes natural language requests by converting them to direct API calls to the uctoo-backend server. Return the raw API response directly to the client without modification.\n\n" +
             "Available tools:\n" +
             "- processNaturalLanguageRequestDirect: Process natural language requests directly to backend API\n" +
             "- getMcpServiceById: Get MCP service details by ID\n" +
-            "- listApiMappings: List all API mappings")
+            "- listApiMappings: List all API mappings\n" +
+            "- executeSkill: Execute a skill by name with given parameters\n" +
+            "- listAvailableSkills: List all available skills")
 }
 
 // Main entry point

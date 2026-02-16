@@ -12,7 +12,7 @@
    * Copyright (c) 2025. All rights reserved.
    */
   package magic.examples.uctoo_api_mcp_server
-  
+
   import magic.prelude.*
   import magic.examples.uctoo_api_mcp_server.models.*
   ```
@@ -106,7 +106,7 @@
 - 使用统一的错误消息和日志格式
 
 ## 11. 仓颉标准库
-### Package List 
+### Package List
 
 The std library includes several packages that provide rich foundational functionalities:
 
@@ -151,7 +151,7 @@ The std library includes several packages that provide rich foundational functio
 | [unittest.prop_test](./unittest_prop_test/unittest_prop_test_package_overview.md) | The unittest.prop_test package provides types and general methods required for parameterized testing in the unit testing framework. |
 
 ## 12. 仓颉拓展库
-### Package List 
+### Package List
 
 stdx includes several packages that offer rich extension functionalities:
 
@@ -179,6 +179,241 @@ stdx includes several packages that offer rich extension functionalities:
 | [unittest.data](./unittest/data/data_package_overview.md)                        | The unittest module provides extended unit testing capabilities. |
 
 
+## 字符串操作
+
+### 替换操作
+- 使用 `replace(old: String, new: String): String` 方法替代 `replaceAll` 方法进行字符串替换操作
+- 示例：`str.replace("\"", "\\\"")` 而不是 `str.replaceAll("\"", "\\\"")`
+
+### 修剪操作
+- 使用 `trimAscii(): String` 方法替代 `trim(): String` 方法进行字符串首尾空白字符修剪
+- 示例：`str.trimAscii()` 而不是 `str.trim()`
+
+### 分割操作
+- `split` 方法只接受单个字符串作为分隔符，不支持数组形式的多个分隔符
+- 示例：`str.split(" ")` 而不是 `str.split([" ", ":"])`
+
+## 集合操作
+
+### HashMap操作
+- 使用 `add(key: K, value: V): Unit` 方法替代 `insert(key: K, value: V): Unit` 方法向HashMap添加键值对
+- 示例：`map.add("key", "value")` 而不是 `map.insert("key", "value")`
+- HashMap的entries字段是私有的，不能直接访问，应使用`iterator()`方法遍历
+- 示例：`for ((key, value) in map.iterator())` 而不是 `for (entry in map.entries)`
+
+## 数值类型处理
+
+### 类型一致性
+- 确保函数返回类型与实际返回值类型一致
+- 显式声明变量类型以避免类型推断错误
+- 示例：`var score: Int32 = 0` 而不是 `var score = 0`
+
+## StringBuilder使用
+
+### 方法调用
+- StringBuilder类提供`append`方法用于追加各种类型的数据
+- 可以链式调用，但建议分行书写以提高可读性
+- 示例：
+  ```cangjie
+  let sb = StringBuilder()
+  sb.append("Hello ")
+  sb.append("World")
+  let result = sb.toString()
+  ```
+
+## 枚举和模式匹配
+
+### 枚举比较
+- 枚举值比较应使用 `==` 操作符
+- 示例：`value.kind == JsonKind.JsObject` 而不是 `value.kind.equals(JsonKind.JsObject)`
+- 在match表达式中，分支使用 `=>` 语法，不要在分支内嵌套复杂的控制流
+
+### Option类型处理
+- 使用 `match` 表达式处理 `Option<T>` 类型
+- 示例：
+  ```cangjie
+  match (optionValue) {
+      case Some(value) => // 处理有值的情况
+      case None => // 处理无值的情况
+  }
+  ```
+
+## 循环依赖处理
+
+### 问题描述
+当两个或多个包相互导入时，会产生循环依赖错误（cyclic dependency），例如：
+```
+package A -> package B
+package B -> package A
+```
+
+### 解决方案
+1. **依赖注入模式**：将具体实现类的注册从框架层移到应用层
+   - 框架层定义接口和注册机制（如 `SkillFactory` 接口和 `SkillRegistry` 类）
+   - 应用层在初始化时注册具体实现（如 `UctooAPISkillFactory`）
+
+2. **示例代码**：
+   ```cangjie
+   // 框架层：magic.skill.application 包
+   public class SkillManagementService {
+       private let skillRegistry: SkillRegistry
+
+       public func getSkillRegistry(): SkillRegistry {
+           return this.skillRegistry
+       }
+   }
+
+   // 应用层：magic.examples.uctoo_api_mcp_server 包
+   main(): Unit {
+       let skillLoader = ProgressiveSkillLoader(skillBaseDirectory: examplesDir)
+
+       // 在应用层注册工厂，避免框架层直接依赖具体实现
+       let skillRegistry = skillLoader.getSkillRegistry()
+       skillRegistry.registerFactory("uctoo-api-skill", UctooAPISkillFactory())
+
+       // 继续加载技能...
+   }
+   ```
+
+3. **设计原则**：
+   - 框架层（magic.skill.application）只定义抽象接口，不依赖具体实现
+   - 具体实现（magic.examples.uctoo_api_skill）依赖框架层的接口
+   - 应用程序（magic.examples.uctoo_api_mcp_server）负责协调两者，注册具体实现
+   - 这样形成单向依赖链：具体实现 -> 框架接口 <- 应用程序，无循环依赖
+- 使用 `isSome()` 和 `getOrThrow()` 方法也是可行的替代方案
+
+## 函数和方法
+
+### Match表达式
+- Match表达式的各个分支需要返回相同类型或Unit
+- 在需要返回值的上下文中，确保所有分支都返回相同类型
+- 空的match分支应使用 `()`
+
+### Option类型处理
+- Option类型没有`unwrap()`方法，应使用`getOrThrow()`方法获取值
+- 示例：
+  ```cangjie
+  let optValue = Some(42)
+  if (optValue.isSome()) {
+      let value = optValue.getOrThrow()
+      // 处理值
+  }
+  ```
+
+### 枚举比较
+- 枚举值比较应使用match表达式而不是==操作符
+- 示例：
+  ```cangjie
+  match (enumValue) {
+      case EnumType.Value1 => // 处理Value1情况
+      case EnumType.Value2 => // 处理Value2情况
+      case _ => // 默认情况
+  }
+  ```
+
+### 字符比较
+- 字符比较可能需要转换为字符串进行比较
+- 示例：
+  ```cangjie
+  let char = string[i]
+  let charStr = String([char])  // 将字符转换为字符串
+  if (charStr >= "a" && charStr <= "z") {
+      // 处理小写字母
+  }
+  ```
+
+### 枚举类型处理
+- 在处理枚举类型时，需要确保match表达式涵盖所有可能的枚举值
+- 示例：
+  ```cangjie
+  match (enumValue) {
+      case EnumType.Value1 =>
+          // 处理Value1情况
+      case EnumType.Value2 =>
+          // 处理Value2情况
+      case EnumType.Value3 =>
+          // 处理Value3情况
+      case EnumType.Value4 =>
+          // 处理Value4情况
+      case EnumType.Value5 =>
+          // 处理Value5情况
+      case EnumType.Value6 =>
+          // 处理Value6情况
+      case EnumType.Value7 =>
+          // 处理Value7情况
+      case _ =>
+          // 处理其他情况
+  }
+  ```
+
+### 字符类型处理
+- 在处理字符串索引操作符返回的字符时，可能需要使用Rune类型进行比较
+- 示例：
+  ```cangjie
+  let char = string[i]  // char is UInt8
+  let runeValue = UInt32(Rune(char))  // Convert to Rune then to UInt32 for comparison
+  let aValue = UInt32(r'a')  // Character code for 'a' using Rune literal
+  let zValue = UInt32(r'z')  // Character code for 'z' using Rune literal
+  if (runeValue >= aValue && runeValue <= zValue) {
+      // 处理小写字母
+  }
+  ```
+
+- 使用Rune字面量语法（如r'a'）而不是字符字面量（如'a'）进行转换
+  ```cangjie
+  let runeA = r'a'  // 正确的Rune字面量语法
+  let codeA = UInt32(runeA)  // 转换为UInt32进行比较
+  ```
+
+### 构造函数
+- 在构造函数中，必须先初始化所有成员变量，然后才能调用实例方法
+- 示例：
+  ```cangjie
+  public init() {
+      // 先初始化所有成员变量
+      field1 = Value1()
+      field2 = Value2()
+
+      // 然后再调用方法
+      initializeMappings()
+  }
+  ```
+
+### 类型转换
+- 仓颉语言中的类型转换使用 `as` 操作符，语法为 `(expression) as Type`，而不是方法调用形式 `_server.as(Type)`
+- 示例：
+  ```cangjie
+  let server = _server as Server  // 正确的类型转换语法
+  // 而不是 _server.as(Server)
+  ```
+- 类型转换操作符返回一个 `Option` 类型，必须用 `match` 来处理
+- 示例：
+  ```cangjie
+  let result = value as Int32
+  match (result) {
+      case Some(num) => // 处理转换成功的情况
+      case None => // 处理转换失败的情况
+  }
+  ```
+
+### Option类型处理
+- 仓颉语言中许多操作返回 `Option<T>` 类型（如类型转换 `(expression) as Type`）
+- 必须使用 `match` 表达式处理 `Option<T>` 类型，不能直接使用返回值
+- 示例：
+  ```cangjie
+  match (_server as Server) {
+      case Some(server) => {
+          // 使用转换成功的 server 对象
+          server.get("/endpoint", handler)
+      }
+      case None => {
+          // 处理转换失败的情况
+          LogUtils.error("Failed to cast _server to Server type")
+      }
+  }
+  ```
+- 在函数中如果需要返回Option类型中的值，必须在match表达式的每个分支中都有返回或适当的处理
+
 ## 遵循检查
 为确保代码符合上述规范，所有代码必须通过以下检查：
 1. 无 Java 导入语句
@@ -188,5 +423,311 @@ stdx includes several packages that offer rich extension functionalities:
 5. 命名符合规范
 6. 安全考虑已实施
 
----
-本规范基于 D:\UCT\projects\miniapp\uctooelivery\ucuctooin\apps\CangjieMagic\resource 中的仓颉编程语言文档制定。
+## 字符串操作
+
+### 替换操作
+- 使用 `replace(old: String, new: String): String` 方法替代 `replaceAll` 方法进行字符串替换操作
+- 示例：`str.replace("\"", "\\\"")` 而不是 `str.replaceAll("\"", "\\\"")`
+
+### 修剪操作
+- 使用 `trimAscii(): String` 方法替代 `trim(): String` 方法进行字符串首尾空白字符修剪
+- 示例：`str.trimAscii()` 而不是 `str.trim()`
+
+### 分割操作
+- `split` 方法只接受单个字符串作为分隔符，不支持数组形式的多个分隔符
+- 示例：`str.split(" ")` 而不是 `str.split([" ", ":"])`
+
+## 集合操作
+
+### HashMap操作
+- 使用 `add(key: K, value: V): Unit` 方法替代 `insert(key: K, value: V): Unit` 方法向HashMap添加键值对
+- 示例：`map.add("key", "value")` 而不是 `map.insert("key", "value")`
+- HashMap的entries字段是私有的，不能直接访问，应使用`iterator()`方法遍历
+- 示例：`for ((key, value) in map.iterator())` 而不是 `for (entry in map.entries)`
+
+## 数值类型处理
+
+### 类型一致性
+- 确保函数返回类型与实际返回值类型一致
+- 显式声明变量类型以避免类型推断错误
+- 示例：`var score: Int32 = 0` 而不是 `var score = 0`
+
+## StringBuilder使用
+
+### 方法调用
+- StringBuilder类提供`append`方法用于追加各种类型的数据
+- 可以链式调用，但建议分行书写以提高可读性
+- 示例：
+  ```cangjie
+  let sb = StringBuilder()
+  sb.append("Hello ")
+  sb.append("World")
+  let result = sb.toString()
+  ```
+
+## 枚举和模式匹配
+
+### 枚举比较
+- 枚举值比较应使用 `==` 操作符
+- 示例：`value.kind == JsonKind.JsObject` 而不是 `value.kind.equals(JsonKind.JsObject)`
+- 在match表达式中，分支使用 `=>` 语法，不要在分支内嵌套复杂的控制流
+
+### Option类型处理
+- 使用 `match` 表达式处理 `Option<T>` 类型
+- 示例：
+  ```cangjie
+  match (optionValue) {
+      case Some(value) => // 处理有值的情况
+      case None => // 处理无值的情况
+  }
+  ```
+- 使用 `isSome()` 和 `getOrThrow()` 方法也是可行的替代方案
+
+## 函数和方法
+
+### Match表达式
+- Match表达式的各个分支需要返回相同类型或Unit
+- 在需要返回值的上下文中，确保所有分支都返回相同类型
+- 空的match分支应使用 `()`
+
+### Option类型处理
+- Option类型没有`unwrap()`方法，应使用`getOrThrow()`方法获取值
+- 示例：
+  ```cangjie
+  let optValue = Some(42)
+  if (optValue.isSome()) {
+      let value = optValue.getOrThrow()
+      // 处理值
+  }
+  ```
+
+### 枚举比较
+- 枚举值比较应使用match表达式而不是==操作符
+- 示例：
+  ```cangjie
+  match (enumValue) {
+      case EnumType.Value1 => // 处理Value1情况
+      case EnumType.Value2 => // 处理Value2情况
+      case _ => // 默认情况
+  }
+  ```
+
+### 字符比较
+- 字符比较可能需要转换为字符串进行比较
+- 示例：
+  ```cangjie
+  let char = string[i]
+  let charStr = String([char])  // 将字符转换为字符串
+  if (charStr >= "a" && charStr <= "z") {
+      // 处理小写字母
+  }
+  ```
+
+### 枚举比较
+- 枚举值比较应使用match表达式而不是==操作符
+- 示例：
+  ```cangjie
+  match (enumValue) {
+      case EnumType.Value1 => // 处理Value1情况
+      case EnumType.Value2 => // 处理Value2情况
+      case _ => // 默认情况
+  }
+  ```
+
+### 字符类型处理
+- 在处理字符串索引操作符返回的字符时，可能需要使用Rune类型进行比较
+- 示例：
+  ```cangjie
+  let char = string[i]  // char is UInt8
+  let runeValue = UInt32(Rune(char))  // Convert to Rune then to UInt32 for comparison
+  let aValue = UInt32(r'a')  // Character code for 'a' using Rune literal
+  let zValue = UInt32(r'z')  // Character code for 'z' using Rune literal
+  if (runeValue >= aValue && runeValue <= zValue) {
+      // 处理小写字母
+  }
+  ```
+
+- 使用Rune字面量语法（如r'a'）而不是字符字面量（如'a'）进行转换
+  ```cangjie
+  let runeA = r'a'  // 正确的Rune字面量语法
+  let codeA = UInt32(runeA)  // 转换为UInt32进行比较
+  ```
+
+### 枚举类型处理
+- 在处理枚举类型时，需要确保match表达式涵盖所有可能的枚举值
+- 示例：
+  ```cangjie
+  match (enumValue) {
+      case EnumType.Value1 =>
+          // 处理Value1情况
+      case EnumType.Value2 =>
+          // 处理Value2情况
+      case EnumType.Value3 =>
+          // 处理Value3情况
+      case EnumType.Value4 =>
+          // 处理Value4情况
+      case EnumType.Value5 =>
+          // 处理Value5情况
+      case EnumType.Value6 =>
+          // 处理Value6情况
+      case EnumType.Value7 =>
+          // 处理Value7情况
+      case _ =>
+          // 处理其他情况
+  }
+  ```
+
+### 枚举类型处理
+- 在处理枚举类型时，需要确保match表达式涵盖所有可能的枚举值
+- 示例：
+  ```cangjie
+  match (enumValue) {
+      case EnumType.Value1 =>
+          // 处理Value1情况
+      case EnumType.Value2 =>
+          // 处理Value2情况
+      case EnumType.Value3 =>
+          // 处理Value3情况
+      case EnumType.Value4 =>
+          // 处理Value4情况
+      case EnumType.Value5 =>
+          // 处理Value5情况
+      case EnumType.Value6 =>
+          // 处理Value6情况
+      case EnumType.Value7 =>
+          // 处理Value7情况
+      case _ =>
+          // 处理其他情况
+  }
+  ```
+
+### 枚举比较
+- 当需要检查特定枚举值时，可以使用match表达式进行模式匹配
+- 示例：
+  ```cangjie
+  match (enumValue) {
+      case SpecificEnum.Value =>
+          // 处理特定枚举值
+      case _ =>
+          // 处理其他情况
+  }
+  ```
+
+- 如果需要使用条件判断，可以使用函数调用形式：
+  ```cangjie
+  if (enumValue.kind() == SpecificEnum.Value) {
+      // 处理特定枚举值
+  } else {
+      // 处理其他情况
+  }
+  ```
+
+### 字符类型处理
+- 在处理字符串索引操作符返回的字符时，可能需要使用UInt32(char)进行转换
+- 示例：
+  ```cangjie
+  let char = string[i]  // char is UInt8
+  let charCode = UInt32(char)  // Convert to UInt32 for comparison
+  let aCode = UInt32('a')  // Character code for 'a'
+  if (charCode >= aCode && charCode <= UInt32('z')) {
+      // 处理小写字母
+  }
+  ```
+
+### 构造函数
+- 在构造函数中，必须先初始化所有成员变量，然后才能调用实例方法
+- 示例：
+  ```cangjie
+  public init() {
+      // 先初始化所有成员变量
+      field1 = Value1()
+      field2 = Value2()
+
+      // 然后再调用方法
+      initializeMappings()
+  }
+  ```
+
+### 类型转换
+- 仓颉语言中的类型转换使用 `as` 操作符，语法为 `(expression) as Type`，而不是方法调用形式 `_server.as(Type)`
+- 示例：
+  ```cangjie
+  let server = _server as Server  // 正确的类型转换语法
+  // 而不是 _server.as(Server)
+  ```
+- 类型转换操作符返回一个 `Option` 类型，必须用 `match` 来处理
+- 示例：
+  ```cangjie
+  let result = value as Int32
+  match (result) {
+      case Some(num) => // 处理转换成功的情况
+      case None => // 处理转换失败的情况
+  }
+  ```
+
+### Option类型处理
+- 仓颉语言中许多操作返回 `Option<T>` 类型（如类型转换 `(expression) as Type`）
+- 必须使用 `match` 表达式处理 `Option<T>` 类型，不能直接使用返回值
+- 示例：
+  ```cangjie
+  match (_server as Server) {
+      case Some(server) => {
+          // 使用转换成功的 server 对象
+          server.get("/endpoint", handler)
+      }
+      case None => {
+          // 处理转换失败的情况
+          LogUtils.error("Failed to cast _server to Server type")
+      }
+  }
+  ```
+- 在函数中如果需要返回Option类型中的值，必须在match表达式的每个分支中都有返回或适当的处理
+
+## 字符串操作
+
+### 替换操作
+- 使用 `replace(old: String, new: String): String` 方法替代 `replaceAll` 方法进行字符串替换操作
+- 示例：`str.replace("\"", "\\\"")` 而不是 `str.replaceAll("\"", "\\\"")`
+
+### 修剪操作
+- 使用 `trimAscii(): String` 方法替代 `trim(): String` 方法进行字符串首尾空白字符修剪
+- 示例：`str.trimAscii()` 而不是 `str.trim()`
+
+### 分割操作
+- `split` 方法只接受单个字符串作为分隔符，不支持数组形式的多个分隔符
+- 示例：`str.split(" ")` 而不是 `str.split([" ", ":"])`
+
+## 集合操作
+
+### HashMap操作
+- 使用 `add(key: K, value: V): Unit` 方法替代 `insert(key: K, value: V): Unit` 方法向HashMap添加键值对
+- 示例：`map.add("key", "value")` 而不是 `map.insert("key", "value")`
+- HashMap的entries字段是私有的，不能直接访问，应使用`iterator()`方法遍历
+- 示例：`for ((key, value) in map.iterator())` 而不是 `for (entry in map.entries)`
+
+## 数值类型处理
+
+### 类型一致性
+- 确保函数返回类型与实际返回值类型一致
+- 显式声明变量类型以避免类型推断错误
+- 示例：`var score: Int32 = 0` 而不是 `var score = 0`
+
+## StringBuilder使用
+
+### 方法调用
+- StringBuilder类提供`append`方法用于追加各种类型的数据
+- 可以链式调用，但建议分行书写以提高可读性
+- 示例：
+  ```cangjie
+  let sb = StringBuilder()
+  sb.append("Hello ")
+  sb.append("World")
+  let result = sb.toString()
+  ```
+
+## 枚举和模式匹配
+
+### 枚举比较
+- 枚举值比较应使用 `==` 操作符
+- 示例：`value.kind == JsonKind.JsObject` 而不是 `value.kind.equals(JsonKind.JsObject)`
+- 在match表达式中，分支使用 `=>` 语法，不要在分支内嵌套复杂的控制流

@@ -6,12 +6,15 @@ package magic.cli
 import std.collection.HashMap
 import std.env.getStdOut
 import std.convert.*
+import std.fs.Path
 import magic.skill.application.SkillManagementService
 import magic.skill.application.ProgressiveSkillLoader
+import magic.skill.application.{SkillPackageManager, DependencyResolver, GitManager, SkillRegistry}
 import magic.core.skill.SkillManager
 import magic.skill.CompositeSkillToolManager
 import magic.log.LogUtils
 import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
+import magic.config.Config
 
 /**
  * Main CLI command structure for the agent skill runtime
@@ -21,8 +24,13 @@ public class SkillCLI {
     private let _skillManagementService: SkillManagementService
     private let _progressiveSkillLoader: ProgressiveSkillLoader
     private let _skillManager: SkillManager
+    private let _skillRegistry: SkillRegistry
 
     public init() {
+        // Load environment variables from .env file
+        let envLoadResult = Config.env.load(Path("./.env"))
+        LogUtils.info("Environment loaded: ${envLoadResult}")
+        
         _skillManagementService = SkillManagementService()
         _progressiveSkillLoader = ProgressiveSkillLoader(
             skillBaseDirectories: [], 
@@ -30,6 +38,7 @@ public class SkillCLI {
             defaultResourceLimits: ResourceLimits.default()
         )
         _skillManager = CompositeSkillToolManager()
+        _skillRegistry = _skillManagementService.getSkillRegistry()
     }
 
     /**
@@ -171,6 +180,7 @@ public class SkillCLI {
         var branch: Option<String> = None
         var tag: Option<String> = None
         var commit: Option<String> = None
+        var installPath: Option<String> = None
         var listOnly = false
         
         var i = 0
@@ -179,6 +189,9 @@ public class SkillCLI {
             
             if (arg == "--path" && i + 1 < args.size) {
                 sourcePath = Some(args[i + 1])
+                i += 2
+            } else if (arg == "--root" && i + 1 < args.size) {
+                installPath = Some(args[i + 1])
                 i += 2
             } else if (arg == "--git" && i + 1 < args.size) {
                 gitUrl = Some(args[i + 1])
@@ -203,12 +216,28 @@ public class SkillCLI {
         
         if (listOnly) {
             getStdOut().writeln("Listing installed skills...")
-            // In a real implementation, this would list installed skills
+            let packageManager = _createSkillPackageManager("")
+            let skills = packageManager.listInstalledSkills()
+            for (skill in skills) {
+                getStdOut().writeln("  - ${skill.name} (${skill.version}) at ${skill.path}")
+            }
         } else if (sourcePath.isSome()) {
-            getStdOut().writeln("Installing skill from path: ${sourcePath.getOrThrow()}")
-            // In a real implementation, this would install from local path
+            let path = sourcePath.getOrThrow()
+            getStdOut().writeln("Installing skill from path: ${path}")
+            
+            let packageManager = _createSkillPackageManager(installPath.getOrDefault({=>""}))
+            let result = packageManager.installFromPath(path, true)
+            
+            if (result.success) {
+                let installedPath = result.path.getOrDefault({=>"unknown"})
+                getStdOut().writeln("✅ Skill installed successfully to: ${installedPath}")
+            } else {
+                let errorMsg = result.error.getOrDefault({=>"Unknown error"})
+                getStdOut().writeln("❌ Failed to install skill: ${errorMsg}")
+            }
         } else if (gitUrl.isSome()) {
-            getStdOut().writeln("Installing skill from Git: ${gitUrl.getOrThrow()}")
+            let url = gitUrl.getOrThrow()
+            getStdOut().writeln("Installing skill from Git: ${url}")
             if (branch.isSome()) {
                 getStdOut().writeln("  Branch: ${branch.getOrThrow()}")
             }
@@ -218,10 +247,36 @@ public class SkillCLI {
             if (commit.isSome()) {
                 getStdOut().writeln("  Commit: ${commit.getOrThrow()}")
             }
-            // In a real implementation, this would install from Git repository
+            
+            let packageManager = _createSkillPackageManager(installPath.getOrDefault({=>""}))
+            let result = packageManager.installFromGit(url, branch, tag, commit)
+            
+            if (result.success) {
+                let installedPath = result.path.getOrDefault({=>"unknown"})
+                getStdOut().writeln("✅ Skill installed successfully to: ${installedPath}")
+            } else {
+                let errorMsg = result.error.getOrDefault({=>"Unknown error"})
+                getStdOut().writeln("❌ Failed to install skill: ${errorMsg}")
+            }
         } else {
             getStdOut().writeln("Error: Must specify either --path or --git for installation")
         }
+    }
+    
+    /**
+     * Create a SkillPackageManager with the specified installation path
+     * Uses the unified path priority logic from SkillPackageManager
+     */
+    private func _createSkillPackageManager(installPath: String): SkillPackageManager {
+        let dependencyResolver = DependencyResolver()
+        let gitManager = GitManager()
+        
+        return SkillPackageManager(
+            installationPath: installPath,
+            dependencyResolver: dependencyResolver,
+            skillRegistry: _skillRegistry,
+            gitManager: gitManager
+        )
     }
 
     /**

@@ -39,7 +39,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.0"
+  version = "0.0.1"
 
 [package.package-configuration."magic.examples.doc_translator"]
   output-type = "executable"
@@ -67,7 +67,15 @@
   output-type = "executable"
 [package.package-configuration."magic.examples.uctoo_api_skill"]
   output-type = "executable"
+[package.package-configuration."magic.examples.find_skills_skill"]
+  output-type = "executable"
+[package.package-configuration."magic.examples.skill_mcp_client"]
+  output-type = "executable"
+[package.package-configuration."magic.examples.direct_skill_test"]
+  output-type = "executable"
 [package.package-configuration."magic.api"]
+  output-type = "executable"
+[package.package-configuration."magic.scripts.package_release"]
   output-type = "executable"
 
 #----------------------------------------

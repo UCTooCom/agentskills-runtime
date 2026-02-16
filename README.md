@@ -44,6 +44,29 @@ This implementation follows clean architecture principles with clear separation 
 - Markdown body processing for skill instructions
 - External resource access (scripts/, references/, assets/)
 
+### API Interface Layer
+- Comprehensive RESTful API for skill management
+- Endpoints for skill lifecycle management (add, edit, delete, execute)
+- Real-time skill loading and reloading
+- Standardized response formats following UCToo API specification
+
+#### API Endpoints
+- **GET /skills**: Retrieve a list of installed skills with pagination support
+- **GET /skills/:id**: Retrieve details of a specific skill
+- **POST /skills/add**: Install a skill from a local path or remote URL
+- **POST /skills/edit**: Update an existing skill
+- **POST /skills/del**: Uninstall a skill
+- **POST /skills/execute**: Execute a skill with provided parameters
+- **POST /skills/search**: Search for skills using semantic search
+- **GET /hello**: Health check endpoint
+- **GET /mcp/stream**: MCP server with HTTP streaming mode
+
+#### API Implementation Details
+The API layer now provides real functionality using underlying services:
+- **POST /skills/add**: Uses SkillPackageManager to perform actual skill installation from local paths or Git repositories
+- **POST /skills/edit**: Updates skills using the SkillPackageManager with proper reloading
+- **POST /skills/del**: Removes skills from the system using SkillPackageManager and refreshes the skill registry
+
 ### DSL Support
 - `@skill` macro for declarative skill definition
 - `@tool` macro for tool definition

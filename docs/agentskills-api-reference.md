@@ -166,18 +166,37 @@ Content-Type: application/json
 {
   "source": "./my-skill",
   "validate": true,
-  "creator": "user-id"
+  "creator": "user-id",
+  "install_path": "/custom/skills/path"
 }
 ```
+
+**Request Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `source` | string | Yes | Local path or Git URL of the skill to install |
+| `validate` | boolean | No | Whether to validate the skill before installation (default: true) |
+| `creator` | string | No | Creator identifier (default: "unknown") |
+| `install_path` | string | No | Custom installation path (see Path Priority below) |
+
+**Path Priority for Installation:**
+The skill installation path is determined by the following priority order:
+
+| Priority | Source | Description |
+|----------|--------|-------------|
+| 1 | `install_path` parameter | Path specified in the API request or CLI `--root` parameter |
+| 2 | `SKILL_INSTALL_PATH` environment variable | Path configured in `.env` file |
+| 3 | Default path `./skills` | Relative to the working directory |
 
 **Implementation Details:**
 The POST /skills/add endpoint now performs actual skill installation using the underlying SkillPackageManager. When a request is received:
 1. The system parses the request body to extract the source, validation flag, and creator
 2. It creates a SkillPackageManager instance with the appropriate dependencies
-3. If the source is a Git URL (starts with http:// or https://), it installs from Git using the GitManager
-4. If the source is a local path, it installs from the local path with optional validation
-5. On successful installation, it reloads the skills to include the newly added skill
-6. Returns a success response with the skill details
+3. The installation path is determined using the priority order above
+4. If the source is a Git URL (starts with http:// or https://), it installs from Git using the GitManager
+5. If the source is a local path, it installs from the local path with optional validation
+6. On successful installation, it reloads the skills to include the newly added skill
+7. Returns a success response with the skill details
 
 **Response:**
 ```json
@@ -191,7 +210,7 @@ The POST /skills/add endpoint now performs actual skill installation using the u
 ```
 
 ### POST /skills/edit
-Update an existing skill.
+Update an existing skill's SKILL.md file.
 
 **Request:**
 ```
@@ -205,24 +224,49 @@ Content-Type: application/json
 {
   "id": "my-skill-abc",
   "description": "Updated description",
-  "creator": "user-id"
+  "creator": "user-id",
+  "install_path": "/custom/skills/path"
 }
 ```
+
+**Request Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | The ID of the skill to edit |
+| `description` | string | No | New description for the skill |
+| `creator` | string | No | New creator identifier |
+| `name` | string | No | New name for the skill |
+| `version` | string | No | New version for the skill |
+| `install_path` | string | No | Custom path to search for the skill (see Path Priority below) |
+
+**Path Priority for Finding Skills:**
+When editing a skill, the system searches for the skill in the following priority order:
+
+| Priority | Source | Description |
+|----------|--------|-------------|
+| 1 | `install_path` parameter | Path specified in the API request |
+| 2 | `SKILL_INSTALL_PATH` environment variable | Path configured in `.env` file |
+| 3 | Default path `./skills` | Relative to the working directory |
+
+The system will search each path in order and edit the first matching skill found.
 
 **Implementation Details:**
 The POST /skills/edit endpoint now performs actual skill updates using the underlying SkillPackageManager. When a request is received:
 1. The system parses the request body to extract the skill ID and update parameters
 2. It creates a SkillPackageManager instance with the appropriate dependencies
-3. It calls the updateSkill method to update the skill in the system
-4. On successful update, it reloads the skills to reflect the changes
-5. Returns a success response with the updated skill details
+3. It searches for the skill using the path priority order above
+4. It reads and parses the SKILL.md file's YAML frontmatter
+5. It updates the specified fields in the frontmatter
+6. It writes the updated content back to the SKILL.md file
+7. On successful update, it reloads the skills to reflect the changes
+8. Returns a success response with the updated skill details
 
 **Response:**
 ```json
 {
   "id": "my-skill-abc",
-  "name": "my-skill",
-  "description": "Updated description",
+  "status": "updated",
+  "message": "Skill updated successfully",
   "updated_at": "2026-01-25T10:00:00Z"
 }
 ```
@@ -240,17 +284,37 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-  "id": "my-skill-abc"
+  "id": "my-skill-abc",
+  "install_path": "/custom/skills/path"
 }
 ```
+
+**Request Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | The ID of the skill to uninstall |
+| `install_path` | string | No | Custom path to search for the skill (see Path Priority below) |
+
+**Path Priority for Finding Skills:**
+When deleting a skill, the system searches for the skill in the following priority order:
+
+| Priority | Source | Description |
+|----------|--------|-------------|
+| 1 | `install_path` parameter | Path specified in the API request |
+| 2 | `SKILL_INSTALL_PATH` environment variable | Path configured in `.env` file |
+| 3 | Default path `./skills` | Relative to the working directory |
+
+The system will search each path in order and delete the first matching skill found.
 
 **Implementation Details:**
 The POST /skills/del endpoint now performs actual skill uninstallation using the underlying SkillPackageManager. When a request is received:
 1. The system parses the request body to extract the skill ID
 2. It creates a SkillPackageManager instance with the appropriate dependencies
-3. It calls the uninstallSkill method to remove the skill from the system
-4. On successful uninstallation, it reloads the skills to exclude the deleted skill
-5. Returns a success response confirming the deletion
+3. It searches for the skill using the path priority order above
+4. It removes the skill from the registry
+5. It recursively deletes the skill directory and all its contents
+6. On successful uninstallation, it reloads the skills to exclude the deleted skill
+7. Returns a success response confirming the deletion
 
 **Response:**
 ```json

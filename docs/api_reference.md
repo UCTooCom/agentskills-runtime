@@ -1,5 +1,11 @@
 # API Reference
 
+## SDK 文档
+
+- 📦 [JavaScript SDK](./sdk-javascript.md) - `@uctoo/skills` JavaScript/TypeScript SDK
+
+## 包 API 文档
+
 - 📁 [agent](./package_docs/agent.md)
 - 📁 [agent.base](./package_docs/agent.base.md)
 - 📁 [agent_executor](./package_docs/agent_executor.md)

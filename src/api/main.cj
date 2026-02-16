@@ -4,12 +4,19 @@
 package magic.api
 
 import std.convert.*
+import magic.config.Config
+import std.fs.Path
+import magic.log.LogUtils
 
 /**
  * Main entry point for the CangjieMagic Agent Skill Runtime API
  * This starts the HTTP server and handles API requests
  */
 main(args: Array<String>): Unit {
+    // Load environment variables from .env file
+    let envLoadResult = Config.env.load(Path("./.env"))
+    LogUtils.info("Environment loaded: ${envLoadResult}")
+    
     let port = if (args.size > 0) {
         try {
             let parsedPort = Int64.parse(args[0])

@@ -120,7 +120,11 @@ export declare class SkillsClient {
     }>;
     executeSkill(skillId: string, params?: Record<string, unknown>): Promise<SkillExecutionResult>;
     executeSkillTool(skillId: string, toolName: string, args?: Record<string, unknown>): Promise<SkillExecutionResult>;
-    searchSkills(query: string): Promise<SkillSearchResult>;
+    searchSkills(options: {
+        query: string;
+        source?: string;
+        limit?: number;
+    } | string): Promise<SkillSearchResult>;
     updateSkill(skillId: string, updates: Partial<Skill>): Promise<Skill>;
     getSkillConfig(skillId: string): Promise<Record<string, unknown>>;
     setSkillConfig(skillId: string, config: Record<string, unknown>): Promise<{

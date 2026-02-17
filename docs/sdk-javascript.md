@@ -564,6 +564,43 @@ interface RuntimeOptions {
 
 ## 环境变量
 
+### 运行时配置
+
+运行时从可执行文件所在目录的 `.env` 文件加载环境变量。
+
+**位置：** 将 `.env` 文件放置在 `bin/` 目录中，与 `agentskills-runtime.exe` 同级：
+
+```
+sdk/javascript/runtime/win-x64/release/bin/.env
+```
+
+**`.env` 文件示例：**
+
+```env
+# GitHub Personal Access Token（可选，用于提高速率限制）
+GITHUB_TOKEN=ghp_your_github_token
+
+# Gitee Private Token（可选，用于提高速率限制）
+GITEE_TOKEN=your_gitee_token
+
+# AtomGit Access Token（可选，用于提高速率限制）
+ATOMGIT_TOKEN=your_atomgit_token
+```
+
+**获取 Token 的方式：**
+
+| 平台 | 获取方式 | 认证方式 |
+|------|----------|----------|
+| GitHub | [Settings → Tokens](https://github.com/settings/tokens) | `Authorization: token` 请求头 |
+| Gitee | [设置 → 私人令牌](https://gitee.com/profile/personal_access_tokens) | `access_token` URL 参数 |
+| AtomGit | [设置 → 访问令牌](https://atomgit.com/-/profile/personal_access_tokens) | `access_token` URL 参数 |
+
+> **注意：** API Token 是**可选的**。不配置 Token 也可以搜索，只是速率限制较低：
+> - GitHub：未认证 10 次/分钟，认证后 30 次/分钟
+> - Gitee/AtomGit：未认证有限制，认证后限制更高
+
+### SDK 环境变量
+
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `SKILL_RUNTIME_API_URL` | API 服务器地址 | `http://127.0.0.1:8080` |

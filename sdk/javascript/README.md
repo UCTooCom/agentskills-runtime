@@ -359,7 +359,120 @@ const apiKey = config.API_KEY;
 └─────────────────────────────────────┘
 ```
 
+## Manual Runtime Installation
+
+If you prefer to manually install the runtime without using the SDK:
+
+### Download
+
+Download the latest release from [AtomGit](https://atomgit.com/UCToo/agentskills-runtime/releases):
+
+- `agentskills-runtime-win-x64.tar.gz` - Windows x64
+- `agentskills-runtime-linux-x64.tar.gz` - Linux x64 (coming soon)
+- `agentskills-runtime-darwin-x64.tar.gz` - macOS x64 (coming soon)
+
+### Installation
+
+```bash
+# Download and extract
+tar -xzf agentskills-runtime-win-x64.tar.gz
+
+# Navigate to bin directory
+cd release/bin
+
+# Run the runtime
+./agentskills-runtime.exe
+```
+
+### Release Package Contents
+
+```
+release/
+├── bin/                    # Executables and ALL DLLs
+│   ├── agentskills-runtime.exe    # Main entry point
+│   ├── magic.api.exe              # Alternative entry point
+│   └── *.dll                      # All required DLLs (stdx, runtime, magic)
+├── magic/                  # Runtime modules
+├── commonmark4cj/          # Markdown parser
+├── yaml4cj/                # YAML parser
+└── VERSION                 # Version information
+```
+
+### Usage
+
+After extraction, simply run the executable:
+
+```bash
+# Windows
+cd release/bin
+agentskills-runtime.exe
+
+# The server will start on http://127.0.0.1:8080
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/hello` | GET | Health check |
+| `/skills` | GET | List all skills |
+| `/skills/:id` | GET | Get skill details |
+| `/skills/add` | POST | Install a skill |
+| `/skills/edit` | POST | Update a skill |
+| `/skills/del` | POST | Uninstall a skill |
+| `/skills/execute` | POST | Execute a skill |
+| `/skills/search` | POST | Search skills |
+| `/mcp/stream` | GET | MCP server with streaming |
+
+### Verify Installation
+
+```bash
+# Check health
+curl http://127.0.0.1:8080/hello
+# Response: {"message":"Hello World"}
+
+# List skills
+curl http://127.0.0.1:8080/skills
+```
+
 ## Environment Variables
+
+### Runtime Configuration
+
+The runtime loads environment variables from a `.env` file in the same directory as the executable.
+
+**Location:** Place the `.env` file in the `bin/` directory alongside `agentskills-runtime.exe`:
+
+```
+sdk/javascript/runtime/win-x64/release/bin/.env
+```
+
+**Example `.env` file:**
+
+```env
+# GitHub Personal Access Token (optional, for higher rate limits)
+GITHUB_TOKEN=ghp_your_github_token
+
+# Gitee Private Token (optional, for higher rate limits)
+GITEE_TOKEN=your_gitee_token
+
+# AtomGit Access Token (optional, for higher rate limits)
+ATOMGIT_TOKEN=your_atomgit_token
+```
+
+**How to obtain tokens:**
+
+| Platform | How to Get Token | Auth Method |
+|----------|------------------|-------------|
+| GitHub | [Settings → Tokens](https://github.com/settings/tokens) | `Authorization: token` header |
+| Gitee | [设置 → 私人令牌](https://gitee.com/profile/personal_access_tokens) | `access_token` URL parameter |
+| AtomGit | [设置 → 访问令牌](https://atomgit.com/-/profile/personal_access_tokens) | `access_token` URL parameter |
+
+> **Note:** API tokens are **optional**. Without tokens, search still works but with lower rate limits:
+> - GitHub: 10 requests/min (unauthenticated) vs 30 requests/min (authenticated)
+> - Gitee/AtomGit: Limited without token, higher with token
+
+### SDK Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -380,7 +493,7 @@ const apiKey = config.API_KEY;
 | `uninstallSkill(skillId)` | Uninstall a skill |
 | `executeSkill(skillId, params)` | Execute a skill |
 | `executeSkillTool(skillId, toolName, args)` | Execute a specific tool |
-| `searchSkills(query)` | Search for skills |
+| `searchSkills(options)` | Search for skills (supports query, source, limit) |
 | `updateSkill(skillId, updates)` | Update a skill |
 | `getSkillConfig(skillId)` | Get skill configuration |
 | `setSkillConfig(skillId, config)` | Set skill configuration |

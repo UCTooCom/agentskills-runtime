@@ -5,14 +5,14 @@ package magic.skill.application
 
 import std.collection.{HashMap, ArrayList, HashSet}
 import std.fs.{exists, Directory, FileInfo, Path, File, copy, remove, OpenMode}
-import std.process.Process
+import std.process.{launch, ProcessRedirect, SubProcess}
 import std.env.{getWorkingDirectory, getVariable}
 import std.time.DateTime
 import std.io.{StringReader, StringWriter}
 import magic.core.skill.SkillManager
 import magic.log.LogUtils
 import magic.skill.domain.models.ValidationResult
-import magic.utils.{move}
+import magic.utils.{move, newProcess}
 
 /**
  * SkillPackageManager handles the installation, update, and uninstallation of skills
@@ -643,14 +643,203 @@ public class DependencyResolver {
 
 /**
  * Git manager for cloning repositories
+ * Implements real Git clone functionality with branch/tag/commit support
  */
 public class GitManager {
+    private let _tempBaseDir: String
+    
+    public init() {
+        let currentDir = getWorkingDirectory().toString()
+        _tempBaseDir = Path(currentDir).join("temp").join("git-clone").toString()
+    }
+    
+    public init(tempBaseDir!: String) {
+        _tempBaseDir = tempBaseDir
+    }
+    
+    /**
+     * Clone a Git repository to a temporary directory
+     * @param url Git repository URL
+     * @param ref Git reference (branch, tag, or commit)
+     * @return Path to the cloned repository
+     */
     public func cloneRepository(url: String, ref: GitReference): String {
-        // In a real implementation, this would clone the Git repository
-        // For now, we'll return a mock path
-        let tempDir = "/tmp/cloned-skill-${(DateTime.now() - DateTime.UnixEpoch).toMilliseconds()}"
-        LogUtils.info("Cloning repository ${url} to ${tempDir}")
-        return tempDir
+        let tempPath = _generateTempPath()
+        LogUtils.info("[GitManager] Cloning repository: ${url}")
+        LogUtils.info("[GitManager] Target path: ${tempPath}")
+        
+        try {
+            let cloneResult = _executeClone(url, ref, tempPath)
+            
+            if (!cloneResult.success) {
+                LogUtils.error("[GitManager] Clone failed: ${cloneResult.error}")
+                throw GitException("Failed to clone repository: ${cloneResult.error}")
+            }
+            
+            LogUtils.info("[GitManager] Successfully cloned to: ${tempPath}")
+            return tempPath
+        } catch (ex: Exception) {
+            LogUtils.error("[GitManager] Exception during clone: ${ex.message}")
+            throw GitException("Failed to clone repository: ${ex.message}")
+        }
+    }
+    
+    /**
+     * Check if Git is available in the system
+     */
+    public func isGitAvailable(): Bool {
+        try {
+            let result = _executeCommand("git", ["--version"])
+            return result.success
+        } catch (ex: Exception) {
+            return false
+        }
+    }
+    
+    /**
+     * Generate a unique temporary path for cloning
+     */
+    private func _generateTempPath(): String {
+        let timestamp = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
+        let randomSuffix = _randomString(6)
+        return Path(_tempBaseDir).join("skill-${timestamp}-${randomSuffix}").toString()
+    }
+    
+    /**
+     * Execute git clone command
+     */
+    private func _executeClone(url: String, ref: GitReference, targetPath: String): GitCommandResult {
+        var args = ArrayList<String>()
+        args.add("clone")
+        
+        match (ref) {
+            case b: GitReferenceBranch =>
+                args.add("--branch")
+                args.add(b.value)
+                args.add("--depth")
+                args.add("1")
+            case t: GitReferenceTag =>
+                args.add("--branch")
+                args.add(t.value)
+                args.add("--depth")
+                args.add("1")
+            case c: GitReferenceCommit =>
+                ()
+            case d: GitReferenceDefault =>
+                args.add("--depth")
+                args.add("1")
+            case _ =>
+                args.add("--depth")
+                args.add("1")
+        }
+        
+        args.add(url)
+        args.add(targetPath)
+        
+        let result = _executeCommand("git", args.toArray())
+        
+        // If commit reference, checkout the specific commit
+        if (result.success) {
+            match (ref) {
+                case c: GitReferenceCommit =>
+                    let checkoutArgs = ["checkout", c.value]
+                    let checkoutResult = _executeCommandInDir(targetPath, "git", checkoutArgs)
+                    if (!checkoutResult.success) {
+                        return checkoutResult
+                    }
+                case _ => ()
+            }
+        }
+        
+        return result
+    }
+    
+    /**
+     * Execute a command and return the result
+     */
+    private func _executeCommand(command: String, args: Array<String>): GitCommandResult {
+        try {
+            let process = newProcess(command, args, redirectErr: true)
+            let stdOut = StringReader(process.stdOutPipe).readToEnd()
+            let stdErr = StringReader(process.stdErrPipe).readToEnd()
+            let exitCode = process.wait()
+            
+            return GitCommandResult(
+                success: exitCode == 0,
+                output: stdOut,
+                error: stdErr
+            )
+        } catch (ex: Exception) {
+            return GitCommandResult(
+                success: false,
+                output: "",
+                error: ex.message
+            )
+        }
+    }
+    
+    /**
+     * Execute a command in a specific directory
+     */
+    private func _executeCommandInDir(workDir: String, command: String, args: Array<String>): GitCommandResult {
+        try {
+            let process = newProcess(command, args, redirectErr: true)
+            let stdOut = StringReader(process.stdOutPipe).readToEnd()
+            let stdErr = StringReader(process.stdErrPipe).readToEnd()
+            let exitCode = process.wait()
+            
+            return GitCommandResult(
+                success: exitCode == 0,
+                output: stdOut,
+                error: stdErr
+            )
+        } catch (ex: Exception) {
+            return GitCommandResult(
+                success: false,
+                output: "",
+                error: ex.message
+            )
+        }
+    }
+    
+    /**
+     * Generate a random string for unique directory names
+     */
+    private func _randomString(length: Int64): String {
+        let chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+        let sb = StringBuilder()
+        let timestamp = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
+        var seed = timestamp
+        for (i in 0..length) {
+            seed = (seed * 1103515245 + 12345) % 2147483648
+            let index = Int64(seed % chars.size)
+            sb.append(chars[index])
+        }
+        return sb.toString()
+    }
+}
+
+/**
+ * Result of a Git command execution
+ */
+public struct GitCommandResult {
+    public let success: Bool
+    public let output: String
+    public let error: String
+    
+    public init(success!: Bool, output!: String, error!: String) {
+        this.success = success
+        this.output = output
+        this.error = error
+    }
+}
+
+/**
+ * Exception for Git operations
+ */
+public class GitException <: Exception {
+    public init(message: String) {
+        super(message)
     }
 }
 

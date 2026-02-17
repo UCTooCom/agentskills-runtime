@@ -7,15 +7,15 @@ import std.fs.*
 import std.process.{launch, ProcessRedirect, SubProcess}
 import std.convert.*
 import std.collection.ArrayList
+import std.env.getVariable
 
 main(args: Array<String>): Unit {
     let version = if (args.size > 0) { args[0] } else { "0.0.1" }
     let platform = if (args.size > 1) { args[1] } else { "win-x64" }
     
-    let projectDir = Path(".")
     let targetDir = Path("./target/release")
     let releaseDir = Path("./release")
-    let packageDir = Path("./target/package")
+    let binDir = Path("${targetDir}/bin")
     
     println("========================================")
     println("AgentSkills Runtime Package Script")
@@ -26,7 +26,7 @@ main(args: Array<String>): Unit {
     
     if (!exists(targetDir)) {
         println("[ERROR] Build directory not found: ${targetDir}")
-        println("Please run 'cjpm build --release' first.")
+        println("Please run 'cjpm build' first.")
         return
     }
     
@@ -35,147 +35,168 @@ main(args: Array<String>): Unit {
         println("[INFO] Created release directory: ${releaseDir}")
     }
     
-    if (exists(packageDir)) {
-        remove(packageDir, recursive: true)
-        println("[INFO] Cleaned old package directory")
-    }
-    Directory.create(packageDir, recursive: true)
+    let dllDirs = ["magic", "commonmark4cj", "yaml4cj"]
+    let totalDlls = ArrayList<String>()
     
-    let binDir = Path("${packageDir}/bin")
-    let libDir = Path("${packageDir}/lib")
-    Directory.create(binDir, recursive: true)
-    Directory.create(libDir, recursive: true)
-    
-    println("")
-    println("[STEP 1] Copying API entry point...")
-    
-    let apiExe = Path("${targetDir}/bin/magic.api.exe")
-    let apiCjo = Path("${targetDir}/bin/magic.api.cjo")
-    
-    if (exists(apiExe)) {
-        copy(apiExe.toString(), to: "${binDir}/agentskills-runtime.exe", overwrite: true)
-        println("  [OK] agentskills-runtime.exe")
-    } else {
-        println("  [WARN] magic.api.exe not found")
-    }
-    
-    if (exists(apiCjo)) {
-        copy(apiCjo.toString(), to: "${binDir}/agentskills-runtime.cjo", overwrite: true)
-        println("  [OK] agentskills-runtime.cjo")
-    } else {
-        println("  [WARN] magic.api.cjo not found")
-    }
-    
-    println("")
-    println("[STEP 2] Copying dynamic libraries...")
-    
-    let magicDir = Path("${targetDir}/magic")
-    if (exists(magicDir)) {
-        let dllCount = ArrayList<String>()
-        let cjoCount = ArrayList<String>()
+    for (dirName in dllDirs) {
+        println("")
+        println("[STEP] Copying ${dirName} DLLs to bin...")
         
-        Directory.walk(magicDir.toString()) { fileInfo =>
+        let srcDir = Path("${targetDir}/${dirName}")
+        if (exists(srcDir) && exists(binDir)) {
+            let dllCount = ArrayList<String>()
+            
+            Directory.walk(srcDir.toString()) { fileInfo =>
+                if (!fileInfo.isDirectory()) {
+                    let name = fileInfo.path.fileName
+                    
+                    if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                        let destPath = Path("${binDir}/${name}")
+                        if (!exists(destPath)) {
+                            copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                            dllCount.add(name)
+                            totalDlls.add(name)
+                        }
+                    }
+                }
+                true
+            }
+            
+            println("  [OK] Copied ${dllCount.size.toString()} ${dirName} DLLs to bin/")
+        } else {
+            println("  [WARN] Directory not found: ${srcDir}")
+        }
+    }
+    
+    println("")
+    println("[STEP] Copying cangjie-stdx libraries to bin...")
+    
+    let stdxDir = Path("./libs/cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx")
+    if (exists(stdxDir) && exists(binDir)) {
+        let stdxCount = ArrayList<String>()
+        
+        Directory.walk(stdxDir.toString()) { fileInfo =>
             if (!fileInfo.isDirectory()) {
                 let name = fileInfo.path.fileName
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
-                    if (!name.contains("tests")) {
-                        copy(fileInfo.path.toString(), to: "${libDir}/${name}", overwrite: true)
-                        dllCount.add(name)
-                    }
-                }
-                
-                if (name.endsWith(".cjo")) {
-                    if (!name.contains("tests") && !name.contains("examples")) {
-                        copy(fileInfo.path.toString(), to: "${libDir}/${name}", overwrite: true)
-                        cjoCount.add(name)
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        stdxCount.add(name)
+                        totalDlls.add(name)
                     }
                 }
             }
             true
         }
         
-        println("  [OK] Copied ${dllCount.size.toString()} dynamic libraries")
-        println("  [OK] Copied ${cjoCount.size.toString()} object files")
+        println("  [OK] Copied ${stdxCount.size.toString()} stdx DLLs to bin/")
     } else {
-        println("  [ERROR] Magic directory not found: ${magicDir}")
+        println("  [WARN] stdx directory not found: ${stdxDir}")
     }
     
     println("")
-    println("[STEP 3] Creating version file...")
+    println("[STEP] Copying cangjie runtime libraries to bin...")
     
-    let versionFile = Path("${packageDir}/VERSION")
-    let versionContent = "AGENTSKILLS_RUNTIME_VERSION=${version}\nBUILD_PLATFORM=${platform}\nBUILD_DATE=2024-01-15\n"
+    let cangjieHome = getVariable("CANGJIE_HOME")
+    if (cangjieHome.isSome()) {
+        let home = cangjieHome.getOrThrow()
+        let runtimeDir = Path("${home}/runtime/lib/windows_x86_64_llvm")
+        if (exists(runtimeDir) && exists(binDir)) {
+            let runtimeCount = ArrayList<String>()
+            
+            Directory.walk(runtimeDir.toString()) { fileInfo =>
+                if (!fileInfo.isDirectory()) {
+                    let name = fileInfo.path.fileName
+                    
+                    if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                        let destPath = Path("${binDir}/${name}")
+                        if (!exists(destPath)) {
+                            copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                            runtimeCount.add(name)
+                            totalDlls.add(name)
+                        }
+                    }
+                }
+                true
+            }
+            
+            println("  [OK] Copied ${runtimeCount.size.toString()} runtime DLLs to bin/")
+        } else {
+            println("  [WARN] runtime directory not found: ${runtimeDir}")
+        }
+    } else {
+        println("  [WARN] CANGJIE_HOME environment variable not set")
+        println("  [INFO] Please ensure CANGJIE runtime DLLs are available in PATH")
+    }
+    
+    println("")
+    println("[STEP] Creating entry point...")
+    
+    let entryExe = Path("${binDir}/agentskills-runtime.exe")
+    let apiExe = Path("${binDir}/magic.api.exe")
+    if (exists(apiExe) && !exists(entryExe)) {
+        copy(apiExe.toString(), to: entryExe.toString(), overwrite: true)
+        println("  [OK] Created agentskills-runtime.exe")
+    } else if (exists(entryExe)) {
+        println("  [OK] agentskills-runtime.exe already exists")
+    }
+    
+    println("")
+    println("[STEP] Creating version file...")
+    
+    let versionFile = Path("${targetDir}/VERSION")
+    let versionContent = "AGENTSKILLS_RUNTIME_VERSION=${version}\nBUILD_PLATFORM=${platform}\nBUILD_DATE=2026-02-16\n"
     File.writeTo(versionFile, versionContent.toArray())
     println("  [OK] VERSION file created")
     
     println("")
-    println("[STEP 4] Creating README...")
+    println("[STEP] Copying .env.example...")
     
-    let readmeFile = Path("${packageDir}/README.txt")
-    let readmeContent = """
-AgentSkills Runtime ${version}
-==============================
-
-This package contains the AgentSkills Runtime binaries.
-
-Directory Structure:
-  bin/              - Executable files
-    agentskills-runtime.exe  - Main API server
-  lib/              - Dynamic libraries and object files
-
-Usage:
-  1. Add bin/ directory to your PATH
-  2. Run: agentskills-runtime.exe [port]
-  3. Default port is 8080
-
-For more information, visit:
-  https://atomgit.com/uctoo/agentskills-runtime
-  https://github.com/UCTooCom/agentskills-runtime
-
-License: MIT
-"""
-    File.writeTo(readmeFile, readmeContent.toArray())
-    println("  [OK] README.txt created")
+    let envExampleSrc = Path("./release/.env.example")
+    let envExampleDest = Path("${targetDir}/.env.example")
+    if (exists(envExampleSrc)) {
+        copy(envExampleSrc.toString(), to: envExampleDest.toString(), overwrite: true)
+        println("  [OK] Copied .env.example to release package")
+    } else {
+        println("  [WARN] .env.example not found, skipping")
+    }
     
     println("")
-    println("[STEP 5] Creating archive...")
+    println("[STEP] Creating archive...")
     
     let archiveName = "agentskills-runtime-${platform}.tar.gz"
     let archivePath = Path("${releaseDir}/${archiveName}")
     
-    let tarArgs = ["-czf", archivePath.toString(), "-C", packageDir.toString(), "."]
+    let tarArgs = ["-czf", archivePath.toString(), "-C", "./target", "release"]
     let tarProcess = launch("tar", tarArgs)
     let exitCode = tarProcess.wait()
     
     if (exitCode == 0) {
-        println("  [OK] Archive created: ${archivePath}")
+        println("  [OK] Archive created: ./release/${archiveName}")
     } else {
-        println("  [ERROR] Failed to create archive, exit code: ${exitCode.toString()}")
-        println("  [INFO] Trying PowerShell Compress-Archive...")
-        
-        let zipName = "agentskills-runtime-${platform}.zip"
-        let zipPath = Path("${releaseDir}/${zipName}")
-        
-        let psCmd = "Compress-Archive -Path '${packageDir}/*' -DestinationPath '${zipPath}' -Force"
-        let psProcess = launch("powershell", ["-Command", psCmd])
-        let psExitCode = psProcess.wait()
-        
-        if (psExitCode == 0) {
-            println("  [OK] ZIP archive created: ${zipPath}")
-        } else {
-            println("  [ERROR] Failed to create ZIP archive")
-        }
+        println("  [ERROR] Failed to create archive")
+        return
     }
-    
-    println("")
-    println("[STEP 6] Cleaning up...")
-    remove(packageDir, recursive: true)
-    println("  [OK] Temporary files cleaned")
     
     println("")
     println("========================================")
     println("Package completed successfully!")
-    println("Output: ${releaseDir}/${archiveName}")
+    println("Output: ./release/${archiveName}")
+    println("Total DLLs copied: ${totalDlls.size.toString()}")
+    println("")
+    println("Directory structure in archive:")
+    println("  release/")
+    println("    bin/              - Executables and ALL DLLs")
+    println("    magic/            - Runtime modules")
+    println("    commonmark4cj/    - Markdown parser")
+    println("    yaml4cj/          - YAML parser")
+    println("    VERSION           - Version info")
+    println("    .env.example      - Configuration template")
+    println("")
+    println("Note: All required DLLs (stdx, runtime, magic) are in bin/")
+    println("      Users can run agentskills-runtime.exe directly.")
+    println("      Copy .env.example to bin/.env and configure API tokens.")
     println("========================================")
 }

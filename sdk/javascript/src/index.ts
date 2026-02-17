@@ -164,7 +164,7 @@ function getRuntimeDir(): string {
 
 function getRuntimePath(): string {
   const { platform, arch, suffix } = getPlatformInfo();
-  return path.join(getRuntimeDir(), `${platform}-${arch}`, 'bin', `agentskills-runtime${suffix}`);
+  return path.join(getRuntimeDir(), `${platform}-${arch}`, 'release', 'bin', `agentskills-runtime${suffix}`);
 }
 
 function isRuntimeInstalled(): boolean {
@@ -274,7 +274,7 @@ export class RuntimeManager {
     const port = options.port || 8080;
     const host = options.host || '127.0.0.1';
     
-    const args = ['--port', String(port), '--host', host];
+    const args = [String(port)];
     
     this.process = spawn(runtimePath, args, {
       stdio: options.detached ? 'ignore' : 'inherit',
@@ -407,8 +407,12 @@ export class SkillsClient {
     return response.data;
   }
 
-  async searchSkills(query: string): Promise<SkillSearchResult> {
-    const response = await this.client.get(`/skills/search?q=${encodeURIComponent(query)}`);
+  async searchSkills(options: { query: string; source?: string; limit?: number } | string): Promise<SkillSearchResult> {
+    const searchOptions = typeof options === 'string' 
+      ? { query: options, source: 'all', limit: 10 }
+      : { query: options.query, source: options.source || 'all', limit: options.limit || 10 };
+    
+    const response = await this.client.post('/skills/search', searchOptions);
     return response.data;
   }
 

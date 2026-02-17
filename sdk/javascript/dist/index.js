@@ -49,7 +49,7 @@ function getRuntimeDir() {
 }
 function getRuntimePath() {
     const { platform, arch, suffix } = getPlatformInfo();
-    return path.join(getRuntimeDir(), `${platform}-${arch}`, 'bin', `agentskills-runtime${suffix}`);
+    return path.join(getRuntimeDir(), `${platform}-${arch}`, 'release', 'bin', `agentskills-runtime${suffix}`);
 }
 function isRuntimeInstalled() {
     return fs.existsSync(getRuntimePath());
@@ -135,7 +135,7 @@ export class RuntimeManager {
         }
         const port = options.port || 8080;
         const host = options.host || '127.0.0.1';
-        const args = ['--port', String(port), '--host', host];
+        const args = [String(port)];
         this.process = spawn(runtimePath, args, {
             stdio: options.detached ? 'ignore' : 'inherit',
             detached: options.detached || false,
@@ -248,8 +248,11 @@ export class SkillsClient {
         const response = await this.client.post(`/skills/${skillId}/tools/${toolName}/run`, { args });
         return response.data;
     }
-    async searchSkills(query) {
-        const response = await this.client.get(`/skills/search?q=${encodeURIComponent(query)}`);
+    async searchSkills(options) {
+        const searchOptions = typeof options === 'string'
+            ? { query: options, source: 'all', limit: 10 }
+            : { query: options.query, source: options.source || 'all', limit: options.limit || 10 };
+        const response = await this.client.post('/skills/search', searchOptions);
         return response.data;
     }
     async updateSkill(skillId, updates) {

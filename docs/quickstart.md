@@ -200,6 +200,43 @@ skill serve --http --port 3000
 
 ## Configuration
 
+### Environment Variables
+
+The runtime loads environment variables from a `.env` file in the same directory as the executable.
+
+**Location:** Place the `.env` file in the `bin/` directory alongside `agentskills-runtime.exe`:
+
+```
+runtime/win-x64/release/bin/.env
+```
+
+**Example `.env` file:**
+
+```env
+# GitHub Personal Access Token (optional, for higher rate limits)
+GITHUB_TOKEN=ghp_your_github_token
+
+# Gitee Private Token (optional, for higher rate limits)
+GITEE_TOKEN=your_gitee_token
+
+# AtomGit Access Token (optional, for higher rate limits)
+ATOMGIT_TOKEN=your_atomgit_token
+```
+
+**How to obtain tokens:**
+
+| Platform | How to Get Token | Auth Method |
+|----------|------------------|-------------|
+| GitHub | [Settings → Tokens](https://github.com/settings/tokens) | `Authorization: token` header |
+| Gitee | [设置 → 私人令牌](https://gitee.com/profile/personal_access_tokens) | `access_token` URL parameter |
+| AtomGit | [设置 → 访问令牌](https://atomgit.com/-/profile/personal_access_tokens) | `access_token` URL parameter |
+
+> **Note:** API tokens are **optional**. Without tokens, search still works but with lower rate limits:
+> - GitHub: 10 requests/min (unauthenticated) vs 30 requests/min (authenticated)
+> - Gitee/AtomGit: Limited without token, higher with token
+
+### Configuration File
+
 The framework can be configured via a comprehensive configuration:
 
 ```toml

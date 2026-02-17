@@ -13,6 +13,9 @@ import magic.log.LogUtils
  * This starts the HTTP server and handles API requests
  */
 main(args: Array<String>): Unit {
+    // Set log level to info
+    Config.logLevel = "info"
+    
     // Load environment variables from .env file
     let envLoadResult = Config.env.load(Path("./.env"))
     LogUtils.info("Environment loaded: ${envLoadResult}")

@@ -11,10 +11,11 @@ import stdx.net.http.{Server, ServerBuilder, HttpContext, HttpRequest, HttpRespo
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonArray, JsonFloat}
 import magic.skill.application.SkillManagementService
 import magic.skill.application.ProgressiveSkillLoader
-import magic.skill.application.{DependencyResolver, GitManager, SkillPackageManager}
+import magic.skill.application.{DependencyResolver, GitManager, SkillPackageManager, GitException}
 import magic.core.skill.{Skill, SkillManager}
 import magic.skill.CompositeSkillToolManager
 import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
+import magic.skill.search.{PublicSkillSearchService, SkillSearchResponse}
 import magic.log.LogUtils
 import magic.config.Config
 
@@ -29,11 +30,17 @@ public class APIRouter {
     private let _progressiveSkillLoader: ProgressiveSkillLoader
     private let _skillManager: SkillManager
     private let _port: Int32
+    private let _searchService: PublicSkillSearchService
+    private let _gitManager: GitManager
 
     public init(port: Int32) {
         _port = port
         _distributor = Some(DefaultHttpRequestDistributor())
         _skillManagementService = SkillManagementService()
+        
+        // Initialize search service and Git manager
+        _searchService = PublicSkillSearchService()
+        _gitManager = GitManager()
         
         // Initialize ProgressiveSkillLoader with skills directories - using absolute paths for better reliability
         let currentDir = getWorkingDirectory().toString()
@@ -382,6 +389,7 @@ public class APIRouter {
 
     /**
      * Handle POST /skills/add request
+     * Install a skill from a local path or Git repository URL
      */
     private func handleAddSkill(context: HttpContext): Unit {
         try {
@@ -416,11 +424,39 @@ public class APIRouter {
             } else {
                 None
             }
+            
+            // Get optional Git reference parameters
+            let branch: Option<String> = if (jsonObj.containsKey("branch")) {
+                Some(jsonObj["branch"].asString().getValue())
+            } else {
+                None
+            }
+            let tag: Option<String> = if (jsonObj.containsKey("tag")) {
+                Some(jsonObj["tag"].asString().getValue())
+            } else {
+                None
+            }
+            let commit: Option<String> = if (jsonObj.containsKey("commit")) {
+                Some(jsonObj["commit"].asString().getValue())
+            } else {
+                None
+            }
+
+            // Convert source to string to use startsWith method
+            let sourceStr = source.getValue()
+            let isGitSource = sourceStr.startsWith("http://") || sourceStr.startsWith("https://")
+            
+            // Check Git availability for Git sources
+            if (isGitSource) {
+                if (!_gitManager.isGitAvailable()) {
+                    createErrorResponse(context, 50001, "git_not_available", "Git is not installed or not available in PATH. Please install Git to install skills from Git repositories.")
+                    return
+                }
+            }
 
             // Create a skill package manager to handle the installation
             let dependencyResolver = DependencyResolver()
             let skillRegistry = _skillManagementService.getSkillRegistry()
-            let gitManager = GitManager()
             
             // Use the unified path determination logic from SkillPackageManager
             // Priority 1: install_path from request parameter
@@ -434,15 +470,13 @@ public class APIRouter {
                 installationPath: skillInstallPath,
                 dependencyResolver: dependencyResolver,
                 skillRegistry: skillRegistry,
-                gitManager: gitManager
+                gitManager: _gitManager
             )
 
-            // Convert source to string to use startsWith method
-            let sourceStr = source.getValue()
             // Determine if source is a local path or Git URL
-            let result = if (sourceStr.startsWith("http://") || sourceStr.startsWith("https://")) {
-                // Git URL - install from Git
-                skillPackageManager.installFromGit(sourceStr)
+            let result = if (isGitSource) {
+                // Git URL - install from Git with optional reference
+                skillPackageManager.installFromGit(sourceStr, branch, tag, commit)
             } else {
                 // Local path - install from path
                 skillPackageManager.installFromPath(sourceStr, validate)
@@ -454,23 +488,47 @@ public class APIRouter {
 
                 let skillName = _extractSkillNameFromPath(sourceStr)
                 let responseObj = JsonObject()
-                responseObj.put("id", JsonString(skillName))  // Use actual skill name
-                responseObj.put("name", JsonString(skillName))  // Use actual skill name
+                responseObj.put("id", JsonString(skillName))
+                responseObj.put("name", JsonString(skillName))
                 responseObj.put("status", JsonString("installed"))
-                responseObj.put("message", JsonString("Skill installed successfully"))
+                
+                if (isGitSource) {
+                    responseObj.put("message", JsonString("Skill installed successfully from Git repository"))
+                    responseObj.put("source_type", JsonString("git"))
+                    responseObj.put("source_url", JsonString(sourceStr))
+                } else {
+                    responseObj.put("message", JsonString("Skill installed successfully from local path"))
+                    responseObj.put("source_type", JsonString("local"))
+                }
+                
                 responseObj.put("created_at", JsonString(DateTime.now().toString()))
 
                 let responseHeaders = HashMap<String, String>()
                 responseHeaders.add("Content-Type", "application/json")
                 createSuccessResponse(context, responseObj.toString(), responseHeaders)
             } else {
-                // Handle installation failure
+                // Handle installation failure with specific error codes
                 let errorMsg = result.error.getOrDefault({=>"Installation failed"})
-                createErrorResponse(context, 500, "installation_failed", errorMsg)
+                
+                // Determine error code based on error message
+                let errorCode = if (errorMsg.contains("SKILL.md not found")) {
+                    "skill_md_not_found"
+                } else if (errorMsg.contains("Invalid SKILL.md")) {
+                    "invalid_skill_md"
+                } else if (errorMsg.contains("clone")) {
+                    "clone_failed"
+                } else {
+                    "installation_failed"
+                }
+                
+                createErrorResponse(context, 500, errorCode, errorMsg)
             }
+        } catch (ex: GitException) {
+            LogUtils.error("Git error handling POST /skills/add: ${ex.message}")
+            createErrorResponse(context, 50002, "git_error", "Git operation failed: ${ex.message}")
         } catch (ex: Exception) {
             LogUtils.error("Error handling POST /skills/add: ${ex.message}")
-            createErrorResponse(context, 500, "internal_error", "Internal server error")
+            createErrorResponse(context, 500, "internal_error", "Internal server error: ${ex.message}")
         }
     }
 
@@ -719,77 +777,72 @@ public class APIRouter {
 
     /**
      * Handle POST /skills/search request
+     * Search for skills from public open-source repositories (GitHub, AtomGit, Gitee)
      */
     private func handleSearchSkills(context: HttpContext): Unit {
         try {
+            LogUtils.info("[APIRouter] handleSearchSkills called")
             let request = context.request
+            
             // Parse request body
-            let bodySize = request.bodySize.getOrThrow()
+            let bodySizeOpt = request.bodySize
+            if (bodySizeOpt.isNone()) {
+                LogUtils.error("[APIRouter] bodySize is None")
+                createErrorResponse(context, 400, "invalid_request", "No body size")
+                return
+            }
+            
+            let bodySize = bodySizeOpt.getOrThrow()
+            LogUtils.info("[APIRouter] Body size: ${bodySize.toString()}")
+            
             let buffer = Array<UInt8>(bodySize, repeat: 0)
             request.body.read(buffer)
             let body = String.fromUtf8(buffer)
+            LogUtils.info("[APIRouter] Request body: ${body}")
+            
             let jsonObj = JsonValue.fromStr(body).asObject()
+            LogUtils.info("[APIRouter] Parsed JSON object")
 
-            let query = if (jsonObj.containsKey("query")) {
-                jsonObj["query"].asString()
+            // Validate required field
+            if (!jsonObj.containsKey("query")) {
+                createErrorResponse(context, 400, "missing_field", "query field is required")
+                return
+            }
+
+            let query = jsonObj["query"].asString().getValue()
+            
+            // Parse optional parameters with defaults
+            let source = if (jsonObj.containsKey("source")) {
+                jsonObj["source"].asString().getValue()
             } else {
-                ""
+                "all"
             }
-            let topK = if (jsonObj.containsKey("top_k")) {
-                Int32(jsonObj["top_k"].asInt().getValue())
+            
+            let limit = if (jsonObj.containsKey("limit")) {
+                let limitValue = Int32(jsonObj["limit"].asInt().getValue())
+                if (limitValue > 50) { Int32(50) } else { limitValue }
             } else {
-                Int32(5)
+                Int32(10)
             }
-            let includeUsageExamples = if (jsonObj.containsKey("include_usage_examples")) {
-                jsonObj["include_usage_examples"].asBool().getValue()
+            
+            let sort = if (jsonObj.containsKey("sort")) {
+                jsonObj["sort"].asString().getValue()
             } else {
-                true
-            }
-            let rerank = if (jsonObj.containsKey("rerank")) {
-                jsonObj["rerank"].asBool()
-            } else {
-                true
-            }
-            let queryUnderstanding = if (jsonObj.containsKey("query_understanding")) {
-                jsonObj["query_understanding"].asBool()
-            } else {
-                true
+                "stars"
             }
 
-            // In a real implementation, this would perform semantic search
-            // For now, we'll simulate the search results
+            LogUtils.info("[APIRouter] Searching for skills: query=${query}, source=${source}, limit=${limit}, sort=${sort}")
 
-            let responseObj = JsonObject()
-            let resultsArray = JsonArray()
-
-            // Add sample results
-            let result1 = JsonObject()
-            result1.put("id", JsonString("kubernetes-456"))
-            result1.put("name", JsonString("kubernetes"))
-            result1.put("description", JsonString("Kubernetes cluster management with kubectl"))
-            result1.put("score", JsonFloat(0.95))
-
-            if (includeUsageExamples) {
-                let examplesArray = JsonArray()
-                let example1 = JsonObject()
-                example1.put("tool", JsonString("kubectl-get"))
-                let exampleData = JsonObject()
-                exampleData.put("resource", JsonString("pods"))
-                exampleData.put("namespace", JsonString("default"))
-                example1.put("example", exampleData)
-                examplesArray.add(example1)
-                result1.put("usage_examples", examplesArray)
-            }
-
-            resultsArray.add(result1)
-            responseObj.put("results", resultsArray)
+            // Use the public skill search service
+            let searchResponse = _searchService.search(query, source, limit, sort)
+            LogUtils.info("[APIRouter] Search completed, total_count: ${searchResponse.total_count.toString()}")
 
             let responseHeaders = HashMap<String, String>()
             responseHeaders.add("Content-Type", "application/json")
-            createSuccessResponse(context, responseObj.toString(), responseHeaders)
+            createSuccessResponse(context, searchResponse.toJson(), responseHeaders)
         } catch (ex: Exception) {
             LogUtils.error("Error handling POST /skills/search: ${ex.message}")
-            createErrorResponse(context, 500, "internal_error", "Internal server error")
+            createErrorResponse(context, 500, "internal_error", "Internal server error: ${ex.message}")
         }
     }
 

@@ -211,7 +211,17 @@ program
       
     } catch (error: unknown) {
       spin.fail('Installation failed');
-      printError(handleApiError(error).errmsg);
+      const apiError = handleApiError(error);
+      if (apiError.errmsg && apiError.errmsg !== 'undefined') {
+        printError(apiError.errmsg);
+      } else if (error instanceof Error) {
+        printError(error.message);
+      } else {
+        printError('Installation failed. Please check if the skill source is valid and accessible.');
+      }
+      if (apiError.details) {
+        console.log(chalk.gray('Details:'), JSON.stringify(apiError.details, null, 2));
+      }
       process.exit(1);
     }
   });
@@ -673,13 +683,15 @@ program
       if (runtimeStatus.running) {
         console.log(chalk.green('✓'), 'Skills runtime is running');
         console.log(chalk.gray('  API URL:'), client.getBaseUrl());
-        console.log(chalk.gray('  Version:'), runtimeStatus.version || 'unknown');
+        console.log(chalk.gray('  Runtime Version:'), runtimeStatus.version || 'unknown');
+        console.log(chalk.gray('  SDK Version:'), runtimeStatus.sdkVersion || 'unknown');
         
         const skills = await client.listSkills({ limit: 1 });
         console.log(chalk.gray('  Skills installed:'), skills.total_count);
       } else {
         console.log(chalk.red('✗'), 'Skills runtime is not running');
         console.log(chalk.gray('  API URL:'), client.getBaseUrl());
+        console.log(chalk.gray('  SDK Version:'), runtimeStatus.sdkVersion || 'unknown');
         console.log(chalk.gray('\nStart the runtime with: skills start'));
         console.log(chalk.gray('Install runtime with: skills install-runtime'));
       }
@@ -736,8 +748,8 @@ program
   .description('Start the AgentSkills runtime server')
   .option('-p, --port <port>', 'Port to listen on', '8080')
   .option('-h, --host <host>', 'Host to bind to', '127.0.0.1')
-  .option('-d, --detached', 'Run in background', false)
-  .action(async (options: { port: string; host: string; detached: boolean }) => {
+  .option('-f, --foreground', 'Run in foreground (default: background)', false)
+  .action(async (options: { port: string; host: string; foreground: boolean }) => {
     const runtime = new RuntimeManager();
     
     if (!runtime.isInstalled()) {
@@ -749,28 +761,35 @@ program
     const status = await runtime.status();
     if (status.running) {
       console.log(chalk.yellow('Runtime is already running'));
-      console.log(chalk.gray('  Version:'), status.version || 'unknown');
+      console.log(chalk.gray('  API URL:'), `http://${options.host}:${options.port}`);
+      console.log(chalk.gray('  Runtime Version:'), status.version || 'unknown');
+      console.log(chalk.gray('  SDK Version:'), status.sdkVersion || 'unknown');
       return;
     }
+    
+    const detached = !options.foreground;
     
     console.log(chalk.bold('Starting AgentSkills runtime...'));
     console.log(chalk.gray(`  Host: ${options.host}`));
     console.log(chalk.gray(`  Port: ${options.port}`));
-    console.log(chalk.gray(`  Mode: ${options.detached ? 'background' : 'foreground'}`));
+    console.log(chalk.gray(`  Mode: ${detached ? 'background' : 'foreground'}`));
     
     const proc = runtime.start({
       port: parseInt(options.port),
       host: options.host,
-      detached: options.detached
+      detached: detached
     });
     
     if (proc) {
-      if (options.detached) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      if (detached) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
         const newStatus = await runtime.status();
         if (newStatus.running) {
           console.log(chalk.green('\n✓ Runtime started in background'));
-          console.log(chalk.gray('  PID file:'), runtime.getRuntimePath().replace(/[^/\\]+$/, 'runtime.pid'));
+          console.log(chalk.gray('  API URL:'), `http://${options.host}:${options.port}`);
+          console.log(chalk.gray('  Runtime Version:'), newStatus.version || 'unknown');
+          console.log(chalk.gray('  SDK Version:'), newStatus.sdkVersion || 'unknown');
+          console.log(chalk.gray('\nStop with: skills stop'));
         } else {
           printError('Runtime failed to start');
           process.exit(1);

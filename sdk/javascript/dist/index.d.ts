@@ -76,6 +76,7 @@ export interface ClientConfig {
 export interface RuntimeStatus {
     running: boolean;
     version?: string;
+    sdkVersion?: string;
     pid?: number;
     port?: number;
 }
@@ -83,6 +84,8 @@ export interface RuntimeOptions {
     port?: number;
     host?: string;
     detached?: boolean;
+    cwd?: string;
+    env?: Record<string, string>;
 }
 export declare class RuntimeManager {
     private process;
@@ -148,5 +151,6 @@ export declare function defineSkill(config: {
     tools: ToolDefinition[];
 };
 export declare function getConfig<T extends EnvironmentConfig = EnvironmentConfig>(): T;
+export declare function getSdkVersion(): string;
 export { SkillsClient as SkillRuntimeClient };
 //# sourceMappingURL=index.d.ts.map

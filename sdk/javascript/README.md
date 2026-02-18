@@ -38,11 +38,11 @@ npx skills install-runtime --version 0.0.1
 ### 2. Start the Runtime
 
 ```bash
-# Start in foreground
+# Start in background (default)
 npx skills start
 
-# Start in background
-npx skills start --detached
+# Start in foreground
+npx skills start --foreground
 
 # Custom port and host
 npx skills start --port 3000 --host 0.0.0.0
@@ -66,139 +66,144 @@ npx skills run my-skill -p '{"input": "data"}'
 
 ### Runtime Management
 
-#### `skills install-runtime`
+#### `npx skills install-runtime`
 
 Download and install the AgentSkills runtime binary.
 
 ```bash
-skills install-runtime
-skills install-runtime --version 0.0.1
+npx skills install-runtime
+npx skills install-runtime --version 0.0.1
 ```
 
-#### `skills start`
+#### `npx skills start`
 
 Start the AgentSkills runtime server.
 
 ```bash
-# Start in foreground
-skills start
+# Start in background (default)
+npx skills start
 
-# Start in background
-skills start --detached
+# Start in foreground
+npx skills start --foreground
 
 # Custom configuration
-skills start --port 3000 --host 0.0.0.0
+npx skills start --port 3000 --host 0.0.0.0
 ```
 
-#### `skills stop`
+**Options:**
+- `-p, --port <port>` - Port to listen on (default: 8080)
+- `-h, --host <host>` - Host to bind to (default: 127.0.0.1)
+- `-f, --foreground` - Run in foreground (default: background)
+
+#### `npx skills stop`
 
 Stop the AgentSkills runtime server.
 
 ```bash
-skills stop
+npx skills stop
 ```
 
-#### `skills status`
+#### `npx skills status`
 
 Check the status of the skills runtime server.
 
 ```bash
-skills status
+npx skills status
 ```
 
 ### Skill Management
 
-#### `skills find [query]`
+#### `npx skills find [query]`
 
 Search for skills interactively or by keyword.
 
 ```bash
-skills find
-skills find react testing
-skills find "pdf generation"
+npx skills find
+npx skills find react testing
+npx skills find "pdf generation"
 ```
 
-#### `skills add <source>`
+#### `npx skills add <source>`
 
 Install a skill from GitHub or local path.
 
 ```bash
-skills add ./my-skill
-skills add github.com/user/skill-repo
-skills add github.com/user/skill-repo --branch develop
+npx skills add ./my-skill
+npx skills add github.com/user/skill-repo
+npx skills add github.com/user/skill-repo --branch develop
 ```
 
-#### `skills list`
+#### `npx skills list`
 
 List installed skills.
 
 ```bash
-skills list
-skills list --limit 50 --page 1
-skills list --json
+npx skills list
+npx skills list --limit 50 --page 1
+npx skills list --json
 ```
 
-#### `skills run <skillId>`
+#### `npx skills run <skillId>`
 
 Execute a skill.
 
 ```bash
-skills run my-skill -p '{"param1": "value"}'
-skills run my-skill --tool tool-name -p '{"param1": "value"}'
-skills run my-skill -i  # Interactive mode
+npx skills run my-skill -p '{"param1": "value"}'
+npx skills run my-skill --tool tool-name -p '{"param1": "value"}'
+npx skills run my-skill -i  # Interactive mode
 ```
 
-#### `skills remove <skillId>`
+#### `npx skills remove <skillId>`
 
 Remove an installed skill.
 
 ```bash
-skills remove my-skill
-skills rm my-skill -y
+npx skills remove my-skill
+npx skills rm my-skill -y
 ```
 
-#### `skills info <skillId>`
+#### `npx skills info <skillId>`
 
 Show detailed information about a skill.
 
 ```bash
-skills info my-skill
+npx skills info my-skill
 ```
 
-#### `skills init [name]`
+#### `npx skills init [name]`
 
 Initialize a new skill project.
 
 ```bash
-skills init my-new-skill
-skills init my-new-skill --directory ./skills
+npx skills init my-new-skill
+npx skills init my-new-skill --directory ./skills
 ```
 
-#### `skills check`
+#### `npx skills check`
 
 Check for skill updates.
 
 ```bash
-skills check
+npx skills check
 ```
 
-#### `skills update [skillId]`
+#### `npx skills update [skillId]`
 
 Update skills to their latest versions.
 
 ```bash
-skills update my-skill
-skills update --all
+npx skills update my-skill
+npx skills update --all
 ```
 
-#### `skills config <skillId>`
+#### `npx skills config <skillId>`
 
 Manage skill configuration.
 
 ```bash
-skills config my-skill --list
-skills config my-skill --get API_KEY
-skills config my-skill --set API_KEY=abc123
+npx skills config my-skill --list
+npx skills config my-skill --get API_KEY
+npx skills config my-skill --set API_KEY=abc123
 ```
 
 ## Programmatic API

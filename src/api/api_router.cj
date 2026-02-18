@@ -392,13 +392,29 @@ public class APIRouter {
      * Install a skill from a local path or Git repository URL
      */
     private func handleAddSkill(context: HttpContext): Unit {
+        LogUtils.info("[handleAddSkill] === Starting handleAddSkill ===")
         try {
             let request = context.request
+            LogUtils.info("[handleAddSkill] Got request object")
+            
             // Parse request body
-            let bodySize = request.bodySize.getOrThrow()
+            let bodySizeOpt = request.bodySize
+            LogUtils.info("[handleAddSkill] bodySize option: ${bodySizeOpt}")
+            
+            if (bodySizeOpt.isNone()) {
+                LogUtils.error("[handleAddSkill] bodySize is None")
+                createErrorResponse(context, 400, "invalid_request", "Request body size is missing")
+                return
+            }
+            
+            let bodySize = bodySizeOpt.getOrThrow()
+            LogUtils.info("[handleAddSkill] bodySize: ${bodySize}")
+            
             let buffer = Array<UInt8>(bodySize, repeat: 0)
             request.body.read(buffer)
             let body = String.fromUtf8(buffer)
+            LogUtils.info("[handleAddSkill] Request body: ${body}")
+            
             let jsonObj = JsonValue.fromStr(body).asObject()
 
             if (!jsonObj.containsKey("source")) {
@@ -406,12 +422,15 @@ public class APIRouter {
                 return
             }
 
-            let source = jsonObj["source"].asString()
+            let sourceStr = jsonObj["source"].asString().getValue()
+            LogUtils.info("[handleAddSkill] Source: ${sourceStr}")
+            
             let validate = if (jsonObj.containsKey("validate")) {
                 jsonObj["validate"].asBool().getValue()
             } else {
                 true
             }
+            
             let creator = if (jsonObj.containsKey("creator")) {
                 jsonObj["creator"].asString().getValue()
             } else {
@@ -442,9 +461,9 @@ public class APIRouter {
                 None
             }
 
-            // Convert source to string to use startsWith method
-            let sourceStr = source.getValue()
+            // Determine if source is a local path or Git URL
             let isGitSource = sourceStr.startsWith("http://") || sourceStr.startsWith("https://")
+            LogUtils.info("[handleAddSkill] isGitSource: ${isGitSource}")
             
             // Check Git availability for Git sources
             if (isGitSource) {
@@ -455,27 +474,36 @@ public class APIRouter {
             }
 
             // Create a skill package manager to handle the installation
+            LogUtils.info("[handleAddSkill] Creating dependency resolver...")
             let dependencyResolver = DependencyResolver()
+            LogUtils.info("[handleAddSkill] Getting skill registry...")
             let skillRegistry = _skillManagementService.getSkillRegistry()
+            LogUtils.info("[handleAddSkill] Skill registry obtained")
             
             // Use the unified path determination logic from SkillPackageManager
             // Priority 1: install_path from request parameter
             // Priority 2: SKILL_INSTALL_PATH from .env file
             // Priority 3: Default to current_dir/skills
+            LogUtils.info("[handleAddSkill] Determining installation path...")
             let skillInstallPath = SkillPackageManager.determineInstallationPath(
                 requestInstallPath.getOrDefault({=>""})
             )
+            LogUtils.info("[handleAddSkill] Installation path: ${skillInstallPath}")
             
+            LogUtils.info("[handleAddSkill] Creating SkillPackageManager...")
             let skillPackageManager = SkillPackageManager(
                 installationPath: skillInstallPath,
                 dependencyResolver: dependencyResolver,
                 skillRegistry: skillRegistry,
                 gitManager: _gitManager
             )
+            LogUtils.info("[handleAddSkill] SkillPackageManager created")
 
             // Determine if source is a local path or Git URL
+            LogUtils.info("[handleAddSkill] Starting installation, isGitSource=${isGitSource}")
             let result = if (isGitSource) {
                 // Git URL - install from Git with optional reference
+                LogUtils.info("[handleAddSkill] Calling installFromGit...")
                 skillPackageManager.installFromGit(sourceStr, branch, tag, commit)
             } else {
                 // Local path - install from path
@@ -528,6 +556,7 @@ public class APIRouter {
             createErrorResponse(context, 50002, "git_error", "Git operation failed: ${ex.message}")
         } catch (ex: Exception) {
             LogUtils.error("Error handling POST /skills/add: ${ex.message}")
+            LogUtils.error("Exception type: ${ex}")
             createErrorResponse(context, 500, "internal_error", "Internal server error: ${ex.message}")
         }
     }

@@ -105,9 +105,10 @@ public class SkillPackageManager {
         }
 
         // Create installation directory if it doesn't exist
-        if (!exists(installPathObj.parent)) {
-            LogUtils.info("Creating parent directory: ${installPathObj.parent}")
-            Directory.create(installPathObj.parent, recursive: true)
+        let parentPath = installPathObj.parent
+        if (!exists(parentPath)) {
+            LogUtils.info("Creating parent directory: ${parentPath}")
+            Directory.create(parentPath, recursive: true)
         }
 
         // Actually copy the skill files to the installation directory
@@ -136,8 +137,9 @@ public class SkillPackageManager {
                                 cleanRelativePath = cleanRelativePath[1..cleanRelativePath.size]
                             }
                             let destFilePath = Path(installPath).join(cleanRelativePath.replace("\\", "/"))
-                            if (!exists(destFilePath.parent)) {
-                                Directory.create(destFilePath.parent, recursive: true)
+                            let destParentPath = destFilePath.parent
+                            if (!exists(destParentPath)) {
+                                Directory.create(destParentPath, recursive: true)
                             }
                             copy(fileInfo.path.toString(), to: destFilePath.toString(), overwrite: true)
                         }
@@ -178,6 +180,8 @@ public class SkillPackageManager {
 
     /**
      * Install a skill from a Git repository with branch/tag/commit support
+     * Supports GitHub URLs with subpaths like:
+     * - https://github.com/owner/repo/tree/branch/path/to/skill
      */
     public func installFromGit(
         gitUrl: String,
@@ -185,26 +189,55 @@ public class SkillPackageManager {
         tag: Option<String>,
         commit: Option<String>
     ): SkillInstallResult {
-        LogUtils.info("Installing skill from Git repository: ${gitUrl}")
+        LogUtils.info("[installFromGit] Starting installation from Git: ${gitUrl}")
         
-        // Determine Git reference priority: commit > branch > tag
+        var actualUrl = gitUrl
+        var actualBranch = branch
+        var subpath: Option<String> = None
+        
+        if ((gitUrl.contains("github.com") || gitUrl.contains("gitcode.com") || gitUrl.contains("gitee.com")) && gitUrl.contains("/tree/")) {
+            LogUtils.info("[installFromGit] Parsing Git hosting URL with subpath")
+            let parsedUrl = GitManager.parseGitHubUrl(gitUrl)
+            actualUrl = parsedUrl.repoUrl
+            if (parsedUrl.branch.isSome() && branch.isNone()) {
+                actualBranch = parsedUrl.branch
+            }
+            subpath = parsedUrl.subpath
+            LogUtils.info("[installFromGit] Parsed: repo=${actualUrl}, branch=${actualBranch.getOrDefault({=>""})}, subpath=${subpath.getOrDefault({=>""})}")
+        }
+        
         let gitRef: GitReference = if (commit.isSome()) {
+            LogUtils.info("[installFromGit] Using commit reference")
             GitReferenceCommit(value: commit.getOrThrow())
-        } else if (branch.isSome()) {
-            GitReferenceBranch(value: branch.getOrThrow())
+        } else if (actualBranch.isSome()) {
+            LogUtils.info("[installFromGit] Using branch reference: ${actualBranch.getOrThrow()}")
+            GitReferenceBranch(value: actualBranch.getOrThrow())
         } else if (tag.isSome()) {
+            LogUtils.info("[installFromGit] Using tag reference: ${tag.getOrThrow()}")
             GitReferenceTag(value: tag.getOrThrow())
         } else {
+            LogUtils.info("[installFromGit] Using default reference")
             GitReferenceDefault()
         }
 
-        // Clone repository to temporary location
-        let tempPath = _gitManager.cloneRepository(gitUrl, gitRef)
+        LogUtils.info("[installFromGit] Cloning repository...")
+        let tempPath = _gitManager.cloneRepository(actualUrl, gitRef)
+        LogUtils.info("[installFromGit] Cloned to: ${tempPath}")
 
-        // Install from cloned path
-        let result = installFromPath(tempPath, true)
+        let skillSourcePath = if (subpath.isSome()) {
+            let subpathValue = subpath.getOrThrow()
+            let fullPath = Path(tempPath).join(subpathValue).toString()
+            LogUtils.info("[installFromGit] Using subpath: ${fullPath}")
+            fullPath
+        } else {
+            LogUtils.info("[installFromGit] Using root path: ${tempPath}")
+            tempPath
+        }
 
-        // Clean up temporary directory
+        LogUtils.info("[installFromGit] Installing from path: ${skillSourcePath}")
+        let result = installFromPath(skillSourcePath, true)
+        LogUtils.info("[installFromGit] Installation result: success=${result.success}")
+
         _cleanupTempDirectory(tempPath)
 
         return result
@@ -642,6 +675,22 @@ public class DependencyResolver {
 }
 
 /**
+ * Parsed GitHub URL structure
+ * Contains the repository URL, optional branch, and optional subpath
+ */
+public struct ParsedGitHubUrl {
+    public let repoUrl: String
+    public let branch: Option<String>
+    public let subpath: Option<String>
+    
+    public init(repoUrl!: String, branch!: Option<String>, subpath!: Option<String>) {
+        this.repoUrl = repoUrl
+        this.branch = branch
+        this.subpath = subpath
+    }
+}
+
+/**
  * Git manager for cloning repositories
  * Implements real Git clone functionality with branch/tag/commit support
  */
@@ -694,6 +743,57 @@ public class GitManager {
         } catch (ex: Exception) {
             return false
         }
+    }
+    
+    /**
+     * Parse a Git hosting URL to extract repository URL, branch, and subpath
+     * Supports URLs like:
+     * - https://github.com/owner/repo
+     * - https://github.com/owner/repo/tree/branch
+     * - https://github.com/owner/repo/tree/branch/path/to/skill
+     * - https://gitcode.com/owner/repo/tree/branch/path/to/skill
+     */
+    public static func parseGitHubUrl(url: String): ParsedGitHubUrl {
+        let result = ParsedGitHubUrl(
+            repoUrl: url,
+            branch: None,
+            subpath: None
+        )
+        
+        if (!url.contains("github.com") && !url.contains("gitcode.com") && !url.contains("gitee.com")) {
+            return result
+        }
+        
+        let treeIndex = url.indexOf("/tree/")
+        if (treeIndex.isNone() || treeIndex.getOrThrow() < 0) {
+            return result
+        }
+        
+        let treeIndexValue = treeIndex.getOrThrow()
+        
+        let basePart = url[0..treeIndexValue]
+        let afterTree = url[(treeIndexValue + 6)..url.size]
+        
+        let slashIndex = afterTree.indexOf("/")
+        
+        if (slashIndex.isNone() || slashIndex.getOrThrow() < 0) {
+            return ParsedGitHubUrl(
+                repoUrl: basePart + ".git",
+                branch: Some(afterTree),
+                subpath: None
+            )
+        }
+        
+        let slashIndexValue = slashIndex.getOrThrow()
+        
+        let branchName = afterTree[0..slashIndexValue]
+        let subpath = afterTree[(slashIndexValue + 1)..afterTree.size]
+        
+        return ParsedGitHubUrl(
+            repoUrl: basePart + ".git",
+            branch: Some(branchName),
+            subpath: Some(subpath)
+        )
     }
     
     /**
@@ -809,9 +909,9 @@ public class GitManager {
         let chars = "abcdefghijklmnopqrstuvwxyz0123456789"
         let sb = StringBuilder()
         let timestamp = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
-        var seed = timestamp
+        var seed = timestamp % 2147483647
         for (i in 0..length) {
-            seed = (seed * 1103515245 + 12345) % 2147483648
+            seed = ((seed % 2147483647) * 1103515245 + 12345) % 2147483647
             let index = Int64(seed % chars.size)
             sb.append(chars[index])
         }

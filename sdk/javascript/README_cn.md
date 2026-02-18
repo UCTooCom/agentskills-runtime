@@ -38,11 +38,11 @@ npx skills install-runtime --version 0.0.1
 ### 2. 启动运行时
 
 ```bash
-# 前台启动
+# 后台启动（默认）
 npx skills start
 
-# 后台启动
-npx skills start --detached
+# 前台启动
+npx skills start --foreground
 
 # 自定义端口和主机
 npx skills start --port 3000 --host 0.0.0.0
@@ -66,139 +66,144 @@ npx skills run my-skill -p '{"input": "data"}'
 
 ### 运行时管理
 
-#### `skills install-runtime`
+#### `npx skills install-runtime`
 
 下载并安装 AgentSkills 运行时二进制文件。
 
 ```bash
-skills install-runtime
-skills install-runtime --version 0.0.1
+npx skills install-runtime
+npx skills install-runtime --version 0.0.1
 ```
 
-#### `skills start`
+#### `npx skills start`
 
 启动 AgentSkills 运行时服务器。
 
 ```bash
-# 前台启动
-skills start
+# 后台启动（默认）
+npx skills start
 
-# 后台启动
-skills start --detached
+# 前台启动
+npx skills start --foreground
 
 # 自定义配置
-skills start --port 3000 --host 0.0.0.0
+npx skills start --port 3000 --host 0.0.0.0
 ```
 
-#### `skills stop`
+**选项：**
+- `-p, --port <port>` - 监听端口（默认：8080）
+- `-h, --host <host>` - 绑定主机（默认：127.0.0.1）
+- `-f, --foreground` - 前台运行（默认：后台）
+
+#### `npx skills stop`
 
 停止 AgentSkills 运行时服务器。
 
 ```bash
-skills stop
+npx skills stop
 ```
 
-#### `skills status`
+#### `npx skills status`
 
 检查技能运行时服务器的状态。
 
 ```bash
-skills status
+npx skills status
 ```
 
 ### 技能管理
 
-#### `skills find [query]`
+#### `npx skills find [query]`
 
 交互式搜索或按关键字搜索技能。
 
 ```bash
-skills find
-skills find react testing
-skills find "pdf generation"
+npx skills find
+npx skills find react testing
+npx skills find "pdf generation"
 ```
 
-#### `skills add <source>`
+#### `npx skills add <source>`
 
 从 GitHub 或本地路径安装技能。
 
 ```bash
-skills add ./my-skill
-skills add github.com/user/skill-repo
-skills add github.com/user/skill-repo --branch develop
+npx skills add ./my-skill
+npx skills add github.com/user/skill-repo
+npx skills add github.com/user/skill-repo --branch develop
 ```
 
-#### `skills list`
+#### `npx skills list`
 
 列出已安装的技能。
 
 ```bash
-skills list
-skills list --limit 50 --page 1
-skills list --json
+npx skills list
+npx skills list --limit 50 --page 1
+npx skills list --json
 ```
 
-#### `skills run <skillId>`
+#### `npx skills run <skillId>`
 
 执行技能。
 
 ```bash
-skills run my-skill -p '{"param1": "value"}'
-skills run my-skill --tool tool-name -p '{"param1": "value"}'
-skills run my-skill -i  # 交互模式
+npx skills run my-skill -p '{"param1": "value"}'
+npx skills run my-skill --tool tool-name -p '{"param1": "value"}'
+npx skills run my-skill -i  # 交互模式
 ```
 
-#### `skills remove <skillId>`
+#### `npx skills remove <skillId>`
 
 移除已安装的技能。
 
 ```bash
-skills remove my-skill
-skills rm my-skill -y
+npx skills remove my-skill
+npx skills rm my-skill -y
 ```
 
-#### `skills info <skillId>`
+#### `npx skills info <skillId>`
 
 显示技能的详细信息。
 
 ```bash
-skills info my-skill
+npx skills info my-skill
 ```
 
-#### `skills init [name]`
+#### `npx skills init [name]`
 
 初始化一个新的技能项目。
 
 ```bash
-skills init my-new-skill
-skills init my-new-skill --directory ./skills
+npx skills init my-new-skill
+npx skills init my-new-skill --directory ./skills
 ```
 
-#### `skills check`
+#### `npx skills check`
 
 检查技能更新。
 
 ```bash
-skills check
+npx skills check
 ```
 
-#### `skills update [skillId]`
+#### `npx skills update [skillId]`
 
 将技能更新到最新版本。
 
 ```bash
-skills update my-skill
-skills update --all
+npx skills update my-skill
+npx skills update --all
 ```
 
-#### `skills config <skillId>`
+#### `npx skills config <skillId>`
 
 管理技能配置。
 
 ```bash
-skills config my-skill --list
-skills config my-skill --get API_KEY
-skills config my-skill --set API_KEY=abc123
+npx skills config my-skill --list
+npx skills config my-skill --get API_KEY
+npx skills config my-skill --set API_KEY=abc123
 ```
 
 ## 编程 API

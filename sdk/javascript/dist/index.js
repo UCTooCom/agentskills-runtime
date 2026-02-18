@@ -6,6 +6,7 @@ import * as os from 'os';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const SDK_VERSION = '0.0.11';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
 const DEFAULT_TIMEOUT = 30000;
 const RUNTIME_VERSION = '0.0.1';
@@ -50,6 +51,32 @@ function getRuntimeDir() {
 function getRuntimePath() {
     const { platform, arch, suffix } = getPlatformInfo();
     return path.join(getRuntimeDir(), `${platform}-${arch}`, 'release', 'bin', `agentskills-runtime${suffix}`);
+}
+function getVersionFilePath() {
+    const { platform, arch } = getPlatformInfo();
+    return path.join(getRuntimeDir(), `${platform}-${arch}`, 'release', 'VERSION');
+}
+function getInstalledVersion() {
+    try {
+        const versionFile = getVersionFilePath();
+        if (fs.existsSync(versionFile)) {
+            const content = fs.readFileSync(versionFile, 'utf-8');
+            const lines = content.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('AGENTSKILLS_RUNTIME_VERSION=')) {
+                    return line.split('=')[1]?.trim() || null;
+                }
+            }
+            const firstLine = lines[0]?.trim();
+            if (firstLine && !firstLine.includes('=')) {
+                return firstLine;
+            }
+        }
+    }
+    catch {
+        // Ignore errors
+    }
+    return null;
 }
 function isRuntimeInstalled() {
     return fs.existsSync(getRuntimePath());
@@ -135,11 +162,17 @@ export class RuntimeManager {
         }
         const port = options.port || 8080;
         const host = options.host || '127.0.0.1';
+        const cwd = options.cwd || path.dirname(runtimePath);
         const args = [String(port)];
+        const env = {
+            ...process.env,
+            ...options.env
+        };
         this.process = spawn(runtimePath, args, {
             stdio: options.detached ? 'ignore' : 'inherit',
             detached: options.detached || false,
-            cwd: path.dirname(runtimePath)
+            cwd: cwd,
+            env: env
         });
         if (options.detached && this.process.pid) {
             this.process.unref();
@@ -171,13 +204,16 @@ export class RuntimeManager {
     async status() {
         try {
             const response = await axios.get(`${this.baseUrl}/hello`, { timeout: 2000 });
+            const headerVersion = response.headers['x-runtime-version'];
+            const installedVersion = getInstalledVersion();
             return {
                 running: true,
-                version: response.headers['x-runtime-version'] || 'unknown'
+                version: headerVersion || installedVersion || 'unknown',
+                sdkVersion: SDK_VERSION
             };
         }
         catch {
-            return { running: false };
+            return { running: false, sdkVersion: SDK_VERSION };
         }
     }
 }
@@ -282,15 +318,34 @@ export function handleApiError(error) {
     if (axios.isAxiosError(error)) {
         const axiosError = error;
         if (axiosError.response?.data) {
-            return axiosError.response.data;
+            const data = axiosError.response.data;
+            return {
+                errno: data.errno || axiosError.response?.status || 500,
+                errmsg: data.errmsg || axiosError.message || 'Unknown error'
+            };
+        }
+        if (axiosError.response) {
+            return {
+                errno: axiosError.response.status,
+                errmsg: axiosError.response.statusText || axiosError.message || 'Request failed'
+            };
+        }
+        if (axiosError.request) {
+            return {
+                errno: 503,
+                errmsg: 'Runtime server is not responding. Make sure the runtime is running.'
+            };
         }
         return {
-            errno: axiosError.response?.status || 500,
+            errno: 500,
             errmsg: axiosError.message || 'Unknown error'
         };
     }
     if (error instanceof Error) {
         return { errno: 500, errmsg: error.message };
+    }
+    if (typeof error === 'string') {
+        return { errno: 500, errmsg: error };
     }
     return { errno: 500, errmsg: 'Unknown error' };
 }
@@ -306,6 +361,9 @@ export function getConfig() {
         }
     }
     return config;
+}
+export function getSdkVersion() {
+    return SDK_VERSION;
 }
 export { SkillsClient as SkillRuntimeClient };
 //# sourceMappingURL=index.js.map

@@ -12,6 +12,7 @@ import std.io.{StringReader, StringWriter}
 import magic.core.skill.SkillManager
 import magic.log.LogUtils
 import magic.skill.domain.models.ValidationResult
+import magic.skill.infrastructure.loaders.SkillMdLoader
 import magic.utils.{move, newProcess}
 
 /**
@@ -195,8 +196,8 @@ public class SkillPackageManager {
         var actualBranch = branch
         var subpath: Option<String> = None
         
-        if ((gitUrl.contains("github.com") || gitUrl.contains("gitcode.com") || gitUrl.contains("gitee.com")) && gitUrl.contains("/tree/")) {
-            LogUtils.info("[installFromGit] Parsing Git hosting URL with subpath")
+        if (gitUrl.contains("/tree/") && gitUrl.startsWith("https://")) {
+            LogUtils.info("[installFromGit] Parsing Git URL with subpath")
             let parsedUrl = GitManager.parseGitHubUrl(gitUrl)
             actualUrl = parsedUrl.repoUrl
             if (parsedUrl.branch.isSome() && branch.isNone()) {
@@ -387,10 +388,32 @@ public class SkillPackageManager {
      * Extract skill name from path
      */
     private func _extractSkillName(path: String): String {
-        // In a real implementation, this would extract the skill name from the skill definition
-        // For now, we'll extract it from the directory name
-        // Normalize path separators to forward slashes for consistent processing
         let normalizedPath = path.replace("\\", "/")
+        
+        let skillMdPath = if (normalizedPath.endsWith("/SKILL.md") || normalizedPath.endsWith("SKILL.md")) {
+            normalizedPath
+        } else {
+            "${normalizedPath}/SKILL.md"
+        }
+        
+        LogUtils.info("[_extractSkillName] Checking for SKILL.md at: ${skillMdPath}")
+        
+        if (exists(skillMdPath)) {
+            let loader = SkillMdLoader()
+            let manifestOpt = loader.loadSkillFromPath(skillMdPath)
+            
+            if (manifestOpt.isSome()) {
+                let manifest = manifestOpt.getOrThrow()
+                let skillName = manifest.name
+                LogUtils.info("[_extractSkillName] Extracted skill name from SKILL.md: ${skillName}")
+                return skillName
+            } else {
+                LogUtils.info("[_extractSkillName] Failed to parse SKILL.md, falling back to directory name")
+            }
+        } else {
+            LogUtils.info("[_extractSkillName] SKILL.md not found at ${skillMdPath}, falling back to directory name")
+        }
+        
         let pathParts = normalizedPath.split("/")
         return pathParts[pathParts.size - 1]
     }
@@ -746,12 +769,11 @@ public class GitManager {
     }
     
     /**
-     * Parse a Git hosting URL to extract repository URL, branch, and subpath
+     * Parse a Git URL to extract repository URL, branch, and subpath
      * Supports URLs like:
-     * - https://github.com/owner/repo
-     * - https://github.com/owner/repo/tree/branch
-     * - https://github.com/owner/repo/tree/branch/path/to/skill
-     * - https://gitcode.com/owner/repo/tree/branch/path/to/skill
+     * - https://any-git-host.com/owner/repo
+     * - https://any-git-host.com/owner/repo/tree/branch
+     * - https://any-git-host.com/owner/repo/tree/branch/path/to/skill
      */
     public static func parseGitHubUrl(url: String): ParsedGitHubUrl {
         let result = ParsedGitHubUrl(
@@ -759,10 +781,6 @@ public class GitManager {
             branch: None,
             subpath: None
         )
-        
-        if (!url.contains("github.com") && !url.contains("gitcode.com") && !url.contains("gitee.com")) {
-            return result
-        }
         
         let treeIndex = url.indexOf("/tree/")
         if (treeIndex.isNone() || treeIndex.getOrThrow() < 0) {

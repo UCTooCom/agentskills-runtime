@@ -42,11 +42,23 @@ public class APIRouter {
         _searchService = PublicSkillSearchService()
         _gitManager = GitManager()
         
-        // Initialize ProgressiveSkillLoader with skills directories - using absolute paths for better reliability
+        // Initialize ProgressiveSkillLoader with skills directories
+        // Uses SKILL_INSTALL_PATH environment variable if set, otherwise defaults to ./skills
         let currentDir = getWorkingDirectory().toString()
+        let skillInstallPath = if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
+            if (!configuredPath.isEmpty()) {
+                LogUtils.info("Using SKILL_INSTALL_PATH from environment: ${configuredPath}")
+                configuredPath
+            } else {
+                "${currentDir}/skills"
+            }
+        } else {
+            "${currentDir}/skills"
+        }
+        
         let skillDirs = [
-            "${currentDir}/skills",      // For installed skills
-            "${currentDir}/src/examples"  // For example skills
+            skillInstallPath,           // For installed skills (from SKILL_INSTALL_PATH)
+            "${currentDir}/src/examples"  // For example skills (built-in)
         ]
         _progressiveSkillLoader = ProgressiveSkillLoader(
             skillBaseDirectories: skillDirs,
@@ -59,7 +71,7 @@ public class APIRouter {
         // Load skills from the configured directories into the skill manager
         try {
             let loadedSkills = _progressiveSkillLoader.loadSkillsToManager(_skillManager)
-            LogUtils.info("✅ Successfully loaded ${loadedSkills.size} skills from './src/examples' directory")
+            LogUtils.info("✅ Successfully loaded ${loadedSkills.size} skills from directories")
             
             // Log all loaded skill IDs for debugging
             for (skill in loadedSkills) {

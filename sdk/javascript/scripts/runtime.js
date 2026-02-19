@@ -58,7 +58,27 @@ function getRuntimeDir() {
 
 function getRuntimePath() {
   const { platform, arch, suffix } = getPlatform();
-  return path.join(getRuntimeDir(), `${platform}-${arch}`, `agentskills-runtime${suffix}`);
+  // Check for release structure first (release/bin/agentskills-runtime.exe)
+  // Then fall back to direct structure (bin/agentskills-runtime.exe)
+  const releasePath = path.join(getRuntimeDir(), `${platform}-${arch}`, 'release', 'bin', `agentskills-runtime${suffix}`);
+  const directPath = path.join(getRuntimeDir(), `${platform}-${arch}`, `agentskills-runtime${suffix}`);
+  
+  if (fs.existsSync(releasePath)) {
+    return releasePath;
+  }
+  return directPath;
+}
+
+function getRuntimeWorkingDir() {
+  const { platform, arch } = getPlatform();
+  // For release structure, working dir should be the release directory (parent of bin/)
+  // This ensures .env file at release/.env can be found
+  const releaseDir = path.join(getRuntimeDir(), `${platform}-${arch}`, 'release');
+  if (fs.existsSync(path.join(releaseDir, 'bin'))) {
+    return releaseDir;
+  }
+  // Fall back to bin directory for direct structure
+  return path.join(getRuntimeDir(), `${platform}-${arch}`, 'bin');
 }
 
 function isRuntimeInstalled() {
@@ -152,10 +172,14 @@ function startRuntime(options = {}) {
   
   const args = ['--port', String(port), '--host', host];
   
+  // Use the correct working directory for the runtime
+  // This ensures .env file can be found in the release directory
+  const workingDir = getRuntimeWorkingDir();
+  
   const child = spawn(runtimePath, args, {
     stdio: options.detached ? 'ignore' : 'inherit',
     detached: options.detached || false,
-    cwd: path.dirname(runtimePath)
+    cwd: workingDir
   });
   
   if (options.detached) {
@@ -207,6 +231,7 @@ module.exports = {
   getPlatform,
   getRuntimeDir,
   getRuntimePath,
+  getRuntimeWorkingDir,
   isRuntimeInstalled,
   downloadRuntime,
   startRuntime,

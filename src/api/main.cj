@@ -60,7 +60,23 @@ main(args: Array<String>): Unit {
     
     // Load environment variables from .env file
     // Environment variables already set (including from command line) will NOT be overwritten
-    let envLoadResult = Config.env.load(Path("./.env"))
+    // Try multiple locations for .env file:
+    // 1. Current working directory (./.env) - for development mode
+    // 2. Parent directory (../.env) - for release mode where exe is in bin/ and .env is in release/
+    let envPaths = [Path("./.env"), Path("../.env")]
+    var envLoadResult = ""
+    for (envPath in envPaths) {
+        eprintln("[DEBUG] Trying to load .env from: ${envPath}")
+        let result = Config.env.load(envPath)
+        eprintln("[DEBUG] Load result: ${result}")
+        if (!result.contains("does not exist")) {
+            envLoadResult = result
+            LogUtils.info("Loaded .env from: ${envPath}")
+            break
+        } else {
+            envLoadResult = result
+        }
+    }
     
     // Set log level from environment variable or default to info
     let logLevel = Config.env["LOG_LEVEL"].getOrDefault({ => "info" })

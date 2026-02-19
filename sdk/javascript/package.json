@@ -1,6 +1,6 @@
 {
   "name": "@opencangjie/skills",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "JavaScript/TypeScript SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

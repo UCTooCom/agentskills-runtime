@@ -188,9 +188,50 @@ static var toolResultCompactThreshold = 1500
 ```
 func load(path: Path): String
 ```
-- Description: Loads environment variables from a .env file.
+- Description: Loads environment variables from a .env file. Environment variables that are already set will NOT be overwritten.
 - Parameters:
   - `path`: `Path`, The path to the .env file to load.
+- Returns: A string describing the load result, including which variables were set or skipped.
+- Behavior:
+  - If a variable is already set in the environment, it will be skipped (not overwritten).
+  - Only variables that are not already set will be loaded from the .env file.
+  - This ensures that command-line arguments and programmatic settings take priority over .env file values.
+
+#### Configuration Priority
+
+The AgentSkills Runtime uses the following priority order for configuration values (highest to lowest):
+
+1. **Command-line Arguments** - Values passed via command-line flags (e.g., `--skill-path`)
+2. **Programmatic Settings** - Values set directly in code before loading .env
+3. **Environment Variables** - Values already set in the system environment
+4. **.env File** - Values loaded from the .env file
+5. **Default Values** - Built-in default values
+
+##### Skill Installation Path Priority
+
+The `SKILL_INSTALL_PATH` configuration follows this priority:
+
+| Priority | Source | Description |
+|----------|--------|-------------|
+| 1 | `--skill-path` CLI argument | Direct command-line parameter |
+| 2 | `install_path` API parameter | Per-request installation path |
+| 3 | `SKILL_INSTALL_PATH` env var | Environment variable (set before .env load) |
+| 4 | `SKILL_INSTALL_PATH` in .env | Value from .env file |
+| 5 | Default `./skills` | Relative to current working directory |
+
+Example:
+```bash
+# Using command-line argument (highest priority)
+agentskills-runtime 8080 --skill-path "/path/to/skills"
+
+# Using environment variable
+export SKILL_INSTALL_PATH="/path/to/skills"
+agentskills-runtime 8080
+
+# Using .env file
+echo "SKILL_INSTALL_PATH=/path/to/skills" >> .env
+agentskills-runtime 8080
+```
 
 #### func operator operator []
 ```

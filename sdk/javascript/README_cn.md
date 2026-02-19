@@ -526,6 +526,137 @@ ATOMGIT_TOKEN=your_atomgit_token
 | 平台支持 | Win/Mac/Linux | Win/Mac/Linux |
 | API 协议 | RESTful + MCP | RESTful |
 
+## 实际使用示例
+
+此 SDK 在 [UCToo](https://gitee.com/uctoo/uctoo) 开源项目中用于 AI 代理技能管理。
+
+### 项目结构
+
+```
+uctoo/
+├── apps/
+│   ├── backend/                    # 后端 API 服务 (Node.js/TypeScript)
+│   │   ├── package.json            # 包含: @opencangjie/skills
+│   │   └── src/
+│   │       └── app/services/uctoo/
+│   │           └── runtimeManager.ts  # 运行时管理服务
+│   │
+│   ├── uctoo-app-client-pc/        # 前端应用 (Vue 3)
+│   │   ├── package.json            # 包含: @opencangjie/skills
+│   │   └── src/
+│   │       └── views/uctoo/agent_skills/
+│   │           └── home.vue        # 技能管理界面
+│   │
+│   └── agentskills-runtime/        # 运行时内核 (仓颉)
+│       └── sdk/javascript/         # 本 SDK
+```
+
+### 后端集成 (apps/backend)
+
+```typescript
+// apps/backend/src/app/services/uctoo/runtimeManager.ts
+import { createClient, RUNTIME_VERSION } from '@opencangjie/skills';
+
+const runtimeClient = createClient({
+  baseUrl: process.env.SKILL_RUNTIME_API_URL || 'http://127.0.0.1:8080'
+});
+
+export class RuntimeManager {
+  async getRuntimeVersion(): Promise<string> {
+    return RUNTIME_VERSION;
+  }
+
+  async listSkills(limit: number = 10, page: number = 0) {
+    return runtimeClient.listSkills({ limit, skip: page * limit });
+  }
+
+  async installSkill(source: string) {
+    return runtimeClient.installSkill({ source });
+  }
+
+  async executeSkill(skillId: string, params: Record<string, any>) {
+    return runtimeClient.executeSkill(skillId, params);
+  }
+
+  async searchSkills(query: string) {
+    return runtimeClient.searchSkills({ query });
+  }
+}
+```
+
+### 前端集成 (apps/uctoo-app-client-pc)
+
+```vue
+<!-- apps/uctoo-app-client-pc/src/views/uctoo/agent_skills/home.vue -->
+<template>
+  <div class="skill-management">
+    <a-input-search
+      v-model:value="searchQuery"
+      placeholder="搜索技能..."
+      @search="handleSearch"
+    />
+    
+    <a-table :dataSource="skills" :columns="columns">
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'action'">
+          <a-button @click="executeSkill(record.id)">执行</a-button>
+        </template>
+      </template>
+    </a-table>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue';
+import { createClient } from '@opencangjie/skills';
+
+const client = createClient({
+  baseUrl: '/api/skills'  // 代理到运行时
+});
+
+const skills = ref([]);
+const searchQuery = ref('');
+
+const loadSkills = async () => {
+  const result = await client.listSkills({ limit: 20 });
+  skills.value = result.skills;
+};
+
+const handleSearch = async () => {
+  if (searchQuery.value) {
+    const result = await client.searchSkills({ query: searchQuery.value });
+    skills.value = result.skills;
+  } else {
+    loadSkills();
+  }
+};
+
+const executeSkill = async (skillId: string) => {
+  // 打开执行对话框
+};
+
+onMounted(loadSkills);
+</script>
+```
+
+### 包依赖配置
+
+```json
+// apps/backend/package.json
+{
+  "dependencies": {
+    "@opencangjie/skills": "^0.0.13"
+  }
+}
+
+// apps/uctoo-app-client-pc/package.json
+{
+  "dependencies": {
+    "@opencangjie/skills": "^0.0.13"
+  }
+}
+```
+
 ## 许可证
 
 MIT

@@ -32,8 +32,9 @@ public class APIRouter {
     private let _port: Int32
     private let _searchService: PublicSkillSearchService
     private let _gitManager: GitManager
+    private let _skillInstallPath: String
 
-    public init(port: Int32) {
+    public init(port: Int32, skillPath!: String = "") {
         _port = port
         _distributor = Some(DefaultHttpRequestDistributor())
         _skillManagementService = SkillManagementService()
@@ -43,9 +44,12 @@ public class APIRouter {
         _gitManager = GitManager()
         
         // Initialize ProgressiveSkillLoader with skills directories
-        // Uses SKILL_INSTALL_PATH environment variable if set, otherwise defaults to ./skills
+        // Priority: 1. skillPath parameter, 2. SKILL_INSTALL_PATH env var, 3. default ./skills
         let currentDir = getWorkingDirectory().toString()
-        let skillInstallPath = if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
+        let skillInstallPath = if (!skillPath.isEmpty()) {
+            LogUtils.info("Using skill path from parameter: ${skillPath}")
+            skillPath
+        } else if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
             if (!configuredPath.isEmpty()) {
                 LogUtils.info("Using SKILL_INSTALL_PATH from environment: ${configuredPath}")
                 configuredPath
@@ -55,9 +59,10 @@ public class APIRouter {
         } else {
             "${currentDir}/skills"
         }
+        _skillInstallPath = skillInstallPath
         
         let skillDirs = [
-            skillInstallPath,           // For installed skills (from SKILL_INSTALL_PATH)
+            skillInstallPath,           // For installed skills (from parameter or SKILL_INSTALL_PATH)
             "${currentDir}/src/examples"  // For example skills (built-in)
         ]
         _progressiveSkillLoader = ProgressiveSkillLoader(
@@ -91,8 +96,8 @@ public class APIRouter {
         setupRoutes()
     }
 
-    public init() {
-        this(8080)  // Default port 8080
+    public init(port: Int32) {
+        this(port, skillPath: "")
     }
 
     /**
@@ -423,11 +428,36 @@ public class APIRouter {
             LogUtils.info("[handleAddSkill] bodySize: ${bodySize}")
             
             let buffer = Array<UInt8>(bodySize, repeat: 0)
-            request.body.read(buffer)
-            let body = String.fromUtf8(buffer)
-            LogUtils.info("[handleAddSkill] Request body: ${body}")
+            let bytesRead = request.body.read(buffer)
+            LogUtils.info("[handleAddSkill] Bytes read: ${bytesRead}, expected: ${bodySize}")
             
-            let jsonObj = JsonValue.fromStr(body).asObject()
+            let body = String.fromUtf8(buffer)
+            LogUtils.info("[handleAddSkill] Request body length: ${body.size}, content: '${body}'")
+            
+            if (body.isEmpty()) {
+                LogUtils.error("[handleAddSkill] Request body is empty")
+                createErrorResponse(context, 400, "invalid_request", "Request body is empty")
+                return
+            }
+            
+            let jsonValue: JsonValue
+            try {
+                jsonValue = JsonValue.fromStr(body)
+                LogUtils.info("[handleAddSkill] JSON parsed successfully")
+            } catch (ex: Exception) {
+                LogUtils.error("[handleAddSkill] Failed to parse JSON: ${ex.message}")
+                createErrorResponse(context, 400, "invalid_json", "Failed to parse JSON: ${ex.message}")
+                return
+            }
+            
+            if (!(jsonValue is JsonObject)) {
+                LogUtils.error("[handleAddSkill] JSON is not an object")
+                createErrorResponse(context, 400, "invalid_json", "Request body must be a JSON object")
+                return
+            }
+            
+            let jsonObj = jsonValue.asObject()
+            LogUtils.info("[handleAddSkill] JSON object parsed")
 
             if (!jsonObj.containsKey("source")) {
                 createErrorResponse(context, 400, "missing_field", "Source field is required")

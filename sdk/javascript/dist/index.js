@@ -4,12 +4,15 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const packageJson = require('../package.json');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SDK_VERSION = '0.0.11';
+const SDK_VERSION = packageJson.version;
+const RUNTIME_VERSION = packageJson.runtime?.version || '0.0.2';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
 const DEFAULT_TIMEOUT = 30000;
-const RUNTIME_VERSION = '0.0.1';
 const GITHUB_REPO = 'UCTooCom/agentskills-runtime';
 const ATOMGIT_REPO = 'uctoo/agentskills-runtime';
 const DOWNLOAD_MIRRORS = [
@@ -51,6 +54,10 @@ function getRuntimeDir() {
 function getRuntimePath() {
     const { platform, arch, suffix } = getPlatformInfo();
     return path.join(getRuntimeDir(), `${platform}-${arch}`, 'release', 'bin', `agentskills-runtime${suffix}`);
+}
+function getReleaseDir() {
+    const { platform, arch } = getPlatformInfo();
+    return path.join(getRuntimeDir(), `${platform}-${arch}`, 'release');
 }
 function getVersionFilePath() {
     const { platform, arch } = getPlatformInfo();
@@ -138,6 +145,23 @@ export class RuntimeManager {
                 if (fs.existsSync(runtimePath) && os.platform() !== 'win32') {
                     fs.chmodSync(runtimePath, '755');
                 }
+                const releaseDir = path.join(runtimeDir, 'release');
+                const envFile = path.join(releaseDir, '.env');
+                const envExampleFile = path.join(releaseDir, '.env.example');
+                if (!fs.existsSync(envFile) && fs.existsSync(envExampleFile)) {
+                    fs.copyFileSync(envExampleFile, envFile);
+                    console.log('Created .env file from .env.example');
+                }
+                else if (!fs.existsSync(envFile)) {
+                    const defaultEnvContent = `# AgentSkills Runtime Configuration
+# This file was auto-generated. Edit as needed.
+
+# Skill Installation Path
+SKILL_INSTALL_PATH=./skills
+`;
+                    fs.writeFileSync(envFile, defaultEnvContent);
+                    console.log('Created default .env file');
+                }
                 console.log(`AgentSkills Runtime v${version} downloaded successfully from ${mirror.name}!`);
                 return true;
             }
@@ -162,18 +186,43 @@ export class RuntimeManager {
         }
         const port = options.port || 8080;
         const host = options.host || '127.0.0.1';
-        const cwd = options.cwd || path.dirname(runtimePath);
-        const args = [String(port)];
+        const cwd = options.cwd || getReleaseDir();
+        const skillInstallPath = options.skillInstallPath || process.env.SKILL_INSTALL_PATH || path.join(process.cwd(), 'skills');
         const env = {
             ...process.env,
+            SKILL_INSTALL_PATH: skillInstallPath,
             ...options.env
         };
-        this.process = spawn(runtimePath, args, {
-            stdio: options.detached ? 'ignore' : 'inherit',
-            detached: options.detached || false,
-            cwd: cwd,
-            env: env
-        });
+        console.log(`[SDK DEBUG] cwd: ${cwd}`);
+        console.log(`[SDK DEBUG] SKILL_INSTALL_PATH in env: ${env.SKILL_INSTALL_PATH}`);
+        console.log(`[SDK DEBUG] runtimePath: ${runtimePath}`);
+        // On Windows, use shell to properly handle path arguments
+        // When using shell: true, we need to properly escape the command
+        if (process.platform === 'win32') {
+            // Use escaped quotes for Windows paths
+            const escapedPath = skillInstallPath.replace(/"/g, '""');
+            const command = `"${runtimePath}" ${port} --skill-path "${escapedPath}"`;
+            console.log(`[SDK DEBUG] command: ${command}`);
+            this.process = spawn(command, [], {
+                stdio: options.detached ? 'ignore' : 'inherit',
+                detached: options.detached || false,
+                cwd: cwd,
+                env: env,
+                windowsHide: true,
+                shell: true
+            });
+        }
+        else {
+            const args = [String(port), '--skill-path', skillInstallPath];
+            console.log(`[SDK DEBUG] args: ${args.join(' ')}`);
+            this.process = spawn(runtimePath, args, {
+                stdio: options.detached ? 'ignore' : 'inherit',
+                detached: options.detached || false,
+                cwd: cwd,
+                env: env,
+                windowsHide: true
+            });
+        }
         if (options.detached && this.process.pid) {
             this.process.unref();
             const pidFile = path.join(getRuntimeDir(), 'runtime.pid');
@@ -365,5 +414,8 @@ export function getConfig() {
 export function getSdkVersion() {
     return SDK_VERSION;
 }
-export { SkillsClient as SkillRuntimeClient };
+export function getRuntimeVersion() {
+    return RUNTIME_VERSION;
+}
+export { SkillsClient as SkillRuntimeClient, RUNTIME_VERSION };
 //# sourceMappingURL=index.js.map

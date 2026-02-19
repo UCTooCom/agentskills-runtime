@@ -1,4 +1,5 @@
 import { ChildProcess } from 'child_process';
+declare const RUNTIME_VERSION: any;
 export interface EnvironmentConfig {
     [key: string]: string | undefined;
 }
@@ -86,6 +87,7 @@ export interface RuntimeOptions {
     detached?: boolean;
     cwd?: string;
     env?: Record<string, string>;
+    skillInstallPath?: string;
 }
 export declare class RuntimeManager {
     private process;
@@ -152,5 +154,6 @@ export declare function defineSkill(config: {
 };
 export declare function getConfig<T extends EnvironmentConfig = EnvironmentConfig>(): T;
 export declare function getSdkVersion(): string;
-export { SkillsClient as SkillRuntimeClient };
+export declare function getRuntimeVersion(): string;
+export { SkillsClient as SkillRuntimeClient, RUNTIME_VERSION };
 //# sourceMappingURL=index.d.ts.map

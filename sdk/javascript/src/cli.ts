@@ -14,7 +14,8 @@ import {
   SkillInstallOptions,
   SkillExecutionResult,
   ToolDefinition,
-  RuntimeManager
+  RuntimeManager,
+  RUNTIME_VERSION
 } from './index.js';
 
 const program = new Command();
@@ -705,7 +706,7 @@ program
 program
   .command('install-runtime')
   .description('Download and install the AgentSkills runtime binary')
-  .option('-v, --version <version>', 'Runtime version to install', '0.0.1')
+  .option('-v, --version <version>', 'Runtime version to install', RUNTIME_VERSION)
   .action(async (options: { version: string }) => {
     const runtime = new RuntimeManager();
     

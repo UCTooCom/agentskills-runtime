@@ -5,7 +5,7 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import fs from 'fs-extra';
 import path from 'path';
-import { createClient, handleApiError, RuntimeManager } from './index.js';
+import { createClient, handleApiError, RuntimeManager, RUNTIME_VERSION } from './index.js';
 const program = new Command();
 const getClient = () => {
     return createClient({
@@ -578,7 +578,7 @@ program
 program
     .command('install-runtime')
     .description('Download and install the AgentSkills runtime binary')
-    .option('-v, --version <version>', 'Runtime version to install', '0.0.1')
+    .option('-v, --version <version>', 'Runtime version to install', RUNTIME_VERSION)
     .action(async (options) => {
     const runtime = new RuntimeManager();
     if (runtime.isInstalled()) {

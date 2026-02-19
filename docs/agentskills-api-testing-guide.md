@@ -1,5 +1,20 @@
 # API 接口测试指南
 
+## 日志位置
+
+### 开发环境日志
+- **路径**: `apps/agentskills-runtime/logs/`
+- 包含 Runtime 运行日志和 Agent 日志
+
+### 部署环境日志
+- **路径**: `node_modules/@opencangjie/skills/runtime/<platform>-<arch>/release/logs/`
+- 例如 Windows: `node_modules/@opencangjie/skills/runtime/win-x64/release/logs/`
+
+### 日志配置
+日志配置在 `.env` 文件中：
+- `LOG_LEVEL`: 日志级别 (error | info | debug | trace)
+- 默认输出到 `stderr`，可通过修改 `Config.logFile` 配置输出到文件
+
 ## 测试 API 接口是否正常工作
 
 要验证 AgentSkills Runtime API 接口是否正常工作，您可以按照以下步骤进行测试：

@@ -4,6 +4,7 @@
 package magic.api
 
 import std.convert.*
+import std.env.{setVariable, getVariable}
 import magic.config.Config
 import std.fs.Path
 import magic.log.LogUtils
@@ -13,28 +14,69 @@ import magic.log.LogUtils
  * This starts the HTTP server and handles API requests
  */
 main(args: Array<String>): Unit {
-    // Set log level to info
-    Config.logLevel = "info"
+    eprintln("[DEBUG] Starting runtime with args: ${args.toString()}")
     
-    // Load environment variables from .env file
-    let envLoadResult = Config.env.load(Path("./.env"))
-    LogUtils.info("Environment loaded: ${envLoadResult}")
+    // Parse command line arguments
+    // Format: agentskills-runtime <port> [--skill-path <path>]
+    var port = Int32(8080)
+    var skillPath = ""
     
-    let port = if (args.size > 0) {
-        try {
-            let parsedPort = Int64.parse(args[0])
-            if (parsedPort >= Int64(Int32.Min) && parsedPort <= Int64(Int32.Max)) {
-                Int32(parsedPort)
-            } else {
-                Int32(8080)
+    var i = 0
+    while (i < args.size) {
+        if (args[i] == "--skill-path" && i + 1 < args.size) {
+            skillPath = args[i + 1]
+            i += 2
+        } else if (i == 0) {
+            // First argument is port
+            try {
+                let parsedPort = Int64.parse(args[0])
+                if (parsedPort >= Int64(Int32.Min) && parsedPort <= Int64(Int32.Max)) {
+                    port = Int32(parsedPort)
+                }
+            } catch (ex: Exception) {
+                () // Use default port
             }
-        } catch (ex: Exception) {
-            Int32(8080)  // Default port
+            i += 1
+        } else {
+            i += 1
         }
-    } else {
-        Int32(8080)  // Default port
     }
     
-    let apiRouter = APIRouter(port)
+    eprintln("[DEBUG] Parsed port: ${port.toString()}, skillPath: ${skillPath}")
+    
+    // If skill path is provided via command line, set it as environment variable
+    // This must be done BEFORE loading .env file so it takes priority
+    if (!skillPath.isEmpty()) {
+        setVariable("SKILL_INSTALL_PATH", skillPath)
+        eprintln("[DEBUG] Set SKILL_INSTALL_PATH to: ${skillPath}")
+    }
+    
+    // Verify environment variable is set
+    if (let Some(skillInstallPath) <- getVariable("SKILL_INSTALL_PATH")) {
+        eprintln("[DEBUG] SKILL_INSTALL_PATH verified: ${skillInstallPath}")
+    } else {
+        eprintln("[DEBUG] SKILL_INSTALL_PATH not set")
+    }
+    
+    // Load environment variables from .env file
+    // Environment variables already set (including from command line) will NOT be overwritten
+    let envLoadResult = Config.env.load(Path("./.env"))
+    
+    // Set log level from environment variable or default to info
+    let logLevel = Config.env["LOG_LEVEL"].getOrDefault({ => "info" })
+    Config.logLevel = logLevel
+    
+    LogUtils.info("Environment loaded: ${envLoadResult}")
+    LogUtils.info("Log level set to: ${Config.logLevel}")
+    
+    // Final verification
+    if (let Some(finalPath) <- getVariable("SKILL_INSTALL_PATH")) {
+        LogUtils.info("Final SKILL_INSTALL_PATH: ${finalPath}")
+    } else {
+        LogUtils.info("SKILL_INSTALL_PATH not set after loading .env")
+    }
+    
+    // Pass skillPath directly to APIRouter to ensure it's used correctly
+    let apiRouter = APIRouter(port, skillPath: skillPath)
     apiRouter.start()
 }

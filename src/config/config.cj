@@ -25,6 +25,7 @@ public struct EnvWrapper {
 
     /**
      * Load the environment variables from a .env file.
+     * Environment variables that are already set will NOT be overwritten.
      */
     public func load(path: Path): String {
         if (!exists(path)) {
@@ -45,8 +46,15 @@ public struct EnvWrapper {
                     } else if (value.startsWith("'")) {
                         value = value.replace("'", "")
                     }
-                    strBuilder.append("[ENV Set] ${key}=${value}\n")
-                    setEnv(key, value)
+                    // Only set if not already defined in environment
+                    let existingOpt = getEnv(key)
+                    if (existingOpt.isSome()) {
+                        let existingValue = existingOpt.getOrThrow()
+                        strBuilder.append("[ENV Skip] ${key} already set to: ${existingValue}\n")
+                    } else {
+                        strBuilder.append("[ENV Set] ${key}=${value}\n")
+                        setEnv(key, value)
+                    }
                 }
             }
         } catch (e: Exception) {

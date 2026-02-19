@@ -829,6 +829,8 @@ public class GitManager {
     private func _executeClone(url: String, ref: GitReference, targetPath: String): GitCommandResult {
         var args = ArrayList<String>()
         args.add("clone")
+        args.add("--config")
+        args.add("core.longpaths=true")
         
         match (ref) {
             case b: GitReferenceBranch =>

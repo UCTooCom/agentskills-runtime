@@ -141,6 +141,78 @@ cjpm run --skip-build --name magic.examples.uctoo_api_mcp_server
 cjpm run --skip-build --name magic.examples.uctoo_api_mcp_client
 ```
 
+## Release Packaging
+
+### Building Release Packages
+
+AgentSkills Runtime provides an automated packaging script to build release packages from source.
+
+#### Build Steps
+
+```bash
+# 1. Build the project
+cjpm build
+
+# 2. Run the packaging script (automatically reads version from cjpm.toml)
+cjpm run --name magic.scripts.package_release
+```
+
+#### Packaging Script Features
+
+- **Automatic Version Detection**: Reads version number from `cjpm.toml` file
+- **Automatic Platform Detection**: Automatically detects current OS and architecture
+- **Lean Packaging**: Automatically excludes examples, tests, and other non-essential modules
+- **Complete Dependencies**: Includes all runtime-required DLL files
+
+#### Output Files
+
+After packaging completes, release packages will be generated in the `release/` directory:
+
+```
+release/
+├── agentskills-runtime-win-x64.tar.gz    # Windows x64 release package
+├── agentskills-runtime-linux-x64.tar.gz  # Linux x64 release package
+├── agentskills-runtime-darwin-arm64.tar.gz # macOS ARM64 release package
+└── .env.example                           # Environment variable template
+```
+
+#### Release Package Directory Structure
+
+```
+release/
+├── bin/                    # Executables and all DLLs
+│   ├── agentskills-runtime.exe  # Main entry point
+│   └── *.dll               # All dependency libraries
+├── magic/                  # Runtime modules
+├── commonmark4cj/          # Markdown parser
+├── yaml4cj/                # YAML parser
+├── VERSION                 # Version information
+└── .env.example            # Configuration template
+```
+
+#### Using Release Package
+
+```bash
+# 1. Extract the release package
+tar -xzf agentskills-runtime-win-x64.tar.gz
+
+# 2. Enter directory and configure environment
+cd release
+cp .env.example bin/.env
+# Edit .env file to configure API keys
+
+# 3. Run the service
+./bin/agentskills-runtime.exe 8080
+```
+
+### Version Release Process
+
+1. Update version number in `cjpm.toml`
+2. Update `CHANGELOG.md` with changes
+3. Run `cjpm build` to build the project
+4. Run `cjpm run --name magic.scripts.package_release` to package
+5. Upload release packages to GitHub Releases or AtomGit Releases
+
 ## Usage
 
 ### Creating Skills with DSL

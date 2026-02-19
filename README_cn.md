@@ -152,6 +152,78 @@ cjpm run --skip-build --name magic.api 8081
 
 有关运行 API 服务的详细说明，请参见 [API 服务运行指南](docs/api-service-run.md)。
 
+## 发布打包
+
+### 构建发布包
+
+AgentSkills Runtime 提供了自动化打包脚本，可以从源码构建发布包。
+
+#### 构建步骤
+
+```bash
+# 1. 构建项目
+cjpm build
+
+# 2. 运行打包脚本（自动从 cjpm.toml 读取版本号）
+cjpm run --name magic.scripts.package_release
+```
+
+#### 打包脚本功能
+
+- **自动版本检测**：从 `cjpm.toml` 文件自动读取版本号
+- **自动平台检测**：自动检测当前操作系统和架构
+- **精简打包**：自动排除 examples、tests 等非必要模块
+- **完整依赖**：包含所有运行时所需的 DLL 文件
+
+#### 输出文件
+
+打包完成后，将在 `release/` 目录生成发布包：
+
+```
+release/
+├── agentskills-runtime-win-x64.tar.gz    # Windows x64 发布包
+├── agentskills-runtime-linux-x64.tar.gz  # Linux x64 发布包
+├── agentskills-runtime-darwin-arm64.tar.gz # macOS ARM64 发布包
+└── .env.example                           # 环境变量配置模板
+```
+
+#### 发布包目录结构
+
+```
+release/
+├── bin/                    # 可执行文件和所有 DLL
+│   ├── agentskills-runtime.exe  # 主入口程序
+│   └── *.dll               # 所有依赖库
+├── magic/                  # 运行时模块
+├── commonmark4cj/          # Markdown 解析器
+├── yaml4cj/                # YAML 解析器
+├── VERSION                 # 版本信息
+└── .env.example            # 配置模板
+```
+
+#### 使用发布包
+
+```bash
+# 1. 解压发布包
+tar -xzf agentskills-runtime-win-x64.tar.gz
+
+# 2. 进入目录并配置环境变量
+cd release
+cp .env.example bin/.env
+# 编辑 .env 文件配置 API 密钥
+
+# 3. 运行服务
+./bin/agentskills-runtime.exe 8080
+```
+
+### 版本发布流程
+
+1. 更新 `cjpm.toml` 中的版本号
+2. 更新 `CHANGELOG.md` 记录变更
+3. 运行 `cjpm build` 构建项目
+4. 运行 `cjpm run --name magic.scripts.package_release` 打包
+5. 上传发布包到 GitHub Releases 或 AtomGit Releases
+
 ### API 端点
 启动 API 服务后，以下端点将可用：
 

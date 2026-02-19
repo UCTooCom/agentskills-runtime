@@ -526,6 +526,137 @@ ATOMGIT_TOKEN=your_atomgit_token
 | Platform Support | Win/Mac/Linux | Win/Mac/Linux |
 | API Protocol | RESTful + MCP | RESTful |
 
+## Real-World Usage Example
+
+This SDK is used in the [UCToo](https://gitee.com/uctoo/uctoo) open source project for AI agent skill management.
+
+### Project Structure
+
+```
+uctoo/
+├── apps/
+│   ├── backend/                    # Backend API service (Node.js/TypeScript)
+│   │   ├── package.json            # Contains: @opencangjie/skills
+│   │   └── src/
+│   │       └── app/services/uctoo/
+│   │           └── runtimeManager.ts  # Runtime management service
+│   │
+│   ├── uctoo-app-client-pc/        # Frontend application (Vue 3)
+│   │   ├── package.json            # Contains: @opencangjie/skills
+│   │   └── src/
+│   │       └── views/uctoo/agent_skills/
+│   │           └── home.vue        # Skill management UI
+│   │
+│   └── agentskills-runtime/        # Runtime kernel (Cangjie)
+│       └── sdk/javascript/         # This SDK
+```
+
+### Backend Integration (apps/backend)
+
+```typescript
+// apps/backend/src/app/services/uctoo/runtimeManager.ts
+import { createClient, RUNTIME_VERSION } from '@opencangjie/skills';
+
+const runtimeClient = createClient({
+  baseUrl: process.env.SKILL_RUNTIME_API_URL || 'http://127.0.0.1:8080'
+});
+
+export class RuntimeManager {
+  async getRuntimeVersion(): Promise<string> {
+    return RUNTIME_VERSION;
+  }
+
+  async listSkills(limit: number = 10, page: number = 0) {
+    return runtimeClient.listSkills({ limit, skip: page * limit });
+  }
+
+  async installSkill(source: string) {
+    return runtimeClient.installSkill({ source });
+  }
+
+  async executeSkill(skillId: string, params: Record<string, any>) {
+    return runtimeClient.executeSkill(skillId, params);
+  }
+
+  async searchSkills(query: string) {
+    return runtimeClient.searchSkills({ query });
+  }
+}
+```
+
+### Frontend Integration (apps/uctoo-app-client-pc)
+
+```vue
+<!-- apps/uctoo-app-client-pc/src/views/uctoo/agent_skills/home.vue -->
+<template>
+  <div class="skill-management">
+    <a-input-search
+      v-model:value="searchQuery"
+      placeholder="Search skills..."
+      @search="handleSearch"
+    />
+    
+    <a-table :dataSource="skills" :columns="columns">
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'action'">
+          <a-button @click="executeSkill(record.id)">Execute</a-button>
+        </template>
+      </template>
+    </a-table>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue';
+import { createClient } from '@opencangjie/skills';
+
+const client = createClient({
+  baseUrl: '/api/skills'  // Proxied to runtime
+});
+
+const skills = ref([]);
+const searchQuery = ref('');
+
+const loadSkills = async () => {
+  const result = await client.listSkills({ limit: 20 });
+  skills.value = result.skills;
+};
+
+const handleSearch = async () => {
+  if (searchQuery.value) {
+    const result = await client.searchSkills({ query: searchQuery.value });
+    skills.value = result.skills;
+  } else {
+    loadSkills();
+  }
+};
+
+const executeSkill = async (skillId: string) => {
+  // Open execution dialog
+};
+
+onMounted(loadSkills);
+</script>
+```
+
+### Package Dependencies
+
+```json
+// apps/backend/package.json
+{
+  "dependencies": {
+    "@opencangjie/skills": "^0.0.13"
+  }
+}
+
+// apps/uctoo-app-client-pc/package.json
+{
+  "dependencies": {
+    "@opencangjie/skills": "^0.0.13"
+  }
+}
+```
+
 ## License
 
 MIT

@@ -8,7 +8,11 @@ const os = require('os');
 
 const GITHUB_REPO = 'UCTooCom/agentskills-runtime';
 const ATOMGIT_REPO = 'uctoo/agentskills-runtime';
-const RUNTIME_VERSION = '0.0.1';
+
+const packageJsonPath = path.join(__dirname, '..', 'package.json');
+const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+const packageJson = JSON.parse(packageJsonContent);
+const RUNTIME_VERSION = packageJson.runtime && packageJson.runtime.version ? packageJson.runtime.version : '0.0.3';
 
 const DOWNLOAD_MIRRORS = [
   {

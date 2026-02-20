@@ -11,7 +11,7 @@ import stdx.net.http.{Server, ServerBuilder, HttpContext, HttpRequest, HttpRespo
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonArray, JsonFloat}
 import magic.skill.application.SkillManagementService
 import magic.skill.application.ProgressiveSkillLoader
-import magic.skill.application.{DependencyResolver, GitManager, SkillPackageManager, GitException}
+import magic.skill.application.{DependencyResolver, GitManager, SkillPackageManager, GitException, AvailableSkillInfo}
 import magic.core.skill.{Skill, SkillManager}
 import magic.skill.CompositeSkillToolManager
 import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
@@ -409,6 +409,7 @@ public class APIRouter {
      * Install a skill from a local path or Git repository URL
      */
     private func handleAddSkill(context: HttpContext): Unit {
+        eprintln("=== [handleAddSkill] === START ===")
         LogUtils.info("[handleAddSkill] === Starting handleAddSkill ===")
         try {
             let request = context.request
@@ -502,9 +503,17 @@ public class APIRouter {
             } else {
                 None
             }
+            
+            // Get optional skill_subpath for multi-skill repositories
+            let skillSubpath: Option<String> = if (jsonObj.containsKey("skill_subpath")) {
+                Some(jsonObj["skill_subpath"].asString().getValue())
+            } else {
+                None
+            }
 
             // Determine if source is a local path or Git URL
             let isGitSource = sourceStr.startsWith("http://") || sourceStr.startsWith("https://")
+            eprintln("[handleAddSkill] isGitSource: ${isGitSource}")
             LogUtils.info("[handleAddSkill] isGitSource: ${isGitSource}")
             
             // Check Git availability for Git sources
@@ -543,20 +552,58 @@ public class APIRouter {
 
             // Determine if source is a local path or Git URL
             LogUtils.info("[handleAddSkill] Starting installation, isGitSource=${isGitSource}")
+            eprintln("[handleAddSkill] About to call installFromGit or installFromPath...")
             let result = if (isGitSource) {
-                // Git URL - install from Git with optional reference
+                // Git URL - install from Git with optional reference and subpath
+                eprintln("[handleAddSkill] Calling installFromGit with url=${sourceStr}")
                 LogUtils.info("[handleAddSkill] Calling installFromGit...")
-                skillPackageManager.installFromGit(sourceStr, branch, tag, commit)
+                skillPackageManager.installFromGit(sourceStr, branch, tag, commit, skillSubpath)
             } else {
                 // Local path - install from path
                 skillPackageManager.installFromPath(sourceStr, validate)
+            }
+            eprintln("[handleAddSkill] Installation returned, checking result...")
+
+            // Handle multi-skill repository response
+            eprintln("[handleAddSkill] result.isMultiSkillRepo = ${result.isMultiSkillRepo}")
+            eprintln("[handleAddSkill] result.success = ${result.success}")
+            if (result.isMultiSkillRepo) {
+                eprintln("[handleAddSkill] Multi-skill repository detected!")
+                LogUtils.info("[handleAddSkill] Multi-skill repository detected")
+                let responseObj = JsonObject()
+                responseObj.put("status", JsonString("multi_skill_repo"))
+                responseObj.put("message", JsonString("This repository contains multiple skills. Please select which skill to install."))
+                
+                if (result.availableSkills.isSome()) {
+                    let skillsArray = JsonArray()
+                    for (skillInfo in result.availableSkills.getOrThrow()) {
+                        let skillObj = JsonObject()
+                        skillObj.put("name", JsonString(skillInfo.name))
+                        skillObj.put("description", JsonString(skillInfo.description))
+                        skillObj.put("relative_path", JsonString(skillInfo.relativePath))
+                        skillObj.put("full_path", JsonString(skillInfo.fullPath))
+                        skillObj.put("depth", JsonInt(skillInfo.depth))
+                        skillObj.put("parent_path", JsonString(skillInfo.parentPath))
+                        skillsArray.add(skillObj)
+                    }
+                    responseObj.put("available_skills", skillsArray)
+                    responseObj.put("total_count", JsonInt(skillsArray.size()))
+                }
+                
+                responseObj.put("source_url", JsonString(sourceStr))
+                
+                let responseHeaders = HashMap<String, String>()
+                responseHeaders.add("Content-Type", "application/json")
+                createSuccessResponse(context, responseObj.toString(), responseHeaders)
+                return
             }
 
             if (result.success) {
                 // Reload skills to include the newly added skill
                 _progressiveSkillLoader.reloadSkills(_skillManager)
 
-                let skillName = _extractSkillNameFromPath(sourceStr)
+                // Use the actual skill name from installation result (extracted from SKILL.md)
+                let skillName = result.skillName.getOrDefault({=> _extractSkillNameFromPath(sourceStr) })
                 let responseObj = JsonObject()
                 responseObj.put("id", JsonString(skillName))
                 responseObj.put("name", JsonString(skillName))

@@ -38,8 +38,9 @@ program
     .option('--json', 'Output as JSON', false);
 program
     .command('find [query]')
-    .description('Search for skills interactively or by keyword')
+    .description('Search for skills from GitHub, Gitee, and AtomGit')
     .option('-l, --limit <number>', 'Maximum number of results', '10')
+    .option('-s, --source <source>', 'Search source (all, github, gitee, atomgit)', 'all')
     .action(async (query, options) => {
     const spin = spinner('Searching for skills...');
     try {
@@ -67,17 +68,27 @@ program
             return;
         }
         spin.start();
-        const result = await client.searchSkills(searchQuery);
+        const result = await client.searchSkills({
+            query: searchQuery,
+            source: options.source,
+            limit: parseInt(options.limit)
+        });
         spin.stop();
-        if (result.skills.length === 0) {
+        if (result.results.length === 0) {
             console.log(chalk.yellow(`No skills found matching "${searchQuery}".`));
-            console.log(chalk.gray('\nTry different keywords or check if the skill exists at https://skills.sh/'));
+            console.log(chalk.gray('\nTry different keywords or search from other sources.'));
             return;
         }
-        console.log(chalk.bold(`\nFound ${result.total} skill(s) matching "${searchQuery}":\n`));
-        result.skills.forEach(printSkillShort);
-        console.log(chalk.gray('\nInstall with: skills add <owner/repo@skill>'));
-        console.log(chalk.gray('Browse more at: https://skills.sh/'));
+        console.log(chalk.bold(`\nFound ${result.total_count} skill(s) matching "${searchQuery}":\n`));
+        result.results.forEach((item) => {
+            const stars = item.stars || item.stargazers_count || 0;
+            const sourceIcon = item.source === 'github' ? '🐙' : item.source === 'gitee' ? '🏠' : item.source === 'atomgit' ? '⚛️' : '📦';
+            console.log(`${sourceIcon} ${chalk.cyan(item.full_name)} ${chalk.yellow(`⭐ ${stars}`)}`);
+            console.log(`   ${chalk.gray(item.description || 'No description')}`);
+            console.log(`   ${chalk.gray('Clone:')} ${item.clone_url}`);
+            console.log();
+        });
+        console.log(chalk.gray('Install with: skills add <clone_url>'));
     }
     catch (error) {
         spin.fail('Search failed');
@@ -578,7 +589,7 @@ program
 program
     .command('install-runtime')
     .description('Download and install the AgentSkills runtime binary')
-    .option('-v, --version <version>', 'Runtime version to install', RUNTIME_VERSION)
+    .option('--runtime-version <version>', 'Runtime version to install', RUNTIME_VERSION)
     .action(async (options) => {
     const runtime = new RuntimeManager();
     if (runtime.isInstalled()) {
@@ -593,9 +604,9 @@ program
             return;
         }
     }
-    const spin = spinner(`Downloading runtime v${options.version}...`);
+    const spin = spinner(`Downloading runtime v${options.runtimeVersion}...`);
     try {
-        const success = await runtime.downloadRuntime(options.version);
+        const success = await runtime.downloadRuntime(options.runtimeVersion);
         if (success) {
             spin.succeed('Runtime installed successfully');
             console.log(chalk.gray('\nLocation:'), runtime.getRuntimePath());

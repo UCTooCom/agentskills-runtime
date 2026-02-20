@@ -39,7 +39,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "0.0.8"
+  version = "0.0.13"
 
 [package.package-configuration."magic.examples.doc_translator"]
   output-type = "executable"

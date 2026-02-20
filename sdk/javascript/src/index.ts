@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -84,9 +84,60 @@ export interface SkillInstallResult {
   created_at: string;
 }
 
+export interface AvailableSkillInfo {
+  name: string;
+  description: string;
+  relative_path: string;
+  full_path: string;
+  depth: number;
+  parent_path: string;
+}
+
+export interface MultiSkillRepoResponse {
+  status: 'multi_skill_repo';
+  message: string;
+  available_skills: AvailableSkillInfo[];
+  total_count: number;
+  source_url: string;
+}
+
+export interface SkillInstallResponse {
+  id?: string;
+  name?: string;
+  status: string;
+  message: string;
+  created_at?: string;
+  source_type?: string;
+  source_url?: string;
+  available_skills?: AvailableSkillInfo[];
+  total_count?: number;
+}
+
+export interface SkillSearchResultItem {
+  name: string;
+  full_name: string;
+  description: string;
+  url?: string;
+  html_url?: string;
+  clone_url: string;
+  source: string;
+  stars?: number;
+  forks?: number;
+  stargazers_count?: number;
+  forks_count?: number;
+  updated_at: string;
+  author?: string;
+  owner?: {
+    login: string;
+    avatar_url: string;
+  };
+  topics?: string[];
+  license?: string;
+}
+
 export interface SkillSearchResult {
-  skills: Skill[];
-  total: number;
+  total_count: number;
+  results: SkillSearchResultItem[];
 }
 
 export interface ApiError {
@@ -391,16 +442,29 @@ SKILL_INSTALL_PATH=./skills
     if (fs.existsSync(pidFile)) {
       const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
       try {
-        process.kill(pid, 'SIGTERM');
+        if (process.platform === 'win32') {
+          execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+        } else {
+          process.kill(pid, 'SIGTERM');
+        }
         fs.unlinkSync(pidFile);
         return true;
       } catch {
+        try {
+          fs.unlinkSync(pidFile);
+        } catch {}
         return false;
       }
     }
     
     if (this.process) {
-      this.process.kill('SIGTERM');
+      try {
+        if (process.platform === 'win32') {
+          execSync(`taskkill /F /PID ${this.process.pid}`, { stdio: 'ignore' });
+        } else {
+          this.process.kill('SIGTERM');
+        }
+      } catch {}
       this.process = null;
       return true;
     }
@@ -482,9 +546,22 @@ export class SkillsClient {
     return response.data;
   }
 
-  async installSkill(options: SkillInstallOptions): Promise<SkillInstallResult> {
+  async installSkill(options: SkillInstallOptions): Promise<SkillInstallResponse> {
     const response = await this.client.post('/skills/add', options);
     return response.data;
+  }
+  
+  async installSkillFromMultiRepo(source: string, skillPath: string, options: Omit<SkillInstallOptions, 'source'> = {}): Promise<SkillInstallResponse> {
+    const response = await this.client.post('/skills/add', {
+      source,
+      skill_subpath: skillPath,
+      ...options
+    });
+    return response.data;
+  }
+  
+  isMultiSkillRepoResponse(response: SkillInstallResponse): response is MultiSkillRepoResponse {
+    return response.status === 'multi_skill_repo' && response.available_skills !== undefined;
   }
 
   async uninstallSkill(skillId: string): Promise<{ success: boolean; message: string }> {

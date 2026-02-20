@@ -249,7 +249,7 @@ public class SkillCLI {
             }
             
             let packageManager = _createSkillPackageManager(installPath.getOrDefault({=>""}))
-            let result = packageManager.installFromGit(url, branch, tag, commit)
+            let result = packageManager.installFromGit(url, branch, tag, commit, None)
             
             if (result.success) {
                 let installedPath = result.path.getOrDefault({=>"unknown"})

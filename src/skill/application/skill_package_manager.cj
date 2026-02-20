@@ -176,79 +176,257 @@ public class SkillPackageManager {
         // Register skill in the registry
         _skillRegistry.registerSkill(skillName, installPath)
 
-        return SkillInstallResult.successResult(installPath)
+        return SkillInstallResult.successResult(installPath, skillName)
     }
 
     /**
      * Install a skill from a Git repository with branch/tag/commit support
      * Supports GitHub URLs with subpaths like:
      * - https://github.com/owner/repo/tree/branch/path/to/skill
+     * 
+     * For multi-skill repositories (no SKILL.md at root, multiple SKILL.md in subdirs):
+     * - Returns a list of available skills for user selection
      */
     public func installFromGit(
         gitUrl: String,
         branch: Option<String>,
         tag: Option<String>,
-        commit: Option<String>
+        commit: Option<String>,
+        skillSubpath: Option<String>
     ): SkillInstallResult {
+        eprintln("[installFromGit] Starting installation from Git: ${gitUrl}")
         LogUtils.info("[installFromGit] Starting installation from Git: ${gitUrl}")
         
         var actualUrl = gitUrl
         var actualBranch = branch
-        var subpath: Option<String> = None
+        var subpath: Option<String> = skillSubpath
         
         if (gitUrl.contains("/tree/") && gitUrl.startsWith("https://")) {
+            eprintln("[installFromGit] Parsing Git URL with subpath")
             LogUtils.info("[installFromGit] Parsing Git URL with subpath")
             let parsedUrl = GitManager.parseGitHubUrl(gitUrl)
             actualUrl = parsedUrl.repoUrl
             if (parsedUrl.branch.isSome() && branch.isNone()) {
                 actualBranch = parsedUrl.branch
             }
-            subpath = parsedUrl.subpath
+            if (subpath.isNone()) {
+                subpath = parsedUrl.subpath
+            }
+            eprintln("[installFromGit] Parsed: repo=${actualUrl}, branch=${actualBranch.getOrDefault({=>""})}, subpath=${subpath.getOrDefault({=>""})}")
             LogUtils.info("[installFromGit] Parsed: repo=${actualUrl}, branch=${actualBranch.getOrDefault({=>""})}, subpath=${subpath.getOrDefault({=>""})}")
         }
         
         let gitRef: GitReference = if (commit.isSome()) {
+            eprintln("[installFromGit] Using commit reference")
             LogUtils.info("[installFromGit] Using commit reference")
             GitReferenceCommit(value: commit.getOrThrow())
         } else if (actualBranch.isSome()) {
+            eprintln("[installFromGit] Using branch reference: ${actualBranch.getOrThrow()}")
             LogUtils.info("[installFromGit] Using branch reference: ${actualBranch.getOrThrow()}")
             GitReferenceBranch(value: actualBranch.getOrThrow())
         } else if (tag.isSome()) {
+            eprintln("[installFromGit] Using tag reference: ${tag.getOrThrow()}")
             LogUtils.info("[installFromGit] Using tag reference: ${tag.getOrThrow()}")
             GitReferenceTag(value: tag.getOrThrow())
         } else {
+            eprintln("[installFromGit] Using default reference")
             LogUtils.info("[installFromGit] Using default reference")
             GitReferenceDefault()
         }
 
+        eprintln("[installFromGit] Cloning repository...")
         LogUtils.info("[installFromGit] Cloning repository...")
         let tempPath = _gitManager.cloneRepository(actualUrl, gitRef)
+        eprintln("[installFromGit] Cloned to: ${tempPath}")
         LogUtils.info("[installFromGit] Cloned to: ${tempPath}")
 
-        let skillSourcePath = if (subpath.isSome()) {
+        // If a specific subpath is provided, install directly from that path
+        if (subpath.isSome()) {
             let subpathValue = subpath.getOrThrow()
             let fullPath = Path(tempPath).join(subpathValue).toString()
-            LogUtils.info("[installFromGit] Using subpath: ${fullPath}")
-            fullPath
-        } else {
-            LogUtils.info("[installFromGit] Using root path: ${tempPath}")
-            tempPath
+            eprintln("[installFromGit] Installing from specified subpath: ${fullPath}")
+            LogUtils.info("[installFromGit] Installing from specified subpath: ${fullPath}")
+            let result = installFromPath(fullPath, true)
+            _cleanupTempDirectory(tempPath)
+            return result
         }
 
-        LogUtils.info("[installFromGit] Installing from path: ${skillSourcePath}")
-        let result = installFromPath(skillSourcePath, true)
-        LogUtils.info("[installFromGit] Installation result: success=${result.success}")
+        // Check if this is a multi-skill repository
+        let rootSkillMd = Path(tempPath).join("SKILL.md").toString()
+        eprintln("[installFromGit] Checking for SKILL.md at root: ${rootSkillMd}")
+        LogUtils.info("[installFromGit] Checking for SKILL.md at root: ${rootSkillMd}")
+        let rootSkillMdExists = exists(rootSkillMd)
+        eprintln("[installFromGit] Root SKILL.md exists: ${rootSkillMdExists}")
+        LogUtils.info("[installFromGit] Root SKILL.md exists: ${rootSkillMdExists}")
+        
+        if (rootSkillMdExists) {
+            eprintln("[installFromGit] Found SKILL.md at root, installing as single skill")
+            LogUtils.info("[installFromGit] Found SKILL.md at root, installing as single skill")
+            let result = installFromPath(tempPath, true)
+            _cleanupTempDirectory(tempPath)
+            return result
+        }
 
+        // No SKILL.md at root, scan for all SKILL.md files
+        eprintln("[installFromGit] No SKILL.md at root, scanning for skills in subdirectories...")
+        LogUtils.info("[installFromGit] No SKILL.md at root, scanning for skills in subdirectories...")
+        let allSkills = _findAllSkillsInDirectory(tempPath)
+        eprintln("[installFromGit] Found ${allSkills.size} skills in subdirectories")
+        LogUtils.info("[installFromGit] Found ${allSkills.size} skills in subdirectories")
+        
+        if (allSkills.size == 0) {
+            eprintln("[installFromGit] No SKILL.md found in repository")
+            LogUtils.error("[installFromGit] No SKILL.md found in repository")
+            _cleanupTempDirectory(tempPath)
+            return SkillInstallResult.errorResult("No valid skill (SKILL.md) found in this repository")
+        }
+        
+        if (allSkills.size == 1) {
+            eprintln("[installFromGit] Found single skill in subdirectory, installing...")
+            LogUtils.info("[installFromGit] Found single skill in subdirectory, installing...")
+            let skillInfo = allSkills[0]
+            let skillPath = Path(tempPath).join(skillInfo.relativePath).toString()
+            let result = installFromPath(skillPath, true)
+            _cleanupTempDirectory(tempPath)
+            return result
+        }
+
+        // Multiple skills found - return list for user selection
+        eprintln("[installFromGit] Found ${allSkills.size} skills in repository, returning list for user selection")
+        LogUtils.info("[installFromGit] Found ${allSkills.size} skills in repository, returning list for user selection")
         _cleanupTempDirectory(tempPath)
-
-        return result
+        return SkillInstallResult.multiSkillRepoResult(allSkills)
+    }
+    
+    /**
+     * Find all skills (SKILL.md files) in a directory
+     * Returns array of AvailableSkillInfo
+     * Note: This function does NOT skip hidden directories (starting with .)
+     */
+    private func _findAllSkillsInDirectory(basePath: String): Array<AvailableSkillInfo> {
+        let skills = ArrayList<AvailableSkillInfo>()
+        
+        LogUtils.info("[_findAllSkillsInDirectory] Starting scan in: ${basePath}")
+        
+        try {
+            let baseInfo = FileInfo(basePath)
+            if (!baseInfo.isDirectory()) {
+                LogUtils.error("[_findAllSkillsInDirectory] Base path is not a directory: ${basePath}")
+                return skills.toArray()
+            }
+            
+            // Use custom recursive walk with depth limit (max 5 levels)
+            _walkDirectoryRecursiveWithDepth(basePath, basePath, skills, 0, 5)
+            
+            LogUtils.info("[_findAllSkillsInDirectory] Total skills found: ${skills.size}")
+        } catch (ex: Exception) {
+            LogUtils.error("[_findAllSkillsInDirectory] Error: ${ex.message}")
+        }
+        
+        return skills.toArray()
+    }
+    
+    /**
+     * Recursive helper function to walk directory tree with depth limit
+     * Uses Directory.readFrom instead of Directory.walk to ensure hidden directories are not skipped
+     * @param basePath The root path of the scan
+     * @param currentPath The current directory being scanned
+     * @param skills The list to store found skills
+     * @param currentDepth Current depth in the directory tree
+     * @param maxDepth Maximum depth to scan (default 5)
+     */
+    private func _walkDirectoryRecursiveWithDepth(
+        basePath: String, 
+        currentPath: String, 
+        skills: ArrayList<AvailableSkillInfo>,
+        currentDepth: Int64,
+        maxDepth: Int64
+    ): Unit {
+        if (currentDepth > maxDepth) {
+            LogUtils.info("[_walkDirectoryRecursiveWithDepth] Reached max depth ${maxDepth}, stopping at ${currentPath}")
+            return
+        }
+        
+        try {
+            // Use Directory.readFrom to get all items including hidden ones
+            let entries = Directory.readFrom(currentPath)
+            for (fileInfo in entries) {
+                let entryPath = fileInfo.path.toString()
+                let entryName = fileInfo.path.fileName
+                
+                if (fileInfo.isDirectory()) {
+                    // Recursively scan subdirectories (including hidden ones starting with .)
+                    // But skip .git directory
+                    if (entryName != ".git") {
+                        _walkDirectoryRecursiveWithDepth(basePath, entryPath, skills, currentDepth + 1, maxDepth)
+                    }
+                } else if (entryName == "SKILL.md") {
+                    // Found a SKILL.md file
+                    let relativePath = entryPath.replace(basePath, "").replace("\\", "/")
+                    var cleanRelativePath = relativePath
+                    if (cleanRelativePath.startsWith("/")) {
+                        cleanRelativePath = cleanRelativePath[1..cleanRelativePath.size]
+                    }
+                    if (cleanRelativePath.endsWith("/SKILL.md")) {
+                        cleanRelativePath = cleanRelativePath[0..(cleanRelativePath.size - 9)]
+                    }
+                    if (cleanRelativePath.endsWith("SKILL.md")) {
+                        cleanRelativePath = cleanRelativePath[0..(cleanRelativePath.size - 8)]
+                    }
+                    
+                    // Calculate parent path
+                    let parentPath = if (cleanRelativePath.contains("/")) {
+                        let parts = cleanRelativePath.split("/")
+                        let parentParts = ArrayList<String>()
+                        for (i in 0..(parts.size - 1)) {
+                            parentParts.add(parts[i])
+                        }
+                        String.join(parentParts.toArray(), delimiter: "/")
+                    } else {
+                        ""
+                    }
+                    
+                    // Get skill directory path (directory containing SKILL.md)
+                    let skillDirPath = Path(entryPath).parent.toString()
+                    
+                    let loader = SkillMdLoader()
+                    let manifestOpt = loader.loadSkillFromPath(entryPath)
+                    
+                    let skillName = if (manifestOpt.isSome()) {
+                        manifestOpt.getOrThrow().name
+                    } else {
+                        let parts = cleanRelativePath.split("/")
+                        if (parts.size > 0) { parts[parts.size - 1] } else { "unknown" }
+                    }
+                    
+                    let description = if (manifestOpt.isSome()) {
+                        manifestOpt.getOrThrow().description
+                    } else {
+                        ""
+                    }
+                    
+                    LogUtils.info("[_walkDirectoryRecursiveWithDepth] Found skill: ${skillName} at depth ${currentDepth}, path: ${cleanRelativePath}")
+                    
+                    skills.add(AvailableSkillInfo(
+                        name: skillName,
+                        description: description,
+                        relativePath: cleanRelativePath,
+                        fullPath: skillDirPath,
+                        depth: currentDepth,
+                        parentPath: parentPath
+                    ))
+                }
+            }
+        } catch (ex: Exception) {
+            LogUtils.error("[_walkDirectoryRecursiveWithDepth] Error scanning ${currentPath}: ${ex.message}")
+        }
     }
 
     /**
      * Install a skill from a Git repository with default parameters
      */
     public func installFromGit(gitUrl: String): SkillInstallResult {
-        return installFromGit(gitUrl, None, None, None)
+        return installFromGit(gitUrl, None, None, None, None)
     }
 
     /**
@@ -265,7 +443,8 @@ public class SkillPackageManager {
                     skillInfo.sourceUrl.getOrDefault({=>""}),
                     skillInfo.branch,
                     skillInfo.tag,
-                    skillInfo.commit
+                    skillInfo.commit,
+                    None
                 )
             } else {
                 return SkillInstallResult.errorResult("Cannot update locally installed skill: ${skillName}")
@@ -386,10 +565,14 @@ public class SkillPackageManager {
 
     /**
      * Extract skill name from path
+     * Priority 1: Name from SKILL.md in the path
+     * Priority 2: Name from SKILL.md in subdirectories (first found)
+     * Priority 3: Directory name as fallback
      */
     private func _extractSkillName(path: String): String {
         let normalizedPath = path.replace("\\", "/")
         
+        // Priority 1: Check for SKILL.md directly in the path
         let skillMdPath = if (normalizedPath.endsWith("/SKILL.md") || normalizedPath.endsWith("SKILL.md")) {
             normalizedPath
         } else {
@@ -408,14 +591,103 @@ public class SkillPackageManager {
                 LogUtils.info("[_extractSkillName] Extracted skill name from SKILL.md: ${skillName}")
                 return skillName
             } else {
-                LogUtils.info("[_extractSkillName] Failed to parse SKILL.md, falling back to directory name")
+                LogUtils.info("[_extractSkillName] Failed to parse SKILL.md, searching subdirectories")
             }
         } else {
-            LogUtils.info("[_extractSkillName] SKILL.md not found at ${skillMdPath}, falling back to directory name")
+            LogUtils.info("[_extractSkillName] SKILL.md not found at ${skillMdPath}, searching subdirectories")
         }
         
+        // Priority 2: Search for SKILL.md in subdirectories
+        let foundSkillName = _searchSkillMdInSubdirectories(normalizedPath)
+        if (!foundSkillName.isEmpty()) {
+            LogUtils.info("[_extractSkillName] Found skill name from subdirectory: ${foundSkillName}")
+            return foundSkillName
+        }
+        
+        // Priority 3: Fall back to directory name
+        LogUtils.info("[_extractSkillName] Falling back to directory name")
         let pathParts = normalizedPath.split("/")
         return pathParts[pathParts.size - 1]
+    }
+    
+    /**
+     * Search for SKILL.md in subdirectories and extract skill name
+     * Returns empty string if not found
+     */
+    private func _searchSkillMdInSubdirectories(basePath: String): String {
+        LogUtils.info("[_searchSkillMdInSubdirectories] Searching in: ${basePath}")
+        
+        if (!exists(basePath)) {
+            LogUtils.info("[_searchSkillMdInSubdirectories] Base path does not exist")
+            return ""
+        }
+        
+        try {
+            let baseInfo = FileInfo(basePath)
+            if (!baseInfo.isDirectory()) {
+                LogUtils.info("[_searchSkillMdInSubdirectories] Base path is not a directory")
+                return ""
+            }
+            
+            // First, find the first SKILL.md file path
+            let skillMdPath = _findFirstSkillMdPath(basePath)
+            
+            if (skillMdPath.isSome()) {
+                let filePath = skillMdPath.getOrThrow()
+                LogUtils.info("[_searchSkillMdInSubdirectories] Found SKILL.md at: ${filePath}")
+                let loader = SkillMdLoader()
+                let manifestOpt = loader.loadSkillFromPath(filePath)
+                
+                if (manifestOpt.isSome()) {
+                    let manifest = manifestOpt.getOrThrow()
+                    let skillName = manifest.name
+                    LogUtils.info("[_searchSkillMdInSubdirectories] Extracted skill name: ${skillName}")
+                    return skillName
+                }
+            }
+            
+            return ""
+        } catch (ex: Exception) {
+            LogUtils.error("[_searchSkillMdInSubdirectories] Error searching subdirectories: ${ex.message}")
+            return ""
+        }
+    }
+    
+    /**
+     * Find the first SKILL.md file in the directory tree
+     * Returns the path to the SKILL.md file, or None if not found
+     * Uses Directory.readFrom to ensure hidden directories are not skipped
+     */
+    private func _findFirstSkillMdPath(basePath: String): Option<String> {
+        return _findFirstSkillMdPathRecursive(basePath)
+    }
+    
+    /**
+     * Recursive helper to find first SKILL.md
+     */
+    private func _findFirstSkillMdPathRecursive(currentPath: String): Option<String> {
+        try {
+            let entries = Directory.readFrom(currentPath)
+            for (fileInfo in entries) {
+                let entryPath = fileInfo.path.toString()
+                let entryName = fileInfo.path.fileName
+                
+                if (fileInfo.isDirectory()) {
+                    // Skip .git directory
+                    if (entryName != ".git") {
+                        let result = _findFirstSkillMdPathRecursive(entryPath)
+                        if (result.isSome()) {
+                            return result
+                        }
+                    }
+                } else if (entryName == "SKILL.md") {
+                    return Some(entryPath)
+                }
+            }
+        } catch (ex: Exception) {
+            LogUtils.error("[_findFirstSkillMdPathRecursive] Error: ${ex.message}")
+        }
+        return None
     }
 
     /**
@@ -594,28 +866,76 @@ public class SkillPackageManager {
 public struct SkillInstallResult {
     public let success: Bool
     public let path: Option<String>
+    public let skillName: Option<String>
     public let error: Option<String>
+    public let isMultiSkillRepo: Bool
+    public let availableSkills: Option<Array<AvailableSkillInfo>>
 
     public init(
         success!: Bool,
         path!: Option<String>,
-        error!: Option<String>
+        skillName!: Option<String>,
+        error!: Option<String>,
+        isMultiSkillRepo!: Bool = false,
+        availableSkills!: Option<Array<AvailableSkillInfo>> = None
     ) {
         this.success = success
         this.path = path
+        this.skillName = skillName
         this.error = error
+        this.isMultiSkillRepo = isMultiSkillRepo
+        this.availableSkills = availableSkills
     }
     
-    public static func successResult(path: String): SkillInstallResult {
-        return SkillInstallResult(success: true, path: Some(path), error: None)
+    public static func successResult(path: String, skillName: String): SkillInstallResult {
+        return SkillInstallResult(success: true, path: Some(path), skillName: Some(skillName), error: None)
     }
 
     public static func failureResult(errors: Array<String>): SkillInstallResult {
-        return SkillInstallResult(success: false, path: None, error: Some(String.join(errors, delimiter: ", ")))
+        return SkillInstallResult(success: false, path: None, skillName: None, error: Some(String.join(errors, delimiter: ", ")))
     }
 
     public static func errorResult(errorMsg: String): SkillInstallResult {
-        return SkillInstallResult(success: false, path: None, error: Some(errorMsg))
+        return SkillInstallResult(success: false, path: None, skillName: None, error: Some(errorMsg))
+    }
+    
+    public static func multiSkillRepoResult(skills: Array<AvailableSkillInfo>): SkillInstallResult {
+        return SkillInstallResult(
+            success: true,
+            path: None,
+            skillName: None,
+            error: None,
+            isMultiSkillRepo: true,
+            availableSkills: Some(skills)
+        )
+    }
+}
+
+/**
+ * Information about an available skill in a multi-skill repository
+ */
+public struct AvailableSkillInfo {
+    public let name: String
+    public let description: String
+    public let relativePath: String
+    public let fullPath: String
+    public let depth: Int64
+    public let parentPath: String
+    
+    public init(
+        name!: String,
+        description!: String,
+        relativePath!: String,
+        fullPath!: String = "",
+        depth!: Int64 = 0,
+        parentPath!: String = ""
+    ) {
+        this.name = name
+        this.description = description
+        this.relativePath = relativePath
+        this.fullPath = fullPath
+        this.depth = depth
+        this.parentPath = parentPath
     }
 }
 
@@ -721,12 +1041,45 @@ public class GitManager {
     private let _tempBaseDir: String
     
     public init() {
-        let currentDir = getWorkingDirectory().toString()
-        _tempBaseDir = Path(currentDir).join("temp").join("git-clone").toString()
+        _tempBaseDir = GitManager._resolveTempBaseDir()
     }
     
-    public init(tempBaseDir!: String) {
-        _tempBaseDir = tempBaseDir
+    public init(skillInstallPath!: String) {
+        _tempBaseDir = GitManager._resolveTempBaseDirFromSkillPath(skillInstallPath)
+    }
+    
+    public static func getTempBaseDir(): String {
+        return GitManager._resolveTempBaseDir()
+    }
+    
+    public static func _resolveTempBaseDir(): String {
+        let skillInstallPath = _getSkillInstallPath()
+        return _resolveTempBaseDirFromSkillPath(skillInstallPath)
+    }
+    
+    public static func _resolveTempBaseDirFromSkillPath(skillInstallPath: String): String {
+        let skillPath = Path(skillInstallPath)
+        let parentDir = skillPath.parent.toString()
+        let tempBaseDir = if (parentDir.isEmpty()) {
+            let currentDir = getWorkingDirectory().toString()
+            Path(currentDir).join("temp").join("git-clone").toString()
+        } else {
+            Path(parentDir).join("temp").join("git-clone").toString()
+        }
+        eprintln("[GitManager] skillInstallPath: ${skillInstallPath}")
+        eprintln("[GitManager] tempBaseDir: ${tempBaseDir}")
+        LogUtils.info("[GitManager] skillInstallPath: ${skillInstallPath}, tempBaseDir: ${tempBaseDir}")
+        return tempBaseDir
+    }
+    
+    public static func _getSkillInstallPath(): String {
+        if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
+            if (!configuredPath.isEmpty()) {
+                return configuredPath
+            }
+        }
+        let currentDir = getWorkingDirectory().toString()
+        return Path(currentDir).join("skills").toString()
     }
     
     /**
@@ -737,20 +1090,27 @@ public class GitManager {
      */
     public func cloneRepository(url: String, ref: GitReference): String {
         let tempPath = _generateTempPath()
+        eprintln("[GitManager] Cloning repository: ${url}")
+        eprintln("[GitManager] Target path: ${tempPath}")
         LogUtils.info("[GitManager] Cloning repository: ${url}")
         LogUtils.info("[GitManager] Target path: ${tempPath}")
         
         try {
             let cloneResult = _executeClone(url, ref, tempPath)
             
+            eprintln("[GitManager] Clone result: success=${cloneResult.success}, error=${cloneResult.error}")
+            
             if (!cloneResult.success) {
+                eprintln("[GitManager] Clone failed: ${cloneResult.error}")
                 LogUtils.error("[GitManager] Clone failed: ${cloneResult.error}")
                 throw GitException("Failed to clone repository: ${cloneResult.error}")
             }
             
+            eprintln("[GitManager] Successfully cloned to: ${tempPath}")
             LogUtils.info("[GitManager] Successfully cloned to: ${tempPath}")
             return tempPath
         } catch (ex: Exception) {
+            eprintln("[GitManager] Exception during clone: ${ex.message}")
             LogUtils.error("[GitManager] Exception during clone: ${ex.message}")
             throw GitException("Failed to clone repository: ${ex.message}")
         }
@@ -818,6 +1178,8 @@ public class GitManager {
      * Generate a unique temporary path for cloning
      */
     private func _generateTempPath(): String {
+        eprintln("[GitManager._generateTempPath] _tempBaseDir = ${_tempBaseDir}")
+        LogUtils.info("[GitManager._generateTempPath] _tempBaseDir = ${_tempBaseDir}")
         let timestamp = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
         let randomSuffix = _randomString(6)
         return Path(_tempBaseDir).join("skill-${timestamp}-${randomSuffix}").toString()

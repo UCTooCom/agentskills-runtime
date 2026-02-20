@@ -14,8 +14,6 @@ import magic.log.LogUtils
  * This starts the HTTP server and handles API requests
  */
 main(args: Array<String>): Unit {
-    eprintln("[DEBUG] Starting runtime with args: ${args.toString()}")
-    
     // Parse command line arguments
     // Format: agentskills-runtime <port> [--skill-path <path>]
     var port = Int32(8080)
@@ -42,20 +40,10 @@ main(args: Array<String>): Unit {
         }
     }
     
-    eprintln("[DEBUG] Parsed port: ${port.toString()}, skillPath: ${skillPath}")
-    
     // If skill path is provided via command line, set it as environment variable
     // This must be done BEFORE loading .env file so it takes priority
     if (!skillPath.isEmpty()) {
         setVariable("SKILL_INSTALL_PATH", skillPath)
-        eprintln("[DEBUG] Set SKILL_INSTALL_PATH to: ${skillPath}")
-    }
-    
-    // Verify environment variable is set
-    if (let Some(skillInstallPath) <- getVariable("SKILL_INSTALL_PATH")) {
-        eprintln("[DEBUG] SKILL_INSTALL_PATH verified: ${skillInstallPath}")
-    } else {
-        eprintln("[DEBUG] SKILL_INSTALL_PATH not set")
     }
     
     // Load environment variables from .env file
@@ -64,32 +52,27 @@ main(args: Array<String>): Unit {
     // 1. Current working directory (./.env) - for development mode
     // 2. Parent directory (../.env) - for release mode where exe is in bin/ and .env is in release/
     let envPaths = [Path("./.env"), Path("../.env")]
-    var envLoadResult = ""
     for (envPath in envPaths) {
-        eprintln("[DEBUG] Trying to load .env from: ${envPath}")
         let result = Config.env.load(envPath)
-        eprintln("[DEBUG] Load result: ${result}")
         if (!result.contains("does not exist")) {
-            envLoadResult = result
-            LogUtils.info("Loaded .env from: ${envPath}")
             break
-        } else {
-            envLoadResult = result
         }
     }
     
-    // Set log level from environment variable or default to info
-    let logLevel = Config.env["LOG_LEVEL"].getOrDefault({ => "info" })
-    Config.logLevel = logLevel
+    // Set up logging configuration - must be done after loading .env
+    // Use environment variables if available, otherwise use defaults
+    Config.logLevel = Config.env["LOG_LEVEL"].getOrDefault({ => "debug" })
+    Config.logFile = Config.env["LOG_FILE"].getOrDefault({ => "./logs/agentskills-runtime.log" })
     
-    LogUtils.info("Environment loaded: ${envLoadResult}")
+    // Now we can use LogUtils - it will initialize with the correct log level
+    LogUtils.info("Starting agentskills-runtime API server on port ${port}")
     LogUtils.info("Log level set to: ${Config.logLevel}")
+    LogUtils.info("Log file set to: ${Config.logFile}")
     
-    // Final verification
     if (let Some(finalPath) <- getVariable("SKILL_INSTALL_PATH")) {
-        LogUtils.info("Final SKILL_INSTALL_PATH: ${finalPath}")
+        LogUtils.info("SKILL_INSTALL_PATH: ${finalPath}")
     } else {
-        LogUtils.info("SKILL_INSTALL_PATH not set after loading .env")
+        LogUtils.info("SKILL_INSTALL_PATH not set, using default")
     }
     
     // Pass skillPath directly to APIRouter to ensure it's used correctly

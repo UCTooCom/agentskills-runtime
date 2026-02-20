@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -235,16 +235,33 @@ SKILL_INSTALL_PATH=./skills
         if (fs.existsSync(pidFile)) {
             const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
             try {
-                process.kill(pid, 'SIGTERM');
+                if (process.platform === 'win32') {
+                    execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+                }
+                else {
+                    process.kill(pid, 'SIGTERM');
+                }
                 fs.unlinkSync(pidFile);
                 return true;
             }
             catch {
+                try {
+                    fs.unlinkSync(pidFile);
+                }
+                catch { }
                 return false;
             }
         }
         if (this.process) {
-            this.process.kill('SIGTERM');
+            try {
+                if (process.platform === 'win32') {
+                    execSync(`taskkill /F /PID ${this.process.pid}`, { stdio: 'ignore' });
+                }
+                else {
+                    this.process.kill('SIGTERM');
+                }
+            }
+            catch { }
             this.process = null;
             return true;
         }
@@ -317,6 +334,17 @@ export class SkillsClient {
     async installSkill(options) {
         const response = await this.client.post('/skills/add', options);
         return response.data;
+    }
+    async installSkillFromMultiRepo(source, skillPath, options = {}) {
+        const response = await this.client.post('/skills/add', {
+            source,
+            skill_subpath: skillPath,
+            ...options
+        });
+        return response.data;
+    }
+    isMultiSkillRepoResponse(response) {
+        return response.status === 'multi_skill_repo' && response.available_skills !== undefined;
     }
     async uninstallSkill(skillId) {
         const response = await this.client.post('/skills/del', { id: skillId });

@@ -60,9 +60,56 @@ export interface SkillInstallResult {
     message: string;
     created_at: string;
 }
+export interface AvailableSkillInfo {
+    name: string;
+    description: string;
+    relative_path: string;
+    full_path: string;
+    depth: number;
+    parent_path: string;
+}
+export interface MultiSkillRepoResponse {
+    status: 'multi_skill_repo';
+    message: string;
+    available_skills: AvailableSkillInfo[];
+    total_count: number;
+    source_url: string;
+}
+export interface SkillInstallResponse {
+    id?: string;
+    name?: string;
+    status: string;
+    message: string;
+    created_at?: string;
+    source_type?: string;
+    source_url?: string;
+    available_skills?: AvailableSkillInfo[];
+    total_count?: number;
+}
+export interface SkillSearchResultItem {
+    name: string;
+    full_name: string;
+    description: string;
+    url?: string;
+    html_url?: string;
+    clone_url: string;
+    source: string;
+    stars?: number;
+    forks?: number;
+    stargazers_count?: number;
+    forks_count?: number;
+    updated_at: string;
+    author?: string;
+    owner?: {
+        login: string;
+        avatar_url: string;
+    };
+    topics?: string[];
+    license?: string;
+}
 export interface SkillSearchResult {
-    skills: Skill[];
-    total: number;
+    total_count: number;
+    results: SkillSearchResultItem[];
 }
 export interface ApiError {
     errno: number;
@@ -118,7 +165,9 @@ export declare class SkillsClient {
         skip?: number;
     }): Promise<SkillListResponse>;
     getSkill(skillId: string): Promise<Skill>;
-    installSkill(options: SkillInstallOptions): Promise<SkillInstallResult>;
+    installSkill(options: SkillInstallOptions): Promise<SkillInstallResponse>;
+    installSkillFromMultiRepo(source: string, skillPath: string, options?: Omit<SkillInstallOptions, 'source'>): Promise<SkillInstallResponse>;
+    isMultiSkillRepoResponse(response: SkillInstallResponse): response is MultiSkillRepoResponse;
     uninstallSkill(skillId: string): Promise<{
         success: boolean;
         message: string;

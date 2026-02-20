@@ -72,7 +72,7 @@ npx skills run my-skill -p '{"input": "data"}'
 
 ```bash
 npx skills install-runtime
-npx skills install-runtime --version 0.0.1
+npx skills install-runtime --runtime-version 0.0.13
 ```
 
 #### `npx skills start`
@@ -121,7 +121,15 @@ npx skills status
 npx skills find
 npx skills find react testing
 npx skills find "pdf generation"
+npx skills find skill --source github --limit 10
+npx skills find skill --source atomgit --limit 5
 ```
+
+**选项：**
+- `-l, --limit <number>`: 最大返回结果数，默认 10
+- `-s, --source <source>`: 搜索来源，可选值：`all`（默认）、`github`、`gitee`、`atomgit`
+
+**注意：** AtomGit 搜索需要在运行时的 `.env` 配置文件中设置 `ATOMGIT_TOKEN` 环境变量。
 
 #### `npx skills add <source>`
 

@@ -32,7 +32,7 @@ npx @opencangjie/skills add ./my-skill
 npx skills install-runtime
 
 # Or specify a version
-npx skills install-runtime --version 0.0.1
+npx skills install-runtime --runtime-version 0.0.13
 ```
 
 ### 2. Start the Runtime
@@ -72,7 +72,7 @@ Download and install the AgentSkills runtime binary.
 
 ```bash
 npx skills install-runtime
-npx skills install-runtime --version 0.0.1
+npx skills install-runtime --runtime-version 0.0.13
 ```
 
 #### `npx skills start`
@@ -121,7 +121,15 @@ Search for skills interactively or by keyword.
 npx skills find
 npx skills find react testing
 npx skills find "pdf generation"
+npx skills find skill --source github --limit 10
+npx skills find skill --source atomgit --limit 5
 ```
+
+**Options:**
+- `-l, --limit <number>`: Maximum number of results, default 10
+- `-s, --source <source>`: Search source, options: `all` (default), `github`, `gitee`, `atomgit`
+
+**Note:** AtomGit search requires setting the `ATOMGIT_TOKEN` environment variable in the runtime's `.env` configuration file.
 
 #### `npx skills add <source>`
 

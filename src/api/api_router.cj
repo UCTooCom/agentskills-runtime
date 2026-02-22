@@ -18,6 +18,8 @@ import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
 import magic.skill.search.{PublicSkillSearchService, SkillSearchResponse}
 import magic.log.LogUtils
 import magic.config.Config
+import magic.model.ModelManager
+import magic.core.model.ChatModel
 
 /**
  * API Router for the Agent Skills Runtime
@@ -33,6 +35,8 @@ public class APIRouter {
     private let _searchService: PublicSkillSearchService
     private let _gitManager: GitManager
     private let _skillInstallPath: String
+    private let _wsHandler: WebSocketChatHandler
+    private let _chatModel: ChatModel
 
     public init(port: Int32, skillPath!: String = "") {
         _port = port
@@ -85,6 +89,22 @@ public class APIRouter {
         } catch (ex: Exception) {
             LogUtils.error("❌ Failed to load skills: ${ex.message}")
         }
+        
+        // Initialize chat model and WebSocket handler
+        // Use MAAS_MODEL_NAME from environment, or default to qwen3-coder-480b-a35b-instruct
+        let modelName = if (let Some(mn) <- getVariable("MAAS_MODEL_NAME")) {
+            if (!mn.isEmpty()) {
+                "maas:${mn}"
+            } else {
+                "maas:qwen3-coder-480b-a35b-instruct"
+            }
+        } else {
+            "maas:qwen3-coder-480b-a35b-instruct"
+        }
+        LogUtils.info("Using chat model: ${modelName}")
+        _chatModel = ModelManager.createChatModel(modelName)
+        _wsHandler = WebSocketChatHandler(_skillManager, _chatModel)
+        LogUtils.info("✅ WebSocket handler initialized")
 
         let builder = ServerBuilder()
         builder.addr("127.0.0.1")
@@ -128,6 +148,7 @@ public class APIRouter {
         distributor.register("/skills/execute", FuncHandler({ context => this.handleExecuteSkill(context) }))
         distributor.register("/skills/search", FuncHandler({ context => this.handleSearchSkills(context) }))
         distributor.register("/mcp/stream", FuncHandler({ context => this.handleMCPStream(context) }))
+        distributor.register("/ws/chat", FuncHandler({ context => this.handleWebSocket(context) }))
     }
 
     /**
@@ -160,6 +181,7 @@ public class APIRouter {
             LogUtils.info("   POST /skills/execute  - Execute a skill")
             LogUtils.info("   POST /skills/search   - Search skills")
             LogUtils.info("   GET  /mcp/stream      - MCP server with streaming")
+            LogUtils.info("   WS   /ws/chat         - WebSocket chat interface")
             
             // Note: server.serve() is a blocking call, so in a real implementation
             // you would want to run this in a background thread or async context
@@ -1011,6 +1033,18 @@ public class APIRouter {
         } catch (ex: Exception) {
             LogUtils.error("Error handling GET /hello: ${ex.message}")
             createErrorResponse(context, 500, "internal_error", "Internal server error")
+        }
+    }
+    
+    /**
+     * Handle WebSocket /ws/chat request
+     */
+    private func handleWebSocket(context: HttpContext): Unit {
+        try {
+            _wsHandler.handleWebSocket(context)
+        } catch (ex: Exception) {
+            LogUtils.error("Error handling WebSocket: ${ex.message}")
+            createErrorResponse(context, 500, "internal_error", "WebSocket error: ${ex.message}")
         }
     }
 

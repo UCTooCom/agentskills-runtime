@@ -259,6 +259,74 @@ After starting the API service, the following endpoints will be available:
 - **POST /skills/execute** - Execute a skill
 - **POST /skills/search** - Search for skills
 - **GET /mcp/stream** - MCP server streaming interface
+- **WS /ws/chat** - WebSocket chat interface (supports AI conversation and skill execution)
+
+### WebSocket Chat Interface
+
+The WebSocket endpoint `/ws/chat` provides real-time AI conversation and skill execution capabilities:
+
+#### Connection URL
+```
+ws://127.0.0.1:8080/ws/chat
+```
+
+#### Message Formats
+
+**Send chat message:**
+```json
+{
+  "type": "chat",
+  "content": "Hello, please help me analyze this code"
+}
+```
+
+**Execute skill:**
+```json
+{
+  "type": "execute_skill",
+  "skill_id": "skill-name",
+  "parameters": {
+    "param1": "value1"
+  },
+  "timeout": "60s"
+}
+```
+
+**Get skill list:**
+```json
+{
+  "type": "list_skills"
+}
+```
+
+**Heartbeat:**
+```json
+{
+  "type": "ping"
+}
+```
+
+#### Response Message Types
+
+- `welcome` - Welcome message when connection is established
+- `chat_response` - AI conversation response
+- `skill_result` - Skill execution result
+- `skills_list` - Skill list
+- `status` - Status update
+- `error` - Error message
+- `pong` - Heartbeat response
+
+#### Configuration Requirements
+
+The WebSocket chat feature requires configuring a large model API Key. Configure in the `.env` file:
+
+```env
+# Huawei Cloud MaaS configuration
+MAAS_API_KEY=your_api_key_here
+MAAS_BASE_URL=https://api.modelarts-maas.com/v2
+```
+
+Supported model providers include: `maas`, `openai`, `deepseek`, `dashscope`, etc.
 
 ## Usage
 

@@ -227,7 +227,7 @@ cp .env.example bin/.env
 ### API 端点
 启动 API 服务后，以下端点将可用：
 
-- **GET /**/hello** - 健康检查端点，返回 "Hello World"
+- **GET /hello** - 健康检查端点，返回 "Hello World"
 - **GET /skills** - 获取可用技能列表
 - **GET /skills/:id** - 获取特定技能的详细信息
 - **POST /skills/add** - 添加新技能
@@ -236,6 +236,74 @@ cp .env.example bin/.env
 - **POST /skills/execute** - 执行技能
 - **POST /skills/search** - 搜索技能
 - **GET /mcp/stream** - MCP 服务器流式接口
+- **WS /ws/chat** - WebSocket 聊天接口（支持 AI 对话和技能执行）
+
+### WebSocket 聊天接口
+
+WebSocket 端点 `/ws/chat` 提供实时 AI 对话和技能执行功能：
+
+#### 连接地址
+```
+ws://127.0.0.1:8080/ws/chat
+```
+
+#### 消息格式
+
+**发送聊天消息：**
+```json
+{
+  "type": "chat",
+  "content": "你好，请帮我分析这段代码"
+}
+```
+
+**执行技能：**
+```json
+{
+  "type": "execute_skill",
+  "skill_id": "skill-name",
+  "parameters": {
+    "param1": "value1"
+  },
+  "timeout": "60s"
+}
+```
+
+**获取技能列表：**
+```json
+{
+  "type": "list_skills"
+}
+```
+
+**心跳检测：**
+```json
+{
+  "type": "ping"
+}
+```
+
+#### 响应消息类型
+
+- `welcome` - 连接建立时的欢迎消息
+- `chat_response` - AI 对话响应
+- `skill_result` - 技能执行结果
+- `skills_list` - 技能列表
+- `status` - 状态更新
+- `error` - 错误消息
+- `pong` - 心跳响应
+
+#### 配置要求
+
+WebSocket 聊天功能需要配置大模型 API Key。在 `.env` 文件中配置：
+
+```env
+# 华为云 MaaS 配置
+MAAS_API_KEY=your_api_key_here
+MAAS_BASE_URL=https://api.modelarts-maas.com/v2
+```
+
+支持的模型提供商包括：`maas`、`openai`、`deepseek`、`dashscope` 等。
 
 ## 使用方法
 

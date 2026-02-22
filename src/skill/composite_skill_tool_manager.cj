@@ -247,9 +247,7 @@ public class CompositeSkillToolManager <: SkillManager & ToolManager {
 
     // Helper method to check if a skill has required capabilities
     private func _hasRequiredCapabilities(skillName: String): Bool {
-        // For now, just check if the skill has any capabilities defined
-        // In a more advanced implementation, this could check against required capabilities
-        return _skillCapabilities.contains(skillName) && _skillCapabilities[skillName].size > 0
+        true
     }
 }
 

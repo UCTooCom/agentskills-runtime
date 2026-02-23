@@ -1,0 +1,80 @@
+{
+    "name": "uctoo/agent-skills",
+    "description": "PHP SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support",
+    "type": "library",
+    "keywords": [
+        "agent-skills",
+        "skills",
+        "ai",
+        "agent",
+        "runtime",
+        "cli",
+        "uctoo",
+        "cangjiemagic",
+        "mcp",
+        "llm-tools",
+        "skill-runtime",
+        "ai-agent-tools"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "OpenCangJie Team",
+            "email": "team@opencangjie.org"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "guzzlehttp/guzzle": "^7.8",
+        "symfony/console": "^7.0",
+        "symfony/process": "^7.0",
+        "symfony/filesystem": "^7.0",
+        "symfony/yaml": "^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "phpstan/phpstan": "^1.10"
+    },
+    "autoload": {
+        "psr-4": {
+            "AgentSkills\\": "src/AgentSkills/"
+        },
+        "files": [
+            "src/AgentSkills/functions.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "AgentSkills\\Tests\\": "tests/"
+        }
+    },
+    "bin": [
+        "bin/skills"
+    ],
+    "scripts": {
+        "test": "phpunit",
+        "test:coverage": "phpunit --coverage-html coverage",
+        "analyze": "phpstan analyse src tests",
+        "cs-check": "phpcs --standard=PSR12 src tests",
+        "cs-fix": "phpcbf --standard=PSR12 src tests"
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "extra": {
+        "runtime": {
+            "version": "0.0.13",
+            "downloadUrl": "https://atomgit.com/uctoo/agentskills-runtime/releases",
+            "platforms": {
+                "win32-x64": "agentskills-runtime-win-x64.tar.gz",
+                "darwin-x64": "agentskills-runtime-darwin-x64.tar.gz",
+                "darwin-arm64": "agentskills-runtime-darwin-arm64.tar.gz",
+                "linux-x64": "agentskills-runtime-linux-x64.tar.gz",
+                "linux-arm64": "agentskills-runtime-linux-arm64.tar.gz"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

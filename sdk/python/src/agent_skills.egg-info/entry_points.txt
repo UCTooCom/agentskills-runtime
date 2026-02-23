@@ -1,0 +1,2 @@
+[console_scripts]
+skills = agent_skills.cli:main

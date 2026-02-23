@@ -1,0 +1,369 @@
+# agent-skills
+
+Python SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support.
+
+## Features
+
+- **Complete Runtime Management**: Download, install, start, and stop the AgentSkills runtime
+- **Skill Management**: Install, list, execute, and remove skills
+- **CLI & Programmatic API**: Use via command line or integrate into your applications
+- **Cross-Platform**: Supports Windows, macOS, and Linux
+- **Type Hints**: Full type annotations for better IDE support
+
+## Installation
+
+```bash
+pip install agent-skills
+```
+
+## Quick Start
+
+### 1. Install the Runtime
+
+```bash
+# Download and install the AgentSkills runtime
+skills install-runtime
+
+# Or specify a version
+skills install-runtime --runtime-version 0.0.13
+```
+
+### 2. Start the Runtime
+
+```bash
+# Start in background (default)
+skills start
+
+# Start in foreground
+skills start --foreground
+
+# Custom port and host
+skills start --port 3000 --host 0.0.0.0
+```
+
+### 3. Manage Skills
+
+```bash
+# Find and install skills
+skills find react
+skills add ./my-skill
+
+# List installed skills
+skills list
+
+# Execute a skill
+skills run my-skill -p '{"input": "data"}'
+```
+
+## CLI Commands
+
+### Runtime Management
+
+#### `skills install-runtime`
+
+Download and install the AgentSkills runtime binary.
+
+```bash
+skills install-runtime
+skills install-runtime --runtime-version 0.0.13
+```
+
+#### `skills start`
+
+Start the AgentSkills runtime server.
+
+```bash
+# Start in background (default)
+skills start
+
+# Start in foreground
+skills start --foreground
+
+# Custom configuration
+skills start --port 3000 --host 0.0.0.0
+```
+
+**Options:**
+- `-p, --port <port>` - Port to listen on (default: 8080)
+- `-h, --host <host>` - Host to bind to (default: 127.0.0.1)
+- `-f, --foreground` - Run in foreground (default: background)
+
+#### `skills stop`
+
+Stop the AgentSkills runtime server.
+
+```bash
+skills stop
+```
+
+#### `skills status`
+
+Check the status of the skills runtime server.
+
+```bash
+skills status
+```
+
+### Skill Management
+
+#### `skills find [query]`
+
+Search for skills interactively or by keyword.
+
+```bash
+skills find
+skills find react testing
+skills find "pdf generation"
+skills find skill --source github --limit 10
+skills find skill --source atomgit --limit 5
+```
+
+**Options:**
+- `-l, --limit <number>`: Maximum number of results, default 10
+- `-s, --source <source>`: Search source, options: `all` (default), `github`, `gitee`, `atomgit`
+
+**Note:** AtomGit search requires setting the `ATOMGIT_TOKEN` environment variable in the runtime's `.env` configuration file.
+
+#### `skills add <source>`
+
+Install a skill from GitHub or local path.
+
+```bash
+skills add ./my-skill
+skills add github.com/user/skill-repo
+skills add github.com/user/skill-repo --branch develop
+```
+
+**Options:**
+- `-g, --global`: Install globally (user-level)
+- `-p, --path <path>`: Local path to skill
+- `-b, --branch <branch>`: Git branch name
+- `-t, --tag <tag>`: Git tag name
+- `-c, --commit <commit>`: Git commit ID
+- `-n, --name <name>`: Skill name override
+- `--validate/--no-validate`: Validate skill before installation (default: True)
+- `-y, --yes`: Skip confirmation prompts
+
+#### `skills list`
+
+List installed skills.
+
+```bash
+skills list
+skills list --limit 50 --page 1
+skills list --json
+```
+
+**Options:**
+- `-l, --limit <number>`: Maximum number of results, default 20
+- `-p, --page <number>`: Page number, default 0
+- `--json`: Output as JSON
+
+#### `skills run <skillId>`
+
+Execute a skill.
+
+```bash
+skills run my-skill -p '{"param1": "value"}'
+skills run my-skill --tool tool-name -p '{"param1": "value"}'
+skills run my-skill -i  # Interactive mode
+```
+
+**Options:**
+- `-t, --tool <name>`: Tool name to execute
+- `-p, --params <json>`: Parameters as JSON string
+- `-f, --params-file <file>`: Parameters from JSON file
+- `-i, --interactive`: Interactive parameter input
+
+#### `skills remove <skillId>`
+
+Remove an installed skill.
+
+```bash
+skills remove my-skill
+skills rm my-skill -y
+```
+
+**Options:**
+- `-y, --yes`: Skip confirmation prompt
+
+#### `skills info <skillId>`
+
+Show detailed information about a skill.
+
+```bash
+skills info my-skill
+```
+
+#### `skills init [name]`
+
+Initialize a new skill project.
+
+```bash
+skills init my-new-skill
+skills init my-new-skill --directory ./skills
+```
+
+**Options:**
+- `-d, --directory <dir>`: Target directory, default: current directory
+- `-t, --template <template>`: Skill template, default: basic
+
+#### `skills check`
+
+Check for skill updates.
+
+```bash
+skills check
+```
+
+## Programmatic API
+
+### Basic Usage
+
+```python
+from agent_skills import SkillsClient, create_client
+
+# Create a client
+client = create_client()
+
+# List skills
+result = client.list_skills(limit=10)
+for skill in result.skills:
+    print(f"{skill.name}: {skill.description}")
+
+# Execute a skill
+result = client.execute_skill("my-skill", {"input": "data"})
+if result.success:
+    print(result.output)
+else:
+    print(f"Error: {result.error_message}")
+```
+
+### Runtime Management
+
+```python
+from agent_skills import RuntimeManager, RuntimeOptions
+
+manager = RuntimeManager()
+
+# Check if runtime is installed
+if not manager.is_installed():
+    # Download and install runtime
+    manager.download_runtime("0.0.13")
+
+# Start runtime
+options = RuntimeOptions(port=8080, host="127.0.0.1")
+process = manager.start(options)
+
+# Check status
+status = manager.status()
+print(f"Running: {status.running}, Version: {status.version}")
+
+# Stop runtime
+manager.stop()
+```
+
+### Skill Definition
+
+```python
+from agent_skills import define_skill, SkillMetadata, ToolDefinition, ToolParameter, ParamType
+
+# Define a skill
+skill = define_skill(
+    metadata=SkillMetadata(
+        name="my-skill",
+        version="1.0.0",
+        description="My custom skill",
+        author="Your Name",
+    ),
+    tools=[
+        ToolDefinition(
+            name="my-tool",
+            description="A tool that does something",
+            parameters=[
+                ToolParameter(
+                    name="input",
+                    param_type=ParamType.STRING,
+                    description="Input parameter",
+                    required=True,
+                ),
+            ],
+        ),
+    ],
+)
+```
+
+### Configuration
+
+```python
+from agent_skills import get_config
+
+# Get configuration from environment variables prefixed with SKILL_
+config = get_config()
+api_key = config.get("API_KEY")  # From SKILL_API_KEY env var
+```
+
+## Configuration
+
+### Environment Variables
+
+- `SKILL_RUNTIME_API_URL`: API server URL (default: http://127.0.0.1:8080)
+- `SKILL_INSTALL_PATH`: Default path for skill installation
+- `SKILL_*`: Custom configuration accessible via `get_config()`
+
+## Development
+
+### Setup Development Environment
+
+```bash
+# Clone the repository
+git clone https://atomgit.com/uctoo/agentskills-runtime.git
+cd agentskills-runtime/sdk/python
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install development dependencies
+pip install -e ".[dev]"
+```
+
+### Run Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=agent_skills
+
+# Run specific test file
+pytest tests/test_models.py
+```
+
+### Code Quality
+
+```bash
+# Format code
+black src tests
+
+# Sort imports
+isort src tests
+
+# Type check
+mypy src
+
+# Lint
+ruff check src tests
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Links
+
+- [Documentation](https://atomgit.com/uctoo/agentskills-runtime#readme)
+- [Repository](https://atomgit.com/uctoo/agentskills-runtime)
+- [Issue Tracker](https://atomgit.com/uctoo/agentskills-runtime/issues)
+- [JavaScript SDK](../javascript)

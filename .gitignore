@@ -20,6 +20,10 @@ src/main*.cj
 # Python SDK large DLL files
 sdk/python/runtime/**/*.dll
 
+# PHP SDK vendor (install via composer)
+sdk/php/vendor/
+sdk/php/.phpunit.cache/
+
 # Release packages (keep VERSION file)
 release/*.tar.gz
 release/*.zip

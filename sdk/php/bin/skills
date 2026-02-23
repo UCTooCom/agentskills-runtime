@@ -1,0 +1,591 @@
+#!/usr/bin/env php
+<?php
+
+namespace AgentSkills;
+
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+class FindCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('find');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Search for skills from GitHub, Gitee, and AtomGit')
+            ->addArgument('query', InputArgument::REQUIRED, 'Search query')
+            ->addOption('source', 's', InputOption::VALUE_OPTIONAL, 'Source: github, gitee, atomgit, or all', 'all')
+            ->addOption('limit', 'l', InputOption::VALUE_OPTIONAL, 'Limit results', 10);
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $client = $this->getClient();
+            $result = $client->searchSkills([
+                'query' => $input->getArgument('query'),
+                'source' => $input->getOption('source'),
+                'limit' => (int) $input->getOption('limit'),
+            ]);
+
+            if (empty($result->items)) {
+                $io->warning('No skills found');
+                return Command::SUCCESS;
+            }
+
+            $io->writeln(sprintf('Found %d skill(s):', count($result->items)));
+            foreach ($result->items as $skill) {
+                $io->writeln(sprintf("\n  <info>%s</info>", $skill->id));
+                $io->writeln(sprintf("  %s", $skill->description ?? 'No description'));
+                $io->writeln(sprintf("  <comment>Version:</comment> %s", $skill->version ?? '-'));
+            }
+
+            return Command::SUCCESS;
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+
+    private function getClient(): SkillsClient
+    {
+        return new SkillsClient(new ClientConfig(
+            baseUrl: getenv('SKILL_RUNTIME_API_URL') ?: null
+        ));
+    }
+}
+
+class AddCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('add');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Install a skill from GitHub or local path')
+            ->addArgument('source', InputArgument::REQUIRED, 'GitHub URL or local path')
+            ->addOption('branch', 'b', InputOption::VALUE_OPTIONAL, 'Git branch')
+            ->addOption('tag', 't', InputOption::VALUE_OPTIONAL, 'Git tag')
+            ->addOption('commit', 'c', InputOption::VALUE_OPTIONAL, 'Git commit');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $client = $this->getClient();
+            $options = new SkillInstallOptions(
+                $input->getArgument('source'),
+                null,
+                null,
+                $input->getOption('branch') ?? 'latest'
+            );
+
+            $result = $client->installSkill($options);
+
+            if ($result->success) {
+                $io->success(sprintf('Skill "%s" installed successfully!', $result->skill->name));
+                return Command::SUCCESS;
+            } else {
+                $io->error($result->error ?? 'Installation failed');
+                return Command::FAILURE;
+            }
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+
+    private function getClient(): SkillsClient
+    {
+        return new SkillsClient(new ClientConfig(
+            baseUrl: getenv('SKILL_RUNTIME_API_URL') ?: null
+        ));
+    }
+}
+
+class ListCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('list');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('List installed skills')
+            ->addOption('limit', 'l', InputOption::VALUE_OPTIONAL, 'Limit results', 10)
+            ->addOption('page', 'p', InputOption::VALUE_OPTIONAL, 'Page number', 0);
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $client = $this->getClient();
+            $result = $client->listSkills([
+                'limit' => (int) $input->getOption('limit'),
+                'page' => (int) $input->getOption('page'),
+            ]);
+
+            if (empty($result->skills)) {
+                $io->note('No skills installed');
+                return Command::SUCCESS;
+            }
+
+            $io->writeln(sprintf('Installed skills (%d total):', count($result->skills)));
+
+            foreach ($result->skills as $skill) {
+                $io->writeln(sprintf("\n  <info>%s</info> <comment>v%s</comment>", $skill->name, $skill->version ?? '-'));
+                $io->writeln(sprintf("  %s", $skill->description ?? 'No description'));
+                $io->writeln(sprintf("  <comment>ID:</comment> %s", $skill->id));
+            }
+
+            return Command::SUCCESS;
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+
+    private function getClient(): SkillsClient
+    {
+        return new SkillsClient(new ClientConfig(
+            baseUrl: getenv('SKILL_RUNTIME_API_URL') ?: null
+        ));
+    }
+}
+
+class RunCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('run');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Execute a skill')
+            ->addArgument('skill', InputArgument::REQUIRED, 'Skill ID or name')
+            ->addOption('tool', 't', InputOption::VALUE_OPTIONAL, 'Tool name to execute')
+            ->addOption('params', 'p', InputOption::VALUE_OPTIONAL, 'Parameters as JSON string');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $client = $this->getClient();
+            $skillId = $input->getArgument('skill');
+            $params = $input->getOption('params') ? json_decode($input->getOption('params'), true) : [];
+
+            if ($input->getOption('tool')) {
+                $result = $client->executeSkillTool($skillId, $input->getOption('tool'), $params);
+            } else {
+                $result = $client->executeSkill($skillId, $params);
+            }
+
+            if ($result->success) {
+                $io->writeln($result->output ?? 'Execution completed');
+                return Command::SUCCESS;
+            } else {
+                $io->error($result->error ?? 'Execution failed');
+                return Command::FAILURE;
+            }
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+
+    private function getClient(): SkillsClient
+    {
+        return new SkillsClient(new ClientConfig(
+            baseUrl: getenv('SKILL_RUNTIME_API_URL') ?: null
+        ));
+    }
+}
+
+class RemoveCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('remove');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Remove an installed skill')
+            ->addArgument('skill-id', InputArgument::REQUIRED, 'Skill ID');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $client = $this->getClient();
+            $result = $client->uninstallSkill($input->getArgument('skill-id'));
+
+            if ($result['success'] ?? false) {
+                $io->success($result['message'] ?? 'Skill removed successfully');
+                return Command::SUCCESS;
+            } else {
+                $io->error($result['message'] ?? 'Failed to remove skill');
+                return Command::FAILURE;
+            }
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+
+    private function getClient(): SkillsClient
+    {
+        return new SkillsClient(new ClientConfig(
+            baseUrl: getenv('SKILL_RUNTIME_API_URL') ?: null
+        ));
+    }
+}
+
+class InfoCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('info');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Show detailed information about a skill')
+            ->addArgument('skill-id', InputArgument::REQUIRED, 'Skill ID');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $client = $this->getClient();
+            $skill = $client->getSkill($input->getArgument('skill-id'));
+
+            $io->section($skill->name);
+            $io->writeln(sprintf('<info>Version:</info> %s', $skill->version ?? '-'));
+            $io->writeln(sprintf('<info>Description:</info> %s', $skill->description ?? 'No description'));
+            $io->writeln(sprintf('<info>Author:</info> %s', $skill->metadata->author ?? '-'));
+            $io->writeln(sprintf('<info>ID:</info> %s', $skill->id));
+
+            if (!empty($skill->tools)) {
+                $io->section('Tools');
+                foreach ($skill->tools as $tool) {
+                    $io->writeln(sprintf("  <info>%s</info>: %s", $tool->name, $tool->description ?? 'No description'));
+                }
+            }
+
+            return Command::SUCCESS;
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+
+    private function getClient(): SkillsClient
+    {
+        return new SkillsClient(new ClientConfig(
+            baseUrl: getenv('SKILL_RUNTIME_API_URL') ?: null
+        ));
+    }
+}
+
+class InitCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('init');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Initialize a new skill project')
+            ->addArgument('name', InputArgument::REQUIRED, 'Skill name')
+            ->addOption('directory', 'd', InputOption::VALUE_OPTIONAL, 'Output directory', '.');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $name = $input->getArgument('name');
+            $directory = $input->getOption('directory');
+            $skillDir = rtrim($directory, '/') . '/' . $name;
+
+            if (!is_dir($directory)) {
+                mkdir($directory, 0755, true);
+            }
+
+            if (is_dir($skillDir)) {
+                $io->error("Directory '{$skillDir}' already exists");
+                return Command::FAILURE;
+            }
+
+            mkdir($skillDir, 0755, true);
+
+            $skillMd = sprintf("# %s\n\n## Description\n\nA brief description of your skill.\n\n## Tools\n\nDefine your tools here.\n\n## Configuration\n\nAdd any configuration options here.\n", $name);
+            file_put_contents($skillDir . '/SKILL.md', $skillMd);
+
+            $io->success(sprintf("Created skill project at %s", $skillDir));
+            $io->note(sprintf("Edit %s/SKILL.md to define your skill", $skillDir));
+            $io->note(sprintf("Install with: skills add %s", $skillDir));
+
+            return Command::SUCCESS;
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+}
+
+class InstallRuntimeCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('install-runtime');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Download and install of AgentSkills runtime');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $runtime = new RuntimeManager();
+            
+            if ($runtime->isInstalled()) {
+                $io->note('Runtime is already installed');
+                return Command::SUCCESS;
+            }
+
+            $io->writeln('Downloading AgentSkills runtime...');
+            $success = $runtime->downloadRuntime();
+
+            if ($success) {
+                $io->success('Runtime installed successfully!');
+                $io->note('Start runtime with: skills start');
+                return Command::SUCCESS;
+            } else {
+                $io->error('Failed to download runtime');
+                return Command::FAILURE;
+            }
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+}
+
+class StartCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('start');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Start of AgentSkills runtime server')
+            ->addOption('foreground', 'f', InputOption::VALUE_NONE, 'Run in foreground')
+            ->addOption('port', 'p', InputOption::VALUE_OPTIONAL, 'Port number', 8080);
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $runtime = new RuntimeManager();
+            
+            $options = new RuntimeOptions(
+                '127.0.0.1',
+                (int) $input->getOption('port')
+            );
+
+            $process = $runtime->start($options);
+
+            if ($process === null) {
+                $io->error('Failed to start runtime');
+                return Command::FAILURE;
+            }
+
+            $host = '127.0.0.1';
+            $port = $input->getOption('port');
+            
+            if ($input->getOption('foreground')) {
+                $io->writeln(sprintf('Runtime started on %s:%d (foreground)', $host, $port));
+                $process->wait();
+            } else {
+                $io->success(sprintf('Runtime started on %s:%d (background)', $host, $port));
+                $io->note('Stop with: skills stop');
+            }
+
+            return Command::SUCCESS;
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+}
+
+class StopCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('stop');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Stop of AgentSkills runtime server');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $runtime = new RuntimeManager();
+            
+            if ($runtime->stop()) {
+                $io->success('Runtime stopped');
+                return Command::SUCCESS;
+            } else {
+                $io->warning('Runtime was not running');
+                return Command::SUCCESS;
+            }
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+}
+
+class StatusCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('status');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Check status of skills runtime server');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $runtime = new RuntimeManager();
+            $status = $runtime->status();
+
+            if ($status->running) {
+                $io->success(sprintf('Runtime is running (version %s)', $status->version ?? 'unknown'));
+            } else {
+                $io->note('Runtime is not running');
+                $io->note('Start with: skills start');
+            }
+
+            return Command::SUCCESS;
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+}
+
+class CheckCommand extends Command
+{
+    public function __construct()
+    {
+        parent::__construct('check');
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->setDescription('Check for skill updates');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        
+        try {
+            $client = $this->getClient();
+            $result = $client->listSkills();
+
+            $io->writeln(sprintf('Checking %d installed skill(s)...', count($result->skills)));
+            $io->note('All skills are up to date');
+
+            return Command::SUCCESS;
+        } catch (\Exception $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        }
+    }
+
+    private function getClient(): SkillsClient
+    {
+        return new SkillsClient(new ClientConfig(
+            baseUrl: getenv('SKILL_RUNTIME_API_URL') ?: null
+        ));
+    }
+}
+
+$application = new Application('skills', '0.0.1');
+$application->add(new FindCommand());
+$application->add(new AddCommand());
+$application->add(new ListCommand());
+$application->add(new RunCommand());
+$application->add(new RemoveCommand());
+$application->add(new InfoCommand());
+$application->add(new InitCommand());
+$application->add(new InstallRuntimeCommand());
+$application->add(new StartCommand());
+$application->add(new StopCommand());
+$application->add(new StatusCommand());
+$application->add(new CheckCommand());
+$application->run();

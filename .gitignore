@@ -17,6 +17,9 @@ build-script-cache/
 src/main*.cj
 **/node_modules/
 
+# Python SDK large DLL files
+sdk/python/runtime/**/*.dll
+
 # Release packages (keep VERSION file)
 release/*.tar.gz
 release/*.zip

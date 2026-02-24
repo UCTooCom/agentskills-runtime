@@ -1,0 +1,56 @@
+{
+  "name": "agentskills-runtime-uniapp-sdk",
+  "version": "0.0.1",
+  "description": "UniApp SDK for AgentSkills Runtime - Communicate with AI agent skills from UniApp applications",
+  "main": "src/index.js",
+  "type": "module",
+  "uni_modules": {
+    "id": "agentskills-runtime-uniapp-sdk",
+    "version": "0.0.1",
+    "name": "AgentSkills Runtime UniApp SDK",
+    "description": "Communicate with AI agent skills from UniApp applications",
+    "author": "OpenCangJie Team",
+    "repository": {
+      "type": "git",
+      "url": "git+https://atomgit.com/uctoo/agentskills-runtime.git"
+    },
+    "license": "MIT",
+    "keywords": [
+      "agentskills",
+      "runtime",
+      "uniapp",
+      "sdk",
+      "ai",
+      "agent",
+      "chat"
+    ],
+    "dependencies": {},
+    "files": [
+      "src",
+      "static",
+      "components",
+      "package.json",
+      "README.md"
+    ]
+  },
+  "scripts": {
+    "build": "echo \"Building UniApp SDK...\"",
+    "test": "echo \"Testing UniApp SDK...\""
+  },
+  "keywords": [
+    "agentskills",
+    "runtime",
+    "uniapp",
+    "sdk",
+    "ai",
+    "agent",
+    "chat"
+  ],
+  "author": "OpenCangJie Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://atomgit.com/uctoo/agentskills-runtime.git"
+  },
+  "homepage": "https://atomgit.com/uctoo/agentskills-runtime"
+}

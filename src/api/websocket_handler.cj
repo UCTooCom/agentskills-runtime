@@ -126,6 +126,11 @@ public class WebSocketChatHandler {
             userFunc: { request: HttpRequest =>
                 let headers = HttpHeaders()
                 headers.add("X-Connection-Type", "skill-chat")
+                // Add CORS headers
+                headers.add("Access-Control-Allow-Origin", "*")
+                headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                headers.add("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Sec-WebSocket-Key, Sec-WebSocket-Version")
+                headers.add("Access-Control-Allow-Credentials", "true")
                 headers
             }
         )

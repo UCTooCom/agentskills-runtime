@@ -63,6 +63,9 @@ private let DEFAULT_PROVIDER_MAP = HashMap<String, ProviderConfig>([
     ("stepfun",   ProviderConfig("STEPFUN_BASE_URL", // openai-compatible
                                 "https://api.stepfun.com/v1",
                                 "STEPFUN_API_KEY")),
+    ("sophnet",   ProviderConfig("SOPHNET_BASE_URL", // openai-compatible
+                                "https://www.sophnet.com/api/open-apis/v1",
+                                "SOPHNET_API_KEY")),
     ("ollama",    ProviderConfig("OLLAMA_BASE_URL",
                                  "http://localhost:11434",
                                  "")),
@@ -196,7 +199,7 @@ public struct ModelManager {
     public static func createChatModel(modelConfig: ModelConfig): ChatModel {
         match (modelConfig.provider) {
             case "openai" | "dashscope" | "ark" | "deepseek" |
-                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" =>
+                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" =>
                 return OpenAIChatModel(modelConfig.provider, modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "ollama" =>
                 return OllamaChatModel(modelConfig.name, baseURL: modelConfig.baseURL)
@@ -222,7 +225,7 @@ public struct ModelManager {
 
     public static func createEmbeddingModel(modelConfig: ModelConfig): EmbeddingModel {
         match (modelConfig.provider) {
-            case "openai" | "ark" | "siliconflow" | "stepfun" =>
+            case "openai" | "ark" | "siliconflow" | "stepfun" | "sophnet" =>
                 return OpenAIEmbeddingModel(modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "dashscope" =>
                 return DashscopeEmbeddingModel(modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
@@ -252,7 +255,7 @@ public struct ModelManager {
 
     public static func createImageModel(modelConfig: ModelConfig): ImageModel {
         match (modelConfig.provider) {
-            case "openai" | "stepfun" =>
+            case "openai" | "stepfun" | "sophnet" =>
                 return OpenAIImageModel(modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "siliconflow" =>
                 return SiliconflowImageModel(modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)

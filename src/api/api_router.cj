@@ -91,15 +91,28 @@ public class APIRouter {
         }
         
         // Initialize chat model and WebSocket handler
-        // Use MAAS_MODEL_NAME from environment, or default to qwen3-coder-480b-a35b-instruct
-        let modelName = if (let Some(mn) <- getVariable("MAAS_MODEL_NAME")) {
-            if (!mn.isEmpty()) {
-                "maas:${mn}"
+        // Use MODEL_CONFIG from environment, or default to stepfun:step-3
+        let modelConfigOpt = getVariable("MODEL_CONFIG")
+        let modelProviderOpt = getVariable("MODEL_PROVIDER")
+        let modelNameOpt = getVariable("MODEL_NAME")
+        
+        let modelName = if (modelConfigOpt.isSome()) {
+            let mc = modelConfigOpt.getOrThrow()
+            if (!mc.isEmpty()) {
+                mc
+            } else if (modelProviderOpt.isSome() && modelNameOpt.isSome()) {
+                let mp = modelProviderOpt.getOrThrow()
+                let mn = modelNameOpt.getOrThrow()
+                "${mp}:${mn}"
             } else {
-                "maas:qwen3-coder-480b-a35b-instruct"
+                "stepfun:step-3"
             }
+        } else if (modelProviderOpt.isSome() && modelNameOpt.isSome()) {
+            let mp = modelProviderOpt.getOrThrow()
+            let mn = modelNameOpt.getOrThrow()
+            "${mp}:${mn}"
         } else {
-            "maas:qwen3-coder-480b-a35b-instruct"
+            "stepfun:step-3"
         }
         LogUtils.info("Using chat model: ${modelName}")
         _chatModel = ModelManager.createChatModel(modelName)

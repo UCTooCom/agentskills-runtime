@@ -20,6 +20,8 @@ import magic.log.LogUtils
 import magic.config.Config
 import magic.model.ModelManager
 import magic.core.model.ChatModel
+// import magic.examples.uctoo_api_skill.src.UctooAPISkillFactory
+// import magic.examples.find_skills_skill.src.FindSkillsSkillFactory
 
 /**
  * API Router for the Agent Skills Runtime
@@ -76,6 +78,13 @@ public class APIRouter {
         )
         
         _skillManager = CompositeSkillToolManager()
+        
+        // Register skill factories before loading skills
+        // This ensures our custom implementations take precedence
+        let skillRegistry = _progressiveSkillLoader.getSkillRegistry()
+        // skillRegistry.registerFactory("uctoo-api-skill", UctooAPISkillFactory())
+        // skillRegistry.registerFactory("find-skills", FindSkillsSkillFactory())
+        LogUtils.info("✅ Registered custom skill factories")
 
         // Load skills from the configured directories into the skill manager
         try {

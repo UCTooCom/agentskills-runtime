@@ -59,6 +59,118 @@
 - 为调试提供详细的错误消息
 - 优雅处理API故障和网络问题
 
+## 自动 Token 管理（V7.0+）
+
+### 概述
+
+从 V7.0 版本开始，系统实现了**会话级自动 Token 管理机制**，彻底解决了大模型在多轮对话中无法正确传递认证 Token 的问题。
+
+### 架构设计
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    WebSocket Session                         │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                 SessionContext                        │    │
+│  │  - setCurrentSession(sessionId)                       │    │
+│  │  - getAccessToken() → TokenManager.getAccessToken()   │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                            │                                 │
+│                            ▼                                 │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                   TokenManager                        │    │
+│  │  - setToken(sessionId, tokenInfo)                     │    │
+│  │  - getAccessToken(sessionId)                          │    │
+│  │  - parseLoginResponse(response)                       │    │
+│  │  - isLoginEndpoint(url)                               │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                            │                                 │
+│                            ▼                                 │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                     HttpTool                          │    │
+│  │  1. 检测登录请求 → 自动保存 token                      │    │
+│  │  2. 检测非登录请求 → 自动注入 Authorization header     │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 核心组件
+
+| 组件 | 文件 | 功能 |
+|------|------|------|
+| TokenInfo | `src/tool/token_manager.cj` | Token 信息封装，包含过期时间检查 |
+| TokenManager | `src/tool/token_manager.cj` | Token 存储和管理，支持多会话 |
+| SessionContext | `src/tool/token_manager.cj` | 当前会话上下文，线程安全 |
+| HttpTool | `src/tool/http_tool.cj` | 自动 token 保存和注入 |
+
+### 工作流程
+
+#### 1. 登录时自动保存 Token
+
+```cangjie
+// HttpTool 检测到登录请求
+if (tokenManager.isLoginEndpoint(url)) {
+    // 解析响应并保存 token
+    let tokenInfoOpt = tokenManager.parseLoginResponse(responseJson)
+    match (tokenInfoOpt) {
+        case Some(tokenInfo) =>
+            tokenManager.setToken(sessionId, tokenInfo)
+            LogUtils.info("[HttpTool] Auto-saved token for session")
+        case None => ()
+    }
+}
+```
+
+#### 2. 后续请求自动注入 Authorization
+
+```cangjie
+// HttpTool 检测到非登录请求
+if (!hasAuthorization && !tokenManager.isLoginEndpoint(url)) {
+    let tokenOpt = sessionContext.getAccessToken()
+    match (tokenOpt) {
+        case Some(token) =>
+            headers.add("Authorization", "Bearer ${token}")
+            LogUtils.info("[HttpTool] Auto-injected Authorization header")
+        case None => ()
+    }
+}
+```
+
+#### 3. 会话结束时清理
+
+```cangjie
+// WebSocket 会话关闭时
+tokenManager.removeToken(sessionId)
+sessionContext.clearCurrentSession()
+```
+
+### 优势
+
+1. **对模型透明**：大模型无需关心 token 管理，只需正常调用 API
+2. **可靠性高**：不依赖大模型的记忆能力，避免 token 丢失或格式错误
+3. **支持多用户**：每个 WebSocket 会话独立管理 token
+4. **自动过期处理**：TokenInfo 包含过期时间，自动检查 token 有效性
+5. **线程安全**：使用 Mutex 保护共享状态
+
+### 使用示例
+
+用户只需正常对话，系统自动处理认证：
+
+```
+用户: 请使用 demo 账号 123456 登录
+助手: 登录成功！用户信息：...
+
+用户: 编辑 id 为 fd0a410a-xxx 的实体，将 link 改为 uctoo.com
+助手: 编辑成功！  # 系统自动注入了 Authorization header
+```
+
+### 技术细节
+
+- **登录端点检测**：通过 URL 中是否包含 `/auth/login` 或 `/auth/signin` 判断
+- **Token 解析**：从 JSON 响应中提取 `access_token`、`refresh_token`、`user.id`、`user.username`
+- **默认过期时间**：24 小时（86400000 毫秒）
+- **Header 注入格式**：`Authorization: Bearer {token}`
+
 ## 技能
 
 该实现公开以下agent技能：
@@ -115,7 +227,7 @@ apps/CangjieMagic/src/examples/uctoo_api_skill/
 
 ```cangjie
 @agent[
-  model: "deepseek:deepseek-chat",
+  model: "dashscope:qwen3-max-preview",
   description: "UCToo后端API的MCP适配器，支持自然语言查询",
   tools: [processNaturalLanguageRequest, getMcpServiceById, listApiMappings]
 ]

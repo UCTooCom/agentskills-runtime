@@ -8,7 +8,8 @@ import std.env.getVariable
 import std.time.DateTime
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonNull}
 import magic.log.LogUtils
-import magic.utils.newProcess
+import magic.utils.http.HttpUtils
+import magic.utils.http.HttpException
 import std.io.StringReader
 
 /**
@@ -225,36 +226,33 @@ public class GitHubSkillSearcher {
     }
     
     private func _executeHttpRequest(url: String, token: Option<String>): String {
-        var args = ArrayList<String>()
-        args.add("-s")
-        args.add("-H")
-        args.add("Accept: application/vnd.github.v3+json")
-        args.add("-H")
-        args.add("User-Agent: AgentSkills-Runtime")
+        var headers = HashMap<String, String>()
+        headers.add("Accept", "application/vnd.github.v3+json")
+        headers.add("User-Agent", "AgentSkills-Runtime")
         
         if (token.isSome()) {
-            args.add("-H")
-            args.add("Authorization: token ${token.getOrThrow()}")
+            headers.add("Authorization", "token ${token.getOrThrow()}")
         }
         
-        args.add(url)
-        
-        LogUtils.info("[GitHubSkillSearcher] Executing curl for GitHub API")
+        LogUtils.info("[GitHubSkillSearcher] Executing HTTP request for GitHub API: ${url}")
         
         try {
-            let process = newProcess("curl", args.toArray(), redirectErr: true)
-            let output = StringReader(process.stdOutPipe).readToEnd()
-            let exitCode = process.wait()
-            
-            LogUtils.info("[GitHubSkillSearcher] Curl exit code: ${exitCode.toString()}, output length: ${output.size.toString()}")
-            
-            if (output.size == 0) {
-                LogUtils.error("[GitHubSkillSearcher] Empty response from curl, URL: ${url}")
+            match (HttpUtils.get(url, headers, None, verify: false)) {
+                case Some(response) =>
+                    LogUtils.info("[GitHubSkillSearcher] HTTP response length: ${response.size.toString()}")
+                    if (response.size == 0) {
+                        LogUtils.error("[GitHubSkillSearcher] Empty response, URL: ${url}")
+                    }
+                    return response
+                case None =>
+                    LogUtils.error("[GitHubSkillSearcher] No response from server, URL: ${url}")
+                    return ""
             }
-            
-            return output
+        } catch (ex: HttpException) {
+            LogUtils.error("[GitHubSkillSearcher] HTTP request failed: ${ex.error}")
+            return ""
         } catch (ex: Exception) {
-            LogUtils.error("[GitHubSkillSearcher] Failed to execute curl: ${ex.message}")
+            LogUtils.error("[GitHubSkillSearcher] Failed to execute HTTP request: ${ex.message}")
             return ""
         }
     }
@@ -440,17 +438,27 @@ public class GiteeSkillSearcher {
     }
     
     private func _executeHttpRequest(url: String): String {
-        var args = ArrayList<String>()
-        args.add("-s")
-        args.add("-H")
-        args.add("User-Agent: AgentSkills-Runtime")
-        args.add(url)
+        var headers = HashMap<String, String>()
+        headers.add("User-Agent", "AgentSkills-Runtime")
         
-        let process = newProcess("curl", args.toArray(), redirectErr: true)
-        let output = StringReader(process.stdOutPipe).readToEnd()
-        let _ = process.wait()
+        LogUtils.info("[GiteeSkillSearcher] Executing HTTP request: ${url}")
         
-        return output
+        try {
+            match (HttpUtils.get(url, headers, None, verify: false)) {
+                case Some(response) =>
+                    LogUtils.info("[GiteeSkillSearcher] HTTP response length: ${response.size.toString()}")
+                    return response
+                case None =>
+                    LogUtils.error("[GiteeSkillSearcher] No response from server, URL: ${url}")
+                    return ""
+            }
+        } catch (ex: HttpException) {
+            LogUtils.error("[GiteeSkillSearcher] HTTP request failed: ${ex.error}")
+            return ""
+        } catch (ex: Exception) {
+            LogUtils.error("[GiteeSkillSearcher] Failed to execute HTTP request: ${ex.message}")
+            return ""
+        }
     }
     
     private func _parseGiteeResponse(response: String): Array<SkillSearchResult> {
@@ -620,23 +628,28 @@ public class AtomGitSkillSearcher {
     }
     
     private func _executeHttpRequest(url: String): String {
-        var args = ArrayList<String>()
-        args.add("-s")
-        args.add("-H")
-        args.add("Accept: application/json")
-        args.add("-H")
-        args.add("User-Agent: AgentSkills-Runtime")
-        args.add(url)
+        var headers = HashMap<String, String>()
+        headers.add("Accept", "application/json")
+        headers.add("User-Agent", "AgentSkills-Runtime")
         
-        LogUtils.info("[AtomGitSkillSearcher] Executing curl with URL: ${url}")
+        LogUtils.info("[AtomGitSkillSearcher] Executing HTTP request: ${url}")
         
-        let process = newProcess("curl", args.toArray(), redirectErr: true)
-        let output = StringReader(process.stdOutPipe).readToEnd()
-        let exitCode = process.wait()
-        
-        LogUtils.info("[AtomGitSkillSearcher] Curl exit code: ${exitCode.toString()}, output length: ${output.size.toString()}")
-        
-        return output
+        try {
+            match (HttpUtils.get(url, headers, None, verify: false)) {
+                case Some(response) =>
+                    LogUtils.info("[AtomGitSkillSearcher] HTTP response length: ${response.size.toString()}")
+                    return response
+                case None =>
+                    LogUtils.error("[AtomGitSkillSearcher] No response from server, URL: ${url}")
+                    return ""
+            }
+        } catch (ex: HttpException) {
+            LogUtils.error("[AtomGitSkillSearcher] HTTP request failed: ${ex.error}")
+            return ""
+        } catch (ex: Exception) {
+            LogUtils.error("[AtomGitSkillSearcher] Failed to execute HTTP request: ${ex.message}")
+            return ""
+        }
     }
     
     private func _parseAtomGitResponse(response: String): Array<SkillSearchResult> {

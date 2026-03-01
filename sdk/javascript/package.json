@@ -1,6 +1,6 @@
 {
   "name": "@opencangjie/skills",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "description": "JavaScript/TypeScript SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -89,7 +89,7 @@
     }
   },
   "runtime": {
-    "version": "0.0.13",
+    "version": "0.0.15",
     "downloadUrl": "https://atomgit.com/UCToo/agentskills-runtime/releases",
     "platforms": {
       "win32-x64": "agentskills-runtime-win-x64.tar.gz",

@@ -18,6 +18,7 @@ import magic.core.agent.{AgentRequest, AgentResponse}
 import magic.agent_executor.react.ReactExecutor
 import magic.skill.{SkillAwareAgent, SkillToToolAdapter}
 import magic.jsonable.JsonUtils
+import magic.tool.{TokenManager, SessionContext}
 
 func _getJsonString(jsonObj: JsonObject, key: String, defaultValue: String): String {
     return JsonUtils.getString(jsonObj, key) ?? defaultValue
@@ -148,6 +149,12 @@ public class WebSocketChatHandler {
         
         _messageLoop(session)
         
+        let tokenManager = TokenManager.getInstance()
+        tokenManager.removeToken(sessionId)
+        
+        let sessionContext = SessionContext.getInstance()
+        sessionContext.clearCurrentSession()
+        
         _sessionsMutex.lock()
         _sessions.remove(sessionId)
         _sessionsMutex.unlock()
@@ -230,6 +237,9 @@ public class WebSocketChatHandler {
         LogUtils.info("Processing chat message: ${content}")
         LogUtils.info("Session ID: ${session.sessionId}")
         
+        let sessionContext = SessionContext.getInstance()
+        sessionContext.setCurrentSession(session.sessionId)
+        
         _sendStatusMessage(session, "thinking", "Processing your request...")
         
         try {
@@ -278,30 +288,71 @@ public class WebSocketChatHandler {
     private func _buildAgentSystemPrompt(): String {
         let skills = _skillManager.availableSkills.values().toArray()
         let skillInfoBuilder = StringBuilder()
-        skillInfoBuilder.append("你是一个智能助手，你可以访问以下已安装的技能（Skills）来帮助用户完成任务。\n\n")
+        skillInfoBuilder.append("你是一个智能助手，可以帮助用户完成各种任务。\n\n")
         skillInfoBuilder.append("【重要说明】\n")
-        skillInfoBuilder.append("1. 每个技能都是一个可用的工具，你可以根据用户的需求选择合适的技能来执行。\n")
-        skillInfoBuilder.append("2. 当你需要使用某个技能时，必须通过工具调用的方式来执行该技能。\n")
-        skillInfoBuilder.append("3. 技能工具的调用方式：使用 query 参数传递用户的自然语言请求。\n")
-        skillInfoBuilder.append("4. 技能执行后会返回结果，请将结果清晰地展示给用户。\n\n")
+        skillInfoBuilder.append("1. 你可以直接使用框架内置的 http_request 工具来发送 HTTP 请求。\n")
+        skillInfoBuilder.append("2. http_request 工具参数格式：\n")
+        skillInfoBuilder.append("   - method: HTTP 方法（GET、POST、PUT、DELETE）\n")
+        skillInfoBuilder.append("   - url: 完整的请求 URL\n")
+        skillInfoBuilder.append("   - headers: JSON 字符串格式的请求头（可选）\n")
+        skillInfoBuilder.append("   - body: JSON 字符串格式的请求体（可选，POST/PUT 需要）\n")
+        skillInfoBuilder.append("3. 当用户需要调用后端 API 时，请直接使用 http_request 工具。\n\n")
         
-        if (skills.isEmpty()) {
-            skillInfoBuilder.append("当前没有安装任何技能。\n")
-        } else {
-            skillInfoBuilder.append("【已安装的技能列表】\n")
+        if (!skills.isEmpty()) {
+            skillInfoBuilder.append("【已安装的技能知识库】\n")
+            skillInfoBuilder.append("以下是可用的技能知识库，它们提供了 API 使用说明和示例：\n\n")
             for (skill in skills) {
-                skillInfoBuilder.append("- **${skill.name}**: ${skill.description}\n")
-                skillInfoBuilder.append("  - 使用方法：通过工具调用，将用户的请求作为 query 参数传递\n")
-                skillInfoBuilder.append("  - 示例：如果用户说'使用 ${skill.name} 来...'，你应该调用 ${skill.name} 工具，query 参数设置为'...'\n\n")
+                skillInfoBuilder.append("### ${skill.name}\n")
+                skillInfoBuilder.append("${skill.description}\n\n")
             }
+            skillInfoBuilder.append("【技能使用指南】\n")
+            skillInfoBuilder.append("技能知识库提供了 API 的使用说明，但你需要直接使用 http_request 工具来执行实际的 API 调用。\n")
+            skillInfoBuilder.append("不要尝试调用技能工具，而是根据技能知识库中的说明，直接调用 http_request 工具。\n\n")
         }
         
-        skillInfoBuilder.append("\n【使用指南】\n")
-        skillInfoBuilder.append("- 如果用户的问题明确需要使用某个技能，请直接调用相应的技能工具\n")
-        skillInfoBuilder.append("- 调用技能时，将用户的完整自然语言请求作为 query 参数传递\n")
-        skillInfoBuilder.append("- 技能执行完成后，将返回的结果清晰、友好地展示给用户\n")
-        skillInfoBuilder.append("- 如果技能返回了JSON格式的结果，请解析并以易读的方式展示\n")
-        skillInfoBuilder.append("- 如果用户的问题不需要使用技能，请直接回答用户的问题\n")
+        skillInfoBuilder.append("【🎉 自动 Token 管理】\n")
+        skillInfoBuilder.append("系统已实现自动 Token 管理机制：\n")
+        skillInfoBuilder.append("1. 登录成功后，系统会自动保存 access_token\n")
+        skillInfoBuilder.append("2. 后续请求会自动注入 Authorization header\n")
+        skillInfoBuilder.append("3. 你不需要手动处理认证 token\n\n")
+        
+        skillInfoBuilder.append("【http_request 工具使用示例】\n\n")
+        skillInfoBuilder.append("示例 1 - 用户登录：\n")
+        skillInfoBuilder.append("```json\n")
+        skillInfoBuilder.append("{\n")
+        skillInfoBuilder.append("  \"method\": \"POST\",\n")
+        skillInfoBuilder.append("  \"url\": \"https://javatoarktsapi.uctoo.com/api/uctoo/auth/login\",\n")
+        skillInfoBuilder.append("  \"headers\": \"{\\\"Content-Type\\\": \\\"application/json\\\"}\",\n")
+        skillInfoBuilder.append("  \"body\": \"{\\\"username\\\": \\\"demo\\\", \\\"password\\\": \\\"123456\\\"}\"\n")
+        skillInfoBuilder.append("}\n")
+        skillInfoBuilder.append("```\n")
+        skillInfoBuilder.append("登录成功后，系统会自动保存 token，后续请求无需手动添加 Authorization。\n\n")
+        
+        skillInfoBuilder.append("示例 2 - 获取数据列表（无需认证）：\n")
+        skillInfoBuilder.append("```json\n")
+        skillInfoBuilder.append("{\n")
+        skillInfoBuilder.append("  \"method\": \"GET\",\n")
+        skillInfoBuilder.append("  \"url\": \"https://javatoarktsapi.uctoo.com/api/uctoo/entity/10/0\"\n")
+        skillInfoBuilder.append("}\n")
+        skillInfoBuilder.append("```\n\n")
+        
+        skillInfoBuilder.append("示例 3 - 编辑数据（自动认证）：\n")
+        skillInfoBuilder.append("```json\n")
+        skillInfoBuilder.append("{\n")
+        skillInfoBuilder.append("  \"method\": \"POST\",\n")
+        skillInfoBuilder.append("  \"url\": \"https://javatoarktsapi.uctoo.com/api/uctoo/entity/edit\",\n")
+        skillInfoBuilder.append("  \"headers\": \"{\\\"Content-Type\\\": \\\"application/json\\\"}\",\n")
+        skillInfoBuilder.append("  \"body\": \"{\\\"id\\\": \\\"fd0a410a-7038-4c62-a5e4-9f7950d3d406\\\", \\\"link\\\": \\\"uctoo.com\\\"}\"\n")
+        skillInfoBuilder.append("}\n")
+        skillInfoBuilder.append("```\n")
+        skillInfoBuilder.append("系统会自动注入 Authorization header，无需手动添加。\n\n")
+        
+        skillInfoBuilder.append("【关键注意事项】\n")
+        skillInfoBuilder.append("- headers 和 body 参数必须是 JSON 字符串格式\n")
+        skillInfoBuilder.append("- POST 请求需要设置 Content-Type: application/json\n")
+        skillInfoBuilder.append("- 认证 token 由系统自动管理，无需手动处理\n")
+        skillInfoBuilder.append("- id 参数必须是实际的 UUID 值（如 fd0a410a-7038-4c62-a5e4-9f7950d3d406），不能使用占位符\n")
+        skillInfoBuilder.append("- 如果用户没有提供具体的 ID，先查询列表获取 ID\n")
         
         return skillInfoBuilder.toString()
     }

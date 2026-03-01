@@ -399,20 +399,17 @@ SKILL_INSTALL_PATH=./skills
     console.log(`[SDK DEBUG] runtimePath: ${runtimePath}`);
     
     // On Windows, use shell to properly handle path arguments
-    // When using shell: true, we need to properly escape the command
     if (process.platform === 'win32') {
-      // Use escaped quotes for Windows paths
-      const escapedPath = skillInstallPath.replace(/"/g, '""');
-      const command = `"${runtimePath}" ${port} --skill-path "${escapedPath}"`;
-      console.log(`[SDK DEBUG] command: ${command}`);
+      const args = [String(port), '--skill-path', skillInstallPath];
+      console.log(`[SDK DEBUG] args: ${args.join(' ')}`);
       
-      this.process = spawn(command, [], {
+      this.process = spawn(runtimePath, args, {
         stdio: options.detached ? 'ignore' : 'inherit',
         detached: options.detached || false,
         cwd: cwd,
         env: env,
         windowsHide: true,
-        shell: true
+        shell: false
       });
     } else {
       const args = [String(port), '--skill-path', skillInstallPath];

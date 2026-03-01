@@ -32,51 +32,59 @@
 
 [package]
   cjc-version = "1.0.0"
-  compile-option = "-Woff unused -Woff deprecated --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=curl\" "
+  compile-option = "-Woff unused -Woff deprecated --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=cj\" "
   description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
   link-option = ""
   name = "magic"
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "0.0.13"
+  version = "0.0.15"
 
-[package.package-configuration."magic.examples.doc_translator"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.markdown_qa"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.doc_generator"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.file_assistant"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.quick_start"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.mcp_server"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.mcp_client"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.mini_rag"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.magic_agent"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.uctoo_api_mcp_server"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.uctoo_api_mcp_client"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.skill_examples"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.uctoo_api_skill"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.find_skills_skill"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.skill_mcp_client"]
-  output-type = "executable"
-[package.package-configuration."magic.examples.direct_skill_test"]
+# [package.package-configuration."magic.examples.doc_translator"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.markdown_qa"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.doc_generator"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.file_assistant"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.quick_start"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.mcp_server"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.mcp_client"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.mini_rag"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.magic_agent"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.uctoo_api_mcp_server"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.uctoo_api_mcp_client"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.skill_examples"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.uctoo_api_skill"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.find_skills_skill"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.skill_mcp_client"]
+#   output-type = "executable"
+# [package.package-configuration."magic.examples.direct_skill_test"]
+#   output-type = "executable"
+[package.package-configuration."magic.examples.http_client_test"]
   output-type = "executable"
 [package.package-configuration."magic.api"]
   output-type = "executable"
 [package.package-configuration."magic.scripts.package_release"]
   output-type = "executable"
+# [package.package-configuration."magic.test_curl"]
+#   output-type = "executable"
+# [package.package-configuration."magic.test_search"]
+#   output-type = "executable"
+# [package.package-configuration."magic.test_git"]
+#   output-type = "executable"
 
 #----------------------------------------
 #  Setting FFI libs

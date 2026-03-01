@@ -261,9 +261,16 @@ public class OpenAIChatModel <: ChatModel {
         let (header, req) = prepareHeaderAndRequest(chatReq, stream: false)
         let start = DateTime.now()
 
+        LogUtils.info("=== [HTTP Request] ===")
+        LogUtils.info("URL: ${this.baseURL}/chat/completions")
+        LogUtils.info("Headers: ${header.toString()}")
+        LogUtils.info("Request body: ${req.toJsonString()}")
+
         try {
             match (HttpUtils.post("${this.baseURL}/chat/completions", header, req)) {
                 case Some(body) =>
+                    LogUtils.info("=== [HTTP Response] ===")
+                    LogUtils.info("Response body: ${body}")
                     if (body.isEmpty()) {
                         throw ModelException("Http response body is empty")
                     } else {
@@ -272,6 +279,8 @@ public class OpenAIChatModel <: ChatModel {
                 case None => throw ModelException("Http response body is None")
             }
         } catch (ex: HttpException) {
+            LogUtils.error("=== [HTTP Error] ===")
+            LogUtils.error("HTTP error: ${ex.error}")
             throw ModelException(ex.error)
         }
     }
@@ -290,14 +299,17 @@ public class OpenAIChatModel <: ChatModel {
         jo.put("model", JsonString(model))
         jo.put("messages", this.messageList2Json(chatReq.messageList))
         jo.put("stream", JsonBool(stream))
-        if (let Some(items) <- chatReq.stop) {
-            if (!items.isEmpty()) {
-                let ja = JsonArray(
-                    Array<JsonValue>(items.size, { i: Int64 =>
-                        JsonString(items[i])
-                    })
-                )
-                jo.put("stop", ja)
+        // AtomGit API doesn't support 'stop' parameter
+        if (_provider != "atomgit") {
+            if (let Some(items) <- chatReq.stop) {
+                if (!items.isEmpty()) {
+                    let ja = JsonArray(
+                        Array<JsonValue>(items.size, { i: Int64 =>
+                            JsonString(items[i])
+                        })
+                    )
+                    jo.put("stop", ja)
+                }
             }
         }
         if (let Some(temp) <- chatReq.temperature) {
@@ -315,6 +327,15 @@ public class OpenAIChatModel <: ChatModel {
     private func messageList2Json(messageList: MessageList): JsonArray {
         let ja = JsonArray()
         for (msg in messageList) {
+            // SophNet and AtomGit APIs don't support "system" role, convert to "user" role
+            let roleStr = if ((_provider == "sophnet" || _provider == "atomgit") && msg.role == MessageRole.System) {
+                LogUtils.info("Converting system message to user role for ${_provider} provider")
+                "user"
+            } else {
+                msg.role.toString()
+            }
+            LogUtils.debug("Message role: ${msg.role.toString()}, Provider: ${_provider}, Converted role: ${roleStr}")
+            
             let msgJson = if (let Some(image) <- msg.image) {
                 // Schema: { role: string,
                 //           content: [
@@ -323,7 +344,7 @@ public class OpenAIChatModel <: ChatModel {
                 //           ]
                 // }
                 JsonUtils.buildJsonObject(
-                    ("role", JsonString(msg.role.toString())),
+                    ("role", JsonString(roleStr)),
                     ("content", JsonArray([
                         JsonUtils.buildJsonObject([
                             ("type", "text"),
@@ -338,8 +359,8 @@ public class OpenAIChatModel <: ChatModel {
             } else {
                 // Schema: { role: string, content: string }
                 JsonUtils.buildJsonObject(
-                    ("role", msg.role.toString()),
-                    ("content", msg.content)
+                    ("role", JsonString(roleStr)),
+                    ("content", JsonString(msg.content))
                 )
             }
             ja.add(msgJson)

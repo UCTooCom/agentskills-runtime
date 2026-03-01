@@ -66,6 +66,9 @@ private let DEFAULT_PROVIDER_MAP = HashMap<String, ProviderConfig>([
     ("sophnet",   ProviderConfig("SOPHNET_BASE_URL", // openai-compatible
                                 "https://www.sophnet.com/api/open-apis/v1",
                                 "SOPHNET_API_KEY")),
+    ("atomgit",   ProviderConfig("ATOMGIT_BASE_URL", // openai-compatible
+                                "https://api.atomgit.com/api/v5",
+                                "ATOMGIT_API_KEY")),
     ("ollama",    ProviderConfig("OLLAMA_BASE_URL",
                                  "http://localhost:11434",
                                  "")),
@@ -199,7 +202,7 @@ public struct ModelManager {
     public static func createChatModel(modelConfig: ModelConfig): ChatModel {
         match (modelConfig.provider) {
             case "openai" | "dashscope" | "ark" | "deepseek" |
-                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" =>
+                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" | "atomgit" =>
                 return OpenAIChatModel(modelConfig.provider, modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "ollama" =>
                 return OllamaChatModel(modelConfig.name, baseURL: modelConfig.baseURL)

@@ -1,7 +1,7 @@
 # AgentSkills Runtime
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/UCTooCom/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.15-blue.svg)](https://github.com/UCTooCom/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## 项目简介

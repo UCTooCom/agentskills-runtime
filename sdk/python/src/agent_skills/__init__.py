@@ -1,7 +1,9 @@
 """Python SDK for AgentSkills Runtime."""
 
-__version__ = "0.0.1"
-RUNTIME_VERSION = "0.0.13"
+from __future__ import annotations
+
+__version__ = "0.0.4"
+RUNTIME_VERSION = "0.0.16"
 
 from agent_skills.models import (
     ApiError,
@@ -9,6 +11,7 @@ from agent_skills.models import (
     ClientConfig,
     EnvironmentConfig,
     MultiSkillRepoResponse,
+    ParamType,
     RuntimeOptions,
     RuntimeStatus,
     Skill,
@@ -35,6 +38,7 @@ __all__ = [
     "ClientConfig",
     "EnvironmentConfig",
     "MultiSkillRepoResponse",
+    "ParamType",
     "RuntimeManager",
     "RuntimeOptions",
     "RuntimeStatus",

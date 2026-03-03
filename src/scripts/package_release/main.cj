@@ -369,7 +369,7 @@ main(args: Array<String>): Unit {
     println("")
     println("[STEP] Copying .env.example...")
     
-    let envExampleSrc = Path("${releaseDir}/.env.example")
+    let envExampleSrc = Path("${rootPath}/.env.example")
     let envExampleDest = Path("${targetDir}/.env.example")
     if (exists(envExampleSrc)) {
         copy(envExampleSrc.toString(), to: envExampleDest.toString(), overwrite: true)

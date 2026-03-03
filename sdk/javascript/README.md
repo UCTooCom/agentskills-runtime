@@ -1,4 +1,4 @@
-# @opencangjie/skills
+﻿# @opencangjie/skills
 
 JavaScript/TypeScript SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support.
 
@@ -32,10 +32,46 @@ npx @opencangjie/skills add ./my-skill
 npx skills install-runtime
 
 # Or specify a version
-npx skills install-runtime --runtime-version 0.0.13
+npx skills install-runtime --runtime-version 0.0.16
 ```
 
-### 2. Start the Runtime
+### 2. Configure the Runtime
+
+Before starting the runtime, you need to configure the AI model API key. The runtime requires an AI model to process skill execution and natural language understanding.
+
+Edit the `.env` file in the runtime directory:
+- **Windows**: `%USERPROFILE%\.agentskills-runtime\release\.env`
+- **macOS/Linux**: `~/.agentskills-runtime/release/.env`
+
+Add your AI model configuration (choose one provider):
+
+```ini
+# Option 1: StepFun (阶跃星辰)
+MODEL_PROVIDER=stepfun
+MODEL_NAME=step-1-8k
+STEPFUN_API_KEY=your_stepfun_api_key_here
+STEPFUN_BASE_URL=https://api.stepfun.com/v1
+
+# Option 2: DeepSeek
+MODEL_PROVIDER=deepseek
+MODEL_NAME=deepseek-chat
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+
+# Option 3: 华为云 MaaS
+MODEL_PROVIDER=maas
+MAAS_API_KEY=your_maas_api_key_here
+MAAS_BASE_URL=https://api.modelarts-maas.com/v2
+MAAS_MODEL_NAME=qwen3-coder-480b-a35b-instruct
+
+# Option 4: Sophnet
+MODEL_PROVIDER=sophnet
+SOPHNET_API_KEY=your_sophnet_api_key_here
+SOPHNET_BASE_URL=https://www.sophnet.com/api/open-apis/v1
+```
+
+> **Note**: Without proper AI model configuration, the runtime will fail to start with an error like "Get env variable XXX_API_KEY error."
+
+### 3. Start the Runtime
 
 ```bash
 # Start in background (default)
@@ -48,7 +84,7 @@ npx skills start --foreground
 npx skills start --port 3000 --host 0.0.0.0
 ```
 
-### 3. Manage Skills
+### 4. Manage Skills
 
 ```bash
 # Find and install skills
@@ -72,7 +108,7 @@ Download and install the AgentSkills runtime binary.
 
 ```bash
 npx skills install-runtime
-npx skills install-runtime --runtime-version 0.0.13
+npx skills install-runtime --runtime-version 0.0.16
 ```
 
 #### `npx skills start`
@@ -136,10 +172,22 @@ npx skills find skill --source atomgit --limit 5
 Install a skill from GitHub or local path.
 
 ```bash
+# Install from local directory
 npx skills add ./my-skill
+
+# Install from GitHub repository
 npx skills add github.com/user/skill-repo
 npx skills add github.com/user/skill-repo --branch develop
+
+# Install from multi-skill repository (specify subdirectory)
+npx skills add https://github.com/user/skills-repo/tree/main/skills/my-skill
+npx skills add https://atomgit.com/user/skills-repo/tree/main/skills/skill-creator
+
+# Install with options
+npx skills add github.com/user/skill-repo -y  # Skip confirmation
 ```
+
+> **Tip**: For repositories containing multiple skills, use the `/tree/<branch>/<skill-path>` format to specify the exact subdirectory. This avoids the interactive selection prompt.
 
 #### `npx skills list`
 
@@ -653,17 +701,25 @@ onMounted(loadSkills);
 // apps/backend/package.json
 {
   "dependencies": {
-    "@opencangjie/skills": "^0.0.13"
+    "@opencangjie/skills": "^0.0.16"
   }
 }
 
 // apps/uctoo-app-client-pc/package.json
 {
   "dependencies": {
-    "@opencangjie/skills": "^0.0.13"
+    "@opencangjie/skills": "^0.0.16"
   }
 }
 ```
+
+## Links
+
+- [NPM Package](https://www.npmjs.com/package/@opencangjie/skills)
+- [Documentation](https://atomgit.com/uctoo/agentskills-runtime#readme)
+- [Repository](https://atomgit.com/uctoo/agentskills-runtime)
+- [Issue Tracker](https://atomgit.com/uctoo/agentskills-runtime/issues)
+- [Python SDK](../python)
 
 ## License
 

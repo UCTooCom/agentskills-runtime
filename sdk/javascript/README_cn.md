@@ -1,4 +1,4 @@
-# @opencangjie/skills
+﻿# @opencangjie/skills
 
 AgentSkills Runtime 的 JavaScript/TypeScript SDK - 安装、管理和执行 AI 代理技能，内置运行时支持。
 
@@ -32,10 +32,46 @@ npx @opencangjie/skills add ./my-skill
 npx skills install-runtime
 
 # 或指定版本
-npx skills install-runtime --version 0.0.1
+npx skills install-runtime --runtime-version 0.0.16
 ```
 
-### 2. 启动运行时
+### 2. 配置运行时
+
+在启动运行时之前，您需要配置 AI 模型 API 密钥。运行时需要 AI 模型来处理技能执行和自然语言理解。
+
+编辑运行时目录中的 `.env` 文件：
+- **Windows**: `%USERPROFILE%\.agentskills-runtime\release\.env`
+- **macOS/Linux**: `~/.agentskills-runtime/release/.env`
+
+添加您的 AI 模型配置（选择一个提供商）：
+
+```ini
+# 选项 1: StepFun (阶跃星辰)
+MODEL_PROVIDER=stepfun
+MODEL_NAME=step-1-8k
+STEPFUN_API_KEY=your_stepfun_api_key_here
+STEPFUN_BASE_URL=https://api.stepfun.com/v1
+
+# 选项 2: DeepSeek
+MODEL_PROVIDER=deepseek
+MODEL_NAME=deepseek-chat
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+
+# 选项 3: 华为云 MaaS
+MODEL_PROVIDER=maas
+MAAS_API_KEY=your_maas_api_key_here
+MAAS_BASE_URL=https://api.modelarts-maas.com/v2
+MAAS_MODEL_NAME=qwen3-coder-480b-a35b-instruct
+
+# 选项 4: Sophnet
+MODEL_PROVIDER=sophnet
+SOPHNET_API_KEY=your_sophnet_api_key_here
+SOPHNET_BASE_URL=https://www.sophnet.com/api/open-apis/v1
+```
+
+> **注意**：如果没有正确配置 AI 模型，运行时将无法启动，并显示类似 "Get env variable XXX_API_KEY error" 的错误。
+
+### 3. 启动运行时
 
 ```bash
 # 后台启动（默认）
@@ -48,7 +84,7 @@ npx skills start --foreground
 npx skills start --port 3000 --host 0.0.0.0
 ```
 
-### 3. 管理技能
+### 4. 管理技能
 
 ```bash
 # 查找并安装技能
@@ -72,7 +108,7 @@ npx skills run my-skill -p '{"input": "data"}'
 
 ```bash
 npx skills install-runtime
-npx skills install-runtime --runtime-version 0.0.13
+npx skills install-runtime --runtime-version 0.0.16
 ```
 
 #### `npx skills start`
@@ -136,10 +172,22 @@ npx skills find skill --source atomgit --limit 5
 从 GitHub 或本地路径安装技能。
 
 ```bash
+# 从本地目录安装
 npx skills add ./my-skill
+
+# 从 GitHub 仓库安装
 npx skills add github.com/user/skill-repo
 npx skills add github.com/user/skill-repo --branch develop
+
+# 从多技能仓库安装（指定子目录）
+npx skills add https://github.com/user/skills-repo/tree/main/skills/my-skill
+npx skills add https://atomgit.com/user/skills-repo/tree/main/skills/skill-creator
+
+# 带选项安装
+npx skills add github.com/user/skill-repo -y  # 跳过确认
 ```
+
+> **提示**：对于包含多个技能的仓库，使用 `/tree/<分支>/<技能路径>` 格式指定具体的子目录。这样可以避免交互式选择提示。
 
 #### `npx skills list`
 
@@ -653,17 +701,25 @@ onMounted(loadSkills);
 // apps/backend/package.json
 {
   "dependencies": {
-    "@opencangjie/skills": "^0.0.13"
+    "@opencangjie/skills": "^0.0.16"
   }
 }
 
 // apps/uctoo-app-client-pc/package.json
 {
   "dependencies": {
-    "@opencangjie/skills": "^0.0.13"
+    "@opencangjie/skills": "^0.0.16"
   }
 }
 ```
+
+## 相关链接
+
+- [NPM 包](https://www.npmjs.com/package/@opencangjie/skills)
+- [文档](https://atomgit.com/uctoo/agentskills-runtime#readme)
+- [仓库](https://atomgit.com/uctoo/agentskills-runtime)
+- [问题追踪](https://atomgit.com/uctoo/agentskills-runtime/issues)
+- [Python SDK](../python)
 
 ## 许可证
 

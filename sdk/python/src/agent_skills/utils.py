@@ -1,5 +1,7 @@
 """Utility functions for AgentSkills SDK."""
 
+from __future__ import annotations
+
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, Union
 

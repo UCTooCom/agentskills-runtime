@@ -128,24 +128,10 @@ public class SkillPackageManager {
                         Directory.create(installPathObj, recursive: true)
                     }
                     
-                    // Copy all files from source to destination
-                    Directory.walk(sourcePath.toString()) { fileInfo =>
-                        if (!fileInfo.isDirectory()) {
-                            let relativePath = fileInfo.path.toString().replace(sourcePath.toString(), "")
-                            // Remove leading slash or backslash from relative path
-                            var cleanRelativePath = relativePath
-                            if (cleanRelativePath.startsWith("/") || cleanRelativePath.startsWith("\\")) {
-                                cleanRelativePath = cleanRelativePath[1..cleanRelativePath.size]
-                            }
-                            let destFilePath = Path(installPath).join(cleanRelativePath.replace("\\", "/"))
-                            let destParentPath = destFilePath.parent
-                            if (!exists(destParentPath)) {
-                                Directory.create(destParentPath, recursive: true)
-                            }
-                            copy(fileInfo.path.toString(), to: destFilePath.toString(), overwrite: true)
-                        }
-                        true
-                    }
+                    let copiedFiles = ArrayList<String>()
+                    // Use recursive walk with Directory.readFrom for better compatibility
+                    _copyDirectoryRecursive(sourcePath.toString(), installPath, copiedFiles)
+                    LogUtils.info("Copied ${copiedFiles.size} files")
                 } else {
                     // Copy single file
                     Directory.create(installPathObj, recursive: true)
@@ -484,6 +470,48 @@ public class SkillPackageManager {
         
         LogUtils.info("Skill directory not found for: ${skillName}")
         return true
+    }
+
+    /**
+     * Copy a directory recursively using Directory.readFrom for better Windows compatibility
+     * @param sourcePath The source directory path
+     * @param destPath The destination directory path
+     * @param copiedFiles List to track copied files
+     */
+    private func _copyDirectoryRecursive(
+        sourcePath: String, 
+        destPath: String, 
+        copiedFiles: ArrayList<String>
+    ): Unit {
+        try {
+            let entries = Directory.readFrom(sourcePath)
+            for (fileInfo in entries) {
+                let entryPath = fileInfo.path.toString()
+                let entryName = fileInfo.path.fileName
+                
+                if (fileInfo.isDirectory()) {
+                    // Skip .git directory
+                    if (entryName != ".git") {
+                        // Create corresponding destination directory using entry name directly
+                        let subDestPath = Path(destPath).join(entryName).toString()
+                        
+                        if (!exists(subDestPath)) {
+                            Directory.create(subDestPath, recursive: true)
+                        }
+                        
+                        // Recursively copy subdirectory
+                        _copyDirectoryRecursive(entryPath, subDestPath, copiedFiles)
+                    }
+                } else {
+                    // Copy file directly to destPath (destPath is already the correct target directory)
+                    let destFilePath = Path(destPath).join(entryName)
+                    copy(entryPath, to: destFilePath.toString(), overwrite: true)
+                    copiedFiles.add(entryPath)
+                }
+            }
+        } catch (ex: Exception) {
+            LogUtils.error("[_copyDirectoryRecursive] Error copying from ${sourcePath}: ${ex.message}")
+        }
     }
 
     /**

@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to the `@opencangjie/skills` SDK will be documented in this file.
 
@@ -7,7 +7,7 @@ All notable changes to the `@opencangjie/skills` SDK will be documented in this 
 ### Fixed
 - **Windows `npx skills stop` command**: Now uses `taskkill /F /PID` on Windows to properly terminate runtime process
 - Previous `process.kill(pid, 'SIGTERM')` didn't work on Windows for detached processes
-- **Runtime v0.0.13**: Temporary directory now uses sibling `temp` directory of `SKILL_INSTALL_PATH`
+- **Runtime v0.0.16**: Temporary directory now uses sibling `temp` directory of `SKILL_INSTALL_PATH`
 - If `SKILL_INSTALL_PATH=./skills`, temp directory will be `./temp/git-clone`
 - This ensures proper permissions and accessibility for the temp directory
 

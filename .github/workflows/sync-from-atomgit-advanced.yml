@@ -1,0 +1,122 @@
+name: Sync from AtomGit
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      sync_branches:
+        description: 'Branches to sync (comma separated, default main)'
+        required: false
+        default: 'main'
+      force_sync:
+        description: 'Force sync (will overwrite GitHub with AtomGit content)'
+        required: false
+        default: 'true'
+
+env:
+  ATOMGIT_URL: https://atomgit.com/UCToo/agentskills-runtime.git
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add AtomGit remote
+        run: |
+          git remote add atomgit ${{ env.ATOMGIT_URL }}
+          git remote -v
+
+      - name: Fetch from AtomGit
+        run: |
+          echo "Fetching from AtomGit..."
+          git fetch atomgit --prune --tags
+
+      - name: Sync branches
+        run: |
+          BRANCHES="${{ github.event.inputs.sync_branches || 'main' }}"
+          FORCE_SYNC="${{ github.event.inputs.force_sync || 'true' }}"
+          
+          echo "Force sync mode: $FORCE_SYNC"
+          echo "Branches to sync: $BRANCHES"
+          
+          IFS=',' read -ra BRANCH_ARRAY <<< "$BRANCHES"
+          
+          for BRANCH in "${BRANCH_ARRAY[@]}"; do
+            BRANCH=$(echo $BRANCH | xargs)
+            echo "========================================"
+            echo "Syncing branch: $BRANCH"
+            echo "========================================"
+            
+            if git rev-parse --verify atomgit/$BRANCH >/dev/null 2>&1; then
+              echo "Branch $BRANCH exists in AtomGit"
+              
+              if git show-ref --verify --quiet refs/heads/$BRANCH; then
+                echo "Checking out existing branch: $BRANCH"
+                git checkout $BRANCH
+              else
+                echo "Creating new branch: $BRANCH"
+                git checkout -b $BRANCH
+              fi
+              
+              if [ "$FORCE_SYNC" = "true" ]; then
+                echo "Force sync - resetting to AtomGit/$BRANCH"
+                git reset --hard atomgit/$BRANCH
+                git push origin $BRANCH --force
+                echo "Branch $BRANCH force synced successfully"
+              else
+                echo "Attempting merge..."
+                if git merge-base $BRANCH atomgit/$BRANCH >/dev/null 2>&1; then
+                  echo "Common ancestor found, performing merge"
+                  git merge atomgit/$BRANCH --no-edit
+                  git push origin $BRANCH
+                  echo "Branch $BRANCH merged successfully"
+                else
+                  echo "No common ancestor, forcing sync instead"
+                  git reset --hard atomgit/$BRANCH
+                  git push origin $BRANCH --force
+                  echo "Branch $BRANCH force synced (no common ancestor)"
+                fi
+              fi
+            else
+              echo "WARNING: Branch $BRANCH not found in AtomGit"
+            fi
+          done
+
+      - name: Sync tags
+        run: |
+          echo "========================================"
+          echo "Syncing tags..."
+          echo "========================================"
+          
+          git fetch atomgit --tags
+          git push origin --tags --force || echo "Tag push completed with warnings"
+          
+          echo "Tags synced successfully"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "========================================"
+          echo "Sync Summary"
+          echo "========================================"
+          echo "Status: ${{ job.status }}"
+          echo "Time: $(date)"
+          echo "Source: ${{ env.ATOMGIT_URL }}"
+          echo "Target: ${{ github.server_url }}/${{ github.repository }}"
+          echo "========================================"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          git remote remove atomgit 2>/dev/null || true

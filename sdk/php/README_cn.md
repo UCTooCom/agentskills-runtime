@@ -7,7 +7,7 @@ AgentSkills Runtime 的 PHP SDK - 安装、管理和执行 AI 代理技能，内
 通过 Composer 安装：
 
 ```bash
-composer require uctoo/agent-skills
+composer require opencangjie/skills
 ```
 
 或从源码安装：

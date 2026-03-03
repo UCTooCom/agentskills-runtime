@@ -1,9 +1,9 @@
 ﻿# AgentSkills PHP SDK
 
-[![Latest Stable Version](https://poser.pugx.org/opencangjie/agent-skills/v/stable)](https://packagist.org/packages/opencangjie/agent-skills)
-[![Total Downloads](https://poser.pugx.org/opencangjie/agent-skills/downloads)](https://packagist.org/packages/opencangjie/agent-skills)
-[![License](https://poser.pugx.org/opencangjie/agent-skills/license)](https://packagist.org/packages/opencangjie/agent-skills)
-[![PHP Version Require](https://poser.pugx.org/opencangjie/agent-skills/require/php)](https://packagist.org/packages/opencangjie/agent-skills)
+[![Latest Stable Version](https://poser.pugx.org/opencangjie/skills/v/stable)](https://packagist.org/packages/opencangjie/skills)
+[![Total Downloads](https://poser.pugx.org/opencangjie/skills/downloads)](https://packagist.org/packages/opencangjie/skills)
+[![License](https://poser.pugx.org/opencangjie/skills/license)](https://packagist.org/packages/opencangjie/skills)
+[![PHP Version Require](https://poser.pugx.org/opencangjie/skills/require/php)](https://packagist.org/packages/opencangjie/skills)
 
 PHP SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support.
 
@@ -21,13 +21,13 @@ PHP SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills w
 ### Via Composer (Recommended)
 
 ```bash
-composer require opencangjie/agent-skills
+composer require opencangjie/skills
 ```
 
 ### Global Installation (for CLI usage)
 
 ```bash
-composer global require opencangjie/agent-skills
+composer global require opencangjie/skills
 ```
 
 Make sure your global Composer bin directory is in your PATH:
@@ -423,7 +423,7 @@ composer check
 
 - [中文文档](README_cn.md)
 - [API Documentation](https://github.com/UCTooCom/agentskills-runtime/wiki)
-- [Packagist](https://packagist.org/packages/opencangjie/agent-skills)
+- [Packagist](https://packagist.org/packages/opencangjie/skills)
 
 ## Contributing
 
@@ -438,7 +438,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **GitHub**: https://github.com/UCTooCom/agentskills-runtime
 - **AtomGit**: https://atomgit.com/uctoo/agentskills-runtime
 - **Issues**: https://github.com/UCTooCom/agentskills-runtime/issues
-- **Packagist**: https://packagist.org/packages/opencangjie/agent-skills
+- **Packagist**: https://packagist.org/packages/opencangjie/skills
 
 ## Related Projects
 

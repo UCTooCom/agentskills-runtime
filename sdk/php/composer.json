@@ -1,6 +1,7 @@
 {
     "name": "opencangjie/skills",
     "description": "PHP SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support",
+    "version": "0.0.2",
     "type": "library",
     "keywords": [
         "agent-skills",
@@ -16,7 +17,7 @@
         "skill-runtime",
         "ai-agent-tools"
     ],
-    "homepage": "https://github.com/UCTooCom/agentskills-runtime",
+    "homepage": "https://github.com/UCTooCom/agentskills-runtime-php-sdk",
     "license": "MIT",
     "authors": [
         {
@@ -26,9 +27,9 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/UCTooCom/agentskills-runtime/issues",
-        "source": "https://github.com/UCTooCom/agentskills-runtime/tree/main/sdk/php",
-        "docs": "https://github.com/UCTooCom/agentskills-runtime/tree/main/sdk/php#readme"
+        "issues": "https://github.com/UCTooCom/agentskills-runtime-php-sdk/issues",
+        "source": "https://github.com/UCTooCom/agentskills-runtime-php-sdk",
+        "docs": "https://github.com/UCTooCom/agentskills-runtime-php-sdk#readme"
     },
     "funding": [
         {

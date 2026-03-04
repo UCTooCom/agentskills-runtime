@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace AgentSkills;
 
@@ -159,6 +159,7 @@ class RuntimeManager
                 $response = $client->get($downloadUrl, [
                     'sink' => $archivePath,
                     'timeout' => 300,
+                    'verify' => false,
                 ]);
 
                 if ($response->getStatusCode() !== 200) {

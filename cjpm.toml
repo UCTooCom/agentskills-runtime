@@ -73,8 +73,8 @@
 #   output-type = "executable"
 # [package.package-configuration."magic.examples.direct_skill_test"]
 #   output-type = "executable"
-[package.package-configuration."magic.examples.http_client_test"]
-  output-type = "executable"
+#[package.package-configuration."magic.examples.http_client_test"]
+# output-type = "executable"
 [package.package-configuration."magic.api"]
   output-type = "executable"
 [package.package-configuration."magic.scripts.package_release"]

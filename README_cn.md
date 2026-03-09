@@ -378,6 +378,112 @@ let skillManager = CompositeSkillToolManager()
 let skills = loader.loadSkillsToManager(skillManager)
 ```
 
+## 应用案例
+
+### 🎯 自然语言查询数据库 - uctoo-api-skill 示例
+
+**uctoo-api-skill** 是一个完整的后端 API 集成技能示例，展示了如何通过自然语言查询数据库。
+
+#### 功能特点
+- **自然语言转 API 调用**：用户可以用自然语言描述查询需求，技能自动转换为 API 调用
+- **多数据库支持**：配合 uctoo backend 项目，支持连接多种类型数据库（MySQL、PostgreSQL、MongoDB 等）
+- **任意数据库结构**：无需预先定义表结构，支持任意数据库结构的查询
+- **通用查询能力**：支持用户管理、产品管理、订单管理、登录认证等功能
+
+#### 使用示例
+用户输入：*"请查询最近一周注册的用户列表"*
+
+技能自动执行：
+1. 分析用户意图（查询用户）
+2. 确定时间范围（最近一周）
+3. 构造 API 请求：`GET /api/uctoo/entity/10/0?filter={"created_at":{"gte":"2024-01-01"}}&sort=-created_at`
+4. 返回格式化结果
+
+> **API 规范说明**：uctoo 遵循 RESTFul 风格 API，查询接口格式为 `/api/{database}/{table}/{limit}/{page}`，支持 Prisma ORM 的 where 条件查询（filter 参数）和 orderBy 排序（sort 参数，负号表示降序）。详见 [uctoo API 设计规范](https://gitee.com/uctoo/uctoo/blob/master/apps/uctoo-backend/docs/uctooAPI%E8%AE%BE%E8%AE%A1%E8%A7%84%E8%8C%83.md)。
+
+#### 技术实现
+- 使用内置的 `http_request` 工具发起 HTTP 请求
+- 自动 Token 管理机制，无需手动处理认证
+- 支持完整的 CRUD 操作
+
+查看完整示例：[src/examples/uctoo_api_skill](src/examples/uctoo_api_skill)
+
+### 🚀 无需仓颉编程语言 - JavaScript SDK 快速集成
+
+如果您不需要对 runtime 进行二次开发，**无需掌握和安装仓颉编程语言**，只需使用多语言 SDK 即可快速集成。
+
+#### 集成步骤
+
+**1. 安装 JavaScript SDK**
+```bash
+npm install @opencangjie/skills
+```
+
+**2. 安装运行时二进制发布版**
+```bash
+# 自动下载并安装 AgentSkills 运行时
+npx skills install-runtime
+
+# 或指定版本
+npx skills install-runtime --runtime-version 0.0.16
+```
+
+**3. 配置 AI 模型**
+编辑运行时目录中的 `.env` 文件：
+- **Windows**: `%USERPROFILE%\.agentskills-runtime\release\.env`
+- **macOS/Linux**: `~/.agentskills-runtime/release/.env`
+
+```ini
+# 配置 AI 模型（以 DeepSeek 为例）
+MODEL_PROVIDER=deepseek
+MODEL_NAME=deepseek-chat
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+```
+
+**4. 启动运行时**
+```bash
+npx skills start
+```
+
+**5. 安装并执行技能**
+```bash
+# 查找技能
+npx skills find database
+
+# 安装技能
+npx skills add ./my-database-skill
+
+# 执行技能
+npx skills run my-database-skill -p '{"query": "查询用户信息"}'
+```
+
+#### 编程 API 使用
+```typescript
+import { createClient } from '@opencangjie/skills';
+
+const client = createClient({
+  baseUrl: 'http://127.0.0.1:8080'
+});
+
+// 列出技能
+const skills = await client.listSkills();
+
+// 执行技能
+const result = await client.executeSkill('database-skill', {
+  query: '查询最近一周注册的用户'
+});
+
+console.log(result.output);
+```
+
+#### 优势
+- **渐进式 AI 能力**：在原有项目中渐进式实现 "+AI" 能力
+- **零学习成本**：无需学习仓颉编程语言
+- **快速集成**：几行代码即可集成 AI 技能
+- **跨平台支持**：支持 Windows、macOS、Linux
+
+查看完整 SDK 文档：[sdk/javascript/README_cn.md](sdk/javascript/README_cn.md)
+
 ### 多语言 SDK 使用示例
 
 #### JavaScript/TypeScript 示例

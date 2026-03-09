@@ -401,6 +401,112 @@ let skillManager = CompositeSkillToolManager()
 let skills = loader.loadSkillsToManager(skillManager)
 ```
 
+## Application Examples
+
+### 🎯 Natural Language Database Query - uctoo-api-skill Example
+
+**uctoo-api-skill** is a complete backend API integration skill example that demonstrates how to query databases using natural language.
+
+#### Features
+- **Natural Language to API Calls**: Users can describe query requirements in natural language, and the skill automatically converts them to API calls
+- **Multi-Database Support**: Works with the uctoo backend project to support multiple database types (MySQL, PostgreSQL, MongoDB, etc.)
+- **Any Database Structure**: No need to pre-define table structures; supports querying any database structure
+- **Universal Query Capability**: Supports user management, product management, order management, authentication, and more
+
+#### Usage Example
+User input: *"Please query the list of users registered in the last week"*
+
+Skill automatically executes:
+1. Analyzes user intent (query users)
+2. Determines time range (last week)
+3. Constructs API request: `GET /api/uctoo/entity/10/0?filter={"created_at":{"gte":"2024-01-01"}}&sort=-created_at`
+4. Returns formatted results
+
+> **API Specification**: uctoo follows RESTFul style API. Query interface format is `/api/{database}/{table}/{limit}/{page}`, supporting Prisma ORM where condition queries (filter parameter) and orderBy sorting (sort parameter, minus sign indicates descending order). See [uctoo API Design Specification](https://gitee.com/uctoo/uctoo/blob/master/apps/uctoo-backend/docs/uctooAPI%E8%AE%BE%E8%AE%A1%E8%A7%84%E8%8C%83.md) for details.
+
+#### Technical Implementation
+- Uses built-in `http_request` tool to make HTTP requests
+- Automatic Token management mechanism, no manual authentication handling required
+- Supports full CRUD operations
+
+View the complete example: [src/examples/uctoo_api_skill](src/examples/uctoo_api_skill)
+
+### 🚀 No Cangjie Programming Language Required - JavaScript SDK Quick Integration
+
+If you don't need to do secondary development on the runtime, **you don't need to master or install the Cangjie programming language**. Just use the multi-language SDK for quick integration.
+
+#### Integration Steps
+
+**1. Install JavaScript SDK**
+```bash
+npm install @opencangjie/skills
+```
+
+**2. Install Runtime Binary Release**
+```bash
+# Automatically download and install AgentSkills runtime
+npx skills install-runtime
+
+# Or specify version
+npx skills install-runtime --runtime-version 0.0.16
+```
+
+**3. Configure AI Model**
+Edit the `.env` file in the runtime directory:
+- **Windows**: `%USERPROFILE%\.agentskills-runtime\release\.env`
+- **macOS/Linux**: `~/.agentskills-runtime/release/.env`
+
+```ini
+# Configure AI model (DeepSeek example)
+MODEL_PROVIDER=deepseek
+MODEL_NAME=deepseek-chat
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+```
+
+**4. Start Runtime**
+```bash
+npx skills start
+```
+
+**5. Install and Execute Skills**
+```bash
+# Find skills
+npx skills find database
+
+# Install skill
+npx skills add ./my-database-skill
+
+# Execute skill
+npx skills run my-database-skill -p '{"query": "Query user information"}'
+```
+
+#### Programming API Usage
+```typescript
+import { createClient } from '@opencangjie/skills';
+
+const client = createClient({
+  baseUrl: 'http://127.0.0.1:8080'
+});
+
+// List skills
+const skills = await client.listSkills();
+
+// Execute skill
+const result = await client.executeSkill('database-skill', {
+  query: 'Query users registered in the last week'
+});
+
+console.log(result.output);
+```
+
+#### Advantages
+- **Progressive AI Capability**: Gradually implement "+AI" capability in existing projects
+- **Zero Learning Cost**: No need to learn Cangjie programming language
+- **Quick Integration**: Integrate AI skills with just a few lines of code
+- **Cross-Platform Support**: Supports Windows, macOS, Linux
+
+View the complete SDK documentation: [sdk/javascript/README.md](sdk/javascript/README.md)
+
 ### Multi-Language SDK Usage Examples
 
 #### JavaScript/TypeScript Example

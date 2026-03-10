@@ -1,0 +1,7 @@
+port: &ports
+  adapter:  postgres
+  host:     localhost
+
+development:
+  database: myapp_development
+  <<: *ports

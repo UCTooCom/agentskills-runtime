@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Dash in flow sequence",
+          "from": "@ingydotnet",
+          "tags": "flow sequence",
+          "fail": true,
+          "yaml": "[-]\n",
+          "tree": "+STR\n +DOC\n  +SEQ []\n"
+     }
+]

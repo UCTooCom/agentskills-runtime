@@ -1,0 +1,36 @@
+---
+- name: Spec Example 8.6. Empty Scalar Chomping
+  from: http:192.168.11.128#id2795596
+  tags: spec folded literal whitespace
+  yaml: |
+    strip: >-
+
+    clip: >
+
+    keep: |+
+    ↵
+  tree: |
+    +STR
+     +DOC
+      +MAP
+       =VAL :strip
+       =VAL >
+       =VAL :clip
+       =VAL >
+       =VAL :keep
+       =VAL |\n
+      -MAP
+     -DOC
+    -STR
+  json: |
+    {
+      "strip": "",
+      "clip": "",
+      "keep": "\n"
+    }
+  dump: |
+    strip: ""
+    clip: ""
+    keep: |2+
+
+    ...

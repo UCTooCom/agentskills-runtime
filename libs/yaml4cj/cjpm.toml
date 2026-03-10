@@ -1,0 +1,32 @@
+[dependencies]
+
+[package]
+  cjc-version = "1.0.0"
+  compile-option = "-O2 -Woff unused"
+  description = "YAML解析工具"
+  link-option = ""
+  name = "yaml4cj"
+  output-type = "dynamic"
+  src-dir = "src"
+  target-dir = ""
+  version = "1.0.4"
+  package-configuration = {}
+  scripts = {}
+
+#----------------------------------------
+#  Setting cangjie-stdx
+#----------------------------------------
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["../cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
+
+[target.x86_64-unknown-windows-gnu.bin-dependencies]
+  path-option = ["../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["../cangjie-stdx-linux-aarch64-1.0.0.1/linux_aarch64_llvm/dynamic/stdx"]
+
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["../cangjie-stdx-mac-aarch64-1.0.0.1/darwin_aarch64_llvm/dynamic/stdx"]

@@ -1,0 +1,11 @@
+%YAML 1.1
+---
+!!map {
+   ? !!str "implicit block key"
+   : !!seq [
+      !!map {
+         ? !!str "implicit flow key"
+         : !!str "value",
+      }
+   ]  
+}

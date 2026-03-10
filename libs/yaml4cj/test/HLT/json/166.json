@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Aliases in Implicit Block Mapping",
+          "from": "NimYAML tests",
+          "tags": "mapping alias",
+          "yaml": "&a a: &b b\n*b : *a\n",
+          "tree": "+STR\n +DOC\n  +MAP\n   =VAL &a :a\n   =VAL &b :b\n   =ALI *b\n   =ALI *a\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"a\": \"b\",\n  \"b\": \"a\"\n}\n",
+          "dump": "&a a: &b b\n*b : *a\n"
+     }
+]

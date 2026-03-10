@@ -1,0 +1,11 @@
+[
+    {
+        "Name": " yaml ",
+        "License": " Apache License 2.0 ",
+        "License File": " LICENSE ", 
+        "Owner": " Kirill Simonov "
+        "Upstream URL": " https://github.com/go-yaml/yaml/blob/v2.0.0 ",
+        "Version Number": " v2.0.0 ",
+        "Description": " Encode and decode YAML values "
+    }
+]

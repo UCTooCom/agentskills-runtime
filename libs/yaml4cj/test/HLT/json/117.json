@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Flow mapping edge cases",
+          "from": "@ingydotnet",
+          "tags": "edge flow mapping",
+          "yaml": "{x: :x}\n",
+          "tree": "+STR\n +DOC\n  +MAP {}\n   =VAL :x\n   =VAL ::x\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"x\": \":x\"\n}\n",
+          "dump": "x: :x\n"
+     }
+]

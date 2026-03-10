@@ -1,0 +1,19 @@
+[
+     {
+          "name": "Syntax character edge cases",
+          "from": "@ingydotnet",
+          "tags": "edge empty-key",
+          "yaml": "- :\n",
+          "tree": "+STR\n +DOC\n  +SEQ\n   +MAP\n    =VAL :\n    =VAL :\n   -MAP\n  -SEQ\n -DOC\n-STR\n"
+     },
+     {
+          "yaml": "::\n",
+          "tree": "+STR\n +DOC\n  +MAP\n   =VAL ::\n   =VAL :\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \":\": null\n}\n"
+     },
+     {
+          "yaml": "!\n",
+          "tree": "+STR\n +DOC\n  =VAL <!> :\n -DOC\n-STR\n",
+          "json": null
+     }
+]

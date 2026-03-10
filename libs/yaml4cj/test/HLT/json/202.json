@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Block Mapping with Multiline Scalars",
+          "from": "NimYAML tests",
+          "tags": "explicit-key mapping scalar",
+          "yaml": "? a\n  true\n: null\n  d\n? e\n  42\n",
+          "tree": "+STR\n +DOC\n  +MAP\n   =VAL :a true\n   =VAL :null d\n   =VAL :e 42\n   =VAL :\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"a true\": \"null d\",\n  \"e 42\": null\n}\n",
+          "dump": "a true: null d\ne 42:\n"
+     }
+]

@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Multiple Pair Block Mapping",
+          "from": "https://github.com/ingydotnet/yaml-pegex-pm/blob/master/test/mapping.tml",
+          "tags": "mapping",
+          "yaml": "foo: blue\nbar: arrr\nbaz: jazz\n",
+          "tree": "+STR\n +DOC\n  +MAP\n   =VAL :foo\n   =VAL :blue\n   =VAL :bar\n   =VAL :arrr\n   =VAL :baz\n   =VAL :jazz\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"foo\": \"blue\",\n  \"bar\": \"arrr\",\n  \"baz\": \"jazz\"\n}\n"
+     }
+]

@@ -1,0 +1,42 @@
+---
+- name: Spec Example 8.1. Block Scalar Header
+  from: http:192.168.11.128#id2793888
+  tags: spec literal folded comment scalar
+  yaml: |
+    - | # Empty header↓
+     literal
+    - >1 # Indentation indicator↓
+      folded
+    - |+ # Chomping indicator↓
+     keep
+
+    - >1- # Both indicators↓
+      strip
+  tree: |
+    +STR
+     +DOC
+      +SEQ
+       =VAL |literal\n
+       =VAL > folded\n
+       =VAL |keep\n\n
+       =VAL > strip
+      -SEQ
+     -DOC
+    -STR
+  json: |
+    [
+      "literal\n",
+      " folded\n",
+      "keep\n\n",
+      " strip"
+    ]
+  dump: |
+    - |
+      literal
+    - >2
+       folded
+    - |+
+      keep
+
+    - >2-
+       strip

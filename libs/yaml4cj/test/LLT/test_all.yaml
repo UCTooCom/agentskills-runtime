@@ -1,0 +1,81 @@
+#注释
+#1-字典  键: 值
+username: xiaoming  #冒号后面是空格
+password: 123456
+info: 配置  #中文---不建议使用，有可能会乱码
+#字典嵌套
+NAME_PSW:
+  name: xiaoming
+  password: 123456
+#2-列表格式
+list:
+  - Ruby
+  - Perl
+  - Python 
+#表嵌套
+lists:
+- 10
+- 20
+-
+ - 100
+ - 200
+#3-列表中套字典
+- 10
+- 20
+-
+ name: tom
+ password: 123456
+
+#4-字典套列表
+name: TOM
+info1:
+   - 10
+   - 20
+   - 30
+
+#5-引号,果是有英文字母或者中文的，不加引号也是字符串
+info2: "HELLO word"  #引号可以不加 
+
+#什么加引号:如果有特俗字符\n 不加引号就原字符样式输出    如果显示特殊字符效果:就加双引号
+info3: "HELLO\nwoord"
+
+#6-引用 一个数据可以使用很多地方，使用变量
+#& 变量名   定义变量
+#*变量名   引用变量
+name1: &a tom
+name2: *a
+
+#8-yamL文件可以有YAML
+DATA: conf.yaml
+
+# YAML格式
+key: |+
+  a
+  b
+  c
+# 实际效果
+"key": "a\nb\nc\n"
+
+# YAML格式
+key: |-
+  a
+  b
+  c
+# 实际效果
+"key": "a\nb\nc"
+
+# YAML格式
+key: >+
+  a
+  b
+  c
+# 实际效果
+"key": "a b c\n"
+
+# YAML格式
+key: >-
+  a
+  b
+  c
+# 实际效果
+"key": "a b c"

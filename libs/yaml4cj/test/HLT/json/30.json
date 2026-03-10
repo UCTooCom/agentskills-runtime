@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Comment and document-end marker",
+          "from": "@perlpunk",
+          "tags": "comment footer",
+          "yaml": "# comment\n...\n",
+          "tree": "+STR\n-STR\n",
+          "json": "",
+          "dump": ""
+     }
+]

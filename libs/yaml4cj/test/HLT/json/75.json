@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Aliases in Flow Objects",
+          "from": "NimYAML tests",
+          "tags": "alias complex-key flow",
+          "yaml": "{ &a [a, &b b]: *b, *a : [c, *b, d]}\n",
+          "tree": "+STR\n +DOC\n  +MAP {}\n   +SEQ [] &a\n    =VAL :a\n    =VAL &b :b\n   -SEQ\n   =ALI *b\n   =ALI *a\n   +SEQ []\n    =VAL :c\n    =ALI *b\n    =VAL :d\n   -SEQ\n  -MAP\n -DOC\n-STR\n",
+          "dump": "? &a\n- a\n- &b b\n: *b\n*a :\n- c\n- *b\n- d\n"
+     }
+]

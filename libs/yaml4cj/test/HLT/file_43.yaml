@@ -1,0 +1,10 @@
+---
+- name: Empty Stream
+  from: http:192.168.11.128
+  tags: edge
+  yaml: |
+    ∎
+  tree: |
+    +STR
+    -STR
+  json: ''

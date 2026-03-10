@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Comment without whitespace after block scalar indicator",
+          "from": "@perlpunk",
+          "tags": "folded comment error whitespace",
+          "fail": true,
+          "yaml": "block: ># comment\n  scalar\n",
+          "tree": "+STR\n +DOC\n  +MAP\n   =VAL :block\n"
+     }
+]

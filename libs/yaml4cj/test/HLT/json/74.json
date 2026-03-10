@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Explicit key and value seperated by comment",
+          "from": "@perlpunk",
+          "tags": "comment explicit-key mapping",
+          "yaml": "---\n? key\n# comment\n: value\n",
+          "tree": "+STR\n +DOC ---\n  +MAP\n   =VAL :key\n   =VAL :value\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"key\": \"value\"\n}\n",
+          "dump": "---\nkey: value\n"
+     }
+]

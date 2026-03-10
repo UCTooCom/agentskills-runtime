@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Allowed characters in plain scalars",
+          "from": "@perlpunk",
+          "tags": "scalar",
+          "yaml": "safe: a!\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~\n     !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~\nsafe question mark: ?foo\nsafe colon: :foo\nsafe dash: -foo\n",
+          "tree": "+STR\n +DOC\n  +MAP\n   =VAL :safe\n   =VAL :a!\"#$%&'()*+,-./09:;<=>?@AZ[\\\\]^_`az{|}~ !\"#$%&'()*+,-./09:;<=>?@AZ[\\\\]^_`az{|}~\n   =VAL :safe question mark\n   =VAL :?foo\n   =VAL :safe colon\n   =VAL ::foo\n   =VAL :safe dash\n   =VAL :-foo\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"safe\": \"a!\\\"#$%&'()*+,-./09:;<=>?@AZ[\\\\]^_`az{|}~ !\\\"#$%&'()*+,-./09:;<=>?@AZ[\\\\]^_`az{|}~\",\n  \"safe question mark\": \"?foo\",\n  \"safe colon\": \":foo\",\n  \"safe dash\": \"-foo\"\n}\n",
+          "dump": "safe: a!\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~ !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~\nsafe question mark: ?foo\nsafe colon: :foo\nsafe dash: -foo\n"
+     }
+]

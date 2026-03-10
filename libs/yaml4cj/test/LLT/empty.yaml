@@ -1,0 +1,46 @@
+defaults: &defaults
+  adapter:  postgres
+  host:     localhost
+  <<: *defaults
+
+development:
+  database: myapp_development
+  adapter:  postgres
+  host:     localhost
+  <<: *defaults
+
+test:
+  database: myapp_test
+  <<: *defaults
+
+int:
+  - 
+  - 0b1010_0111_0100_1010_1110    #二进制表示
+
+key: 
+    child-key
+
+key2: 
+    child-key: 
+        key3: child-key
+
+%YAML 1.2
+---
+!!seq [
+   !!str "literal\n",
+   !!str "·folded\n",
+   !!str "keep\n\n",
+   !!str "·strip",
+]
+
+%YAML 1.2
+---
+!!map {
+   ? !!str "strip"
+   : !!str "# text",
+   ? !!str "clip"
+   : !!str "# text\n",
+   ? !!str "keep"
+   : !!str "# text\n",
+}
+

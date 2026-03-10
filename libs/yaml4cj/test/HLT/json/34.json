@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Mixed Block Mapping (implicit to explicit)",
+          "from": "NimYAML tests",
+          "tags": "explicit-key mapping",
+          "yaml": "a: 4.2\n? d\n: 23\n",
+          "tree": "+STR\n +DOC\n  +MAP\n   =VAL :a\n   =VAL :4.2\n   =VAL :d\n   =VAL :23\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"d\": 23,\n  \"a\": 4.2\n}\n",
+          "dump": "a: 4.2\nd: 23\n"
+     }
+]

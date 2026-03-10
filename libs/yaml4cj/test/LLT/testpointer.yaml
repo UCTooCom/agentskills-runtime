@@ -1,0 +1,6 @@
+hr:                hr1
+  - Mark McGwire          - Mark McGwire
+  - &SS Sammy Sosa          - Sammy Sosa        &ss指向内容Sammy Sosa
+rbi:                rbi1
+  - *SS                  - Sammy Sosa        *SS 取出内容
+  - Ken Griffey              - Ken Griffey

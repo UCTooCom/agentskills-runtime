@@ -1,0 +1,20 @@
+{
+  "resolves": [
+    {
+      "name": "yaml4cj",
+      "packagePath": "D:\\Changeden\\cangjie\\cangjie-lib\\yaml4cj\\src\\yaml",
+      "packageName": "yaml4cj/yaml",
+      "build_dir": "build",
+      "isMacroPackage": false,
+      "output_type": "dynamic",
+      "command_option": "-O2",
+      "condition_option": {},
+      "link_option": "",
+      "requires": [],
+      "package_requires": {},
+      "foreign_requires": {},
+      "cross_compile_configuration": {},
+      "isTestPkg": false
+    }
+  ]
+}

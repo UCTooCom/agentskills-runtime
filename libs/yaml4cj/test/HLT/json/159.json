@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Flow sequence with invalid comma at the beginning",
+          "from": "@perlpunk",
+          "tags": "error flow sequence",
+          "fail": true,
+          "yaml": "---\n[ , a, b, c ]\n",
+          "tree": "+STR\n +DOC ---\n  +SEQ []\n"
+     }
+]

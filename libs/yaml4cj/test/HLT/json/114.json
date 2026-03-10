@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Flow Mapping",
+          "from": "https://github.com/ingydotnet/yaml-pegex-pm/blob/master/test/mapping.tml",
+          "tags": "flow mapping",
+          "yaml": "{foo: you, bar: far}\n",
+          "tree": "+STR\n +DOC\n  +MAP {}\n   =VAL :foo\n   =VAL :you\n   =VAL :bar\n   =VAL :far\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"foo\": \"you\",\n  \"bar\": \"far\"\n}\n",
+          "dump": "foo: you\nbar: far\n"
+     }
+]

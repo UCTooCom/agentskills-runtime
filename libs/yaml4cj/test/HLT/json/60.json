@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Invalid comma in tag",
+          "from": "@perlpunk",
+          "tags": "error tag",
+          "fail": true,
+          "yaml": "- !!str, xxx\n",
+          "tree": "+STR\n +DOC\n  +SEQ\n"
+     }
+]

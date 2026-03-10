@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Wrong indented sequence item",
+          "from": "@perlpunk",
+          "tags": "error sequence indent",
+          "fail": true,
+          "yaml": "- key: value\n - item1\n",
+          "tree": "+STR\n +DOC\n  +SEQ\n   +MAP\n    =VAL :key\n    =VAL :value\n   -MAP\n"
+     }
+]

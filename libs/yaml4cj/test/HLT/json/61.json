@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Plain URL in flow mapping",
+          "from": "https://github.com/yaml/libyaml/pull/28",
+          "tags": "flow scalar",
+          "yaml": "- { url: http://example.org }\n",
+          "tree": "+STR\n +DOC\n  +SEQ\n   +MAP {}\n    =VAL :url\n    =VAL :http://example.org\n   -MAP\n  -SEQ\n -DOC\n-STR\n",
+          "json": "[\n  {\n    \"url\": \"http://example.org\"\n  }\n]\n",
+          "dump": "- url: http://example.org\n"
+     }
+]

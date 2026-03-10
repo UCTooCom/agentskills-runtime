@@ -1,0 +1,11 @@
+[
+     {
+          "name": "Tags for Flow Objects",
+          "from": "NimYAML tests",
+          "tags": "tag flow mapping sequence",
+          "yaml": "!!map {\n  k: !!seq\n  [ a, !!str b]\n}\n",
+          "tree": "+STR\n +DOC\n  +MAP {} <tag:yaml.org,2002:map>\n   =VAL :k\n   +SEQ [] <tag:yaml.org,2002:seq>\n    =VAL :a\n    =VAL <tag:yaml.org,2002:str> :b\n   -SEQ\n  -MAP\n -DOC\n-STR\n",
+          "json": "{\n  \"k\": [\n    \"a\",\n    \"b\"\n  ]\n}\n",
+          "dump": "!!map\nk: !!seq\n- a\n- !!str b\n"
+     }
+]

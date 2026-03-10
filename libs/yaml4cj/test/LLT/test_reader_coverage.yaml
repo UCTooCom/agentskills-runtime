@@ -1,0 +1,129 @@
+z:
+  men: [John Smith, Bill Jones]
+  women:
+    - Mary Smith
+    - Susan Williams
+a:
+  - {name: John Smith, age: 33}
+  - name: Mary Smith
+    age: 27
+b:
+  invoice: 34843
+  date   : 2001-01-23
+  bill-to: &id001
+    given  : Chris
+    family : Dumars
+    address:
+        lines: |
+              458 Walkman Dr.
+              Suite #292
+        city    : Royal Oak
+        state   : MI
+        postal  : 48046
+  ship-to: *id001
+  product:
+      - sku         : BL394D
+        quantity    : 4
+        description : Basketball
+        price       : 450.00
+      - sku         : BL4438H
+        quantity    : 1
+        description : Super Hoop
+        price       : 2392.00
+  tax  : 251.42
+  total: 4443.52
+  comments: >
+      Late afternoon is best.
+      Backup contact is Nancy
+      Billsmer @ 338-4338.
+
+c: 
+  - 2001-07-23  ? [ New York Yankees,Atlanta Braves ]  : [ 2001-07-02, 2001-08-12, 2001-08-14]
+d:
+  canonical: 12345
+  decimal: +12,345
+  sexagecimal: 3:25:45
+  octal: 014
+  hexadecimal: 0xC
+e:
+  canonical: 1.23015e+3
+  exponential: 12.3015e+02
+  sexagecimal: 20:30.15
+  fixed: 1,230.15
+  negative infinity: -.inf
+  not a number: .NaN
+f:
+  null: ~
+  true: y
+  false: n
+  string: '12345'
+g:
+  !!map {
+    ? !!str "sequence"
+    : !!seq [
+        !!str "one", !!str "two"
+    ],
+    ? !!str "mapping"
+    : !!map {
+        ? !!str "sky" : !!str "blue",
+        ? !!str "sea" : !!str "green",
+    }
+  }
+# h:
+  # !!map1 {
+  #   ? !!str "anchored"    : !local &A1 "value",
+  #   ? !!str "alias"    : *A1,
+  # }
+i:
+  !!str "text"
+j: { · first: · Sammy, · last: · Sosa · }
+k: !!map {
+   ? !!str "plain"   : !!str "text lines",
+   ? !!str "quoted"   : !!str "text lines",
+   ? !!str "block"   : !!str "text·®lines\n"
+}
+# l: !!map {
+#    ? &A1 !!str "foo"   : !!str "bar",
+#    ? !!str &A2 "baz"   : *a1
+# }
+m: !!map {
+   ? !!str "First occurence"   : &A !!str "Value",
+   ? !!str "Second occurence"   : *A
+}
+n: !!map {
+   ? !<tag:yaml.org,2002:str> "foo"   : !<!bar> "baz"
+}
+o: !!seq [
+   !!str "literal\n",
+   !!str "·folded\n",
+   !!str "keep\n\n",
+   !!str "·strip",
+]
+p: 
+  paper:
+    uuid: 8a8cbf60-e067-11e3-8b68-0800200c9a66
+    name: On formally undecidable propositions of  Principia Mathematica and related systems I.
+    author: Kurt Gödel.
+  tags:
+    - tag:
+        uuid: 98fb0d90-e067-11e3-8b68-0800200c9a66
+        name: Mathematics
+    - tag:
+        uuid: 3f25f680-e068-11e3-8b68-0800200c9a66
+        name: Logic
+q: 
+  Clark : Evans
+  Ingy : döt Net
+  Oren : Ben-Kiki
+  Flow style: !!map { Clark: Evans, Ingy: döt Net, Oren: Ben-Kiki }
+r:
+  !!map {
+    ? !!str "plain"
+    : !!str "text lines",
+    ? !!str "quoted"
+    : !!str "text lines",
+    ? !!str "block"
+    : !!str "text·®lines\n"
+  }
+ðñòó: ðñòó
+s: !!binary "SGVsbG8sIFdvcmxkIQ=="

@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Wrong indented multiline quoted scalar",
+          "from": "@perlpunk",
+          "tags": "double error indent",
+          "fail": true,
+          "yaml": "---\nquoted: \"a\nb\nc\"\n",
+          "tree": "+STR\n +DOC ---\n  +MAP\n   =VAL :quoted\n"
+     }
+]

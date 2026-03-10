@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Invalid nested mapping",
+          "from": "@perlpunk",
+          "tags": "error mapping",
+          "fail": true,
+          "yaml": "---\na: 'b': c\n",
+          "tree": "+STR\n +DOC ---\n  +MAP\n   =VAL :a\n   =VAL 'b\n"
+     }
+]

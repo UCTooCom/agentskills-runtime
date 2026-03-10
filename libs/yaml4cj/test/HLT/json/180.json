@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Plain dashes in flow sequence",
+          "from": "@ingydotnet",
+          "tags": "flow sequence",
+          "fail": true,
+          "yaml": "---\n- [-, -]\n",
+          "tree": "+STR\n +DOC ---\n  +SEQ\n   +SEQ []\n"
+     }
+]

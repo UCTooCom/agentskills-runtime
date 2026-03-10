@@ -1,0 +1,10 @@
+[
+     {
+          "name": "Flow mapping missing a separating comma",
+          "from": "@perlpunk",
+          "tags": "error flow mapping",
+          "fail": true,
+          "yaml": "---\n{\n foo: 1\n bar: 2 }\n",
+          "tree": "+STR\n +DOC ---\n  +MAP\n   =VAL :foo\n"
+     }
+]

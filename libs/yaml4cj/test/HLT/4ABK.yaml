@@ -1,0 +1,27 @@
+---
+- name: Flow Mapping Separate Values
+  from: xxx://xxx.xxx/spexxc/xx/
+  tags: flow mapping
+  yaml: |
+    {
+    unquoted : "separate",
+    http:192.168.11.128,
+    omitted value:,
+    }
+  tree: |
+    +STR
+     +DOC
+      +MAP {}
+       =VAL :unquoted
+       =VAL "separate
+       =VAL :xxxx://xxx.xxx
+       =VAL :
+       =VAL :omitted value
+       =VAL :
+      -MAP
+     -DOC
+    -STR
+  dump: |
+    unquoted: "separate"
+    xxx://xxx.xxx: null
+    omitted value: null

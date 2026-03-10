@@ -1,7 +1,7 @@
 {
     "name": "opencangjie/skills",
     "description": "PHP SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "type": "library",
     "keywords": [
         "agent-skills",
@@ -87,7 +87,7 @@
     },
     "extra": {
         "runtime": {
-            "version": "0.0.16",
+            "version": "0.0.17",
             "downloadUrl": "https://atomgit.com/uctoo/agentskills-runtime/releases",
             "platforms": {
                 "win32-x64": "agentskills-runtime-win-x64.tar.gz",

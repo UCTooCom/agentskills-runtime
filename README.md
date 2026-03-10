@@ -139,11 +139,52 @@ The API layer now provides real functionality using underlying services:
 
 ## Quick Start
 
-### Environment Requirements
+### Simplest Demo Solution (Recommended)
+
+If you want to quickly experience AgentSkills Runtime's capabilities, **you don't need to download the source code of this project**. Simply deploy the [UCToo project](https://gitee.com/uctoo/uctoo):
+
+#### Deployment Steps
+
+1. **Deploy UCToo Project**
+   - Follow the [UCToo deployment documentation](https://gitee.com/uctoo/uctoo) to deploy the backend and web frontend
+   - UCToo already includes the AgentSkills Runtime JavaScript SDK
+
+2. **Configure LLM API Key**
+   - Find the `.env` file in the agentskills-runtime JavaScript SDK directory within the backend project
+   - Configure the LLM API Key (supports DeepSeek, OpenAI, Huawei Cloud MaaS, etc.)
+   ```ini
+   MODEL_PROVIDER=deepseek
+   MODEL_NAME=deepseek-chat
+   DEEPSEEK_API_KEY=your_api_key_here
+   ```
+
+3. **Experience Natural Language Database Queries**
+   - Open the UCToo Web frontend's **AI Module -> Chat Page**
+   - Use natural language to chat with AI and perform CRUD operations on the UCToo database
+   - Example conversations:
+     - *"Query the list of users registered in the past week"*
+     - *"Create a new user named 'John Doe'"*
+     - *"Calculate the total order amount for this month"*
+
+#### Solution Advantages
+- **Zero Configuration**: No need to install the Cangjie programming language environment
+- **Ready to Use**: UCToo already integrates the complete runtime environment
+- **Full Functionality**: Supports the built-in uctoo-api-skill for natural language database operations
+- **Easy to Extend**: Can continue developing custom skills based on the UCToo framework
+
+### Starting from Source (For Developers)
+
+If you need to perform secondary development on the runtime or contribute code, please refer to the following steps:
+
+#### Environment Requirements
 - Cangjie programming language environment (https://cangjie-lang.cn/)
 - Supported operating systems: Windows/Linux/macOS
+- **Windows System Specific Requirement**: OpenSSL library is required for WebSocket communication
+  - Download URL: https://slproweb.com/products/Win32OpenSSL.html
+  - During installation, select "Copy OpenSSL DLLs to: The OpenSSL binaries (/bin) directory"
+  - Ensure the OpenSSL bin directory is added to the system PATH environment variable
 
-### Installation
+#### Installation
 
 ```bash
 # Ensure Cangjie programming language environment is installed
@@ -245,7 +286,8 @@ cp .env.example bin/.env
 2. Update `CHANGELOG.md` with changes
 3. Run `cjpm build` to build the project
 4. Run `cjpm run --name magic.scripts.package_release` to package
-5. Upload release packages to GitHub Releases or AtomGit Releases
+5. Create release notes in `release/release-notes-<version>.md`
+6. Upload release packages to GitHub Releases or AtomGit Releases
 
 ### API Endpoints
 After starting the API service, the following endpoints will be available:

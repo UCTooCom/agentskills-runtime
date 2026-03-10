@@ -81,7 +81,7 @@ def get_platform_info() -> Dict[str, str]:
 
 def get_runtime_dir() -> Path:
     """Get the runtime directory path."""
-    return Path(__file__).parent.parent.parent / "runtime"
+    return Path.home() / ".agentskills-runtime"
 
 
 def get_runtime_path() -> Path:

@@ -1,4 +1,4 @@
-﻿# AgentSkills PHP SDK
+# AgentSkills PHP SDK
 
 [![Latest Stable Version](https://poser.pugx.org/opencangjie/skills/v/stable)](https://packagist.org/packages/opencangjie/skills)
 [![Total Downloads](https://poser.pugx.org/opencangjie/skills/downloads)](https://packagist.org/packages/opencangjie/skills)
@@ -57,8 +57,8 @@ skills install-runtime
 ### 2. Configure AI Model
 
 Edit the `.env` file in the runtime directory:
-- **Windows**: `%USERPROFILE%\.agentskills\runtime\win-x64\release\.env`
-- **macOS/Linux**: `~/.agentskills/runtime/<platform>-<arch>/release/.env`
+- **Windows**: `%USERPROFILE%\.agentskills-runtime\win-x64\release\.env`
+- **macOS/Linux**: `~/.agentskills-runtime/<platform>-<arch>/release/.env`
 
 Add your AI model API key:
 
@@ -355,8 +355,8 @@ try {
 Before starting the runtime, you need to configure the AI model API key. The runtime requires an AI model to process skill execution and natural language understanding.
 
 Edit the `.env` file in the runtime directory:
-- **Windows**: `%USERPROFILE%\.agentskills\runtime\win-x64\release\.env`
-- **macOS/Linux**: `~/.agentskills/runtime/<platform>-<arch>/release/.env`
+- **Windows**: `%USERPROFILE%\.agentskills-runtime\win-x64\release\.env`
+- **macOS/Linux**: `~/.agentskills-runtime/<platform>-<arch>/release/.env`
 
 Add your AI model configuration (choose one provider):
 

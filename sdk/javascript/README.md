@@ -1,4 +1,4 @@
-﻿# @opencangjie/skills
+# @opencangjie/skills
 
 JavaScript/TypeScript SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support.
 
@@ -40,8 +40,10 @@ npx skills install-runtime --runtime-version 0.0.16
 Before starting the runtime, you need to configure the AI model API key. The runtime requires an AI model to process skill execution and natural language understanding.
 
 Edit the `.env` file in the runtime directory:
-- **Windows**: `%USERPROFILE%\.agentskills-runtime\release\.env`
-- **macOS/Linux**: `~/.agentskills-runtime/release/.env`
+- **Windows**: `%USERPROFILE%\.agentskills-runtime\<platform>-<arch>\release\.env`
+- **macOS/Linux**: `~/.agentskills-runtime/<platform>-<arch>/release/.env`
+
+Where `<platform>-<arch>` is your system architecture, e.g., `win-x64`, `darwin-x64`, or `linux-x64`
 
 Add your AI model configuration (choose one provider):
 

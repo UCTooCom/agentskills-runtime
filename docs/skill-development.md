@@ -41,6 +41,10 @@ skill run my-awesome-skill:perform-task input="Hello, world!" options="--verbose
 - The input parameter is required
 - Options are optional and default to standard processing
 
+## Using Built-in Tools
+
+For a complete list of built-in tools available in the runtime, please refer to the [Built-in Tools](builtin-tools.md) documentation.
+
 ## Security Considerations
 
 - This skill only accesses local resources

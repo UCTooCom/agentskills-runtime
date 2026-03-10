@@ -60,7 +60,7 @@ public class RuntimeManager {
 
     public Path getRuntimeDir() {
         String userHome = System.getProperty("user.home");
-        return Paths.get(userHome, ".agentskills", "runtime");
+        return Paths.get(userHome, ".agentskills-runtime");
     }
 
     public Path getReleaseDir() {

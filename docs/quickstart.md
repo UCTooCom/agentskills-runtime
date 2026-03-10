@@ -12,6 +12,10 @@ The CangjieMagic framework is typically included as part of the larger applicati
 
 ## Basic Usage
 
+### Built-in Tools
+
+The runtime includes a variety of built-in tools for common tasks. For detailed information, see [Built-in Tools](builtin-tools.md).
+
 ### Loading Skills
 
 #### From SKILL.md Files

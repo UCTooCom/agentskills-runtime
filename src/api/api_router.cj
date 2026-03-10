@@ -7,10 +7,12 @@ import std.collection.{HashMap, ArrayList}
 import std.convert.*
 import std.time.DateTime
 import std.env.{getWorkingDirectory, getVariable}
+import std.fs.{exists, Directory, FileInfo}
 import stdx.net.http.{Server, ServerBuilder, HttpContext, HttpRequest, HttpResponse, HttpResponseBuilder, FuncHandler, HttpRequestDistributor, HttpRequestHandler}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonArray, JsonFloat}
 import magic.skill.application.SkillManagementService
 import magic.skill.application.ProgressiveSkillLoader
+import magic.utils.sleep2
 import magic.skill.application.{DependencyResolver, GitManager, SkillPackageManager, GitException, AvailableSkillInfo}
 import magic.core.skill.{Skill, SkillManager}
 import magic.skill.CompositeSkillToolManager
@@ -39,6 +41,8 @@ public class APIRouter {
     private let _skillInstallPath: String
     private let _wsHandler: WebSocketChatHandler
     private let _chatModel: ChatModel
+    private var _hotReloadEnabled: Bool = true
+    private var _hotReloadInterval: Int32 = 30 // 30 seconds
 
     public init(port: Int32, skillPath!: String = "") {
         _port = port
@@ -180,10 +184,38 @@ public class APIRouter {
         LogUtils.info("🚀 Starting Agent Skills Runtime API server on port ${_port}...")
         LogUtils.info("📁 Loading skills from directory: ./skills and ./src/examples")
         LogUtils.info("⚡ Loaded ${_skillManager.availableSkills.values().toArray().size} skills")
+        
+        // Start hot reload task if enabled
+        if (_hotReloadEnabled) {
+            LogUtils.info("🔥 Starting skill hot reload task (interval: ${_hotReloadInterval}s)")
+            _startHotReloadTask()
+        }
 
         match (_server as Server) {
             case Some(server) => this.startWithServer(server)
             case None => this.handleErrorInStart()
+        }
+    }
+    
+    /**
+     * Start hot reload background task
+     */
+    private func _startHotReloadTask(): Unit {
+        spawn {
+            while (true) {
+                try {
+                    // Sleep for the configured interval
+                    sleep2(Int64(_hotReloadInterval) * 1000) // Convert seconds to milliseconds
+                    
+                    // For simplicity, just reload skills periodically
+                    // In a real project, you would implement more sophisticated change detection
+                    LogUtils.info("Reloading skills periodically...")
+                    _progressiveSkillLoader.reloadSkills(_skillManager)
+                    LogUtils.info("✅ Skills reloaded successfully")
+                } catch (ex: Exception) {
+                    LogUtils.error("Error in hot reload task: ${ex.message}")
+                }
+            }
         }
     }
 
@@ -873,8 +905,8 @@ public class APIRouter {
             let skill = skillOpt.getOrThrow()
             
             let args = HashMap<String, JsonValue>()
-            if (jsonObj.containsKey("parameters")) {
-                let paramsObj = jsonObj["parameters"].asObject()
+            if (jsonObj.containsKey("params")) {
+                let paramsObj = jsonObj["params"].asObject()
                 for ((key, value) in paramsObj.getFields()) {
                     args.add(key, value)
                 }

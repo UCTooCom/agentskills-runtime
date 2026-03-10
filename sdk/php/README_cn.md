@@ -34,8 +34,10 @@ php bin/skills install-runtime
 在启动运行时之前，您需要配置 AI 模型 API 密钥。运行时需要 AI 模型来处理技能执行和自然语言理解。
 
 编辑运行时目录中的 `.env` 文件：
-- **Windows**: `%USERPROFILE%\.agentskills-runtime\release\.env`
-- **macOS/Linux**: `~/.agentskills-runtime/release/.env`
+- **Windows**: `%USERPROFILE%\.agentskills-runtime\win-x64\release\.env`
+- **macOS/Linux**: `~/.agentskills-runtime/<platform>-<arch>/release/.env`
+
+其中 `<platform>-<arch>` 是您的系统架构，例如 `darwin-x64` 或 `linux-x64`
 
 添加您的 AI 模型配置（选择一个提供商）：
 

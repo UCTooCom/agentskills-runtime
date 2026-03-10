@@ -13,7 +13,7 @@ import magic.config.Config
 import std.fs.Path
 
 @agent[
-    model: "stepfun:step-3",
+    model: "maas:qwen3-coder-480b-a35b-instruct",
     tools: [
         // Use stdioMCP to connect to the uctoo_api_mcp_server
         stdioMCP("cjpm run --skip-build --name magic.examples.uctoo_api_mcp_server")

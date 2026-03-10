@@ -55,7 +55,8 @@ class RuntimeManager
 
     private function getRuntimeDir(): string
     {
-        return $this->sdkDir . '/runtime';
+        $userHome = getenv('HOME') ?: getenv('USERPROFILE');
+        return $userHome . '/.agentskills-runtime';
     }
 
     private function getRuntimePath(): string

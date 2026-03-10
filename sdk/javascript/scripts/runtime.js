@@ -53,7 +53,8 @@ function getPlatform() {
 }
 
 function getRuntimeDir() {
-  return path.join(__dirname, '..', 'runtime');
+  const homeDir = os.homedir();
+  return path.join(homeDir, '.agentskills-runtime');
 }
 
 function getRuntimePath() {
@@ -140,6 +141,27 @@ async function downloadRuntime(version = RUNTIME_VERSION) {
       const runtimePath = getRuntimePath();
       if (fs.existsSync(runtimePath) && os.platform() !== 'win32') {
         fs.chmodSync(runtimePath, '755');
+      }
+      
+      // Handle .env file - preserve existing configuration
+      const releaseDir = getRuntimeWorkingDir();
+      const envFile = path.join(releaseDir, '.env');
+      const envExampleFile = path.join(releaseDir, '.env.example');
+      
+      if (!fs.existsSync(envFile) && fs.existsSync(envExampleFile)) {
+        fs.copyFileSync(envExampleFile, envFile);
+        console.log('Created .env file from .env.example');
+      } else if (!fs.existsSync(envFile)) {
+        const defaultEnvContent = `# AgentSkills Runtime Configuration
+# This file was auto-generated. Edit as needed.
+
+# Skill Installation Path
+SKILL_INSTALL_PATH=./skills
+`;
+        fs.writeFileSync(envFile, defaultEnvContent);
+        console.log('Created default .env file');
+      } else {
+        console.log('Preserved existing .env file');
       }
       
       console.log(`AgentSkills Runtime v${version} downloaded successfully from ${mirror.name}!`);

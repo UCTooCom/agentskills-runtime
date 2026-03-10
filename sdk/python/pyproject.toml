@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentskills-runtime"
-version = "0.0.5"
+version = "0.0.6"
 description = "Python SDK for AgentSkills Runtime - Install, manage, and execute AI agent skills with built-in runtime support"
 readme = "README.md"
 license = {text = "MIT"}

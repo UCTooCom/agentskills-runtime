@@ -7,10 +7,9 @@ import magic.agent.base.BaseAgent
 import magic.core.model.ChatModel
 import magic.core.agent.{AgentExecutor, AgentRequest, AgentResponse}
 import magic.core.tool.ToolManager
-import magic.tool.SimpleToolManager
+import magic.tool.{SimpleToolManager, BuiltinToolsRegistry}
 import magic.core.skill.SkillManager
 import magic.log.LogUtils
-import magic.tool.HttpTool
 
 import std.collection.{ArrayList, HashMap}
 
@@ -42,11 +41,10 @@ public class SkillAwareAgent <: BaseAgent {
     private func _registerSkillsAsTools(): Unit {
         LogUtils.info("Registering built-in tools")
         try {
-            let httpTool = HttpTool()
-            _toolManager.addTool(httpTool)
-            LogUtils.info("Registered built-in tool '${httpTool.name}'")
+            BuiltinToolsRegistry.registerAll(_toolManager)
+            LogUtils.info("All builtin tools registered via BuiltinToolsRegistry")
         } catch (ex: Exception) {
-            LogUtils.error("Failed to register built-in HTTP tool: ${ex.message}")
+            LogUtils.error("Failed to register builtin tools: ${ex.message}")
         }
         
         let skills = _skillManagerVar.availableSkills.values().toArray()

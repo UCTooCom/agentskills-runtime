@@ -1,4 +1,4 @@
-package com.opencangjie.skills;
+﻿package com.opencangjie.skills;
 
 import com.opencangjie.skills.model.*;
 import org.junit.Before;
@@ -16,7 +16,7 @@ public class SkillsClientTest {
     @Before
     public void setUp() {
         ClientConfig config = new ClientConfig();
-        config.setBaseUrl("http://127.0.0.1:8080");
+        config.setBaseUrl("http://127.0.0.1:8080/api/v1/uctoo");
         client = new SkillsClient(config);
     }
 

@@ -32,7 +32,7 @@ npx @opencangjie/skills add ./my-skill
 npx skills install-runtime
 
 # 或指定版本
-npx skills install-runtime --runtime-version 0.0.16
+npx skills install-runtime --runtime-version 0.0.19
 ```
 
 ### 2. 配置运行时
@@ -110,7 +110,7 @@ npx skills run my-skill -p '{"input": "data"}'
 
 ```bash
 npx skills install-runtime
-npx skills install-runtime --runtime-version 0.0.16
+npx skills install-runtime --runtime-version 0.0.19
 ```
 
 #### `npx skills start`

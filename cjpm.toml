@@ -1,3 +1,36 @@
+[package]
+  cjc-version = "1.0.0"
+  compile-option = "-Woff all --dy-std --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=cj\""
+  description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
+  link-option = ""
+  name = "magic"
+  output-type = "dynamic"
+  src-dir = ""
+  target-dir = ""
+  version = "0.0.19"
+
+[dependencies]
+  yaml4cj = { path = "./libs/yaml4cj" }
+  commonmark4cj = { path = "./libs/commonmark4cj" }
+  f_orm = { path = "../fountain/f_orm" }
+  f_data = { path = "../fountain/f_data" }
+  f_config = { path = "../fountain/f_config" }
+  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", compile-option = "-Woff unused" }
+  jwt4cj = { path = "../CangjieMagic/resource/TPC/jwt4cj" }
+  logcj = { path = "../CangjieMagic/resource/TPC/log-cj" }
+  opengauss = { path = "../CangjieMagic/resource/TPC/opengauss-driver" }
+#  redis_sdk = { path = "../CangjieMagic/resource/TPC/redis-sdk"}
+#  pbkdf2 = { path = "../CangjieMagic/resource/TPC/pbkdf2" }
+#  hicrypto = { path = "../CangjieMagic/resource/TPC/hicrypto" }
+  blowfish = { path = "../blowfish-cj" }
+
+#----------------------------------------
+#  Build Profile Configuration
+#----------------------------------------
+[profile.build]
+  incremental = true    # 启用增量编译,只编译改动的模块
+  lto = "thin"          # 链接时优化: full|thin (thin编译更快,full优化更好)
+
 [target.aarch64-linux-ohos]
   compile-option = "-B \"${DEVECO_CANGJIE_HOME}/compiler/third_party/llvm/bin\" -B \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/build/linux_ohos_aarch64_llvm/openssl\" --sysroot \"${DEVECO_CANGJIE_HOME}/musl\" --cfg \"ohos=true\""
   [target.aarch64-linux-ohos.bin-dependencies]
@@ -11,35 +44,6 @@
 [target.x86_64-unknown-linux-gnu]
   compile-option = "--cfg \"ohos=false\""
 
-[target.x86_64-unknown-windows-gnu]
-  compile-option = "--cfg \"ohos=false\""
-
-[target.x86_64-w64-mingw32]
-  compile-option = "--cfg \"ohos=false\""
-
-[target.aarch64-unknown-linux-gnu]
-  compile-option = "--cfg \"ohos=false\""
-
-[target.x86_64-apple-darwin]
-  compile-option = "--cfg \"ohos=false\""
-
-[target.aarch64-apple-darwin]
-  compile-option = "--cfg \"ohos=false\""
-
-[dependencies]
-  yaml4cj = { path = "./libs/yaml4cj" }
-  commonmark4cj = { path = "./libs/commonmark4cj" }
-
-[package]
-  cjc-version = "1.0.0"
-  compile-option = "-Woff unused -Woff deprecated --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=cj\" "
-  description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
-  link-option = ""
-  name = "magic"
-  output-type = "dynamic"
-  src-dir = ""
-  target-dir = ""
-  version = "0.0.16"
 
 # [package.package-configuration."magic.examples.doc_translator"]
 #   output-type = "executable"
@@ -63,28 +67,18 @@
 #   output-type = "executable"
 # [package.package-configuration."magic.examples.uctoo_api_mcp_client"]
 #   output-type = "executable"
-# [package.package-configuration."magic.examples.skill_examples"]
-#   output-type = "executable"
 # [package.package-configuration."magic.examples.uctoo_api_skill"]
-#   output-type = "executable"
-# [package.package-configuration."magic.examples.find_skills_skill"]
 #   output-type = "executable"
 # [package.package-configuration."magic.examples.skill_mcp_client"]
 #   output-type = "executable"
-# [package.package-configuration."magic.examples.direct_skill_test"]
-#   output-type = "executable"
-#[package.package-configuration."magic.examples.http_client_test"]
-# output-type = "executable"
-[package.package-configuration."magic.api"]
+[package.package-configuration."magic.app"]
   output-type = "executable"
 [package.package-configuration."magic.scripts.package_release"]
   output-type = "executable"
-# [package.package-configuration."magic.test_curl"]
-#   output-type = "executable"
-# [package.package-configuration."magic.test_search"]
-#   output-type = "executable"
-# [package.package-configuration."magic.test_git"]
-#   output-type = "executable"
+#[package.package-configuration."magic.app.test.integration"]
+#  output-type = "executable"
+#[package.package-configuration."magic.examples.firecrawl_test"]
+#  output-type = "executable"
 
 #----------------------------------------
 #  Setting FFI libs
@@ -96,17 +90,35 @@
 #----------------------------------------
 #  Setting cangjie-stdx
 #----------------------------------------
+
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
 
+[target.x86_64-unknown-windows-gnu]
+  compile-option = "--cfg \"ohos=false\""
 [target.x86_64-unknown-windows-gnu.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+
+[target.x86_64-w64-mingw32]
+  compile-option = "-Woff unused -Woff deprecated --dy-std --cfg \"ohos=false\""
 
 [target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
 
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "--cfg \"ohos=false\""
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-linux-aarch64-1.0.0.1/linux_aarch64_llvm/dynamic/stdx"]
 
+[target.x86_64-apple-darwin]
+  compile-option = "--cfg \"ohos=false\""
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["./libs/cangjie-stdx-mac-x64-1.0.0.1/darwin_x86_64_llvm/dynamic/stdx"]
+
+[target.aarch64-apple-darwin]
+  compile-option = "--cfg \"ohos=false\""
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-mac-aarch64-1.0.0.1/darwin_aarch64_llvm/dynamic/stdx"]
+
+
+

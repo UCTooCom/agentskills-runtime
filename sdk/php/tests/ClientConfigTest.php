@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace AgentSkills\Tests;
 
@@ -10,12 +10,12 @@ class ClientConfigTest extends TestCase
     public function testCreateClientConfig(): void
     {
         $config = new ClientConfig(
-            baseUrl: 'http://127.0.0.1:8080',
+            baseUrl: 'http://127.0.0.1:8080/api/v1/uctoo',
             authToken: 'test-token',
             timeout: 30000,
         );
 
-        $this->assertEquals('http://127.0.0.1:8080', $config->baseUrl);
+        $this->assertEquals('http://127.0.0.1:8080/api/v1/uctoo', $config->baseUrl);
         $this->assertEquals('test-token', $config->authToken);
         $this->assertEquals(30000, $config->timeout);
     }
@@ -32,12 +32,12 @@ class ClientConfigTest extends TestCase
     public function testToArray(): void
     {
         $config = new ClientConfig(
-            baseUrl: 'http://127.0.0.1:8080',
+            baseUrl: 'http://127.0.0.1:8080/api/v1/uctoo',
         );
 
         $array = $config->toArray();
 
         $this->assertArrayHasKey('baseUrl', $array);
-        $this->assertEquals('http://127.0.0.1:8080', $array['baseUrl']);
+        $this->assertEquals('http://127.0.0.1:8080/api/v1/uctoo', $array['baseUrl']);
     }
 }

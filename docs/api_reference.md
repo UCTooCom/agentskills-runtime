@@ -6,6 +6,8 @@
 
 ## 包 API 文档
 
+- 📁 [app](./package_docs/app.md) - 应用服务器模块 (HTTP/HTTPS服务器、认证、CRUD API)
+- 📁 [tool](./package_docs/tool.md) - 工具管理模块 (内置工具、权限控制、审计日志)
 - 📁 [agent](./package_docs/agent.md)
 - 📁 [agent.base](./package_docs/agent.base.md)
 - 📁 [agent_executor](./package_docs/agent_executor.md)
@@ -39,6 +41,5 @@
 - 📁 [storage.kv](./package_docs/storage.kv.md)
 - 📁 [storage.vdb](./package_docs/storage.vdb.md)
 - 📁 [tokenizer](./package_docs/tokenizer.md)
-- 📁 [tool](./package_docs/tool.md)
 - 📁 [vdb](./package_docs/vdb.md)
 - 📁 [agentskills](./agentskills-api-reference.md)

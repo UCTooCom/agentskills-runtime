@@ -80,6 +80,14 @@ skill/
 
 ## Key Components
 
+### HTTP/HTTPS Server
+- `HTTPServer`: Core HTTP server with support for both HTTP and HTTPS modes
+- **HTTP Mode**: Standard HTTP server for development and non-secure environments
+- **HTTPS Mode**: Secure HTTPS server with TLS/SSL encryption for production
+- **Auto-detection**: Automatically switches between HTTP and HTTPS based on `BACKEND_URL` configuration
+- **Certificate Support**: Loads PEM format certificates from `./ssl/` directory
+- **TLS Support**: Supports TLS 1.2 and TLS 1.3 protocols
+
 ### Skill Management
 - `SkillManagementService`: Main service for managing skills throughout their lifecycle
 - `SkillLoadingService`: Service for loading skills from SKILL.md files

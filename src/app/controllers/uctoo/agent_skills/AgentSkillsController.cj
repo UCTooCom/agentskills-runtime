@@ -1,0 +1,764 @@
+/*
+ * Copyright (c) UCToo Co., Ltd. 2026. All rights reserved.
+ */
+package magic.app.controllers.uctoo.agent_skills
+
+// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+
+import magic.app.core.http.{HttpRequest, HttpResponse}
+import magic.app.core.response.{APIError, APIResult}
+import magic.app.models.uctoo.AgentSkillsPO
+import magic.app.services.uctoo.AgentSkillsService
+import magic.log.LogUtils
+import std.collection.{HashMap, Map, ArrayList}
+import std.convert.*
+import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool, JsonArray}
+
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+
+public class AgentSkillsController {
+    private var service: AgentSkillsService
+    
+    public init(service: AgentSkillsService) {
+        this.service = service
+    }
+    
+    //#region AutoCreateCode
+    
+    public func add(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let body = parseBody(req)
+            if (let Some(b) <- body) {
+                let entity = mapToEntity(b)
+                let result = service.create(entity)
+                if (result.success) {
+                    if (let Some(data) <- result.data) {
+                        res.status(200).json(data.toJson())
+                    } else {
+                        res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"创建失败\"}")
+                    }
+                } else {
+                    let reason = result.reason ?? "创建失败"
+                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                }
+            } else {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    public func edit(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let body = parseBody(req)
+            if (let Some(b) <- body) {
+                let ids = b.get("ids")
+                let id = b.get("id")
+                
+                // 检查是否是恢复软删除数据 (deleted_at === "0")
+                let deletedAt = b.get("deleted_at")
+                let isRestore = if (let Some(da) <- deletedAt) {
+                    let daStr = da as String
+                    if (let Some(s) <- daStr) {
+                        s == "0"
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+                
+                if (let Some(idsVal) <- ids) {
+                    // 批量编辑
+                    let idsStrOpt = idsVal as String
+                    if (let Some(idsStr) <- idsStrOpt) {
+                        // 使用JSON.parse解析ids数组，与backend保持一致
+                        let idArray = parseIdsArray(idsStr)
+                        
+                        if (isRestore) {
+                            // 批量恢复软删除数据
+                            let result = service.restoreMultiple(idArray)
+                            if (result.success) {
+                                res.status(200).json("{\"desc\":\"恢复成功\"}")
+                            } else {
+                                let reason = result.reason ?? "批量恢复失败"
+                                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                            }
+                        } else {
+                            let entities = ArrayList<AgentSkillsPO>()
+                            for (idStr in idArray) {
+                                let entity = mapToEntity(b)
+                                entity.id = idStr
+                                entities.add(entity)
+                            }
+                            
+                            let result = service.updateMultiple(entities)
+                            if (result.success) {
+                                if (let Some(data) <- result.data) {
+                                    let sb = StringBuilder()
+                                    sb.append("[")
+                                    let size = data.size
+                                    for (i in 0..size) {
+                                        sb.append(data[i].toJson())
+                                        if (i < size - 1) {
+                                            sb.append(",")
+                                        }
+                                    }
+                                    sb.append("]")
+                                    res.status(200).json(sb.toString())
+                                } else {
+                                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"批量更新失败\"}")
+                                }
+                            } else {
+                                let reason = result.reason ?? "批量更新失败"
+                                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                            }
+                        }
+                    } else {
+                        res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"IDs参数格式错误\"}")
+                    }
+                } else {
+                    // 单个编辑
+                    if (let Some(idVal) <- id) {
+                        let idStrOpt = idVal as String
+                        if (let Some(idStr) <- idStrOpt) {
+                            if (isRestore) {
+                                // 恢复软删除数据
+                                let result = service.restore(idStr)
+                                if (result.success) {
+                                    if (let Some(data) <- result.data) {
+                                        res.status(200).json(data.toJson())
+                                    } else {
+                                        res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"恢复失败\"}")
+                                    }
+                                } else {
+                                    let reason = result.reason ?? "恢复失败"
+                                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                                }
+                            } else {
+                                let entity = mapToEntity(b)
+                                let result = service.update(idStr, entity)
+                                if (result.success) {
+                                    if (let Some(data) <- result.data) {
+                                        res.status(200).json(data.toJson())
+                                    } else {
+                                        res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"更新失败\"}")
+                                    }
+                                } else {
+                                    let reason = result.reason ?? "更新失败"
+                                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                                }
+                            }
+                        } else {
+                            res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"ID参数格式错误\"}")
+                        }
+                    } else {
+                        res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少ID参数\"}")
+                    }
+                }
+            } else {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    public func delete(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let body = parseBody(req)
+            if (let Some(b) <- body) {
+                let id = b.get("id")
+                let ids = b.get("ids")
+                let forceOpt = b.get("force")
+                let force = parseForce(forceOpt)
+                
+                if (let Some(idsVal) <- ids) {
+                    // 批量删除
+                    let idsStrOpt = idsVal as String
+                    if (let Some(idsStr) <- idsStrOpt) {
+                        // 使用JSON.parse解析ids数组，与backend保持一致
+                        let idArray = parseIdsArray(idsStr)
+                        let result = service.deleteMultiple(idArray, force)
+                        if (result.success) {
+                            res.status(200).json("{\"desc\":\"删除成功\"}")
+                        } else {
+                            let reason = result.reason ?? "批量删除失败"
+                            res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                        }
+                    } else {
+                        res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"IDs参数格式错误\"}")
+                    }
+                } else if (let Some(idVal) <- id) {
+                    // 单个删除
+                    let idStrOpt = idVal as String
+                    if (let Some(idStr) <- idStrOpt) {
+                        let result = service.delete(idStr, force)
+                        if (result.success) {
+                            res.status(200).json("{\"desc\":\"删除成功\"}")
+                        } else {
+                            let reason = result.reason ?? "删除失败"
+                            res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                        }
+                    } else {
+                        res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"ID参数格式错误\"}")
+                    }
+                } else {
+                    res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少ID参数\"}")
+                }
+            } else {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    public func getSingle(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            LogUtils.info("AgentSkillsController", "=== AgentSkillsController.getSingle() called ===")
+            LogUtils.info("AgentSkillsController", "=== Request path: ${req.uri.path} ===")
+            let id = req.pathParam("id")
+            
+            if (let Some(idVal) <- id) {
+                LogUtils.info("AgentSkillsController", "=== Got id value: ${idVal} ===")
+                let result = service.getById(idVal)
+                let reasonStr = result.reason ?? "none"
+                LogUtils.info("AgentSkillsController", "=== service.getById result - success: ${result.success}, reason: ${reasonStr} ===")
+                
+                if (result.success) {
+                    if (let Some(data) <- result.data) {
+                        LogUtils.info("AgentSkillsController", "=== AgentSkills found, returning data ===")
+                        // 与backend保持一致，直接返回实体对象，不包装在data中
+                        res.status(200).json(data.toJson())
+                    } else {
+                        LogUtils.info("AgentSkillsController", "=== result.data is None ===")
+                        res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该agentSkills或您没有权限访问\"}")
+                    }
+                } else {
+                    LogUtils.info("AgentSkillsController", "=== result.success is false ===")
+                    res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该agentSkills\"}")
+                }
+            } else {
+                LogUtils.info("AgentSkillsController", "=== id pathParam is None ===")
+                res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少ID参数\"}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("AgentSkillsController", "=== AgentSkillsController.getSingle() exception: ${e.message} ===")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    public func getManyWithPathParams(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            // 按照 backend 规范：/api/uctoo/agent_skills/:limit/:page
+            // 页码从1开始，1表示第一页（符合业界最佳实践）
+            let limitParam = req.pathParam("limit")
+            let pageParam = req.pathParam("page")
+            
+            let limitNum = if (let Some(l) <- limitParam) {
+                Int32.parse(l)
+            } else {
+                Int32(10)
+            }
+            
+            let pageNum = if (let Some(p) <- pageParam) {
+                Int32.parse(p)
+            } else {
+                Int32(1)  // 默认第一页
+            }
+            
+            if (limitNum > 100) {
+                res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
+                return
+            }
+            
+            // 解析查询参数中的 sort 和 filter
+            let sortParam = req.queryParam("sort")
+            let filterParam = req.queryParam("filter")
+            
+            let sortStr = if (let Some(s) <- sortParam) { s } else { "" }
+            let filterStr = if (let Some(f) <- filterParam) { f } else { "" }
+            
+            // 页码从1开始，转换为内部页码（从0开始）
+            let (entities, total) = service.getList(pageNum - 1, limitNum, sortStr, filterStr)
+            
+            let totalPage = if (limitNum > 0) {
+                Int32((total + Int64(limitNum) - 1) / Int64(limitNum))
+            } else {
+                Int32(0)
+            }
+            
+            var entitiesJson = ""
+            for (e in entities) {
+                if (entitiesJson.isEmpty()) {
+                    entitiesJson = e.toJson()
+                } else {
+                    entitiesJson = entitiesJson + "," + e.toJson()
+                }
+            }
+            res.status(200).json("{\"currentPage\":${pageNum},\"totalCount\":${total},\"totalPage\":${totalPage},\"agent_skillss\":[${entitiesJson}]}")
+        } catch (e: Exception) {
+            res.status(500).json(APIError("50000", e.message).toJson())
+        }
+    }
+    
+    public func getManyWithSkip(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            // 按照 backend 规范：/api/uctoo/agent_skills/:limit/:page/:skip
+            // 页码从1开始，1表示第一页（符合业界最佳实践）
+            let limitParam = req.pathParam("limit")
+            let pageParam = req.pathParam("page")
+            let skipParam = req.pathParam("skip")
+            
+            let limitNum = if (let Some(l) <- limitParam) {
+                Int32.parse(l)
+            } else {
+                Int32(10)
+            }
+            
+            let pageNum = if (let Some(p) <- pageParam) {
+                Int32.parse(p)
+            } else {
+                Int32(1)  // 默认第一页
+            }
+            
+            let skipNum = if (let Some(s) <- skipParam) {
+                Int32.parse(s)
+            } else {
+                Int32(0)
+            }
+            
+            if (limitNum > 100) {
+                res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
+                return
+            }
+            
+            // 解析查询参数中的 sort 和 filter
+            let sortParam = req.queryParam("sort")
+            let filterParam = req.queryParam("filter")
+            
+            let sortStr = if (let Some(s) <- sortParam) { s } else { "" }
+            let filterStr = if (let Some(f) <- filterParam) { f } else { "" }
+            
+            // 页码从1开始，转换为内部页码（从0开始）
+            let (entities, total) = service.getListWithSkip(pageNum - 1, limitNum, skipNum, sortStr, filterStr)
+            
+            let totalPage = if (limitNum > 0) {
+                Int32((total + Int64(limitNum) - 1) / Int64(limitNum))
+            } else {
+                Int32(0)
+            }
+            
+            var entitiesJson = ""
+            for (e in entities) {
+                if (entitiesJson.isEmpty()) {
+                    entitiesJson = e.toJson()
+                } else {
+                    entitiesJson = entitiesJson + "," + e.toJson()
+                }
+            }
+            res.status(200).json("{\"currentPage\":${pageNum},\"totalCount\":${total},\"totalPage\":${totalPage},\"skip\":${skipNum},\"agent_skillss\":[${entitiesJson}]}")
+        } catch (e: Exception) {
+            res.status(500).json(APIError("50000", e.message).toJson())
+        }
+    }
+    
+    private func parseBody(req: HttpRequest): ?Map<String, Any> {
+        try {
+            let body = req.body
+
+            if (body.isEmpty()) {
+                return None<Map<String, Any>>
+            }
+
+            let jsonValue = JsonValue.fromStr(body)
+            if (!(jsonValue is JsonObject)) {
+                return None<Map<String, Any>>
+            }
+
+            let jsonObj = jsonValue.asObject()
+            let map = HashMap<String, Any>()
+
+            for ((key, value) in jsonObj.getFields()) {
+                let anyValue = jsonValueToAny(value)
+                map.add(key, anyValue)
+            }
+
+            return Some<Map<String, Any>>(map)
+        } catch (e: Exception) {
+            return None<Map<String, Any>>
+        }
+    }
+
+    private func jsonValueToAny(value: JsonValue): Any {
+        if (value is JsonString) {
+            return value.asString().getValue()
+        } else if (value is JsonInt) {
+            return value.asInt().getValue()
+        } else if (value is JsonFloat) {
+            return value.asFloat().getValue()
+        } else if (value is JsonBool) {
+            return value.asBool().getValue()
+        } else {
+            return ""
+        }
+    }
+    
+    private func mapToEntity(map: Map<String, Any>): AgentSkillsPO {
+        let entity = AgentSkillsPO()
+                if (let Some(id) <- map.get("id")) {
+            let idStr = id as String
+            if (let Some(s) <- idStr) {
+                entity.id = s
+            }
+        }
+        if (let Some(name) <- map.get("name")) {
+            let nameStr = name as String
+            if (let Some(s) <- nameStr) {
+                entity.name = s
+            }
+        }
+        if (let Some(description) <- map.get("description")) {
+            let descriptionStr = description as String
+            if (let Some(s) <- descriptionStr) {
+                entity.description = Some<String>(s)
+            }
+        }
+        if (let Some(source) <- map.get("source")) {
+            let sourceStr = source as String
+            if (let Some(s) <- sourceStr) {
+                entity.source = Some<String>(s)
+            }
+        }
+        if (let Some(sourceUrl) <- map.get("source_url")) {
+            let sourceUrlStr = sourceUrl as String
+            if (let Some(s) <- sourceUrlStr) {
+                entity.sourceUrl = Some<String>(s)
+            }
+        }
+        if (let Some(sourceType) <- map.get("source_type")) {
+            let sourceTypeStr = sourceType as String
+            if (let Some(s) <- sourceTypeStr) {
+                entity.sourceType = Some<String>(s)
+            }
+        }
+        if (let Some(branch) <- map.get("branch")) {
+            let branchStr = branch as String
+            if (let Some(s) <- branchStr) {
+                entity.branch = Some<String>(s)
+            }
+        }
+        if (let Some(tag) <- map.get("tag")) {
+            let tagStr = tag as String
+            if (let Some(s) <- tagStr) {
+                entity.tag = Some<String>(s)
+            }
+        }
+        if (let Some(commit) <- map.get("commit")) {
+            let commitStr = commit as String
+            if (let Some(s) <- commitStr) {
+                entity.commit = Some<String>(s)
+            }
+        }
+        if (let Some(version) <- map.get("version")) {
+            let versionStr = version as String
+            if (let Some(s) <- versionStr) {
+                entity.version = Some<String>(s)
+            }
+        }
+        if (let Some(author) <- map.get("author")) {
+            let authorStr = author as String
+            if (let Some(s) <- authorStr) {
+                entity.author = Some<String>(s)
+            }
+        }
+        if (let Some(homepage) <- map.get("homepage")) {
+            let homepageStr = homepage as String
+            if (let Some(s) <- homepageStr) {
+                entity.homepage = Some<String>(s)
+            }
+        }
+        if (let Some(license) <- map.get("license")) {
+            let licenseStr = license as String
+            if (let Some(s) <- licenseStr) {
+                entity.license = Some<String>(s)
+            }
+        }
+        if (let Some(keywords) <- map.get("keywords")) {
+            let keywordsStr = keywords as String
+            if (let Some(s) <- keywordsStr) {
+                entity.keywords = Some<String>(s)
+            }
+        }
+        if (let Some(tags) <- map.get("tags")) {
+            let tagsStr = tags as String
+            if (let Some(s) <- tagsStr) {
+                entity.tags = Some<String>(s)
+            }
+        }
+        if (let Some(categories) <- map.get("categories")) {
+            let categoriesStr = categories as String
+            if (let Some(s) <- categoriesStr) {
+                entity.categories = Some<String>(s)
+            }
+        }
+        if (let Some(installPath) <- map.get("install_path")) {
+            let installPathStr = installPath as String
+            if (let Some(s) <- installPathStr) {
+                entity.installPath = Some<String>(s)
+            }
+        }
+        if (let Some(compatibility) <- map.get("compatibility")) {
+            let compatibilityStr = compatibility as String
+            if (let Some(s) <- compatibilityStr) {
+                entity.compatibility = Some<String>(s)
+            }
+        }
+        if (let Some(allowedTools) <- map.get("allowed_tools")) {
+            let allowedToolsStr = allowedTools as String
+            if (let Some(s) <- allowedToolsStr) {
+                entity.allowedTools = Some<String>(s)
+            }
+        }
+        if (let Some(dependencies) <- map.get("dependencies")) {
+            let dependenciesStr = dependencies as String
+            if (let Some(s) <- dependenciesStr) {
+                entity.dependencies = Some<String>(s)
+            }
+        }
+        if (let Some(permissions) <- map.get("permissions")) {
+            let permissionsStr = permissions as String
+            if (let Some(s) <- permissionsStr) {
+                entity.permissions = Some<String>(s)
+            }
+        }
+        if (let Some(parameters) <- map.get("parameters")) {
+            let parametersStr = parameters as String
+            if (let Some(s) <- parametersStr) {
+                entity.parameters = Some<String>(s)
+            }
+        }
+        if (let Some(instructions) <- map.get("instructions")) {
+            let instructionsStr = instructions as String
+            if (let Some(s) <- instructionsStr) {
+                entity.instructions = Some<String>(s)
+            }
+        }
+        if (let Some(scriptsDirExists) <- map.get("scripts_dir_exists")) {
+            let scriptsDirExistsInt64 = scriptsDirExists as Int64
+            if (let Some(s) <- scriptsDirExistsInt64) {
+                entity.scriptsDirExists = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(referencesDirExists) <- map.get("references_dir_exists")) {
+            let referencesDirExistsInt64 = referencesDirExists as Int64
+            if (let Some(s) <- referencesDirExistsInt64) {
+                entity.referencesDirExists = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(assetsDirExists) <- map.get("assets_dir_exists")) {
+            let assetsDirExistsInt64 = assetsDirExists as Int64
+            if (let Some(s) <- assetsDirExistsInt64) {
+                entity.assetsDirExists = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(status) <- map.get("status")) {
+            let statusInt64 = status as Int64
+            if (let Some(s) <- statusInt64) {
+                entity.status = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(runtimeStatus) <- map.get("runtime_status")) {
+            let runtimeStatusStr = runtimeStatus as String
+            if (let Some(s) <- runtimeStatusStr) {
+                entity.runtimeStatus = Some<String>(s)
+            }
+        }
+        if (let Some(validationStatus) <- map.get("validation_status")) {
+            let validationStatusStr = validationStatus as String
+            if (let Some(s) <- validationStatusStr) {
+                entity.validationStatus = Some<String>(s)
+            }
+        }
+        if (let Some(validationErrors) <- map.get("validation_errors")) {
+            let validationErrorsStr = validationErrors as String
+            if (let Some(s) <- validationErrorsStr) {
+                entity.validationErrors = Some<String>(s)
+            }
+        }
+        // lastValidatedAt is DateTime type, handled by database
+        if (let Some(config) <- map.get("config")) {
+            let configStr = config as String
+            if (let Some(s) <- configStr) {
+                entity.config = Some<String>(s)
+            }
+        }
+        if (let Some(envVars) <- map.get("env_vars")) {
+            let envVarsStr = envVars as String
+            if (let Some(s) <- envVarsStr) {
+                entity.envVars = Some<String>(s)
+            }
+        }
+        if (let Some(timeout) <- map.get("timeout")) {
+            let timeoutInt64 = timeout as Int64
+            if (let Some(s) <- timeoutInt64) {
+                entity.timeout = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(retryCount) <- map.get("retry_count")) {
+            let retryCountInt64 = retryCount as Int64
+            if (let Some(s) <- retryCountInt64) {
+                entity.retryCount = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(runCount) <- map.get("run_count")) {
+            let runCountInt64 = runCount as Int64
+            if (let Some(s) <- runCountInt64) {
+                entity.runCount = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(successCount) <- map.get("success_count")) {
+            let successCountInt64 = successCount as Int64
+            if (let Some(s) <- successCountInt64) {
+                entity.successCount = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(errorCount) <- map.get("error_count")) {
+            let errorCountInt64 = errorCount as Int64
+            if (let Some(s) <- errorCountInt64) {
+                entity.errorCount = Some<Int32>(Int32(s))
+            }
+        }
+        // lastRunAt is DateTime type, handled by database
+        if (let Some(lastError) <- map.get("last_error")) {
+            let lastErrorStr = lastError as String
+            if (let Some(s) <- lastErrorStr) {
+                entity.lastError = Some<String>(s)
+            }
+        }
+        if (let Some(avgExecutionTime) <- map.get("avg_execution_time")) {
+            let avgExecutionTimeInt64 = avgExecutionTime as Int64
+            if (let Some(s) <- avgExecutionTimeInt64) {
+                entity.avgExecutionTime = Some<Int32>(Int32(s))
+            }
+        }
+        if (let Some(generationPrompt) <- map.get("generation_prompt")) {
+            let generationPromptStr = generationPrompt as String
+            if (let Some(s) <- generationPromptStr) {
+                entity.generationPrompt = Some<String>(s)
+            }
+        }
+        if (let Some(generationModel) <- map.get("generation_model")) {
+            let generationModelStr = generationModel as String
+            if (let Some(s) <- generationModelStr) {
+                entity.generationModel = Some<String>(s)
+            }
+        }
+        if (let Some(generationStatus) <- map.get("generation_status")) {
+            let generationStatusStr = generationStatus as String
+            if (let Some(s) <- generationStatusStr) {
+                entity.generationStatus = Some<String>(s)
+            }
+        }
+        if (let Some(parentSkillId) <- map.get("parent_skill_id")) {
+            let parentSkillIdStr = parentSkillId as String
+            if (let Some(s) <- parentSkillIdStr) {
+                entity.parentSkillId = Some<String>(s)
+            }
+        }
+        if (let Some(extraMetadata) <- map.get("extra_metadata")) {
+            let extraMetadataStr = extraMetadata as String
+            if (let Some(s) <- extraMetadataStr) {
+                entity.extraMetadata = Some<String>(s)
+            }
+        }
+        if (let Some(creator) <- map.get("creator")) {
+            let creatorStr = creator as String
+            if (let Some(s) <- creatorStr) {
+                entity.creator = Some<String>(s)
+            }
+        }
+        // createdAt is DateTime type, handled by database
+        // updatedAt is DateTime type, handled by database
+        // deletedAt is DateTime type, handled by database
+        return entity
+    }
+    
+    private func parseForce(forceOpt: ?Any): Bool {
+        if (let Some(f) <- forceOpt) {
+            // 支持数字1或字符串"true"作为硬删除标志，与backend保持一致
+            // 先尝试转换为Int64（因为jsonValueToAny返回Int64）
+            let fInt64 = f as Int64
+            if (let Some(v) <- fInt64) {
+                v == 1
+            } else {
+                // 再尝试Int32
+                let fInt32 = f as Int32
+                if (let Some(v) <- fInt32) {
+                    v == 1
+                } else {
+                    let fStr = f as String
+                    if (let Some(s) <- fStr) {
+                        s == "true" || s == "1"
+                    } else {
+                        false
+                    }
+                }
+            }
+        } else {
+            false
+        }
+    }
+    
+    /**
+     * 解析JSON格式的ids数组
+     * 支持格式: "[\"uuid1\",\"uuid2\"]" 或 "[\"uuid1\", \"uuid2\"]"
+     */
+    private func parseIdsArray(idsStr: String): ArrayList<String> {
+        let idArray = ArrayList<String>()
+        try {
+            let jsonValue = JsonValue.fromStr(idsStr)
+            if (jsonValue is JsonArray) {
+                let arr = jsonValue.asArray()
+                for (item in arr.getItems()) {
+                    if (item is JsonString) {
+                        let jsonStr = item.asString()
+                        idArray.add(jsonStr.getValue())
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // 如果JSON解析失败，尝试逗号分隔格式
+            let parts = idsStr.split(",")
+            for (part in parts) {
+                let trimmed = part.trimAscii()
+                if (!trimmed.isEmpty()) {
+                    idArray.add(trimmed)
+                }
+            }
+        }
+        return idArray
+    }
+    
+    private func parseLimit(limit: ?String): Int32 {
+        if (let Some(l) <- limit) {
+            Int32.parse(l)
+        } else {
+            10
+        }
+    }
+    
+    private func parsePage(page: ?String): Int32 {
+        if (let Some(p) <- page) {
+            Int32.parse(p)
+        } else {
+            1
+        }
+    }
+    
+    //#endregion AutoCreateCode
+    
+    // ========== 定制开发方法（在此区域添加自定义方法）==========
+}

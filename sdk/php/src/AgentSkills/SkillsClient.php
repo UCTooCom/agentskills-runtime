@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace AgentSkills;
 
@@ -8,7 +8,7 @@ use GuzzleHttp\Exception\RequestException;
 
 class SkillsClient
 {
-    private const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
+    private const DEFAULT_BASE_URL = 'http://127.0.0.1:8080/api/v1/uctoo';
     private const DEFAULT_TIMEOUT = 30000;
 
     private GuzzleClient $client;

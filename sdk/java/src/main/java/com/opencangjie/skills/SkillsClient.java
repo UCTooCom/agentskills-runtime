@@ -1,4 +1,4 @@
-package com.opencangjie.skills;
+﻿package com.opencangjie.skills;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opencangjie.skills.model.*;
@@ -15,7 +15,7 @@ public class SkillsClient {
     private RuntimeManager runtimeManager;
     private ObjectMapper objectMapper;
 
-    private static final String DEFAULT_BASE_URL = "http://127.0.0.1:8080";
+    private static final String DEFAULT_BASE_URL = "http://127.0.0.1:8080/api/v1/uctoo";
     private static final int DEFAULT_TIMEOUT = 30000;
 
     public SkillsClient(ClientConfig config) {
@@ -145,7 +145,7 @@ public class SkillsClient {
         );
 
         Request request = new Request.Builder()
-                .url(baseUrl + "/skills/add")
+                .url(baseUrl + "/skills/install")
                 .post(body)
                 .build();
 
@@ -303,7 +303,7 @@ public class SkillsClient {
         );
 
         Request request = new Request.Builder()
-                .url(baseUrl + "/skills/" + skillId + "/config")
+                .url(baseUrl + "/api/v1/uctoo/skills/" + skillId + "/config")
                 .post(body)
                 .build();
 
@@ -317,7 +317,7 @@ public class SkillsClient {
 
     public java.util.List<ToolDefinition> listSkillTools(String skillId) throws IOException {
         Request request = new Request.Builder()
-                .url(baseUrl + "/skills/" + skillId + "/tools")
+                .url(baseUrl + "/api/v1/uctoo/skills/" + skillId + "/tools")
                 .build();
 
         try (Response response = client.newCall(request).execute()) {

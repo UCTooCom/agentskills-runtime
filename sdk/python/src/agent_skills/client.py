@@ -27,7 +27,7 @@ from agent_skills.models import (
 from agent_skills.runtime import RuntimeManager
 
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8080"
+DEFAULT_BASE_URL = "http://127.0.0.1:8080/api/v1/uctoo"
 DEFAULT_TIMEOUT = 30000
 
 
@@ -178,7 +178,7 @@ class SkillsClient:
             payload["skill_subpath"] = options.skill_subpath
 
         response = self._session.post(
-            f"{self.base_url}/skills/add",
+            f"{self.base_url}/skills/install",
             json=payload,
             timeout=self.timeout,
         )

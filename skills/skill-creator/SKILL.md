@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.
+description: Create new skills, modify and improve existing skills, and measure skill performance. Use this skill whenever the user wants to create a skill from scratch, edit or modify an existing skill (e.g., add documentation, update examples, change settings), run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy. When the user mentions "modify skill", "update skill", "add to skill", "edit skill", or similar phrases, you MUST use this skill and follow the modification workflow.
 ---
 
 # Skill Creator
@@ -39,6 +39,218 @@ So please pay attention to context cues to understand how to phrase your communi
 - for "JSON" and "assertion" you want to see serious cues from the user that they know what those things are before using them without explaining them
 
 It's OK to briefly explain terms if you're in doubt, and feel free to clarify terms with a short definition if you're unsure if the user will get it.
+
+---
+
+## Modifying an Existing Skill
+
+When a user wants to modify an existing skill, follow this workflow:
+
+### Step 1: Locate the Skill
+
+First, determine where the skill is located:
+
+1. **Check environment variables** - Look for skill-related environment variables:
+   - `SKILL_INSTALL_PATH` - Where skills are installed
+   - `SKILL_BASE_DIRECTORY` - Base directory for skill loading
+   - Any skill-specific paths (e.g., `UCTOO_API_SKILL_DIR`)
+
+2. **Common skill locations**:
+   - `./skills/` - Default installation directory
+   - `./src/examples/` - Built-in example skills
+   - Custom paths from environment variables
+
+3. **Use file tools to search**:
+   - Use `file_search` to find SKILL.md files
+   - Use `directory_list` to explore directories
+
+### Windows Path Handling
+- **Use full absolute paths** on Windows: `D:\\UCT\\projects\\...\\uctoo_api_skill`
+- **Double backslashes** are required to avoid escaping: `\\`
+- **Example path**: `"D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\backend\\skills\\uctoo_api_skill"`
+
+### Tool Call Examples
+
+**Directory listing example:**
+```json
+{
+  "toolcall": {
+    "thought": "List contents of uctoo_api_skill directory",
+    "name": "DirectoryListTool",
+    "params": {
+      "path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\backend\\skills\\uctoo_api_skill"
+    }
+  }
+}
+```
+
+**File reading example:**
+```json
+{
+  "toolcall": {
+    "thought": "Read SKILL.md file",
+    "name": "FileReadTool",
+    "params": {
+      "path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\backend\\skills\\uctoo_api_skill\\SKILL.md"
+    }
+  }
+}
+```
+
+**File editing example:**
+```json
+{
+  "toolcall": {
+    "thought": "Edit SKILL.md to add documentation links",
+    "name": "FileEditTool",
+    "params": {
+      "path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\backend\\skills\\uctoo_api_skill\\SKILL.md",
+      "old_string": "## API 基础配置",
+      "new_string": "## 参考文档\n\n- uctoo api 规范: `https://gitee.com/uctoo/uctoo/blob/master/apps/uctoo-backend/docs/uctoo-api-design-specification.md`\n- uctoo 数据库设计: `https://gitee.com/uctoo/uctoo/blob/master/apps/uctoo-backend/docs/uctoo-database-design-document.md`\n\n## API 基础配置"
+    }
+  }
+}
+```
+
+### Step 2: Read and Understand the Current Skill
+
+1. **Use `file_read` tool** to read the skill's SKILL.md
+2. **Analyze the current structure**:
+   - YAML frontmatter (name, description, etc.)
+   - Main instructions
+   - Examples
+   - Any bundled resources
+
+### Error Handling
+
+**When directory listing fails:**
+- **Try direct file access** - If `DirectoryListTool` returns empty results, directly use `FileReadTool` to access the SKILL.md file
+- **Verify path format** - Ensure Windows paths use double backslashes
+- **Check permissions** - Confirm the runtime has access to the directory
+
+**When file reading fails:**
+- **Validate the path** - Double-check the file path
+- **Try alternative paths** - Look in common skill locations
+- **Use fallback** - If tools are unavailable, ask user for file content
+
+### Step 3: Gather New Information
+
+When the user wants to add new content (documentation, examples, etc.):
+
+1. **For web URLs** - Use `web_fetch` or `firecrawl` tools:
+   ```
+   web_fetch: {"url": "https://gitee.com/uctoo/uctoo/blob/master/apps/uctoo-backend/docs/uctoo-api-design-specification.md"}
+   firecrawl: {"action": "scrape", "query": "https://example.com/document"}
+   ```
+
+   **Important URL Notes**:
+   - For Gitee/GitHub, you can use either:
+     - Web page URL: `https://gitee.com/uctoo/uctoo/blob/master/path/to/file.md`
+     - Raw URL: `https://gitee.com/uctoo/uctoo/raw/master/path/to/file.md`
+   - The `web_fetch` tool will automatically convert HTML pages to markdown
+   - **ALWAYS try to fetch the URL yourself first** - don't ask the user for help before attempting
+
+2. **For local files** - Use `file_read` tool:
+   ```
+   file_read: {"path": "/path/to/document.md"}
+   ```
+
+3. **Critical**: Never tell the user "I encountered an error" without first attempting to use the available tools:
+   - `web_fetch` - For fetching web content
+   - `firecrawl` - For web scraping with search capability
+   - `file_read` - For reading local files
+   - `file_search` - For finding files by pattern
+   - `directory_list` - For exploring directories
+
+### Step 4: Modify the Skill
+
+1. **Use `file_edit` tool** to make changes:
+   - Add new sections
+   - Update descriptions
+   - Add new examples
+   - Update the version number in metadata
+
+2. **Maintain consistency**:
+   - Keep the same writing style
+   - Follow the existing structure
+   - Don't remove important existing content without user confirmation
+
+### Step 5: Verify Changes
+
+1. **Read the modified file** to confirm changes
+2. **Test the skill** if possible
+3. **Report back to the user** with a summary of changes
+
+### Example: Adding Documentation to a Skill
+
+User request: "Add the API design specification to uctoo-api-skill"
+
+```
+1. Locate the skill:
+   - Check UCTOO_API_SKILL_DIR environment variable
+   - Or search for "uctoo-api-skill/SKILL.md"
+
+2. Fetch the documentation:
+   - Use web_fetch to get: https://gitee.com/uctoo/uctoo/raw/master/apps/uctoo-backend/docs/uctoo-api-design-specification.md
+   - Note: Use /raw/ URL for raw markdown content
+
+3. Read the current skill:
+   - file_read: {"path": "D:/UCT/projects/.../uctoo-api-skill/SKILL.md"}
+
+4. Edit the skill:
+   - Add a new "## API Design Specification" section
+   - Insert the fetched documentation content
+   - Update version number
+
+5. Verify and report:
+   - Read the modified file
+   - Summarize changes for user
+```
+
+---
+
+## Fallback: When File Tools Are Unavailable
+
+**IMPORTANT**: If you attempt to use `file_read`, `file_edit`, or `web_fetch` tools and receive an error that these tools are not available, follow this fallback workflow:
+
+### Step 1: Inform the User
+Tell the user: "The file editing tools are not available in this environment. I'll provide you with the modified skill content, and you can apply the changes manually."
+
+### Step 2: Gather Information (Without Tools)
+1. **Ask the user for the current skill content** - Request them to copy and paste the SKILL.md content
+2. **For web URLs** - Ask the user to either:
+   - Copy and paste the content from the URL
+   - Or provide the content they want to add
+
+### Step 3: Generate the Modified Skill
+1. **Analyze the requested changes** based on the user's requirements
+2. **Draft the complete modified SKILL.md** with all changes applied
+3. **Present the full content** to the user in a code block
+
+### Step 4: Provide Clear Instructions
+Tell the user:
+- Where to save the file (e.g., `skills/<skill-name>/SKILL.md`)
+- What specific changes were made
+- How to verify the changes
+
+### Example Fallback Workflow
+
+User: "Add the API design specification to uctoo-api-skill"
+
+Your response:
+```
+The file editing tools are not available in this environment. Please:
+
+1. Copy and paste the current content of uctoo-api-skill/SKILL.md
+2. I'll provide you with the modified version
+
+Once you provide the content, I'll:
+- Add the API design specification section
+- Update the version number
+- Provide the complete modified file for you to save
+```
+
+After receiving the content, generate the complete modified SKILL.md and present it to the user.
 
 ---
 
@@ -439,6 +651,12 @@ In Claude.ai, the core workflow is the same (draft → test → review → impro
 - **Preserve the original name.** Note the skill's directory name and `name` frontmatter field -- use them unchanged. E.g., if the installed skill is `research-helper`, output `research-helper.skill` (not `research-helper-v2`).
 - **Copy to a writeable location before editing.** The installed skill path may be read-only. Copy to `/tmp/skill-name/`, edit there, and package from the copy.
 - **If packaging manually, stage in `/tmp/` first**, then copy to the output directory -- direct writes may fail due to permissions.
+
+**Fallback when file tools are unavailable**: If `file_read`, `file_edit`, or `web_fetch` tools are not available:
+1. Inform the user: "The file editing tools are not available in this environment."
+2. Ask the user to provide the current SKILL.md content
+3. Generate the complete modified SKILL.md with all requested changes
+4. Present the full content in a code block for the user to save manually
 
 ---
 

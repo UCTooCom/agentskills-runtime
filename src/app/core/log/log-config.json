@@ -1,0 +1,89 @@
+{
+    "appenders": [
+        {
+            "enabled": "true",
+            "name": "console",
+            "type": "console",
+            "pattern": "[%D %T %m] [%L] [%I] [%l] <%S> %M"
+        },
+        {
+            "enabled": "true",
+            "name": "file",
+            "type": "file",
+            "pattern": "[%D %T %m] [%L] [%I] [%l] <%S> %M",
+            "properties": [
+                {
+                    "name": "filename",
+                    "value": "logs/uctoo-v4.log"
+                },
+                {
+                    "name": "rotate",
+                    "value": "true"
+                },
+                {
+                    "name": "maxsize",
+                    "value": "100M"
+                },
+                {
+                    "name": "daily",
+                    "value": "true"
+                }
+            ]
+        }
+    ],
+    "loggers": [
+        {
+            "name": "uctoo.http",
+            "level": "info",
+            "appender-refs": [
+                {
+                    "ref": "console"
+                },
+                {
+                    "ref": "file"
+                }
+            ]
+        },
+        {
+            "name": "uctoo.db",
+            "level": "debug",
+            "appender-refs": [
+                {
+                    "ref": "file"
+                }
+            ]
+        },
+        {
+            "name": "uctoo.auth",
+            "level": "info",
+            "appender-refs": [
+                {
+                    "ref": "console"
+                },
+                {
+                    "ref": "file"
+                }
+            ]
+        },
+        {
+            "name": "uctoo.middleware",
+            "level": "debug",
+            "appender-refs": [
+                {
+                    "ref": "file"
+                }
+            ]
+        }
+    ],
+    "root": {
+        "level": "info",
+        "appender-refs": [
+            {
+                "ref": "console"
+            },
+            {
+                "ref": "file"
+            }
+        ]
+    }
+}

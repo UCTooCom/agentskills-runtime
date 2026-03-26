@@ -32,7 +32,7 @@ npx @opencangjie/skills add ./my-skill
 npx skills install-runtime
 
 # Or specify a version
-npx skills install-runtime --runtime-version 0.0.16
+npx skills install-runtime --runtime-version 0.0.19
 ```
 
 ### 2. Configure the Runtime
@@ -110,7 +110,7 @@ Download and install the AgentSkills runtime binary.
 
 ```bash
 npx skills install-runtime
-npx skills install-runtime --runtime-version 0.0.16
+npx skills install-runtime --runtime-version 0.0.19
 ```
 
 #### `npx skills start`

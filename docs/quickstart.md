@@ -239,6 +239,76 @@ ATOMGIT_TOKEN=your_atomgit_token
 > - GitHub: 10 requests/min (unauthenticated) vs 30 requests/min (authenticated)
 > - Gitee/AtomGit: Limited without token, higher with token
 
+### HTTPS/SSL Configuration
+
+The runtime supports HTTPS for secure API communication. HTTPS can be enabled by configuring SSL certificates.
+
+#### Enabling HTTPS
+
+1. **Configure in `.env` file:**
+   ```env
+   # Set BACKEND_URL to https:// to enable HTTPS
+   BACKEND_URL=https://your-domain.com
+   
+   # Optional: Specify custom port (default: 8080)
+   PORT=8443
+   
+   # Optional: Specify bind address (default: 0.0.0.0)
+   HOST=0.0.0.0
+   ```
+
+2. **Place SSL certificates:**
+   - Certificate file: `./ssl/server.crt` (PEM format)
+   - Private key file: `./ssl/server.key` (PEM format)
+
+#### Certificate Requirements
+
+- **Format**: PEM (Privacy Enhanced Mail)
+- **Certificate**: X.509 certificate chain
+- **Private Key**: RSA or ECDSA private key
+- **Location**: `./ssl/` directory relative to the executable
+
+#### Example Certificate Setup
+
+```bash
+# Directory structure
+ssl/
+├── server.crt    # SSL certificate (PEM format)
+└── server.key    # Private key (PEM format)
+
+# For Let's Encrypt certificates
+# Combine fullchain.pem into server.crt
+cat /etc/letsencrypt/live/your-domain.com/fullchain.pem > ./ssl/server.crt
+cat /etc/letsencrypt/live/your-domain.com/privkey.pem > ./ssl/server.key
+
+# For self-signed certificates (development only)
+openssl req -x509 -newkey rsa:4096 -keyout ./ssl/server.key -out ./ssl/server.crt -days 365 -nodes
+```
+
+#### HTTPS Behavior
+
+- **Auto-detection**: The runtime automatically enables HTTPS when `BACKEND_URL` starts with `https://`
+- **Fallback**: If `BACKEND_URL` is not set or starts with `http://`, HTTP mode is used
+- **Certificate Loading**: Certificates are loaded at startup; invalid certificates will cause startup failure
+- **TLS Version**: Supports TLS 1.2 and TLS 1.3
+
+#### Testing HTTPS
+
+```bash
+# Test HTTPS endpoint (use -k to skip certificate verification for self-signed certs)
+curl -k https://localhost:8443/api/v1/health
+
+# Test with valid certificate
+curl https://your-domain.com:8443/api/v1/health
+```
+
+#### Security Considerations
+
+- **Production**: Always use valid SSL certificates from a trusted CA (e.g., Let's Encrypt)
+- **Development**: Self-signed certificates can be used but require `-k` flag in curl
+- **Certificate Permissions**: Ensure private key file has restricted permissions (chmod 600)
+- **Certificate Renewal**: For Let's Encrypt, set up automatic renewal and restart the service
+
 ### Configuration File
 
 The framework can be configured via a comprehensive configuration:

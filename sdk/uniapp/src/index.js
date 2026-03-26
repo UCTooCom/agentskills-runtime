@@ -1,4 +1,4 @@
-// AgentSkills Runtime UniApp SDK
+﻿// AgentSkills Runtime UniApp SDK
 // 轻量级 SDK，用于在 UniApp 应用中与 AgentSkills Runtime 通信
 
 import SkillsClient from './client.js';
@@ -6,7 +6,7 @@ import WebSocketManager from './websocket.js';
 import { handleApiError, createClientConfig } from './utils.js';
 
 // 默认配置
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
+const DEFAULT_BASE_URL = 'http://127.0.0.1:8080/api/v1/uctoo';
 const DEFAULT_WS_URL = 'ws://127.0.0.1:8080/ws/chat';
 
 /**

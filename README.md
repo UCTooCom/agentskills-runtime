@@ -1,7 +1,7 @@
 # AgentSkills Runtime
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.16-blue.svg)](https://github.com/uctoo/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.19-blue.svg)](https://github.com/uctoo/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## Project Introduction
@@ -51,21 +51,24 @@ This implementation follows clean architecture principles with clear separation 
 - Standardized response formats following UCToo API specification
 
 #### API Endpoints
-- **GET /skills**: Retrieve a list of installed skills with pagination support
-- **GET /skills/:id**: Retrieve details of a specific skill
-- **POST /skills/add**: Install a skill from a local path or remote URL
-- **POST /skills/edit**: Update an existing skill
-- **POST /skills/del**: Uninstall a skill
-- **POST /skills/execute**: Execute a skill with provided parameters
-- **POST /skills/search**: Search for skills using semantic search
-- **GET /hello**: Health check endpoint
-- **GET /mcp/stream**: MCP server with HTTP streaming mode
+All API endpoints now follow the uctoo v4 standard with `/api/v1/uctoo` prefix:
+
+- **GET /api/v1/uctoo/agent_skills**: Retrieve a list of installed skills with pagination support
+- **GET /api/v1/uctoo/agent_skills/:id**: Retrieve details of a specific skill
+- **POST /api/v1/uctoo/skills/install**: Install a skill from a local path or remote URL
+- **POST /api/v1/uctoo/agent_skills/edit**: Update an existing skill
+- **POST /api/v1/uctoo/agent_skills/del**: Uninstall a skill
+- **POST /api/v1/uctoo/skills/execute**: Execute a skill with provided parameters
+- **POST /api/v1/uctoo/skills/search**: Search for skills using semantic search
+- **GET /api/v1/uctoo/health**: Health check endpoint
+- **GET /api/v1/uctoo/mcp/stream**: MCP server with HTTP streaming mode
+- **GET /api/v1/uctoo/ws/chat**: WebSocket chat interface
 
 #### API Implementation Details
 The API layer now provides real functionality using underlying services:
-- **POST /skills/add**: Uses SkillPackageManager to perform actual skill installation from local paths or Git repositories
-- **POST /skills/edit**: Updates skills using the SkillPackageManager with proper reloading
-- **POST /skills/del**: Removes skills from the system using SkillPackageManager and refreshes the skill registry
+- **POST /api/v1/uctoo/skills/install**: Uses SkillPackageManager to perform actual skill installation from local paths or Git repositories
+- **POST /api/v1/uctoo/agent_skills/edit**: Updates skills using the SkillPackageManager with proper reloading
+- **POST /api/v1/uctoo/agent_skills/del**: Removes skills from the system using SkillPackageManager and refreshes the skill registry
 
 ### DSL Support
 - `@skill` macro for declarative skill definition
@@ -95,6 +98,142 @@ The API layer now provides real functionality using underlying services:
 - Semantic search integration with MCP protocol
 - Pagination support for large skill catalogs
 - HTTP streaming mode with embedded web UI
+
+## Built-in Tools v2.0
+
+AgentSkills Runtime v2.0 provides a complete set of built-in tools supporting CLI, HTTP, and internal API invocation methods, all integrated with the RBAC permission system.
+
+### Tool Categories
+
+#### File System Tools (9)
+- `file_read` - Read file (Sensitivity: Low)
+- `file_write` - Write file (Sensitivity: Medium)
+- `file_edit` - Edit file (Sensitivity: Medium)
+- `file_delete` - Delete file (Sensitivity: High, requires confirmation)
+- `file_copy` - Copy file (Sensitivity: Low)
+- `file_move` - Move file (Sensitivity: Medium)
+- `file_search` - Search files (Sensitivity: Low)
+- `directory_list` - List directory (Sensitivity: Low)
+- `directory_create` - Create directory (Sensitivity: Medium)
+
+#### Web Tools (4)
+- `http_request` - HTTP request (Sensitivity: Medium)
+- `web_fetch` - Web page fetch (Sensitivity: Low)
+- `firecrawl` - Firecrawl crawler (Sensitivity: Medium)
+- `browser_tool` - Browser tool (Sensitivity: Medium)
+
+#### Skill Tools (2)
+- `skill_initializer` - Initialize skill (Sensitivity: Medium)
+- `skill_packager` - Package skill (Sensitivity: Medium)
+
+#### Code Generation Tools (2)
+- `template_engine` - Template engine (Sensitivity: Low)
+- `code_snippet_generator` - Code snippet generator (Sensitivity: Low)
+
+#### CLI Tools (1)
+- `cli_execute` - Execute CLI command (Sensitivity: High, requires confirmation)
+
+### HTTP Interface
+
+**Base Path**: `/api/v1/tools`
+
+**Endpoints**:
+- `GET /api/v1/tools/list` - Get tool list
+- `GET /api/v1/tools/:toolName/info` - Get tool information
+- `POST /api/v1/tools/:toolName` - Invoke tool
+
+**Usage Example**:
+```bash
+# Get tool list
+curl -X GET https://javatoarktsapi.uctoo.com/api/v1/tools/list \
+  -H "Authorization: Bearer <token>"
+
+# Invoke file read tool
+curl -X POST https://javatoarktsapi.uctoo.com/api/v1/tools/file_read \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"path": "./SKILL.md"}'
+```
+
+### Permission System
+
+All tool invocations are protected by the RBAC permission system:
+- **Sensitivity Levels**: Low(1), Medium(2), High(3)
+- **Permission Check**: Every invocation validates user permissions
+- **Audit Logging**: All operations are recorded in the database
+- **Confirmation Required**: High-sensitivity operations require confirmation parameter
+
+Detailed documentation: [Built-in Tools Documentation](./docs/builtin-tools.md)
+
+## High-Performance Application Server
+
+AgentSkills Runtime includes a high-performance HTTP/HTTPS application server providing enterprise-level API service capabilities.
+
+### Server Features
+
+- **HTTPS Support**: Built-in SSL/TLS encryption with certificate configuration
+- **High-Performance Routing**: Efficient Trie-tree based route matching
+- **Middleware System**: Extensible middleware chain
+- **WebSocket Support**: Real-time bidirectional communication
+- **Connection Pool**: Database connection pool management
+- **Cache System**: Built-in cache manager
+
+### Core Components
+
+#### HTTPServer
+- HTTP/HTTPS protocol support
+- Configurable thread pool
+- Request/response interceptors
+- Static file serving
+
+#### Router
+- RESTful routing support
+- Path parameter extraction
+- Route grouping
+- Middleware mounting
+
+#### Middleware
+- `DeserializeUserMiddleware` - JWT authentication
+- `RequirePermissionMiddleware` - Permission checking
+- `CORSMiddleware` - CORS support
+- `LoggingMiddleware` - Request logging
+
+### Server Configuration
+
+```ini
+# .env configuration
+PORT=443
+HOST=0.0.0.0
+SSL_CERT=./ssl/server.crt
+SSL_KEY=./ssl/server.key
+DB_URL=postgresql://user:pass@host:port/db
+```
+
+### Start Service
+
+```bash
+# Build
+cjpm build
+
+# Start HTTPS service
+cjpm run --skip-build --name magic.app
+```
+
+### API Endpoints
+
+- `GET /hello` - Health check
+- `GET /api/v1/health` - Service status
+- `GET /api/v1/info` - Application info
+- `/api/v1/uctoo/*` - UCToo business API
+- `/api/v1/tools/*` - Tool management API
+- `/api/v1/skills/*` - Skill management API
+
+### Performance Metrics
+
+- **Concurrent Connections**: Supports 1000+ concurrent connections
+- **Response Time**: Average response time < 50ms
+- **Throughput**: > 10000 req/s
+- **Memory Usage**: Base memory < 100MB
 
 ### Multi-Language Ecosystem Support
 - **Cross-Language Interoperability**: Support for skills written in different programming languages working together in the same runtime environment
@@ -201,17 +340,16 @@ cd agentskills-runtime
 cjpm build
 
 # Run examples
-cjpm run --skip-build --name magic.examples.uctoo_api_mcp_server
-cjpm run --skip-build --name magic.examples.uctoo_api_mcp_client
+cjpm run --skip-build --name magic.examples.uctoo_api_skill
 ```
 
 ### Running API Service
 ```bash
 # Run the API service on default port 8080
-cjpm run --skip-build --name magic.api
+cjpm run --skip-build --name magic.app
 
 # Or run on a specific port
-cjpm run --skip-build --name magic.api 8081
+cjpm run --skip-build --name magic.app 8081
 ```
 
 For detailed instructions on running the API service, see [API Service Run Guide](docs/api-service-run.md).
@@ -636,12 +774,33 @@ apps/agentskills-runtime/
 ├── docs/                                # Documentation
 │   ├── architecture.md                  # Architecture overview
 │   ├── quickstart.md                    # Quick start guide
+│   ├── builtin-tools.md                 # Built-in tools documentation
 │   └── api-reference.md                 # API reference
 ├── src/                                 # Source code
+│   ├── app/                            # Application server module
+│   │   ├── main.cj                     # Application main entry
+│   │   ├── core/                       # Core components
+│   │   │   ├── server/                 # HTTP/HTTPS server
+│   │   │   ├── router/                 # Routing system
+│   │   │   ├── middleware/             # Middleware
+│   │   │   ├── http/                   # HTTP request/response
+│   │   │   └── database/               # Database connection pool
+│   │   ├── routes/                     # Route handlers
+│   │   │   ├── skill/                  # Skill routes
+│   │   │   └── tool/                   # Tool routes
+│   │   ├── controllers/                # Controllers
+│   │   ├── services/                   # Business services
+│   │   ├── middlewares/                # Middleware implementations
+│   │   └── registry/                   # Auto route registration
 │   ├── skill/                          # Skill-related functionality
 │   │   ├── domain/                     # Skill domain models
 │   │   ├── infrastructure/             # Skill infrastructure components
 │   │   └── application/                # Skill application services
+│   ├── tool/                           # Tool module
+│   │   ├── tool_dispatcher.cj          # Tool dispatcher
+│   │   ├── permission_checker.cj       # Permission checker
+│   │   ├── builtin_tools_registry.cj   # Built-in tools registry
+│   │   └── file_tools.cj               # File tools implementation
 │   ├── security/                       # Security module
 │   │   ├── wasm_sandbox/               # WASM sandbox
 │   │   └── access_control/             # Access control

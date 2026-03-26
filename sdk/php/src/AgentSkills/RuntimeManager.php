@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace AgentSkills;
 
@@ -9,7 +9,7 @@ use Symfony\Component\Process\Process;
 
 class RuntimeManager
 {
-    private const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
+    private const DEFAULT_BASE_URL = 'http://127.0.0.1:8080/api/v1/uctoo';
     private const RUNTIME_VERSION = '0.0.16';
     private const GITHUB_REPO = 'UCTooCom/agentskills-runtime';
     private const ATOMGIT_REPO = 'uctoo/agentskills-runtime';

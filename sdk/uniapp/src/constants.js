@@ -1,8 +1,8 @@
-// AgentSkills Runtime UniApp SDK Constants
+﻿// AgentSkills Runtime UniApp SDK Constants
 // 常量定义
 
 // 默认配置
-export const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
+export const DEFAULT_BASE_URL = 'http://127.0.0.1:8080/api/v1/uctoo';
 export const DEFAULT_WS_URL = 'ws://127.0.0.1:8080/ws/chat';
 export const DEFAULT_TIMEOUT = 30000; // 30秒
 

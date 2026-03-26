@@ -280,6 +280,230 @@ main(args: Array<String>): Unit {
     }
     
     println("")
+    println("[STEP] Copying f_orm DLLs to bin...")
+    
+    let fOrmDir = Path("${targetDir}/f_orm")
+    if (exists(fOrmDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(fOrmDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} f_orm DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${fOrmDir}")
+    }
+    
+    println("")
+    println("[STEP] Copying charset4cj DLLs to bin...")
+    
+    let charsetDir = Path("${targetDir}/charset4cj")
+    if (exists(charsetDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(charsetDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} charset4cj DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${charsetDir}")
+    }
+    
+    println("")
+    println("[STEP] Copying jwt4cj DLLs to bin...")
+    
+    let jwtDir = Path("${targetDir}/jwt4cj")
+    if (exists(jwtDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(jwtDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} jwt4cj DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${jwtDir}")
+    }
+    
+    println("")
+    println("[STEP] Copying logcj DLLs to bin...")
+    
+    let logDir = Path("${targetDir}/logcj")
+    if (exists(logDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(logDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} logcj DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${logDir}")
+    }
+    
+    println("")
+    println("[STEP] Copying f_data DLLs to bin...")
+    
+    let fDataDir = Path("${targetDir}/f_data")
+    if (exists(fDataDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(fDataDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} f_data DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${fDataDir}")
+    }
+    
+    println("")
+    println("[STEP] Copying f_config DLLs to bin...")
+    
+    let fConfigDir = Path("${targetDir}/f_config")
+    if (exists(fConfigDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(fConfigDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} f_config DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${fConfigDir}")
+    }
+    
+    println("")
+    println("[STEP] Copying opengauss DLLs to bin...")
+    
+    let opengaussDir = Path("${targetDir}/opengauss")
+    if (exists(opengaussDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(opengaussDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} opengauss DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${opengaussDir}")
+    }
+    
+    println("")
+    println("[STEP] Copying blowfish DLLs to bin...")
+    
+    let blowfishDir = Path("${targetDir}/blowfish")
+    if (exists(blowfishDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(blowfishDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} blowfish DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${blowfishDir}")
+    }
+    
+    println("")
     println("[STEP] Copying cangjie-stdx libraries to bin...")
     
     let stdxDir = Path("${rootPath}/libs/cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx")
@@ -346,14 +570,14 @@ main(args: Array<String>): Unit {
     println("[STEP] Creating entry point...")
     
     let entryExe = Path("${binDir}/agentskills-runtime.exe")
-    let apiExe = Path("${binDir}/magic.api.exe")
-    if (exists(apiExe)) {
-        copy(apiExe.toString(), to: entryExe.toString(), overwrite: true)
-        println("  [OK] Created agentskills-runtime.exe from magic.api.exe")
+    let appExe = Path("${binDir}/magic.app.exe")
+    if (exists(appExe)) {
+        copy(appExe.toString(), to: entryExe.toString(), overwrite: true)
+        println("  [OK] Created agentskills-runtime.exe from magic.app.exe")
     } else if (exists(entryExe)) {
         println("  [OK] agentskills-runtime.exe already exists")
     } else {
-        println("  [WARN] magic.api.exe not found, entry point may be missing")
+        println("  [WARN] magic.app.exe not found, entry point may be missing")
     }
     
     println("")
@@ -469,6 +693,14 @@ main(args: Array<String>): Unit {
     println("    magic/            - Runtime modules")
     println("    commonmark4cj/    - Markdown parser")
     println("    yaml4cj/          - YAML parser")
+    println("    f_orm/            - ORM database framework")
+    println("    f_data/           - Data processing framework")
+    println("    f_config/         - Configuration management")
+    println("    charset4cj/       - Character encoding library")
+    println("    jwt4cj/           - JWT authentication library")
+    println("    logcj/            - Logging library")
+    println("    opengauss/        - OpenGauss database driver")
+    println("    blowfish/         - Blowfish encryption library")
     println("    VERSION           - Version info")
     println("    .env.example      - Configuration template")
     println("")

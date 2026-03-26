@@ -1,12 +1,12 @@
 {
   "name": "agentskills-runtime-uniapp-sdk",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "UniApp SDK for AgentSkills Runtime - Communicate with AI agent skills from UniApp applications",
   "main": "src/index.js",
   "type": "module",
   "uni_modules": {
     "id": "agentskills-runtime-uniapp-sdk",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "name": "AgentSkills Runtime UniApp SDK",
     "description": "Communicate with AI agent skills from UniApp applications",
     "author": "OpenCangJie Team",

@@ -169,7 +169,8 @@ export interface RuntimeOptions {
   skillInstallPath?: string;
 }
 
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
+const DEFAULT_BASE_URL = 'http://127.0.0.1:8080/api/v1/uctoo';
+const API_PREFIX = '/api/v1/uctoo';
 const DEFAULT_TIMEOUT = 30000;
 const GITHUB_REPO = 'UCTooCom/agentskills-runtime';
 const ATOMGIT_REPO = 'uctoo/agentskills-runtime';
@@ -544,12 +545,12 @@ export class SkillsClient {
   }
 
   async installSkill(options: SkillInstallOptions): Promise<SkillInstallResponse> {
-    const response = await this.client.post('/skills/add', options);
+    const response = await this.client.post('/skills/install', options);
     return response.data;
   }
   
   async installSkillFromMultiRepo(source: string, skillPath: string, options: Omit<SkillInstallOptions, 'source'> = {}): Promise<SkillInstallResponse> {
-    const response = await this.client.post('/skills/add', {
+    const response = await this.client.post('/skills/install', {
       source,
       skill_subpath: skillPath,
       ...options

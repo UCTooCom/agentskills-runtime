@@ -1,4 +1,4 @@
-package com.opencangjie.skills;
+﻿package com.opencangjie.skills;
 
 import com.opencangjie.skills.model.RuntimeOptions;
 import com.opencangjie.skills.model.RuntimeStatus;
@@ -14,7 +14,7 @@ import java.util.zip.GZIPInputStream;
 public class RuntimeManager {
     private Process process = null;
     private String baseUrl;
-    private static final String DEFAULT_BASE_URL = "http://127.0.0.1:8080";
+    private static final String DEFAULT_BASE_URL = "http://127.0.0.1:8080/api/v1/uctoo";
     private static final String SDK_VERSION = "0.0.1";
     private static final String RUNTIME_VERSION = "0.0.16";
     private static final String GITHUB_REPO = "UCTooCom/agentskills-runtime";

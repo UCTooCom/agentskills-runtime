@@ -1,0 +1,53 @@
+[dependencies]
+  f_base  = {path = "../f_base", version = "1.0.45"}
+  f_cmd  = {path = "../f_cmd", version = "1.0.45"}
+  f_collection  = {path = "../f_collection", version = "1.0.45"}
+  f_config  = {path = "../f_config", version = "1.0.45"}
+  f_data  = {path = "../f_data", version = "1.0.45"}
+  f_log  = {path = "../f_log", version = "1.0.45"}
+  f_macros  = {path = "../f_macros", version = "1.0.45"}
+  f_exception  = {path = "../f_exception", version = "1.0.45"}
+  f_regex  = {path = "../f_regex", version = "1.0.45"}
+[package]
+  cjc-version = "1.0.4"
+  compile-option = "-Woff all --dy-std"
+  override-compile-option = "-Woff all --dy-std"
+  description = "IOC"
+  link-option = ""
+  name = "f_bean"
+  output-type = "dynamic"
+  src-dir = ""
+  target-dir = ""
+  version = "1.0.45"
+  package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
+
+[profile.build]
+#  lto = "full"
+  incremental = true
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.x86_64-w64-mingw32]
+  compile-option = "-Woff all --dy-std -lcrypt32"
+  override-compile-option = "-Woff all --dy-std -lcrypt32"
+[target.x86_64-apple-darwin]
+  compile-option = "-Woff all --dy-std"
+  override-compile-option = "-Woff all --dy-std"
+[target.aarch64-apple-darwin]
+  compile-option = "-Woff all --dy-std"
+  override-compile-option = "-Woff all --dy-std"
+[target.aarch64-linux-ohos]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.x86_64-linux-ohos]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"

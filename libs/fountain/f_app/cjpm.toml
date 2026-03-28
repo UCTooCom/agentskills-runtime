@@ -1,0 +1,48 @@
+[package]
+  cjc-version = "1.0.4"
+  name = "f_app"
+  description = "依赖fountain开发的应用进程启动模块"
+  version = "1.0.45"
+  target-dir = ""
+  src-dir = ""
+  output-type = "dynamic"
+  compile-option = ""
+  override-compile-option = ""
+  link-option = ""
+  package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
+
+[dependencies]
+  f_base  = {path = "../f_base", version = "1.0.45"}
+  f_log  = {path = "../f_log", version = "1.0.45"}
+  f_version  = {path = "../f_version", version = "1.0.45"}
+
+[profile.build]
+##  lto = "full"
+  incremental = true
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.x86_64-w64-mingw32]
+  compile-option = "-Woff all --dy-std -lcrypt32"
+  override-compile-option = "-Woff all --dy-std -lcrypt32"
+[target.x86_64-apple-darwin]
+  compile-option = "-Woff all --dy-std"
+  override-compile-option = "-Woff all --dy-std"
+[target.aarch64-apple-darwin]
+  compile-option = "-Woff all --dy-std"
+  override-compile-option = "-Woff all --dy-std"
+[target.aarch64-linux-ohos]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.x86_64-linux-ohos]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"

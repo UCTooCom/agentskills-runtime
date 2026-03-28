@@ -1,0 +1,51 @@
+[dependencies]
+  fountain = {path = "../"}
+  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
+#  opengauss = {path = "../../opengauss-driver"}
+
+[workspace]
+  version = "1.0.45"
+  members=["./boot", "./user"]
+  compile-option = "--dy-std -Woff unused"
+  override-compile-option = "--dy-std -Woff unused"
+
+[profile.build]
+##  lto = "full"
+  incremental = true
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "--dy-std -Woff unused"
+  override-compile-option = "--dy-std -Woff unused"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "--dy-std -Woff unused"
+  override-compile-option = "--dy-std -Woff unused"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-w64-mingw32]
+  compile-option = "--dy-std -Woff unused"
+  override-compile-option = "--dy-std -Woff unused"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-apple-darwin]
+  compile-option = "--dy-std -Woff unused"
+  override-compile-option = "--dy-std -Woff unused"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-apple-darwin]
+  compile-option = "--dy-std -Woff unused"
+  override-compile-option = "--dy-std -Woff unused"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-linux-ohos]
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-linux-ohos]
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]

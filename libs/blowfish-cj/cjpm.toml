@@ -1,0 +1,14 @@
+[package]
+  cjc-version = "1.0.1"
+  name = "blowfish"
+  description = "Blowfish cipher and bcrypt implementation for Cangjie"
+  version = "1.0.1"
+  target-dir = ""
+  src-dir = ""
+  output-type = "dynamic"
+  compile-option = "-Woff unused"
+  override-compile-option = ""
+  link-option = ""
+  package-configuration = {}
+
+[dependencies]

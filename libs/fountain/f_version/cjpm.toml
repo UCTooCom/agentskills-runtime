@@ -1,0 +1,57 @@
+[package]
+  cjc-version = "1.0.4"
+  name = "f_version"
+  description = "应用与fountain的版本信息和应用BANNER"
+  version = "1.0.45"
+  target-dir = ""
+  src-dir = ""
+  output-type = "dynamic"
+  compile-option = ""
+  override-compile-option = ""
+  link-option = ""
+  package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-w64-mingw32]
+  compile-option = "-Woff all --dy-std -lcrypt32"
+  override-compile-option = "-Woff all --dy-std -lcrypt32"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-apple-darwin]
+  compile-option = "-Woff all --dy-std"
+  override-compile-option = "-Woff all --dy-std"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-apple-darwin]
+  compile-option = "-Woff all --dy-std"
+  override-compile-option = "-Woff all --dy-std"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-linux-ohos]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-linux-ohos]
+  compile-option = "-Woff all --dy-std -ldl"
+  override-compile-option = "-Woff all --dy-std -ldl"
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+  
+[profile.build]
+#  lto = "full"
+  incremental = true

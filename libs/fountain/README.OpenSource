@@ -1,0 +1,38 @@
+[
+    {
+        "Name": " RxJava ",
+        "License": " Apache License 2.0 ",
+        "License File": " LICENSE ",
+        "Owner": ""
+        "Upstream URL": " https://github.com/ReactiveX/RxJava/tree/3.x ",
+        "Version Number": " 3.x ",
+        "Description": " RxJava: Reactive Extensions for the JVM "
+    },
+    {
+        "Name": " spring-webmvc ",
+        "License": " Apache License 2.0 ",
+        "License File": " LICENSE ",
+        "Owner": ""
+        "Upstream URL": " https://github.com/spring-projects/spring-framework/tree/main/spring-webmvc ",
+        "Version Number": " 6.2.11 ",
+        "Description": " Spring Web MVC "
+    },
+    {
+        "Name": " spring-tx ",
+        "License": " Apache License 2.0 ",
+        "License File": " LICENSE ",
+        "Owner": ""
+        "Upstream URL": " https://github.com/spring-projects/spring-framework/tree/main/spring-tx ",
+        "Version Number": " 6.2.11 ",
+        "Description": " Spring Transaction "
+    },
+    {
+        "Name": " spring-webmvc ",
+        "License": " Apache License 2.0 ",
+        "License File": " LICENSE ",
+        "Owner": ""
+        "Upstream URL": " https://github.com/apache/logging-log4j2 ",
+        "Version Number": " rel/2.25.2 ",
+        "Description": " Apache Log4j "
+    }
+]

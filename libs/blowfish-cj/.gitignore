@@ -1,0 +1,10 @@
+/.vscode
+/.cache
+
+/target
+
+*.sh
+
+# 覆盖率相关文件
+/cov_output
+/output

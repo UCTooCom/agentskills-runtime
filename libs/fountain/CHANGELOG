@@ -1,0 +1,33 @@
+2024-11-03
+初始化项目目录结构
+增加通用异常声明
+增加f_base模块
+    Comparator Equaler
+    空集合
+    Option的比较扩展
+    对数值型的抽象Number Float Integer
+    字符扩展
+    区间扩展
+    字符串扩展
+    OS
+    HashBuilder
+    超限策略OverSizePolicy
+    单实例迭代器
+    TypeInfo辅助工具
+    反射类型成员信息辅助工具
+    超限制时的工作策略
+    什么也不做的定时器
+    一些集合类型，包括并发集合
+2024-11-10
+    堆缓存
+    一些并发类型，包括限流算法
+2024-11-17
+    配置类型
+    属性复制
+    jwt
+    宏编程辅助API
+    随机串、范围随机数、随机迭代器等
+    正则表达式DSL和正则表达式缓存
+    文本模板
+    时间扩展类型
+    crc16 CaseFormat 密钥交换算法 常用设计模式 murmur-hash PathPattern uuid

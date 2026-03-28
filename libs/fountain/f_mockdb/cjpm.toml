@@ -1,0 +1,18 @@
+[package]
+  cjc-version = "1.0.4"
+  name = "f_mockdb"
+  compile-option = "-Woff all --dy-std"
+  override-compile-option = "-Woff all --dy-std"
+  description = "mock database"
+  version = "1.0.45"
+  target-dir = ""
+  src-dir = ""
+  output-type = "dynamic"
+  link-option = ""
+  package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
+
+[dependencies]

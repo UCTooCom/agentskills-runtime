@@ -12,17 +12,17 @@
 [dependencies]
   yaml4cj = { path = "./libs/yaml4cj" }
   commonmark4cj = { path = "./libs/commonmark4cj" }
-  f_orm = { path = "../fountain/f_orm" }
-  f_data = { path = "../fountain/f_data" }
-  f_config = { path = "../fountain/f_config" }
+  f_orm = { path = "./libs/fountain/f_orm" }
+  f_data = { path = "./libs/fountain/f_data" }
+  f_config = { path = "./libs/fountain/f_config" }
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", compile-option = "-Woff unused" }
-  jwt4cj = { path = "../CangjieMagic/resource/TPC/jwt4cj" }
-  logcj = { path = "../CangjieMagic/resource/TPC/log-cj" }
-  opengauss = { path = "../CangjieMagic/resource/TPC/opengauss-driver" }
+  jwt4cj = { git = "https://gitcode.com/Cangjie-TPC/jwt4cj.git", branch = "develop", compile-option = "-Woff unused }
+  logcj = { git = "https://gitcode.com/Cangjie-TPC/log-cj.git", branch = "develop", compile-option = "-Woff unused" }
+  opengauss = { git = "https://gitcode.com/Cangjie-TPC/opengauss-driver.git", branch = "master", compile-option = "-Woff unused" }
 #  redis_sdk = { path = "../CangjieMagic/resource/TPC/redis-sdk"}
 #  pbkdf2 = { path = "../CangjieMagic/resource/TPC/pbkdf2" }
 #  hicrypto = { path = "../CangjieMagic/resource/TPC/hicrypto" }
-  blowfish = { path = "../blowfish-cj" }
+  blowfish = { path = "./libs/blowfish-cj" }
 
 #----------------------------------------
 #  Build Profile Configuration

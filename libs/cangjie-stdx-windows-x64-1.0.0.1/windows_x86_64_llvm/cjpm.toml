@@ -1,0 +1,15 @@
+[dependencies]
+
+[package]
+  cjc-version = "1.0.0"
+  compile-option = "-Woff unused"
+  description = "Cangjie Standard Library Extension"
+  link-option = ""
+  name = "stdx"
+  output-type = "dynamic"
+  src-dir = ""
+  target-dir = ""
+  version = "1.0.0"
+
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["./dynamic/stdx"]

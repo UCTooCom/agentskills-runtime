@@ -1,11 +1,97 @@
 ---
 name: crud-generator
-description: Generate standard CRUD modules for UCToo V4 with DAO layer. Use this skill when the user wants to create a new database module, scaffold CRUD operations, or generate boilerplate code for a database table. The skill reads Prisma schema to understand table structure, then generates Model, DAO, Service, Controller, Route files and pkg.cj exports in Cangjie language. Trigger when user mentions "generate CRUD", "create module", "scaffold", "new table", "add entity", or asks to create database operations for any table like "为xxx表生成CRUD" or "创建xxx模块".
+description: Generate standard CRUD modules for UCToo V4 with DAO layer. Use this skill when the user wants to create a new database module, scaffold CRUD operations, or generate boilerplate code for a database table. The skill reads uctooDB.sql to understand table structure, then generates Model, DAO, Service, Controller, Route files and pkg.cj exports in Cangjie language. Trigger when user mentions "generate CRUD", "create module", "scaffold", "new table", "add entity", or asks to create database operations for any table like "为xxx表生成CRUD" or "创建xxx模块".
 ---
 
 # CRUD Generator Skill
 
 为 UCToo V4 生成标准 CRUD 模块，包含 DAO 层。
+
+## 📚 文档导航
+
+本技能包含以下文档和资源：
+
+### 核心文档
+- **SKILL.md** (本文档) - 技能主文档，包含完整的使用说明
+- **SQL_SCHEMA_PARSER_USAGE.md** - SQL解析器详细使用说明，包含API文档和类型映射
+
+### 参考文档 (references/)
+- **model-pattern.md** - Model层代码模式参考，包含字段定义和ORM注解
+- **dao-pattern.md** - DAO层代码模式参考，包含数据访问方法设计
+- **service-pattern.md** - Service层代码模式参考，包含业务逻辑封装
+- **controller-pattern.md** - Controller层代码模式参考，包含HTTP请求处理
+- **route-pattern.md** - Route层代码模式参考，包含路由注册
+
+### 核心脚本 (scripts/)
+- **generate-from-template-v2.js** - 核心生成脚本，支持关键字检测和自动路由注册
+- **sql-schema-parser.js** - SQL表结构解析器，从uctooDB.sql读取表结构
+- **update-auto-route-config.js** - 自动路由注册脚本，更新AutoRouteConfig.cj
+- **example-generate-entity.js** - Entity表生成示例，演示完整流程
+
+### 模板文件 (templates/)
+- **model-full.cj.tpl** - Model层完整模板，包含ORM注解和toJson方法
+- **dao-full.cj.tpl** - DAO层完整模板，包含CRUD操作方法
+- **service-full.cj.tpl** - Service层完整模板，包含业务逻辑封装
+- **controller-full.cj.tpl** - Controller层完整模板，包含RESTful端点
+- **route-full.cj.tpl** - Route层完整模板，包含路由定义
+
+## 🚀 快速开始
+
+### 最简单的使用方式
+
+```bash
+# 方式1：使用示例脚本（推荐新手）
+node scripts/example-generate-entity.js
+
+# 方式2：使用核心脚本（推荐进阶用户）
+# 在代码中导入并调用
+import { generateModule } from './scripts/generate-from-template-v2.js'
+import { parseTable } from './scripts/sql-schema-parser.js'
+```
+
+### 推荐阅读顺序
+
+1. **新手路径**：
+   - 阅读本文档 → 了解基本流程
+   - 运行 `example-generate-entity.js` → 查看生成结果
+   - 阅读生成的代码 → 理解各层结构
+
+2. **进阶路径**：
+   - 阅读 `SQL_SCHEMA_PARSER_USAGE.md` → 了解SQL解析
+   - 阅读 `references/` 目录 → 理解各层设计模式
+   - 自定义生成逻辑 → 修改模板文件
+
+3. **深入路径**：
+   - 研究模板文件 → 理解代码生成机制
+   - 修改模板 → 适配特殊需求
+   - 扩展功能 → 添加新的生成能力
+
+## 📦 技能文件清单
+
+```
+crud-generator/
+├── SKILL.md                           # 本文档
+├── SQL_SCHEMA_PARSER_USAGE.md         # SQL解析器使用说明
+├── references/                        # 参考文档目录
+│   ├── model-pattern.md               # Model模式参考
+│   ├── dao-pattern.md                 # DAO模式参考
+│   ├── service-pattern.md             # Service模式参考
+│   ├── controller-pattern.md          # Controller模式参考
+│   └── route-pattern.md               # Route模式参考
+├── scripts/                           # 核心脚本目录
+│   ├── generate-from-template-v2.js   # 核心生成脚本
+│   ├── sql-schema-parser.js           # SQL解析器
+│   ├── update-auto-route-config.js    # 自动路由注册
+│   └── example-generate-entity.js     # Entity生成示例
+└── templates/                         # 模板文件目录
+    ├── model-full.cj.tpl              # Model模板
+    ├── dao-full.cj.tpl                # DAO模板
+    ├── service-full.cj.tpl            # Service模板
+    ├── controller-full.cj.tpl         # Controller模板
+    └── route-full.cj.tpl              # Route模板
+
+总计：16个核心文件
+```
 
 ## 使用场景
 
@@ -27,19 +113,24 @@ description: Generate standard CRUD modules for UCToo V4 with DAO layer. Use thi
    - 启用缓存？(默认: 否)
    - 生成测试？(默认: 是)
 
-### 步骤 2: 分析 Schema
+### 步骤 2: 分析 SQL Schema
 
-1. **读取 Prisma schema**:
-   - 读取 `apps/backend/prisma/uctoo/schema.prisma` 获取表结构
+1. **读取 uctooDB.sql**:
+   - 读取 `apps/agentskills-runtime/sql/uctooDB.sql` 获取表结构
+   - 解析CREATE TABLE语句提取字段定义
    - 解析字段类型、可空标志、默认值
-   - 识别主键和关系
+   - 识别主键和字段注释
 
-2. **字段类型映射**:
-   - String → String / ?String
-   - Int → Int32 / ?Int32
-   - Float → Float64 / ?Float64
-   - Boolean → Bool / ?Bool
-   - DateTime → DateTime / ?DateTime
+2. **PostgreSQL类型映射**:
+   - uuid → String
+   - text/varchar → String
+   - int4/int8 → Int
+   - float8 → Float
+   - bool → Boolean
+   - timestamptz → DateTime
+   - jsonb/json → String
+
+> 💡 **详细说明**：SQL解析器的详细使用方法、API文档和类型映射表请参考 [SQL_SCHEMA_PARSER_USAGE.md](./SQL_SCHEMA_PARSER_USAGE.md)
 
 ### 步骤 2.5: 关键字检测和处理
 
@@ -131,6 +222,13 @@ src/app/
 4. **用户确认后应用更改**
 
 ## 代码模式
+
+> 💡 **详细参考**：各层的详细设计模式、代码结构和最佳实践请参考 [references/](./references/) 目录下的文档：
+> - [model-pattern.md](./references/model-pattern.md) - Model层详细设计
+> - [dao-pattern.md](./references/dao-pattern.md) - DAO层详细设计
+> - [service-pattern.md](./references/service-pattern.md) - Service层详细设计
+> - [controller-pattern.md](./references/controller-pattern.md) - Controller层详细设计
+> - [route-pattern.md](./references/route-pattern.md) - Route层详细设计
 
 ### 关键字处理模式
 
@@ -245,35 +343,34 @@ if (let Some(typeValue) <- map.get("type")) {
 
 ```javascript
 import { generateModule } from './scripts/generate-from-template-v2.js'
+import { parseTable } from './scripts/sql-schema-parser.js'
 
-// 准备字段定义
-const fields = [
-  { name: 'id', dbName: 'id', camelName: 'id', type: 'String', isPrimaryKey: true, isOptional: false },
-  { name: 'name', dbName: 'name', camelName: 'name', type: 'String', isPrimaryKey: false, isOptional: false },
-  // ... 其他字段
-]
+// 解析表结构（从uctooDB.sql）
+const tableInfo = parseTable('entity')
 
 // 生成entity模块
 await generateModule({
   tableName: 'entity',
   dbName: 'uctoo',
-  fields: fields,
+  fields: tableInfo.fields,
   outputDir: './src/app'
 })
 
 // 生成uctoo_user模块（使用同一个函数）
+const uctooUserTableInfo = parseTable('uctoo_user')
 await generateModule({
   tableName: 'uctoo_user',
   dbName: 'uctoo',
-  fields: uctooUserFields,
+  fields: uctooUserTableInfo.fields,
   outputDir: './src/app'
 })
 
 // 生成任何其他表的模块（都使用同一个函数）
+const yourTableInfo = parseTable('your_table')
 await generateModule({
   tableName: 'your_table',
   dbName: 'uctoo',
-  fields: yourTableFields,
+  fields: yourTableInfo.fields,
   outputDir: './src/app'
 })
 ```
@@ -284,7 +381,7 @@ await generateModule({
 
 **技能执行流程**:
 ```
-1. 分析 Prisma schema 中的 entity 表结构
+1. 分析 uctooDB.sql 中的 entity 表结构
 2. 提取字段定义
 3. 调用 generateModule({ tableName: 'entity', ... })
 4. 生成 Model, DAO, Service, Controller, Route 文件
@@ -295,7 +392,7 @@ await generateModule({
 
 **技能执行流程**:
 ```
-1. 分析 Prisma schema 中的 uctoo_user 表结构
+1. 分析 uctooDB.sql 中的 uctoo_user 表结构
 2. 提取字段定义
 3. 调用 generateModule({ tableName: 'uctoo_user', ... })  // 使用同一个函数
 4. 生成 Model, DAO, Service, Controller, Route 文件
@@ -306,23 +403,20 @@ await generateModule({
 
 ```javascript
 import { generateModule } from './scripts/generate-from-template-v2.js'
+import { parseTable } from './scripts/sql-schema-parser.js'
 
-const tables = [
-  { tableName: 'entity', fields: entityFields },
-  { tableName: 'uctoo_user', fields: uctooUserFields },
-  { tableName: 'agent_skills', fields: agentSkillsFields },
-  // ... 其他表
-]
+const tableNames = ['entity', 'uctoo_user', 'agent_skills', 'db_info']
 
 // 使用循环批量生成
-for (const table of tables) {
+for (const tableName of tableNames) {
+  const tableInfo = parseTable(tableName)
   await generateModule({
-    tableName: table.tableName,
+    tableName: tableName,
     dbName: 'uctoo',
-    fields: table.fields,
+    fields: tableInfo.fields,
     outputDir: './src/app'
   })
-  console.log(`✅ ${table.tableName} 模块生成完成`)
+  console.log(`✅ ${tableName} 模块生成完成`)
 }
 ```
 
@@ -337,66 +431,81 @@ for (const table of tables) {
 // scripts/generate-agent-skills.js
 // ... 每个表一个脚本
 
-// ❌ 错误：复制粘贴生成逻辑
-function generateEntity() { /* 复制的代码 */ }
-function generateUctooUser() { /* 复制的代码 */ }
-function generateAgentSkills() { /* 复制的代码 */ }
+// ❌ 错误：手动定义字段列表
+const entityFields = [
+  { name: 'id', dbName: 'id', camelName: 'id', type: 'String', isPrimaryKey: true, isOptional: false },
+  // ... 手动维护大量字段定义
+]
 ```
 
 **应该这样做**：
 
 ```javascript
-// ✅ 正确：使用统一的生成函数
+// ✅ 正确：使用统一的生成函数和SQL解析器
 import { generateModule } from './scripts/generate-from-template-v2.js'
+import { parseTable } from './scripts/sql-schema-parser.js'
 
-await generateModule({ tableName: 'entity', ... })
-await generateModule({ tableName: 'uctoo_user', ... })
-await generateModule({ tableName: 'agent_skills', ... })
+const tableInfo = parseTable('entity')  // 自动从SQL解析
+await generateModule({ tableName: 'entity', fields: tableInfo.fields, ... })
+
+const uctooUserTableInfo = parseTable('uctoo_user')  // 自动从SQL解析
+await generateModule({ tableName: 'uctoo_user', fields: uctooUserTableInfo.fields, ... })
+
+const agentSkillsTableInfo = parseTable('agent_skills')  // 自动从SQL解析
+await generateModule({ tableName: 'agent_skills', fields: agentSkillsTableInfo.fields, ... })
 ```
 
 ## 字段类型映射
 
-| Prisma 类型 | Cangjie 类型 | 默认值 |
-|-------------|--------------|--------|
-| String | String | "" |
-| String? | ?String | None<String> |
-| Int | Int32 | 0 |
-| Float | Float64 | 0.0 |
-| Boolean | Bool | false |
-| DateTime | DateTime | DateTime.now() |
-| DateTime? | ?String | "" (ISO字符串) |
-| @db.Uuid | String | "" |
+| PostgreSQL类型 | Cangjie类型 | 默认值 | 说明 |
+|---------------|-------------|--------|------|
+| uuid | String | "" | UUID主键 |
+| text | String | "" | 文本类型 |
+| varchar | String | "" | 变长字符串 |
+| int4 | Int32 | 0 | 32位整数 |
+| int8 | Int64 | 0 | 64位整数 |
+| float8 | Float64 | 0.0 | 双精度浮点 |
+| bool | Bool | false | 布尔值 |
+| timestamptz | DateTime | DateTime.now() | 时区时间戳 |
+| timestamp | DateTime | DateTime.now() | 时间戳 |
+| date | DateTime | DateTime.now() | 日期 |
+| jsonb | String | "" | JSON二进制 |
+| json | String | "" | JSON文本 |
 
-## Prisma Schema 解析
+## SQL Schema 解析
 
-读取 `schema.prisma` 时，提取：
+读取 `uctooDB.sql` 时，提取：
 
-```prisma
-model entity {
-  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  link          String     @db.VarChar
-  privacy_level Int        @default(0)
-  stars         Float      @default(0)
-  description   String?    @db.VarChar
-  created_at    DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime   @default(now()) @db.Timestamptz(6)
-  deleted_at    DateTime?  @db.Timestamptz(6)
-  creator       String     @db.Uuid
-}
+```sql
+CREATE TABLE "public"."entity" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "link" text COLLATE "pg_catalog"."default" NOT NULL,
+  "privacy_level" int4 NOT NULL DEFAULT 0,
+  "stars" float8 NOT NULL DEFAULT 0,
+  "description" text COLLATE "pg_catalog"."default",
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6),
+  "creator" uuid,
+  CONSTRAINT "entity_pkey" PRIMARY KEY ("id")
+);
+
+COMMENT ON COLUMN "public"."entity"."id" IS '主键UUID';
+COMMENT ON COLUMN "public"."entity"."link" IS '链接地址';
 ```
 
 生成对应的 Cangjie 字段:
-- `id: String` - 主键
+- `id: String` - 主键UUID
 - `link: String` - 必填字符串
 - `privacyLevel: Int32` - 从 privacy_level 映射
 - `stars: Float64` - 浮点字段
 - `description: ?String` - 可空字符串
 - `createdAt: DateTime` - 时间戳
-- `deletedAt: ?String` - 可空，存储为 ISO 字符串
+- `deletedAt: ?DateTime` - 可空时间戳
 
 ## 错误处理
 
-- **表在 schema 中不存在**: 询问用户有效的表名
+- **表在 uctooDB.sql 中不存在**: 询问用户有效的表名
 - **字段类型错误**: 建议手动覆盖
 - **生成失败**: 显示详细错误并建议修复
 
@@ -560,62 +669,127 @@ func findByCustomCondition(param: String): ArrayList<{Table}PO> {
 
 ### 自动路由注册（推荐）
 
-**重要**: 生成的路由会自动通过 `AutoRouteRegistry` 注册，无需手动添加！
+**重要**: 生成的路由会自动通过 `AutoRouteConfig.cj` 注册，无需手动添加！
 
 #### 自动注册机制
 
-项目已实现自动路由注册机制（位于 `src/app/registry/AutoRouteRegistry.cj`），会自动注册所有CRUD路由：
+项目已实现自动路由注册机制，包含两个关键文件：
+
+1. **AutoRouteConfig.cj** - 路由配置文件
+   - 位置：`src/app/registry/AutoRouteConfig.cj`
+   - 作用：存储所有 CRUD 路由的配置信息
+   - 维护：由 crud-generator 自动更新
+
+2. **AutoRouteRegistry.cj** - 路由注册器
+   - 位置：`src/app/registry/AutoRouteRegistry.cj`
+   - 作用：读取配置并注册所有路由
+   - 使用：在 main.cj 中调用
+
+#### 工作流程
 
 ```cangjie
-// main.cj 中已配置
+// 1. AutoRouteConfig.cj 中定义路由配置
+public static func initRegistry(registry: RouteRegistry): Unit {
+    // Entity 路由
+    registry.add(RouteEntry(
+        "entity",
+        "/api/v1/uctoo/entity",
+        10,
+        true,
+        { router: Router =>
+            let service = EntityService()
+            let controller = EntityController(service)
+            let route = EntityRoute(router, controller)
+            route.register()
+        }
+    ))
+    
+    // 更多路由配置...
+}
+
+// 2. AutoRouteRegistry.cj 中注册所有路由
+public func registerAllRoutes(): Unit {
+    logger.info("=== Starting automatic route registration ===")
+    registerCrudRoutes()  // 注册所有 CRUD 路由
+    registerAuthRoutes()  // 注册认证路由
+    registerMcpRoutes()   // 注册 MCP 路由
+    logger.info("=== All routes registered successfully ===")
+}
+
+// 3. main.cj 中使用
 private func setupRoutes(): Unit {
-    // 使用自动路由注册器注册所有路由
     let routeRegistry = AutoRouteRegistry(router)
     routeRegistry.registerAllRoutes()
-    
-    // 所有生成的CRUD路由都会自动注册
-    // 无需手动添加！
 }
 ```
 
 #### 新增路由的自动注册
 
-当使用 crud-generator 生成新模块时，只需在 `AutoRouteRegistry.cj` 的 `registerCrudRoutes()` 方法中添加一行注册代码：
+当使用 crud-generator 生成新模块时，会自动更新 `AutoRouteConfig.cj`：
 
+**生成前**：
 ```cangjie
-// 在 AutoRouteRegistry.cj 的 registerCrudRoutes() 方法中添加：
+// AutoRouteConfig.cj
+import magic.app.routes.uctoo.entity.EntityRoute
+import magic.app.controllers.uctoo.entity.EntityController
+import magic.app.services.uctoo.{EntityService}
 
-// {Table}路由
-let {table}Service = {Table}Service()
-let {table}Controller = {Table}Controller({table}Service)
-let {table}Route = {Table}Route(router, {table}Controller)
-{table}Route.register()
-logger.info("✓ {Table}Route registered")
+public static func initRegistry(registry: RouteRegistry): Unit {
+    // Entity 路由
+    registry.add(RouteEntry(...))
+}
 ```
 
-**示例**：生成 `uctoo_session` 模块后，添加：
-
+**生成 db_info 模块后**（自动更新）：
 ```cangjie
-// UctooSession路由
-let uctooSessionService = UctooSessionService()
-let uctooSessionController = UctooSessionController(uctooSessionService)
-let uctooSessionRoute = UctooSessionRoute(router, uctooSessionController)
-uctooSessionRoute.register()
-logger.info("✓ UctooSessionRoute registered")
+// AutoRouteConfig.cj
+import magic.app.routes.uctoo.entity.EntityRoute
+import magic.app.routes.uctoo.db_info.DbInfoRoute  // 新增
+import magic.app.controllers.uctoo.entity.EntityController
+import magic.app.controllers.uctoo.db_info.DbInfoController  // 新增
+import magic.app.services.uctoo.{
+    EntityService,
+    DbInfoService  // 新增
+}
+
+public static func initRegistry(registry: RouteRegistry): Unit {
+    // Entity 路由
+    registry.add(RouteEntry(...))
+    
+    // DbInfo 路由（自动添加）
+    registry.add(RouteEntry(
+        "db_info",
+        "/api/v1/uctoo/db_info",
+        130,  // 自动计算的优先级
+        true,
+        { router: Router =>
+            let service = DbInfoService()
+            let controller = DbInfoController(service)
+            let route = DbInfoRoute(router, controller)
+            route.register()
+        }
+    ))
+}
 ```
 
 #### 复合主键表的特殊处理
 
-对于复合主键表（如 `user_has_group`, `group_has_permission`），需要特殊处理：
+对于复合主键表（如 `user_has_group`, `group_has_permission`），路由配置会自动添加注释标记：
 
 ```cangjie
-// 复合主键表需要DAO参数
-let userHasGroupDAO = // TODO: 解决DAO实例化问题
-let userHasGroupService = UserHasGroupService(userHasGroupDAO)
-let userHasGroupController = UserHasGroupController(userHasGroupService)
-let userHasGroupRoute = UserHasGroupRoute(router, userHasGroupController)
-userHasGroupRoute.register()
-logger.info("✓ UserHasGroupRoute registered")
+// UserHasGroup 路由 (复合主键)
+registry.add(RouteEntry(
+    "user_has_group",
+    "/api/v1/uctoo/user_has_group",
+    60,
+    true,
+    { router: Router =>
+        let service = UserHasGroupService()
+        let controller = UserHasGroupController(service)
+        let route = UserHasGroupRoute(router, controller)
+        route.register()
+    }
+))
 ```
 
 ### 手动注册（不推荐）
@@ -651,6 +825,7 @@ Registering CRUD routes...
 ✓ UserGroupRoute registered
 ✓ PermissionsRoute registered
 ✓ UserHasAccountRoute registered
+✓ DbInfoRoute registered  // 新生成的路由
 === All routes registered successfully ===
 ```
 

@@ -23,68 +23,68 @@ import f_orm.*
 @DataAssist[fields]
 @QueryMappersGenerator["entity"]
 public class EntityPO {
-        @ORMField[true 'id']
-    private var id: String = ""
+        @ORMField['id']
+    public var id: String = ""
 
         @ORMField['link']
-    private var link: String = ""
+    public var link: String = ""
 
         @ORMField['privacy_level']
-    private var privacyLevel: ?Int32 = None<Int32>
+    public var privacyLevel: ?Int32 = None<Int32>
 
         @ORMField['stars']
-    private var stars: ?Float64 = None<Float64>
+    public var stars: ?Float64 = None<Float64>
 
         @ORMField['description']
-    private var description: ?String = None<String>
+    public var description: ?String = None<String>
 
         @ORMField['group_id']
-    private var groupId: ?String = None<String>
+    public var groupId: ?String = None<String>
 
         @ORMField['picture']
-    private var picture: ?String = None<String>
+    public var picture: ?String = None<String>
 
         @ORMField['images']
-    private var images: ?String = None<String>
+    public var images: ?String = None<String>
 
         @ORMField['content']
-    private var content: ?String = None<String>
+    public var content: ?String = None<String>
 
         @ORMField['json']
-    private var json: ?String = None<String>
+    public var json: ?String = None<String>
 
         @ORMField['city']
-    private var city: ?String = None<String>
+    public var city: ?String = None<String>
 
         @ORMField['price']
-    private var price: ?Float64 = None<Float64>
+    public var price: ?Float64 = None<Float64>
 
         @ORMField['birthday']
-    private var birthday: ?DateTime = None<DateTime>
+    public var birthday: ?DateTime = None<DateTime>
 
         @ORMField['owner']
-    private var owner: ?String = None<String>
+    public var owner: ?String = None<String>
 
         @ORMField['creator']
-    private var creator: String = ""
+    public var creator: String = ""
 
         @ORMField['created_at']
-    private var createdAt: DateTime = DateTime.now()
+    public var createdAt: DateTime = DateTime.now()
 
         @ORMField['updated_at']
-    private var updatedAt: DateTime = DateTime.now()
+    public var updatedAt: DateTime = DateTime.now()
 
         @ORMField['deleted_at']
-    private var deletedAt: ?DateTime = None<DateTime>
+    public var deletedAt: ?DateTime = None<DateTime>
 
         @ORMField['end_time']
-    private var endTime: ?DateTime = None<DateTime>
+    public var endTime: ?DateTime = None<DateTime>
 
         @ORMField['start_time']
-    private var startTime: ?DateTime = None<DateTime>
+    public var startTime: ?DateTime = None<DateTime>
 
         @ORMField['status']
-    private var status: ?String = None<String>
+    public var status: ?String = None<String>
     
     public init() {}
     
@@ -139,16 +139,8 @@ public class EntityPO {
         sb.append("{")
                 sb.append("\"id\":\"${id}\",")
         sb.append("\"link\":\"${link}\",")
-        if (let Some(v) <- privacyLevel) {
-            sb.append("\"privacy_level\":${v},")
-        } else {
-            sb.append("\"privacy_level\":null,")
-        }
-        if (let Some(v) <- stars) {
-            sb.append("\"stars\":${v},")
-        } else {
-            sb.append("\"stars\":null,")
-        }
+        sb.append("\"privacy_level\":${privacyLevel},")
+        sb.append("\"stars\":${stars},")
         if (let Some(v) <- description) {
             sb.append("\"description\":\"${v}\",")
         } else {
@@ -185,9 +177,9 @@ public class EntityPO {
             sb.append("\"city\":\"\",")
         }
         if (let Some(v) <- price) {
-            sb.append("\"price\":\"${v}\",")
+            sb.append("\"price\":${v},")
         } else {
-            sb.append("\"price\":\"\",")
+            sb.append("\"price\":null,")
         }
         if (let Some(v) <- birthday) {
             sb.append("\"birthday\":\"${v}\",")

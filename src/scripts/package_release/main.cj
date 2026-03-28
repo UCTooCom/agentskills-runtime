@@ -503,6 +503,44 @@ main(args: Array<String>): Unit {
         println("  [WARN] Directory not found: ${blowfishDir}")
     }
     
+    // Copy all remaining Fountain framework modules
+    let fountainModules = [
+        "f_aspect", "f_base", "f_bean", "f_cache", "f_cmd", 
+        "f_collection", "f_concurrent", "f_exception", "f_io", 
+        "f_log", "f_macros", "f_mockdb", "f_pool", 
+        "f_random", "f_regex", "f_time", "f_util", "f_version"
+    ]
+    
+    for (moduleName in fountainModules) {
+        println("")
+        println("[STEP] Copying ${moduleName} DLLs to bin...")
+        
+        let moduleDir = Path("${targetDir}/${moduleName}")
+        if (exists(moduleDir) && exists(binDir)) {
+            let dllCount = ArrayList<String>()
+            
+            Directory.walk(moduleDir.toString()) { fileInfo =>
+                if (!fileInfo.isDirectory()) {
+                    let name = fileInfo.path.fileName
+                    
+                    if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                        let destPath = Path("${binDir}/${name}")
+                        if (!exists(destPath)) {
+                            copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                            dllCount.add(name)
+                            totalDlls.add(name)
+                        }
+                    }
+                }
+                true
+            }
+            
+            println("  [OK] Copied ${dllCount.size.toString()} ${moduleName} DLLs to bin/")
+        } else {
+            println("  [WARN] Directory not found: ${moduleDir}")
+        }
+    }
+    
     println("")
     println("[STEP] Copying cangjie-stdx libraries to bin...")
     

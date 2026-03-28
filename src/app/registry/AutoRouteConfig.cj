@@ -24,6 +24,7 @@ import magic.app.routes.uctoo.role_has_permission.RoleHasPermissionRoute
 import magic.app.routes.uctoo.data_access_authorization.DataAccessAuthorizationRoute
 import magic.app.routes.uctoo.login_log.LoginLogRoute
 import magic.app.routes.uctoo.operate_log.OperateLogRoute
+import magic.app.routes.uctoo.db_info.DbInfoRoute
 import magic.app.controllers.uctoo.entity.EntityController
 import magic.app.controllers.uctoo.uctoo_user.UctooUserController
 import magic.app.controllers.uctoo.uctoo_session.UctooSessionController
@@ -38,6 +39,7 @@ import magic.app.controllers.uctoo.role_has_permission.RoleHasPermissionControll
 import magic.app.controllers.uctoo.data_access_authorization.DataAccessAuthorizationController
 import magic.app.controllers.uctoo.login_log.LoginLogController
 import magic.app.controllers.uctoo.operate_log.OperateLogController
+import magic.app.controllers.uctoo.db_info.DbInfoController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -52,7 +54,8 @@ import magic.app.services.uctoo.{
     RoleHasPermissionService,
     DataAccessAuthorizationService,
     LoginLogService,
-    OperateLogService
+    OperateLogService,
+    DbInfoService
 }
 
 /**
@@ -68,6 +71,34 @@ public class AutoRouteConfig {
      * @param registry 路由注册表
      */
     public static func initRegistry(registry: RouteRegistry): Unit {
+        
+        // DbInfo 路由
+        registry.add(RouteEntry(
+            "db_info",
+            "/api/v1/uctoo/db_info",
+            130,
+            true,
+            { router: Router =>
+                let service = DbInfoService()
+                let controller = DbInfoController(service)
+                let route = DbInfoRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // Entity 路由
+        registry.add(RouteEntry(
+            "entity",
+            "/api/v1/uctoo/entity",
+            10,
+            true,
+            { router: Router =>
+                let service = EntityService()
+                let controller = EntityController(service)
+                let route = EntityRoute(router, controller)
+                route.register()
+            }
+        ))
         
         // OperateLog 路由
         registry.add(RouteEntry(
@@ -98,21 +129,7 @@ public class AutoRouteConfig {
         ))
         // ==================== CRUD 路由配置 ====================
         
-        // 1. Entity 路由
-        registry.add(RouteEntry(
-            "entity",
-            "/api/v1/uctoo/entity",
-            10,
-            true,
-            { router: Router =>
-                let service = EntityService()
-                let controller = EntityController(service)
-                let route = EntityRoute(router, controller)
-                route.register()
-            }
-        ))
-        
-        // 2. UctooUser 路由
+        // 1. UctooUser 路由
         registry.add(RouteEntry(
             "uctoo_user",
             "/api/v1/uctoo/uctoo_user",

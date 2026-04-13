@@ -801,4 +801,443 @@ public class PermissionsController {
         sb.append("]")
         return sb.toString()
     }
+    
+    /**
+     * 获取用户菜单树 - V4 标准 RBAC
+     * POST /api/v1/uctoo/permissions/user/menu
+     * 
+     * 实现逻辑（参考 backend 的 getUserPermissionsTree）：
+     * 1. 从 user_has_roles 获取用户所有角色
+     * 2. 从 role_has_permission 获取角色所有权限名称
+     * 3. 从 permissions 获取权限详情（type=1 为菜单）
+     * 4. 构建树形结构返回
+     */
+    public func getUserMenuTree(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            LogUtils.info("PermissionsController", "=== getUserMenuTree() called ===")
+            
+            // 获取用户ID（从请求体或token）
+            let userId = extractUserId(req)
+            
+            if (let Some(uid) <- userId) {
+                LogUtils.info("PermissionsController", "=== Getting menu for user: ${uid} ===")
+                
+                // 获取用户菜单树
+                let menuTree = service.getUserMenuTree(uid)
+                
+                // 返回结果
+                let menuJson = buildMenuTreeJson(menuTree)
+                res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":${menuJson}}")
+                
+                LogUtils.info("PermissionsController", "=== getUserMenuTree() completed ===")
+            } else {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录\"}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("PermissionsController", "=== getUserMenuTree() exception: ${e.message} ===")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    /**
+     * 获取所有菜单树
+     * GET /api/v1/uctoo/permissions/menu/all
+     */
+    public func getAllMenuTree(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            LogUtils.info("PermissionsController", "=== getAllMenuTree() called ===")
+            
+            let menuTree = service.getAllMenuTree()
+            let menuJson = buildMenuTreeJson(menuTree)
+            res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":${menuJson}}")
+            
+        } catch (e: Exception) {
+            LogUtils.error("PermissionsController", "=== getAllMenuTree() exception: ${e.message} ===")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    /**
+     * 根据角色ID获取菜单树
+     * POST /api/v1/uctoo/permissions/role/menu
+     */
+    public func getRoleMenuTree(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            LogUtils.info("PermissionsController", "=== getRoleMenuTree() called ===")
+            
+            let body = parseBody(req)
+            if (let Some(b) <- body) {
+                let roleIdOpt = b.get("id")
+                if (let Some(roleIdVal) <- roleIdOpt) {
+                    let roleIdStr = roleIdVal as String
+                    if (let Some(roleId) <- roleIdStr) {
+                        let menuTree = service.getRoleMenuTree(roleId)
+                        let menuJson = buildMenuTreeJson(menuTree)
+                        res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":${menuJson}}")
+                        return
+                    }
+                }
+            }
+            
+            res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少角色ID参数\"}")
+        } catch (e: Exception) {
+            LogUtils.error("PermissionsController", "=== getRoleMenuTree() exception: ${e.message} ===")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    /**
+     * 从请求中提取用户ID
+     */
+    private func extractUserId(req: HttpRequest): ?String {
+        // 1. 优先从请求体获取
+        let body = parseBody(req)
+        if (let Some(b) <- body) {
+            let idOpt = b.get("id")
+            if (let Some(idVal) <- idOpt) {
+                let idStr = idVal as String
+                if (let Some(s) <- idStr) {
+                    LogUtils.info("PermissionsController", "=== Extracting userId from request body ===")
+                    return Some<String>(s)
+                }
+            }
+        }
+        
+        // 2. 从 locals 获取（由 DeserializeUserMiddleware 从 token 解析后的用户信息）
+        let userId = req.getLocals("userId")
+            if (let Some(uid) <- userId) {
+              let uidStr = uid as String
+              if (let Some(s) <- uidStr) {
+                LogUtils.info("PermissionsController", "=== Extracting userId from locals ===")
+                return Some<String>(s)
+            }
+        }
+        
+        LogUtils.error("PermissionsController", "=== No userId found in request ===")
+        return None<String>
+    }
+    
+    /**
+     * 构建菜单树JSON - 直接使用数据库字段名并构建树形结构
+     * 数据库字段名：permission_name, path, icon, menu_type, parent_id, weight, locale
+     */
+    private func buildMenuTreeJson(menus: ArrayList<PermissionsPO>): String {
+        // 构建树形结构
+        let treeMenus = buildTree(menus, None<String>)
+        
+        let sb = StringBuilder()
+        sb.append("[")
+        
+        let size = treeMenus.size
+        for (i in 0..size) {
+            let menu = treeMenus[i]
+            sb.append(convertToDatabaseFormatWithChildren(menu, menus))
+            
+            if (i < size - 1) {
+                sb.append(",")
+            }
+        }
+        
+        sb.append("]")
+        return sb.toString()
+    }
+    
+    /**
+     * 构建树形结构 - 递归查找子菜单
+     * 
+     * 注意：数据库中的 parent_id 可能是空字符串 "" 而不是 null
+     * 需要将空字符串也视为根菜单
+     */
+    private func buildTree(menus: ArrayList<PermissionsPO>, parentId: ?String): ArrayList<PermissionsPO> {
+        let result = ArrayList<PermissionsPO>()
+        
+        for (menu in menus) {
+            let menuParentId = menu.parentId
+            
+            // 判断是否匹配父ID
+            let isMatch = if (let Some(pid) <- parentId) {
+                // 有父ID，查找子菜单
+                if (let Some(mpid) <- menuParentId) {
+                    // 比较时去除空白字符
+                    let trimmedMpid = mpid.trimAscii()
+                    let trimmedPid = pid.trimAscii()
+                    let isFound = trimmedMpid == trimmedPid && !trimmedMpid.isEmpty()
+                    if (isFound) {
+                        LogUtils.info("PermissionsController", "=== buildTree: Found child menu ${menu.permissionName} with parentId=${mpid} ===")
+                    }
+                    isFound
+                } else {
+                    false
+                }
+            } else {
+                // 无父ID，查找根菜单
+                // 根菜单的条件：parentId 为 None 或空字符串
+                let isRoot = if (let Some(mpid) <- menuParentId) {
+                    mpid.trimAscii().isEmpty()
+                } else {
+                    true
+                }
+                if (isRoot) {
+                    LogUtils.info("PermissionsController", "=== buildTree: Found root menu ${menu.permissionName} ===")
+                }
+                isRoot
+            }
+            
+            if (isMatch) {
+                result.add(menu)
+            }
+        }
+        
+        LogUtils.info("PermissionsController", "=== buildTree: Found ${result.size} menus for parentId=${parentId} ===")
+        return result
+    }
+    
+    /**
+     * 转换为前端格式并递归构建children
+     */
+    private func convertToFrontendFormatWithChildren(menu: PermissionsPO, allMenus: ArrayList<PermissionsPO>): String {
+        let sb = StringBuilder()
+        sb.append("{")
+        
+        // id
+        sb.append("\"id\":\"${menu.id}\",")
+        
+        // label - 使用 title 或 permissionName
+        let label = if (let Some(t) <- menu.title) { t } else { menu.permissionName }
+        sb.append("\"label\":\"${label}\",")
+        
+        // url - 使用 path
+        sb.append("\"url\":\"${menu.path}\",")
+        
+        // component
+        let component = if (let Some(c) <- menu.component) { c } else { "" }
+        sb.append("\"component\":\"${component}\",")
+        
+        // customIcon - 使用 icon
+        let icon = if (let Some(i) <- menu.icon) { i } else { "" }
+        sb.append("\"customIcon\":\"${icon}\",")
+        
+        // menuType
+        let menuType = if (let Some(mt) <- menu.menuType) { mt } else { "normal" }
+        sb.append("\"menuType\":\"${menuType}\",")
+        
+        // parentId
+        let parentIdStr = if (let Some(pid) <- menu.parentId) { pid } else { "" }
+        sb.append("\"parentId\":\"${parentIdStr}\",")
+        
+        // order - 使用 weight
+        let order = if (let Some(w) <- menu.weight) { w } else { Int32(0) }
+        sb.append("\"order\":${order},")
+        
+        // locale
+        let locale = if (let Some(l) <- menu.locale) { l } else { "" }
+        sb.append("\"locale\":\"${locale}\",")
+        
+        // children - 递归构建子菜单
+        let children = buildTree(allMenus, Some<String>(menu.id))
+        if (children.size > 0) {
+            sb.append("\"children\":[")
+            for (i in 0..children.size) {
+                sb.append(convertToFrontendFormatWithChildren(children[i], allMenus))
+                if (i < children.size - 1) {
+                    sb.append(",")
+                }
+            }
+            sb.append("]")
+        } else {
+            sb.append("\"children\":[]")
+        }
+        
+        sb.append("}")
+        return sb.toString()
+    }
+    
+    /**
+     * 直接使用数据库字段名并递归构建children
+     */
+    private func convertToDatabaseFormatWithChildren(menu: PermissionsPO, allMenus: ArrayList<PermissionsPO>): String {
+        let sb = StringBuilder()
+        sb.append("{")
+        
+        // id
+        sb.append("\"id\":\"${menu.id}\",")
+        
+        // permission_name
+        sb.append("\"permission_name\":\"${menu.permissionName}\",")
+        
+        // path
+        sb.append("\"path\":\"${menu.path}\",")
+        
+        // component
+        let component = if (let Some(c) <- menu.component) { c } else { "" }
+        sb.append("\"component\":\"${component}\",")
+        
+        // icon
+        let icon = if (let Some(i) <- menu.icon) { i } else { "" }
+        sb.append("\"icon\":\"${icon}\",")
+        
+        // menu_type
+        let menuType = if (let Some(mt) <- menu.menuType) { mt } else { "normal" }
+        sb.append("\"menu_type\":\"${menuType}\",")
+        
+        // parent_id
+        let parentIdStr = if (let Some(pid) <- menu.parentId) { pid } else { "" }
+        sb.append("\"parent_id\":\"${parentIdStr}\",")
+        
+        // weight
+        let weight = if (let Some(w) <- menu.weight) { w } else { Int32(0) }
+        sb.append("\"weight\":${weight},")
+        
+        // locale
+        let locale = if (let Some(l) <- menu.locale) { l } else { "" }
+        sb.append("\"locale\":\"${locale}\",")
+        
+        // title
+        let title = if (let Some(t) <- menu.title) { t } else { "" }
+        sb.append("\"title\":\"${title}\",")
+        
+        // type
+        let permissionType = if (let Some(pt) <- menu.permissionType) { pt } else { Int32(1) }
+        sb.append("\"type\":${permissionType},")
+        
+        // hidden
+        let hidden = if (let Some(h) <- menu.hidden) { h } else { Int32(1) }
+        sb.append("\"hidden\":${hidden},")
+        
+        // keepalive
+        let keepalive = if (let Some(k) <- menu.keepalive) { k } else { Int32(1) }
+        sb.append("\"keepalive\":${keepalive},")
+        
+        // children - 递归构建子菜单
+        let children = buildTree(allMenus, Some<String>(menu.id))
+        if (children.size > 0) {
+            sb.append("\"children\":[")
+            for (i in 0..children.size) {
+                sb.append(convertToDatabaseFormatWithChildren(children[i], allMenus))
+                if (i < children.size - 1) {
+                    sb.append(",")
+                }
+            }
+            sb.append("]")
+        } else {
+            sb.append("\"children\":[]")
+        }
+        
+        sb.append("}")
+        return sb.toString()
+    }
+    
+    /**
+     * 将 PermissionsPO 转换为前端期望的 JSON 格式
+     */
+    private func convertToFrontendFormat(menu: PermissionsPO): String {
+        let sb = StringBuilder()
+        sb.append("{")
+        
+        // id
+        sb.append("\"id\":\"${menu.id}\",")
+        
+        // label - 使用 title 或 permissionName
+        let label = if (let Some(t) <- menu.title) { t } else { menu.permissionName }
+        sb.append("\"label\":\"${label}\",")
+        
+        // url - 使用 path
+        sb.append("\"url\":\"${menu.path}\",")
+        
+        // component
+        let component = if (let Some(c) <- menu.component) { c } else { "" }
+        sb.append("\"component\":\"${component}\",")
+        
+        // customIcon - 使用 icon
+        let icon = if (let Some(i) <- menu.icon) { i } else { "" }
+        sb.append("\"customIcon\":\"${icon}\",")
+        
+        // menuType
+        let menuType = if (let Some(mt) <- menu.menuType) { mt } else { "normal" }
+        sb.append("\"menuType\":\"${menuType}\",")
+        
+        // parentId
+        let parentIdStr = if (let Some(pid) <- menu.parentId) { pid } else { "" }
+        sb.append("\"parentId\":\"${parentIdStr}\",")
+        
+        // order - 使用 weight
+        let order = if (let Some(w) <- menu.weight) { w } else { Int32(0) }
+        sb.append("\"order\":${order},")
+        
+        // locale
+        let locale = if (let Some(l) <- menu.locale) { l } else { "" }
+        sb.append("\"locale\":\"${locale}\",")
+        
+        // children - 空数组，由前端构建树形结构
+        sb.append("\"children\":[]")
+        
+        sb.append("}")
+        return sb.toString()
+    }
+    
+    /**
+     * 获取用户所有权限 - 不区分权限类型
+     * POST /api/v1/uctoo/permissions/user/all
+     * 
+     * 实现逻辑：
+     * 1. 从 user_has_roles 获取用户所有角色
+     * 2. 从 role_has_permission 获取角色所有权限名称
+     * 3. 从 permissions 获取所有权限详情（不区分类型）
+     * 4. 返回权限列表
+     */
+    public func getUserAllPermissions(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            LogUtils.info("PermissionsController", "=== getUserAllPermissions() called ===")
+            
+            // 获取用户ID（从请求体或token）
+            let userId = extractUserId(req)
+            
+            if (let Some(uid) <- userId) {
+                LogUtils.info("PermissionsController", "=== Getting all permissions for user: ${uid} ===")
+                
+                // 获取用户所有权限
+                let permissions = service.getUserAllPermissions(uid)
+                
+                // 构建权限列表JSON
+                let permissionsJson = buildPermissionsListJson(permissions)
+                res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":{\"items\":${permissionsJson},\"meta\":{\"totalItems\":${permissions.size}}}}")
+                
+                LogUtils.info("PermissionsController", "=== getUserAllPermissions() completed ===")
+            } else {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录\"}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("PermissionsController", "=== getUserAllPermissions() exception: ${e.message} ===")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    /**
+     * 构建权限列表JSON
+     */
+    private func buildPermissionsListJson(permissions: ArrayList<PermissionsPO>): String {
+        let sb = StringBuilder()
+        sb.append("[")
+        
+        let size = permissions.size
+        for (i in 0..size) {
+            let perm = permissions[i]
+            let permType = if (let Some(t) <- perm.permissionType) { t } else { Int32(0) }
+            let desc = if (let Some(t) <- perm.title) { t } else { perm.permissionName }
+            
+            sb.append("{")
+            sb.append("\"id\":\"${perm.id}\",")
+            sb.append("\"name\":\"${perm.permissionName}\",")
+            sb.append("\"desc\":\"${desc}\",")
+            sb.append("\"type\":${permType}")
+            sb.append("}")
+            
+            if (i < size - 1) {
+                sb.append(",")
+            }
+        }
+        
+        sb.append("]")
+        return sb.toString()
+    }
 }

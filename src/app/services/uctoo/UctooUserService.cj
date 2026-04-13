@@ -18,15 +18,11 @@ import magic.log.LogUtils
  * 使用DAO层进行数据访问
  */
 public class UctooUserService {
-    private var executor: ?SqlExecutor = None<SqlExecutor>
+    // 不缓存 SqlExecutor，每次都获取新的实例
+    // 缓存会导致连接被关闭后仍然被复用的问题
     
     private func getExecutor(): SqlExecutor {
-        if (let Some(exe) <- executor) {
-            return exe
-        }
-        let exe = ORM.executor()
-        executor = Some<SqlExecutor>(exe)
-        return exe
+        ORM.executor()
     }
     
     public init() {}
@@ -109,6 +105,9 @@ public class UctooUserService {
             }
             if (entity.accessToken.isSome()) {
                 existingEntity.accessToken = entity.accessToken
+            }
+            if (entity.refreshToken.isSome()) {
+                existingEntity.refreshToken = entity.refreshToken
             }
             
             // 设置更新时间和ID
@@ -415,6 +414,30 @@ public class UctooUserService {
         } catch (e: Exception) {
             LogUtils.error("findByEmail failed: ${e.message}")
             None<UctooUserPO>
+        }
+    }
+    
+    /**
+     * 更新用户的access_token和refresh_token
+     * @param userId 用户ID
+     * @param accessToken access_token
+     * @param refreshToken refresh_token
+     * @return 更新是否成功
+     */
+    public func updateTokens(userId: String, accessToken: String, refreshToken: String): Bool {
+        try {
+            let existing = getExecutor().findUctooUserById(userId)
+            if (let Some(user) <- existing) {
+                user.accessToken = Some<String>(accessToken)
+                user.refreshToken = Some<String>(refreshToken)
+                user.updatedAt = DateTime.now()
+                let rows = getExecutor().updateUctooUser(user)
+                return rows > 0
+            }
+            false
+        } catch (e: Exception) {
+            LogUtils.error("updateTokens failed: ${e.message}")
+            false
         }
     }
     

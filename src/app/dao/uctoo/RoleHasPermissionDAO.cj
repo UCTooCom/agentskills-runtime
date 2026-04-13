@@ -127,6 +127,7 @@ public interface RoleHasPermissionDAO <: RootDAO {
         executor.setSql('''
             select * from role_has_permission 
             where role_id in (${inClause.toString()})
+              and deleted_at is null
             order by created_at desc
         ''').list<RoleHasPermissionPO>()
     }

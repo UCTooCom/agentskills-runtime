@@ -30,7 +30,7 @@ public class UctooRolePO {
     private var name: String = ""
 
         @ORMField['created_at']
-    private var createdAt: DateTime = DateTime.now()
+    private var createdAt: ?DateTime = None<DateTime>
 
         @ORMField['creator']
     private var creator: ?String = None<String>
@@ -39,17 +39,17 @@ public class UctooRolePO {
     private var deletedAt: ?DateTime = None<DateTime>
 
         @ORMField['updated_at']
-    private var updatedAt: DateTime = DateTime.now()
+    private var updatedAt: ?DateTime = None<DateTime>
     
     public init() {}
     
     public init(
                 id: String,
         name: String,
-        createdAt: DateTime,
+        createdAt: ?DateTime,
         creator: ?String,
         deletedAt: ?DateTime,
-        updatedAt: DateTime
+        updatedAt: ?DateTime
     ) {
                 this.id = id
         this.name = name
@@ -64,7 +64,11 @@ public class UctooRolePO {
         sb.append("{")
                 sb.append("\"id\":\"${id}\",")
         sb.append("\"name\":\"${name}\",")
-        sb.append("\"created_at\":\"${createdAt}\",")
+        if (let Some(v) <- createdAt) {
+            sb.append("\"created_at\":\"${v}\",")
+        } else {
+            sb.append("\"created_at\":\"\",")
+        }
         if (let Some(v) <- creator) {
             sb.append("\"creator\":\"${v}\",")
         } else {
@@ -75,7 +79,11 @@ public class UctooRolePO {
         } else {
             sb.append("\"deleted_at\":\"\",")
         }
-        sb.append("\"updated_at\":\"${updatedAt}\"")
+        if (let Some(v) <- updatedAt) {
+            sb.append("\"updated_at\":\"${v}\"")
+        } else {
+            sb.append("\"updated_at\":\"\"")
+        }
         sb.append("}")
         return sb.toString()
     }

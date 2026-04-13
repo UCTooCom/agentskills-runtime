@@ -23,22 +23,41 @@ public class EntityController {
     
     public func add(req: HttpRequest, res: HttpResponse): Unit {
         try {
-            let body = parseBody(req)
-            if (let Some(b) <- body) {
-                let entity = mapToEntity(b)
-                let result = service.create(entity)
-                if (result.success) {
-                    if (let Some(data) <- result.data) {
-                        res.status(200).json(data.toJson())
+            // 获取用户ID
+            let userId = req.getLocals("userId")
+            if (userId.isNone()) {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
+            }
+            
+            let userIdStr = userId.getOrThrow() as String
+            if (let Some(str) <- userIdStr) {
+                if (str.isEmpty()) {
+                    res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                    return
+                }
+                
+                let body = parseBody(req)
+                if (let Some(b) <- body) {
+                    let entity = mapToEntity(b)
+                    let result = service.create(entity, str)
+                    if (result.success) {
+                        if (result.data.isSome()) {
+                            let data = result.data.getOrThrow()
+                            res.status(200).json(data.toJson())
+                        } else {
+                            res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"创建失败\"}")
+                        }
                     } else {
-                        res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"创建失败\"}")
+                        let reason = result.reason ?? "创建失败"
+                        res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
                     }
                 } else {
-                    let reason = result.reason ?? "创建失败"
-                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                    res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
                 }
             } else {
-                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
             }
         } catch (e: Exception) {
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
@@ -248,40 +267,53 @@ public class EntityController {
     
     public func getManyWithPathParams(req: HttpRequest, res: HttpResponse): Unit {
         try {
-            // 按照 backend 规范：/api/uctoo/entity/:limit/:page
-            // 页码从1开始，1表示第一页（符合业界最佳实践）
+            // 支持前端表格的分页查询
+            // 从查询参数获取 currentPage 和 pageSize
+            let currentPageParam = req.queryParam("currentPage")
+            let pageSizeParam = req.queryParam("pageSize")
+            
+            // 从路径参数获取 limit 和 page（向后兼容）
             let limitParam = req.pathParam("limit")
             let pageParam = req.pathParam("page")
             
-            let limitNum = if (let Some(l) <- limitParam) {
+            let pageSize = if (let Some(ps) <- pageSizeParam) {
+                Int32.parse(ps)
+            } else if (let Some(l) <- limitParam) {
                 Int32.parse(l)
             } else {
                 Int32(10)
             }
             
-            let pageNum = if (let Some(p) <- pageParam) {
+            let currentPage = if (let Some(cp) <- currentPageParam) {
+                Int32.parse(cp)
+            } else if (let Some(p) <- pageParam) {
                 Int32.parse(p)
             } else {
                 Int32(1)  // 默认第一页
             }
             
-            if (limitNum > 100) {
+            if (pageSize > 100) {
                 res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
                 return
             }
             
-            // 解析查询参数中的 sort 和 filter
-            let sortParam = req.queryParam("sort")
-            let filterParam = req.queryParam("filter")
+            // 解析查询参数中的 filter（link 和 description）
+            let linkParam = req.queryParam("link")
+            let descriptionParam = req.queryParam("description")
             
-            let sortStr = if (let Some(s) <- sortParam) { s } else { "" }
-            let filterStr = if (let Some(f) <- filterParam) { f } else { "" }
+            let link = if (let Some(l) <- linkParam) { Some<String>(l) } else { None<String> }
+            let description = if (let Some(d) <- descriptionParam) { Some<String>(d) } else { None<String> }
             
-            // 页码从1开始，转换为内部页码（从0开始）
-            let (entities, total) = service.getList(pageNum - 1, limitNum, sortStr, filterStr)
+            // 调用带过滤条件的查询方法
+            let (entities, total) = service.getFilteredList(
+                Int64(currentPage),
+                Int64(pageSize),
+                link,
+                description
+            )
             
-            let totalPage = if (limitNum > 0) {
-                Int32((total + Int64(limitNum) - 1) / Int64(limitNum))
+            let totalPage = if (pageSize > 0) {
+                Int32((total + Int64(pageSize) - 1) / Int64(pageSize))
             } else {
                 Int32(0)
             }
@@ -294,7 +326,7 @@ public class EntityController {
                     entitiesJson = entitiesJson + "," + e.toJson()
                 }
             }
-            res.status(200).json("{\"currentPage\":${pageNum},\"totalCount\":${total},\"totalPage\":${totalPage},\"entitys\":[${entitiesJson}]}")
+            res.status(200).json("{\"currentPage\":${currentPage},\"totalCount\":${total},\"totalPage\":${totalPage},\"entitys\":[${entitiesJson}]}")
         } catch (e: Exception) {
             res.status(500).json(APIError("50000", e.message).toJson())
         }
@@ -423,9 +455,17 @@ public class EntityController {
             }
         }
         if (let Some(stars) <- map.get("stars")) {
-            let starsFloat64 = stars as Float64
-            if (let Some(s) <- starsFloat64) {
-                entity.stars = Some<Float64>(s)
+            // 处理数字类型，包括0值
+            if (stars is Int64) {
+                let starsInt = stars as Int64
+                if (let Some(s) <- starsInt) {
+                    entity.stars = Some<Float64>(Float64(s))
+                }
+            } else if (stars is Float64) {
+                let starsFloat = stars as Float64
+                if (let Some(s) <- starsFloat) {
+                    entity.stars = Some<Float64>(s)
+                }
             }
         }
         if (let Some(description) <- map.get("description")) {
@@ -471,9 +511,17 @@ public class EntityController {
             }
         }
         if (let Some(price) <- map.get("price")) {
-            let priceFloat64 = price as Float64
-            if (let Some(s) <- priceFloat64) {
-                entity.price = Some<Float64>(s)
+            // 处理数字类型，包括0值
+            if (price is Int64) {
+                let priceInt = price as Int64
+                if (let Some(s) <- priceInt) {
+                    entity.price = Some<Float64>(Float64(s))
+                }
+            } else if (price is Float64) {
+                let priceFloat = price as Float64
+                if (let Some(s) <- priceFloat) {
+                    entity.price = Some<Float64>(s)
+                }
             }
         }
         // birthday is DateTime type, handled by database
@@ -486,7 +534,9 @@ public class EntityController {
         if (let Some(creator) <- map.get("creator")) {
             let creatorStr = creator as String
             if (let Some(s) <- creatorStr) {
-                entity.creator = s
+                if (!s.isEmpty()) {
+                    entity.creator = Some<String>(s)
+                }
             }
         }
         // createdAt is DateTime type, handled by database
@@ -578,4 +628,60 @@ public class EntityController {
     //#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义方法）==========
+    
+    /**
+     * 导出entity数据为CSV
+     * @param req 请求对象
+     * @param res 响应对象
+     */
+    public func export(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            // 获取所有entity数据
+            let (entities, _) = service.getFilteredList(1, 1000, None<String>, None<String>)
+            
+            // 构建CSV内容
+            let sb = StringBuilder()
+            // 写入CSV头部
+            sb.append("id,link,privacy_level,stars,description,group_id,picture,images,content,json,city,price,birthday,owner,creator,created_at,updated_at,deleted_at,end_time,start_time,status\n")
+            
+            // 写入数据行
+            for (entity in entities) {
+                sb.append("\"${entity.id}\",")
+                sb.append("\"${entity.link}\",")
+                sb.append(if (let Some(v) <- entity.privacyLevel) { "${v}" } else { "" })
+                sb.append(",")
+                sb.append(if (let Some(v) <- entity.stars) { "${v}" } else { "" })
+                sb.append(",")
+                sb.append(if (let Some(v) <- entity.description) { "\"${v.replace("\"", "\\\"")}\"" } else { "" })
+                sb.append(",")
+                sb.append(if (let Some(v) <- entity.groupId) { "\"${v}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.picture) { "\"${v}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.images) { "\"${v}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.content) { "\"${v.replace("\"", "\\\"")}\"" } else { "" })
+                sb.append(",")
+                sb.append(if (let Some(v) <- entity.json) { "\"${v.replace("\"", "\\\"")}\"" } else { "" })
+                sb.append(",")
+                sb.append(if (let Some(v) <- entity.city) { "\"${v}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.price) { "${v}" } else { "" })
+                sb.append(",")
+                sb.append(if (let Some(v) <- entity.birthday) { "\"${v.toString()}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.owner) { "\"${v}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.creator) { "\"${v}\"," } else { "" })
+                sb.append("\"${entity.createdAt.toString()}\",")
+                sb.append("\"${entity.updatedAt.toString()}\",")
+                sb.append(if (let Some(v) <- entity.deletedAt) { "\"${v.toString()}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.endTime) { "\"${v.toString()}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.startTime) { "\"${v.toString()}\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.status) { "\"${v}\"" } else { "" })
+                sb.append("\n")
+            }
+            
+            // 设置响应头
+            res.header("Content-Type", "text/csv")
+            res.header("Content-Disposition", "attachment; filename=entity_export.csv")
+            res.status(200).send(sb.toString())
+        } catch (e: Exception) {
+            res.status(500).json(APIError("50000", e.message).toJson())
+        }
+    }
 }

@@ -93,7 +93,7 @@ curl -X GET https://javatoarktsapi.uctoo.com/hello
 **响应示例**:
 ```json
 {
-  "message": "AgentSkills-runtime，Hello World"
+  "message": "AgentSkills-runtime,Hello World"
 }
 ```
 

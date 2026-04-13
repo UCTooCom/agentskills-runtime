@@ -83,7 +83,13 @@ public class PermissionsPO {
 
         @ORMField['method']
     private var method: ?String = None<String>
-    
+
+        @ORMField['menu_type']
+    private var menuType: ?String = None<String>
+
+        @ORMField['locale']
+    private var locale: ?String = None<String>
+
     public init() {}
     
     public init(
@@ -106,7 +112,9 @@ public class PermissionsPO {
         title: ?String,
         parentId: ?String,
         meta: ?String,
-        method: ?String
+        method: ?String,
+        menuType: ?String,
+        locale: ?String
     ) {
                 this.id = id
         this.permissionName = permissionName
@@ -128,6 +136,8 @@ public class PermissionsPO {
         this.parentId = parentId
         this.meta = meta
         this.method = method
+        this.menuType = menuType
+        this.locale = locale
     }
     
     public func toJson(): String {
@@ -213,9 +223,19 @@ public class PermissionsPO {
             sb.append("\"meta\":\"\",")
         }
         if (let Some(v) <- method) {
-            sb.append("\"method\":\"${v}\"")
+            sb.append("\"method\":\"${v}\",")
         } else {
-            sb.append("\"method\":\"\"")
+            sb.append("\"method\":\"\",")
+        }
+        if (let Some(v) <- menuType) {
+            sb.append("\"menu_type\":\"${v}\",")
+        } else {
+            sb.append("\"menu_type\":\"\",")
+        }
+        if (let Some(v) <- locale) {
+            sb.append("\"locale\":\"${v}\"")
+        } else {
+            sb.append("\"locale\":\"\"")
         }
         sb.append("}")
         return sb.toString()

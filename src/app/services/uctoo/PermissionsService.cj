@@ -18,15 +18,8 @@ import magic.log.LogUtils
  * 使用DAO层进行数据访问
  */
 public class PermissionsService {
-    private var executor: ?SqlExecutor = None<SqlExecutor>
-    
     private func getExecutor(): SqlExecutor {
-        if (let Some(exe) <- executor) {
-            return exe
-        }
-        let exe = ORM.executor()
-        executor = Some<SqlExecutor>(exe)
-        return exe
+        ORM.executor()
     }
     
     public init() {}
@@ -443,6 +436,204 @@ public class PermissionsService {
             result.isSome()
         } catch (e: Exception) {
             false
+        }
+    }
+    
+    /**
+     * 获取用户菜单树 - V4标准RBAC
+     * 参考 backend 的 getUserPermissionsTree 实现
+     * 
+     * 实现逻辑：
+     * 1. 从 user_has_roles 获取用户所有角色ID
+     * 2. 从 role_has_permission 获取角色所有权限名称
+     * 3. 从 permissions 获取权限详情（type=1 为菜单）
+     * 4. 构建树形结构返回
+     * 
+     * @param userId 用户ID
+     * @return 菜单树
+     */
+    public func getUserMenuTree(userId: String): ArrayList<PermissionsPO> {
+        try {
+            LogUtils.info("=== [getUserMenuTree] START for userId: ${userId} ===")
+            
+            // 1. 获取用户所有角色ID
+            LogUtils.info("[getUserMenuTree] Step 1: Calling findUserRoles...")
+            let roleIds = getExecutor().findUserRoles(userId)
+            LogUtils.info("[getUserMenuTree] Step 1: Found ${roleIds.size} role IDs")
+            
+            if (roleIds.size == 0) {
+                LogUtils.info("[getUserMenuTree] No roles found, returning empty list")
+                return ArrayList<PermissionsPO>()
+            }
+            
+            // 打印所有角色ID
+            for (i in 0..roleIds.size) {
+                LogUtils.info("[getUserMenuTree] Role[${i}]: ${roleIds[i]}")
+            }
+            
+            // 2. 获取角色所有权限名称
+            LogUtils.info("[getUserMenuTree] Step 2: Getting permission names for each role...")
+            let permissionNames = ArrayList<String>()
+            var hasMenuWildcard = false
+            for (roleId in roleIds) {
+                LogUtils.info("[getUserMenuTree] Calling findRolePermissionNames for roleId: ${roleId}")
+                let perms = getExecutor().findRolePermissionNames(roleId)
+                LogUtils.info("[getUserMenuTree] Found ${perms.size} permissions for role: ${roleId}")
+                
+                for (permName in perms) {
+                    if (!permissionNames.contains(permName)) {
+                        permissionNames.add(permName)
+                        LogUtils.info("[getUserMenuTree] Added permission: ${permName}")
+                        
+                        // 检查是否有菜单通配符权限
+                        // * 表示所有权限，menu:* 表示所有菜单权限，/* 表示所有API权限
+                        if (permName == "*" || permName == "menu:*") {
+                            hasMenuWildcard = true
+                            LogUtils.info("[getUserMenuTree] Found menu wildcard permission (${permName})")
+                        }
+                    }
+                }
+            }
+            
+            LogUtils.info("[getUserMenuTree] Total unique permission names: ${permissionNames.size}")
+            
+            if (permissionNames.size == 0) {
+                LogUtils.info("[getUserMenuTree] No permissions found, returning empty list")
+                return ArrayList<PermissionsPO>()
+            }
+            
+            // 3. 获取权限详情
+            var allPermissions = ArrayList<PermissionsPO>()
+            
+            // 如果有菜单通配符权限，直接获取所有菜单
+            if (hasMenuWildcard) {
+                LogUtils.info("[getUserMenuTree] Step 3: User has menu wildcard permission, getting all menus...")
+                allPermissions = getExecutor().findAllMenuPermissions()
+                LogUtils.info("[getUserMenuTree] Step 3: Found ${allPermissions.size} menu items (all menus)")
+            } else {
+                // 否则根据权限名称查询
+                LogUtils.info("[getUserMenuTree] Step 3: Calling findPermissionsByNames...")
+                allPermissions = getExecutor().findPermissionsByNames(permissionNames)
+                LogUtils.info("[getUserMenuTree] Step 3: Found ${allPermissions.size} permission objects")
+            }
+            
+            // 4. 构建树形结构
+            // 注意：需要返回所有菜单（包括子菜单），让Controller层构建树形结构
+            LogUtils.info("[getUserMenuTree] Step 4: Returning ${allPermissions.size} menu items for tree building")
+            return allPermissions
+        } catch (e: Exception) {
+            LogUtils.error("[getUserMenuTree] EXCEPTION: ${e.message}")
+            LogUtils.error("[getUserMenuTree] Stack trace: ${e}")
+            ArrayList<PermissionsPO>()
+        }
+    }
+    
+    /**
+     * 获取所有菜单树
+     * @return 所有菜单列表（包括子菜单），让Controller层构建树形结构
+     */
+    public func getAllMenuTree(): ArrayList<PermissionsPO> {
+        try {
+            // 获取所有菜单类型的权限（type=1）
+            let allPermissions = getExecutor().findAllMenuPermissions()
+            LogUtils.info("[getAllMenuTree] Returning ${allPermissions.size} menu items for tree building")
+            return allPermissions
+        } catch (e: Exception) {
+            LogUtils.error("getAllMenuTree failed: ${e.message}")
+            ArrayList<PermissionsPO>()
+        }
+    }
+    
+    /**
+     * 根据角色ID获取菜单树
+     * @param roleId 角色ID
+     * @return 所有菜单列表（包括子菜单），让Controller层构建树形结构
+     */
+    public func getRoleMenuTree(roleId: String): ArrayList<PermissionsPO> {
+        try {
+            // 获取角色所有权限名称
+            let permissionNames = getExecutor().findRolePermissionNames(roleId)
+            if (permissionNames.size == 0) {
+                return ArrayList<PermissionsPO>()
+            }
+            
+            // 获取权限详情
+            let allPermissions = getExecutor().findPermissionsByNames(permissionNames)
+            LogUtils.info("[getRoleMenuTree] Returning ${allPermissions.size} menu items for tree building")
+            return allPermissions
+        } catch (e: Exception) {
+            LogUtils.error("getRoleMenuTree failed: ${e.message}")
+            ArrayList<PermissionsPO>()
+        }
+    }
+    
+    /**
+     * 获取用户所有权限 - 不区分权限类型
+     * 
+     * 实现逻辑：
+     * 1. 从 user_has_roles 获取用户所有角色ID
+     * 2. 从 role_has_permission 获取角色所有权限名称
+     * 3. 从 permissions 获取所有权限详情（不区分类型）
+     * 4. 返回权限列表
+     * 
+     * @param userId 用户ID
+     * @return 权限列表
+     */
+    public func getUserAllPermissions(userId: String): ArrayList<PermissionsPO> {
+        try {
+            LogUtils.info("PermissionsService", "=== getUserAllPermissions() START for userId: ${userId} ===")
+            
+            // 1. 获取用户所有角色ID
+            let roleIds = getExecutor().findUserRoles(userId)
+            LogUtils.info("PermissionsService", "=== Found ${roleIds.size} roles for user ===")
+            
+            if (roleIds.size == 0) {
+                LogUtils.info("PermissionsService", "=== No roles found, returning empty list ===")
+                return ArrayList<PermissionsPO>()
+            }
+            
+            // 2. 获取角色所有权限名称
+            let permissionNames = ArrayList<String>()
+            var hasWildcard = false
+            
+            for (roleId in roleIds) {
+                let perms = getExecutor().findRolePermissionNames(roleId)
+                for (permName in perms) {
+                    if (!permissionNames.contains(permName)) {
+                        permissionNames.add(permName)
+                        
+                        // 检查是否有通配符权限
+                        if (permName == "*") {
+                            hasWildcard = true
+                        }
+                    }
+                }
+            }
+            
+            LogUtils.info("PermissionsService", "=== Found ${permissionNames.size} unique permission names ===")
+            
+            if (permissionNames.size == 0) {
+                LogUtils.info("PermissionsService", "=== No permissions found, returning empty list ===")
+                return ArrayList<PermissionsPO>()
+            }
+            
+            // 3. 获取权限详情
+            var allPermissions = ArrayList<PermissionsPO>()
+            
+            // 如果有全局通配符权限，返回所有权限
+            if (hasWildcard) {
+                LogUtils.info("PermissionsService", "=== User has wildcard permission, returning all permissions ===")
+                allPermissions = getExecutor().listAllPermissions()
+            } else {
+                // 否则根据权限名称查询
+                allPermissions = getExecutor().findPermissionsByNames(permissionNames)
+            }
+            
+            LogUtils.info("PermissionsService", "=== getUserAllPermissions() completed, returning ${allPermissions.size} permissions ===")
+            return allPermissions
+        } catch (e: Exception) {
+            LogUtils.error("PermissionsService", "=== getUserAllPermissions() exception: ${e.message} ===")
+            ArrayList<PermissionsPO>()
         }
     }
 }

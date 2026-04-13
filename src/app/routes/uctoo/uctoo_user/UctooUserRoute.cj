@@ -10,7 +10,6 @@ import magic.app.core.router.Router
 
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
-
 public class UctooUserRoute {
     private var router: Router
     private var controller: UctooUserController

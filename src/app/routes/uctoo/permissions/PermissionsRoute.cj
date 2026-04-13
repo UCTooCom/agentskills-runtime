@@ -50,6 +50,14 @@ public class PermissionsRoute {
         // 从应用中加载路由到permissions表
         router.get("/api/v1/uctoo/permissions/loadRouteFromApp", controller.loadRouteFromApp)
         
+        // 菜单相关接口 - V4标准RBAC
+        router.post("/api/v1/uctoo/permissions/user/menu", controller.getUserMenuTree)
+        router.get("/api/v1/uctoo/permissions/menu/all", controller.getAllMenuTree)
+        router.post("/api/v1/uctoo/permissions/role/menu", controller.getRoleMenuTree)
+        
+        // 用户所有权限接口 - 不区分权限类型
+        router.post("/api/v1/uctoo/permissions/user/all", controller.getUserAllPermissions)
+        
         return router
     }
 }

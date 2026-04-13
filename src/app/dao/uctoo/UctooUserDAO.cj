@@ -15,7 +15,6 @@ import magic.log.LogUtils
 
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
-
 /**
  * UctooUserDAO - uctoo_user数据访问接口
  * 
@@ -58,7 +57,8 @@ public interface UctooUserDAO <: RootDAO {
                 remember_token,
                 status,
                 updated_at,
-                access_token
+                access_token,
+                refresh_token
             ) values(
                 ${arg(entity.name)},
                 ${arg(entity.username)},
@@ -75,7 +75,8 @@ public interface UctooUserDAO <: RootDAO {
                 ${arg(entity.rememberToken)},
                 ${arg(entity.status)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.accessToken)}
+                ${arg(entity.accessToken)},
+                ${arg(entity.refreshToken)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -117,6 +118,7 @@ public interface UctooUserDAO <: RootDAO {
                 remember_token = ${arg(entity.rememberToken)},
                 status = ${arg(entity.status)},
                 access_token = ${arg(entity.accessToken)},
+                refresh_token = ${arg(entity.refreshToken)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update

@@ -8,6 +8,7 @@ import magic.app.core.log.{LoggerFactory, Logger}
 import magic.app.core.cache.{CacheManager, CacheConfig}
 import magic.app.core.database.{DatabaseConnection, DatabaseConfig, DatabaseConnectionPool}
 import magic.app.middlewares.auth.{DeserializeUserMiddleware, RequirePermissionMiddleware}
+import magic.app.middlewares.CORSMiddleware
 import magic.app.services.uctoo.{PermissionsService, UserHasRolesService, RoleHasPermissionService, UctooSessionService}
 import magic.app.utils.auth.{JWTUtil, CookieUtil}
 import magic.app.controllers.uctoo.ws.WsChatController
@@ -308,6 +309,10 @@ public class Application {
     }
 
     private func setupMiddlewares(): Unit {
+        // 0. CORS 中间件 - 处理跨域请求
+        let corsMiddleware = CORSMiddleware()
+        server.use(corsMiddleware)
+        
         let jwtSecret = if (let Some(secret) <- getVariable("JWT_SECRET")) {
             secret
         } else {
@@ -334,7 +339,7 @@ public class Application {
         )
         server.use(requirePermissionMiddleware)
 
-        logger.info("Middlewares configured: DeserializeUser -> RequirePermission (V4 RBAC)")
+        logger.info("Middlewares configured: CORS -> DeserializeUser -> RequirePermission (V4 RBAC)")
     }
 
     private func setupRoutes(): Unit {

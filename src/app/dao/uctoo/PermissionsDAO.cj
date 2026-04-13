@@ -247,16 +247,12 @@ public interface PermissionsDAO <: RootDAO {
      * @return 角色ID列表
      */
     func findUserRoles(userId: String): ArrayList<String> {
-        let result = ArrayList<String>()
-        let rows = executor.setSql('''
+        LogUtils.info("[findUserRoles] START for userId: ${userId}")
+        let result = executor.setSql('''
             SELECT role_id FROM user_has_roles
             WHERE user_id = ${arg(userId)} AND deleted_at IS NULL
-        ''').list<PermissionsPO>()
-
-        for (row in rows) {
-            result.add(row.id)
-        }
-
+        ''').list<String>()
+        LogUtils.info("[findUserRoles] SUCCESS: Found ${result.size} roles")
         return result
     }
 
@@ -291,5 +287,54 @@ public interface PermissionsDAO <: RootDAO {
             WHERE permission_name = ${arg(permissionName)} AND deleted_at IS NULL 
             LIMIT 1
         ''').first<PermissionsPO>()
+    }
+    
+    /**
+     * 根据角色ID获取权限名称列表 - V4标准RBAC
+     * @param roleId 角色ID
+     * @return 权限名称列表
+     */
+    public func findRolePermissionNames(roleId: String): ArrayList<String> {
+        LogUtils.info("[findRolePermissionNames] START for roleId: ${roleId}")
+        let result = executor.setSql('''
+            SELECT permission_name FROM role_has_permission
+            WHERE role_id = ${arg(roleId)} AND deleted_at IS NULL
+        ''').list<String>()
+        LogUtils.info("[findRolePermissionNames] SUCCESS: Found ${result.size} permissions")
+        return result
+    }
+    
+    /**
+     * 根据权限名称列表查询权限
+     * @param permissionNames 权限名称列表
+     * @return 权限列表
+     */
+    public func findPermissionsByNames(permissionNames: ArrayList<String>): ArrayList<PermissionsPO> {
+        if (permissionNames.size == 0) {
+            return ArrayList<PermissionsPO>()
+        }
+        
+        executor.setSql('''
+            SELECT * FROM permissions 
+            WHERE permission_name ${IN(permissionNames)} 
+              AND type = 1 
+              AND menu_type IS NOT NULL 
+              AND deleted_at IS NULL
+            ORDER BY weight ASC
+        ''').list<PermissionsPO>()
+    }
+    
+    /**
+     * 查询所有菜单权限（type=1且menu_type不为空）
+     * @return 权限列表
+     */
+    public func findAllMenuPermissions(): ArrayList<PermissionsPO> {
+        executor.setSql('''
+            SELECT * FROM permissions 
+            WHERE type = 1 
+              AND menu_type IS NOT NULL 
+              AND deleted_at IS NULL
+            ORDER BY weight ASC
+        ''').list<PermissionsPO>()
     }
 }

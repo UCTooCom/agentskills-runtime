@@ -18,15 +18,8 @@ import magic.log.LogUtils
  * 使用DAO层进行数据访问
  */
 public class UctooRoleService {
-    private var executor: ?SqlExecutor = None<SqlExecutor>
-    
     private func getExecutor(): SqlExecutor {
-        if (let Some(exe) <- executor) {
-            return exe
-        }
-        let exe = ORM.executor()
-        executor = Some<SqlExecutor>(exe)
-        return exe
+        ORM.executor()
     }
     
     public init() {}
@@ -40,12 +33,12 @@ public class UctooRoleService {
      */
     public func create(entity: UctooRolePO): APIResult<UctooRolePO> {
         try {
-            entity.createdAt = DateTime.now()
-            entity.updatedAt = DateTime.now()
-            
+            entity.createdAt = Some<DateTime>(DateTime.now())
+            entity.updatedAt = Some<DateTime>(DateTime.now())
+
             // id 由数据库自动生成 UUID
             let id = getExecutor().insertUctooRole(entity)
-            
+
             if (!id.isEmpty()) {
                 entity.id = id
                 return APIResult<UctooRolePO>(entity)
@@ -85,7 +78,7 @@ public class UctooRoleService {
             }
             
             // 设置更新时间和ID
-            existingEntity.updatedAt = DateTime.now()
+            existingEntity.updatedAt = Some<DateTime>(DateTime.now())
             existingEntity.id = entityId
             
             let rows = getExecutor().updateUctooRole(existingEntity)
@@ -110,7 +103,7 @@ public class UctooRoleService {
             let updatedEntities = ArrayList<UctooRolePO>()
             
             for (entity in entities) {
-                entity.updatedAt = DateTime.now()
+                entity.updatedAt = Some<DateTime>(DateTime.now())
                 let rows = getExecutor().updateUctooRole(entity)
                 
                 if (rows > 0) {

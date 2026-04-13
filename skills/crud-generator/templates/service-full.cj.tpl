@@ -18,15 +18,9 @@ import magic.log.LogUtils
  * 使用DAO层进行数据访问
  */
 public class {TABLE_NAME_PASCAL}Service {
-    private var executor: ?SqlExecutor = None<SqlExecutor>
     
     private func getExecutor(): SqlExecutor {
-        if (let Some(exe) <- executor) {
-            return exe
-        }
-        let exe = ORM.executor()
-        executor = Some<SqlExecutor>(exe)
-        return exe
+        ORM.executor()
     }
     
     public init() {}

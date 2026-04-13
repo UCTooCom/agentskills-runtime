@@ -33,15 +33,9 @@ import magic.log.LogUtils
  * {Table}Service - {表描述}服务类
  */
 public class {Table}Service {
-    private var executor: ?SqlExecutor = None<SqlExecutor>
     
     private func getExecutor(): SqlExecutor {
-        if (let Some(exe) <- executor) {
-            return exe
-        }
-        let exe = ORM.executor()
-        executor = Some<SqlExecutor>(exe)
-        return exe
+        ORM.executor()
     }
     
     public init() {}

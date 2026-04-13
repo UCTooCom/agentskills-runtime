@@ -231,6 +231,7 @@ public class HTTPServer {
         return FuncHandler({ context =>
             eprintln("=== createRouteHandler: Processing request to ${routePath} ===")
             let req = context.request
+            
             let appReq = convertRequest(req)
 
             // 提取路径参数
@@ -249,6 +250,7 @@ public class HTTPServer {
                 eprintln("=== Middleware chain completed ===")
 
                 context.responseBuilder.status(UInt16(appRes.getStatusCode()))
+                
                 for ((key, value) in appRes.getHeaders()) {
                     context.responseBuilder.header(key, value)
                 }
@@ -319,6 +321,8 @@ public class HTTPServer {
             return HttpMethod.DELETE
         } else if (method == "PATCH") {
             return HttpMethod.PATCH
+        } else if (method == "OPTIONS") {
+            return HttpMethod.OPTIONS
         } else {
             return HttpMethod.GET
         }
@@ -427,7 +431,7 @@ public class HTTPServer {
     
     private func handleHello(context: HttpContext): Unit {
         let responseObj = JsonObject()
-        responseObj.put("message", JsonString("AgentSkills-runtime，Hello World"))
+        responseObj.put("message", JsonString("AgentSkills-runtime,Hello World"))
         
         context.responseBuilder.status(200)
         context.responseBuilder.header("Content-Type", "application/json")

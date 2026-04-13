@@ -25,6 +25,10 @@ import magic.app.routes.uctoo.data_access_authorization.DataAccessAuthorizationR
 import magic.app.routes.uctoo.login_log.LoginLogRoute
 import magic.app.routes.uctoo.operate_log.OperateLogRoute
 import magic.app.routes.uctoo.db_info.DbInfoRoute
+import magic.app.routes.uctoo.application.ApplicationRoute
+import magic.app.routes.uctoo.i18.I18Route
+import magic.app.routes.uctoo.lang.LangRoute
+import magic.app.routes.uctoo.app_access_token.AppAccessTokenRoute
 import magic.app.controllers.uctoo.entity.EntityController
 import magic.app.controllers.uctoo.uctoo_user.UctooUserController
 import magic.app.controllers.uctoo.uctoo_session.UctooSessionController
@@ -40,6 +44,10 @@ import magic.app.controllers.uctoo.data_access_authorization.DataAccessAuthoriza
 import magic.app.controllers.uctoo.login_log.LoginLogController
 import magic.app.controllers.uctoo.operate_log.OperateLogController
 import magic.app.controllers.uctoo.db_info.DbInfoController
+import magic.app.controllers.uctoo.application.ApplicationController
+import magic.app.controllers.uctoo.i18.I18Controller
+import magic.app.controllers.uctoo.lang.LangController
+import magic.app.controllers.uctoo.app_access_token.AppAccessTokenController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -55,7 +63,11 @@ import magic.app.services.uctoo.{
     DataAccessAuthorizationService,
     LoginLogService,
     OperateLogService,
-    DbInfoService
+    DbInfoService,
+    ApplicationService,
+    I18Service,
+    LangService,
+    AppAccessTokenService
 }
 
 /**
@@ -182,6 +194,7 @@ public class AutoRouteConfig {
                 let controller = PermissionsController(service)
                 let route = PermissionsRoute(router, controller)
                 route.register()
+                route.registerCustomRoutes()
             }
         ))
         
@@ -281,6 +294,62 @@ public class AutoRouteConfig {
                 let service = DataAccessAuthorizationService()
                 let controller = DataAccessAuthorizationController(service)
                 let route = DataAccessAuthorizationRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // 13. Application 路由 (应用管理)
+        registry.add(RouteEntry(
+            "application",
+            "/api/v1/uctoo/application",
+            160,
+            true,
+            { router: Router =>
+                let service = ApplicationService()
+                let controller = ApplicationController(service)
+                let route = ApplicationRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // 14. I18 路由 (国际化内容)
+        registry.add(RouteEntry(
+            "i18",
+            "/api/v1/uctoo/i18",
+            170,
+            true,
+            { router: Router =>
+                let service = I18Service()
+                let controller = I18Controller(service)
+                let route = I18Route(router, controller)
+                route.register()
+            }
+        ))
+        
+        // 15. Lang 路由 (语言管理)
+        registry.add(RouteEntry(
+            "lang",
+            "/api/v1/uctoo/lang",
+            180,
+            true,
+            { router: Router =>
+                let service = LangService()
+                let controller = LangController(service)
+                let route = LangRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // 16. AppAccessToken 路由 (应用access_token)
+        registry.add(RouteEntry(
+            "app_access_token",
+            "/api/v1/uctoo/app_access_token",
+            190,
+            true,
+            { router: Router =>
+                let service = AppAccessTokenService()
+                let controller = AppAccessTokenController(service)
+                let route = AppAccessTokenRoute(router, controller)
                 route.register()
             }
         ))

@@ -73,7 +73,10 @@ public class UctooUserPO {
 
         @ORMField['access_token']
     public var accessToken: ?String = None<String>
-    
+
+        @ORMField['refresh_token']
+    public var refreshToken: ?String = None<String>
+
     public init() {}
     
     public init(
@@ -93,7 +96,8 @@ public class UctooUserPO {
         rememberToken: ?String,
         status: ?Int32,
         updatedAt: DateTime,
-        accessToken: ?String
+        accessToken: ?String,
+        refreshToken: ?String
     ) {
                 this.id = id
         this.name = name
@@ -112,6 +116,7 @@ public class UctooUserPO {
         this.status = status
         this.updatedAt = updatedAt
         this.accessToken = accessToken
+        this.refreshToken = refreshToken
     }
     
     public func toJson(): String {

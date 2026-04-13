@@ -238,4 +238,55 @@ public interface EntityDAO <: RootDAO {
     //#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义方法）==========
+    
+    /**
+     * 分页查询entity列表（带过滤条件）
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findEntityByFilterPage(link: ?String, description: ?String, page: Int64, size: Int64): Pagination<EntityPO> {
+        let sql = StringBuilder()
+        sql.append("select * from entity where 1=1")
+        
+        if (let Some(linkVal) <- link) {
+            if (linkVal != "") {
+                sql.append(" and link like ${arg('%' + linkVal + '%')}")
+            }
+        }
+        
+        if (let Some(descVal) <- description) {
+            if (descVal != "") {
+                sql.append(" and description like ${arg('%' + descVal + '%')}")
+            }
+        }
+        
+        sql.append(" order by created_at desc")
+        
+        executor.page<EntityPO>(sql.toString(), size, page: page)
+    }
+    
+    /**
+     * 批量软删除entity
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchSoftDeleteEntity(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            update entity set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
+        ''').update
+    }
+    
+    /**
+     * 批量硬删除entity
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchDeleteEntity(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            delete from entity where id ${IN(ids)}
+        ''').delete
+    }
 }

@@ -22,15 +22,8 @@ import magic.log.LogUtils
  * 注意: 此表使用复合主键 (role_id, permission_name)
  */
 public class RoleHasPermissionService {
-    private var executor: ?SqlExecutor = None<SqlExecutor>
-    
     private func getExecutor(): SqlExecutor {
-        if (let Some(exe) <- executor) {
-            return exe
-        }
-        let exe = ORM.executor()
-        executor = Some<SqlExecutor>(exe)
-        return exe
+        ORM.executor()
     }
     
     public init() {}

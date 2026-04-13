@@ -278,28 +278,42 @@ cjpm run --skip-build --name magic.app
 
 ## Quick Start
 
-### Simplest Demo Solution (Recommended)
+### Simplest Usage Solution (Recommended)
 
-If you want to quickly experience AgentSkills Runtime's capabilities, **you don't need to download the source code of this project**. Simply deploy the [UCToo project](https://gitee.com/uctoo/uctoo):
+If you want to quickly experience AgentSkills Runtime's capabilities, **you don't need to download the source code of this project**. Simply clone the UCToo project:
 
 #### Deployment Steps
 
-1. **Deploy UCToo Project**
-   - Follow the [UCToo deployment documentation](https://gitee.com/uctoo/uctoo) to deploy the backend and web frontend
-   - UCToo already includes the AgentSkills Runtime JavaScript SDK
-
-2. **Configure LLM API Key**
-   - Find the `.env` file in the agentskills-runtime JavaScript SDK directory within the backend project
-   - Configure the LLM API Key (supports DeepSeek, OpenAI, Huawei Cloud MaaS, etc.)
-   ```ini
-   MODEL_PROVIDER=deepseek
-   MODEL_NAME=deepseek-chat
-   DEEPSEEK_API_KEY=your_api_key_here
+1. **Clone UCToo Project**
+   ```bash
+   git clone https://gitee.com/UCT/uctoo-app-client-pc.git
+   cd uctoo-app-client-pc
    ```
 
-3. **Experience Natural Language Database Queries**
-   - Open the UCToo Web frontend's **AI Module -> Chat Page**
-   - Use natural language to chat with AI and perform CRUD operations on the UCToo database
+2. **Run Installation Assistant**
+   - Double-click to run `uctoo-app-client-pc/start-installer.bat` (Windows system)
+   - Or execute in command line:
+     ```bash
+     cd uctoo-app-client-pc
+     start-installer.bat
+     ```
+
+3. **Follow Installation Assistant to Configure Environment**
+   - The installation assistant will automatically check the environment (Node.js, PostgreSQL, Redis, etc.)
+   - Configure database connection information
+   - Configure SSL certificate (development environment can choose self-signed certificate)
+   - Configure LLM API Key (supports DeepSeek, OpenAI, Huawei Cloud MaaS, etc.)
+   - Create administrator account
+
+4. **Use JavaScript SDK in web-admin**
+   - After installation, web-admin has built-in AgentSkills Runtime JavaScript SDK
+   - Install and start agentskills-runtime through the installation wizard or configuration page in web-admin management backend
+
+5. **Login to Use Agent Applications**
+   - Open web-admin management backend (default address: http://localhost:3031)
+   - Login with the created administrator account
+   - Access **AI Module -> Chat Page** to use agent functions
+   - Use natural language to chat with AI and perform CRUD operations on the database
    - Example conversations:
      - *"Query the list of users registered in the past week"*
      - *"Create a new user named 'John Doe'"*
@@ -307,9 +321,10 @@ If you want to quickly experience AgentSkills Runtime's capabilities, **you don'
 
 #### Solution Advantages
 - **Zero Configuration**: No need to install the Cangjie programming language environment
-- **Ready to Use**: UCToo already integrates the complete runtime environment
+- **Ready to Use**: One-click start of installation assistant, automatic configuration of complete runtime environment
 - **Full Functionality**: Supports the built-in uctoo-api-skill for natural language database operations
 - **Easy to Extend**: Can continue developing custom skills based on the UCToo framework
+- **Visual Configuration**: Easily manage runtime and configuration through web-admin graphical interface
 
 ### Starting from Source (For Developers)
 
@@ -367,7 +382,7 @@ AgentSkills Runtime provides an automated packaging script to build release pack
 cjpm build
 
 # 2. Run the packaging script (automatically reads version from cjpm.toml)
-cjpm run --name magic.scripts.package_release
+cjpm run --skip-build --name magic.scripts.package_release
 ```
 
 #### Packaging Script Features

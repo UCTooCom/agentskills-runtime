@@ -8,7 +8,7 @@ import magic.app.core.log.{Logger, LoggerFactory}
 import magic.log.LogUtils
 import magic.app.routes.uctoo.uctoo_user.UctooUserAuthRoute
 import magic.app.controllers.uctoo.uctoo_user.UctooUserAuthController
-import magic.app.services.uctoo.{UctooUserService, UctooSessionService}
+import magic.app.services.uctoo.{UctooUserService, UctooSessionService, UserHasRolesService, UctooRoleService, RoleHasPermissionService, PermissionsService}
 import magic.app.middlewares.auth.{DeserializeUserMiddleware, RequireUserMiddleware}
 import magic.app.utils.auth.{JWTUtil, BcryptUtil, CookieUtil, AuthorizeUtil}
 import magic.app.routes.uctoo.mcp.McpRoute
@@ -92,7 +92,23 @@ public class AutoRouteRegistry {
         let jwtUtil = JWTUtil("uctoo-v4-secret-key", 1728000, 6048000)
         let bcryptUtil = BcryptUtil(saltRounds: 10)
         let cookieUtil = CookieUtil(true, None<String>)
-        let authorizeUtil = AuthorizeUtil(uctooUserService, uctooSessionService, jwtUtil, cookieUtil)
+        
+        // 创建权限相关服务
+        let userHasRolesService = UserHasRolesService()
+        let uctooRoleService = UctooRoleService()
+        let roleHasPermissionService = RoleHasPermissionService()
+        let permissionsService = PermissionsService()
+        
+        let authorizeUtil = AuthorizeUtil(
+            uctooUserService, 
+            uctooSessionService, 
+            jwtUtil, 
+            cookieUtil,
+            userHasRolesService,
+            uctooRoleService,
+            roleHasPermissionService,
+            permissionsService
+        )
         
         // 创建认证控制器
         let uctooUserAuthController = UctooUserAuthController(uctooUserService, bcryptUtil, authorizeUtil, jwtUtil)

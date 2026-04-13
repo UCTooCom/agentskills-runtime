@@ -221,7 +221,7 @@ function getPlatformInfo(): { platform: string; arch: string; suffix: string } {
 }
 
 function getRuntimeDir(): string {
-  return path.join(__dirname, '..', 'runtime');
+  return path.join(__dirname, 'runtime');
 }
 
 function getRuntimePath(): string {
@@ -231,7 +231,7 @@ function getRuntimePath(): string {
 
 function getReleaseDir(): string {
   const { platform, arch } = getPlatformInfo();
-  return path.join(getRuntimeDir(), `${platform}-${arch}`, 'release');
+  return path.join(getRuntimeDir(), `${platform}-${arch}`, 'release', 'bin');
 }
 
 function getVersionFilePath(): string {
@@ -359,6 +359,8 @@ SKILL_INSTALL_PATH=./skills
         }
         
         console.log(`AgentSkills Runtime v${version} downloaded successfully from ${mirror.name}!`);
+        console.log('Note: The runtime reads configuration from the .env file in the release directory.');
+        console.log('      Command line arguments are not supported.');
         return true;
       } catch (error) {
         console.log(`Mirror ${mirror.name} failed, trying next...`);
@@ -399,31 +401,18 @@ SKILL_INSTALL_PATH=./skills
     console.log(`[SDK DEBUG] SKILL_INSTALL_PATH in env: ${env.SKILL_INSTALL_PATH}`);
     console.log(`[SDK DEBUG] runtimePath: ${runtimePath}`);
     
-    // On Windows, use shell to properly handle path arguments
-    if (process.platform === 'win32') {
-      const args = [String(port), '--skill-path', skillInstallPath];
-      console.log(`[SDK DEBUG] args: ${args.join(' ')}`);
-      
-      this.process = spawn(runtimePath, args, {
-        stdio: options.detached ? 'ignore' : 'inherit',
-        detached: options.detached || false,
-        cwd: cwd,
-        env: env,
-        windowsHide: true,
-        shell: false
-      });
-    } else {
-      const args = [String(port), '--skill-path', skillInstallPath];
-      console.log(`[SDK DEBUG] args: ${args.join(' ')}`);
-      
-      this.process = spawn(runtimePath, args, {
-        stdio: options.detached ? 'ignore' : 'inherit',
-        detached: options.detached || false,
-        cwd: cwd,
-        env: env,
-        windowsHide: true
-      });
-    }
+    // Runtime doesn't accept command line arguments - it reads from .env file
+    // So we don't pass any arguments to the runtime executable
+    const args: string[] = [];
+    console.log(`[SDK DEBUG] args: ${args.join(' ')}`);
+    
+    this.process = spawn(runtimePath, args, {
+      stdio: options.detached ? 'ignore' : 'inherit',
+      detached: options.detached || false,
+      cwd: cwd,
+      env: env,
+      windowsHide: true
+    });
     
     if (options.detached && this.process.pid) {
       this.process.unref();

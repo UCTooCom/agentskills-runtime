@@ -18,15 +18,8 @@ import magic.log.LogUtils
  * 使用DAO层进行数据访问
  */
 public class EntityService {
-    private var executor: ?SqlExecutor = None<SqlExecutor>
-    
     private func getExecutor(): SqlExecutor {
-        if (let Some(exe) <- executor) {
-            return exe
-        }
-        let exe = ORM.executor()
-        executor = Some<SqlExecutor>(exe)
-        return exe
+        ORM.executor()
     }
     
     public init() {}
@@ -36,12 +29,18 @@ public class EntityService {
     /**
      * 创建entity
      * @param entity entity对象
+     * @param creatorId 创建者ID（当用户未指定creator时使用）
      * @return 创建结果
      */
-    public func create(entity: EntityPO): APIResult<EntityPO> {
+    public func create(entity: EntityPO, creatorId: String): APIResult<EntityPO> {
         try {
             entity.createdAt = DateTime.now()
             entity.updatedAt = DateTime.now()
+            
+            // 只有当用户未指定creator时，才使用登录用户ID
+            if (entity.creator.isNone()) {
+                entity.creator = Some<String>(creatorId)
+            }
             
             // id 由数据库自动生成 UUID
             let id = getExecutor().insertEntity(entity)
@@ -113,7 +112,7 @@ public class EntityService {
             if (entity.owner.isSome()) {
                 existingEntity.owner = entity.owner
             }
-            if (entity.creator.size > 0) {
+            if (entity.creator.isSome()) {
                 existingEntity.creator = entity.creator
             }
             if (entity.deletedAt.isSome()) {
@@ -212,16 +211,11 @@ public class EntityService {
      */
     public func deleteMultiple(ids: ArrayList<String>, force: Bool): APIResult<Bool> {
         try {
-            var rows: Int64 = 0
-            for (id in ids) {
-                let existing = getExecutor().findEntityById(id)
-                if (existing.isSome()) {
-                    if (force) {
-                        rows = rows + getExecutor().deleteEntityById(id)
-                    } else {
-                        rows = rows + getExecutor().softDeleteEntityById(id)
-                    }
-                }
+            let rows: Int64
+            if (force) {
+                rows = getExecutor().batchDeleteEntity(ids)
+            } else {
+                rows = getExecutor().batchSoftDeleteEntity(ids)
             }
             
             if (rows > 0) {
@@ -324,9 +318,40 @@ public class EntityService {
         sort: String,
         filter: String
     ): (ArrayList<EntityPO>, Int64) {
-        // TODO: filter参数需要实现JSON解析和动态WHERE条件构建
-        // 当前版本暂不支持filter，只支持基本的分页查询
-        let pagination = getExecutor().findAllEntityPage(
+        // 解析过滤条件
+        var link: ?String = None<String>
+        var description: ?String = None<String>
+        
+        // 简单解析filter JSON
+        if (!filter.isEmpty()) {
+            // 这里可以实现更复杂的JSON解析
+            // 暂时简单处理，假设filter格式为 {"link": "xxx", "description": "xxx"}
+            if (filter.contains("link")) {
+                if (let Some(start) <- filter.indexOf("link")) {
+                    if (let Some(colon) <- filter.indexOf(":", start)) {
+                        if (let Some(comma) <- filter.indexOf(",", colon)) {
+                            link = filter[colon + 2..comma - 1]
+                        }
+                    }
+                }
+            }
+            if (filter.contains("description")) {
+                if (let Some(start) <- filter.indexOf("description")) {
+                    if (let Some(colon) <- filter.indexOf(":", start)) {
+                        let end = if (let Some(comma) <- filter.indexOf(",", colon)) {
+                            comma - 1
+                        } else {
+                            filter.size - 1
+                        }
+                        description = filter[colon + 2..end]
+                    }
+                }
+            }
+        }
+        
+        let pagination = getExecutor().findEntityByFilterPage(
+            link,
+            description,
             Int64(page + 1),
             Int64(pageSize)
         )
@@ -407,6 +432,39 @@ public class EntityService {
     //#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义方法）==========
+    
+    /**
+     * TODO: 实现行级数据权限
+     * 
+     * 按照uctoo-v4规划，需要实现行级数据权限：
+     * 1. 基于creator字段的访问控制
+     * 2. 数据授权机制
+     * 3. 查询时自动过滤无权限的数据
+     */
+    
+    /**
+     * 获取entity列表（带过滤条件）
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @return entity列表和总数
+     */
+    public func getFilteredList(
+        page: Int64,
+        pageSize: Int64,
+        link: ?String,
+        description: ?String
+    ): (ArrayList<EntityPO>, Int64) {
+        let pagination = getExecutor().findEntityByFilterPage(
+            link,
+            description,
+            page,
+            pageSize
+        )
+        
+        return (pagination.list, pagination.rows)
+    }
     
     /**
      * 生成UUID

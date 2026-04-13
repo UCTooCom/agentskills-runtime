@@ -38,6 +38,10 @@ public class UctooUserAuthController {
     /**
      * 用户登录
      * POST /api/v1/uctoo/uctoo_user/signin
+     * 
+     * 支持两种登录方式：
+     * 1. 用户名 + 密码：{ "username": "xxx", "password": "xxx" }
+     * 2. 邮箱 + 密码：{ "email": "xxx@example.com", "password": "xxx" }
      */
     public func signin(req: HttpRequest, res: HttpResponse): Unit {
         try {
@@ -51,17 +55,26 @@ public class UctooUserAuthController {
             
             let obj = jsonValue.asObject()
             
-            // 获取用户名和密码
+            // 获取用户名/邮箱和密码
             let username = getStringFromJson(obj, "username")
+            let email = getStringFromJson(obj, "email")
             let password = getStringFromJson(obj, "password")
             
-            if (username.isEmpty() || password.isEmpty()) {
-                res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"用户名和密码不能为空\"}")
+            // 支持用户名或邮箱登录
+            let loginAccount = if (username.isEmpty()) { email } else { username }
+            
+            if (loginAccount.isEmpty() || password.isEmpty()) {
+                res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"用户名/邮箱和密码不能为空\"}")
                 return
             }
             
-            // 查询用户
-            let user = userService.findByUsername(username)
+            // 查询用户（优先按用户名查询，如果包含@则按邮箱查询）
+            let user = if (loginAccount.contains('@')) {
+                userService.findByEmail(loginAccount)
+            } else {
+                userService.findByUsername(loginAccount)
+            }
+            
             if (user.isNone()) {
                 res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"用户不存在\"}")
                 return

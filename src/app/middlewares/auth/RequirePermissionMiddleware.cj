@@ -165,12 +165,50 @@ public class RequirePermissionMiddleware <: Middleware {
 
     /**
      * 检查是否有通配符权限
+     * 
+     * 支持所有类型的通配符权限:
+     * -  : 全局通配符,拥有所有权限(超级管理员)
+     * -  : API通配符,拥有所有API权限(type=3)
+     * - menu: : 菜单通配符,拥有所有菜单权限(type=1)
+     * - button: : 按钮通配符,拥有所有按钮权限(type=2)
+     * - tool: : 工具通配符,拥有所有工具权限(type=4)
+     * 
+     * 对于API权限中间件,主要检查 全局通配符 和  API通配符
+     * 但为了兼容性和灵活性,也支持其他类型通配符
      */
     private func hasWildcardPermission(roleIds: ArrayList<String>): Bool {
-        // 查询角色是否有/*权限 (使用 role_has_permission 表)
+        // 查询角色是否有通配符权限 (使用 role_has_permission 表)
         let permissions = roleHasPermissionService.findByRoleIds(roleIds)
         for (p in permissions) {
-            if (p.permissionName == "/*") {
+            let permName = p.permissionName
+            
+            // 检查全局通配符 - 最高优先级,拥有所有权限
+            if (permName == "*") {
+                LogUtils.info("RequirePermissionMiddleware", "=== Found global wildcard permission: * ===")
+                return true
+            }
+            
+            // 检查API通配符 - 拥有所有API权限
+            if (permName == "/*") {
+                LogUtils.info("RequirePermissionMiddleware", "=== Found API wildcard permission: /* ===")
+                return true
+            }
+            
+            // 检查菜单通配符 - 虽然API中间件主要检查API权限,但菜单通配符也可能隐含API访问权限
+            if (permName == "menu:*") {
+                LogUtils.info("RequirePermissionMiddleware", "=== Found menu wildcard permission: menu:* ===")
+                return true
+            }
+            
+            // 检查按钮通配符 - 按钮操作通常对应API调用
+            if (permName == "button:*") {
+                LogUtils.info("RequirePermissionMiddleware", "=== Found button wildcard permission: button:* ===")
+                return true
+            }
+            
+            // 检查工具通配符 - 工具可能需要调用API
+            if (permName == "tool:*") {
+                LogUtils.info("RequirePermissionMiddleware", "=== Found tool wildcard permission: tool:* ===")
                 return true
             }
         }
@@ -184,13 +222,65 @@ public class RequirePermissionMiddleware <: Middleware {
         // 检查角色是否有此权限 (使用 role_has_permission 表)
         let permissions = roleHasPermissionService.findByRoleIds(roleIds)
         for (rp in permissions) {
+            let permName = rp.permissionName
+            
             // 精确匹配
-            if (rp.permissionName == routePattern) {
+            if (permName == routePattern) {
                 return true
             }
 
             // 路由参数匹配
-            if (matchRoutePattern(rp.permissionName, routePattern)) {
+            if (matchRoutePattern(permName, routePattern)) {
+                return true
+            }
+            
+            // 三段式权限名称匹配
+            if (matchThreePartPermission(permName, routePattern)) {
+                return true
+            }
+            
+            // 通配符匹配
+            if (matchWildcardPermission(permName, routePattern)) {
+                return true
+            }
+        }
+        false
+    }
+    
+    /**
+     * 三段式权限名称匹配
+     * 支持 uctoo:module:action 格式的权限名称
+     */
+    private func matchThreePartPermission(permName: String, routePattern: String): Bool {
+        // 检查是否是三段式权限名称
+        if (permName.contains(":")) {
+            let parts = permName.split(":")
+            if (parts.size == 3) {
+                let module = parts[1]
+                let action = parts[2]
+                
+                // 检查路由是否包含模块名
+                if (routePattern.contains("/" + module + "/")) {
+                    // 检查是否是对应操作
+                    if (routePattern.contains("/" + action) || action == "*") {
+                        return true
+                    }
+                }
+            }
+        }
+        false
+    }
+    
+    /**
+     * 通配符权限匹配
+     * 支持 uctoo:* 和 uctoo:i18:* 格式的通配符
+     */
+    private func matchWildcardPermission(permName: String, routePattern: String): Bool {
+        // 检查是否是通配符权限
+        if (permName.endsWith("*")) {
+            let prefix = permName[0..(permName.size - 1)]
+            // 检查路由是否以通配符前缀开头
+            if (routePattern.startsWith(prefix) || routePattern.contains(prefix)) {
                 return true
             }
         }

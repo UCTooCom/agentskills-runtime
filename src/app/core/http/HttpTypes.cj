@@ -23,6 +23,11 @@ public enum HttpMethod {
             case OPTIONS => 6
         }
     }
+    
+    // 实现 == 操作符，支持枚举比较
+    public operator func ==(other: HttpMethod): Bool {
+        this.level() == other.level()
+    }
 }
 
 public class HttpUrl {

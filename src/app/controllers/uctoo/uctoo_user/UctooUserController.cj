@@ -16,7 +16,6 @@ import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat
 
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
-
 public class UctooUserController {
     private var service: UctooUserService
     

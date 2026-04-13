@@ -30,6 +30,9 @@ public class EntityRoute {
         router.get("/api/v1/uctoo/entity/:limit/:page/:skip", controller.getManyWithSkip)
         router.get("/api/v1/uctoo/entity/:limit/:page", controller.getManyWithPathParams)
         
+        // 导出功能
+        router.get("/api/v1/uctoo/entity/export", controller.export)
+        
         return router
     }
     

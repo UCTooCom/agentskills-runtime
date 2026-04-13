@@ -68,30 +68,6 @@ func getCurrentPlatform(): String {
     return "win-x64"
 }
 
-func getBuildDate(): String {
-    let now = DateTime.now()
-    let year = now.year
-    let month = now.month
-    let day = now.dayOfMonth
-    let monthValue: Int64 = match (month) {
-        case January => 1
-        case February => 2
-        case March => 3
-        case April => 4
-        case May => 5
-        case June => 6
-        case July => 7
-        case August => 8
-        case September => 9
-        case October => 10
-        case November => 11
-        case December => 12
-    }
-    let monthStr = if (monthValue < 10) { "0${monthValue}" } else { monthValue.toString() }
-    let dayStr = if (day < 10) { "0${day}" } else { day.toString() }
-    return "${year}-${monthStr}-${dayStr}"
-}
-
 func getProjectRoot(): ?Path {
     var currentDir = canonicalize(Path("."))
     
@@ -163,6 +139,7 @@ main(args: Array<String>): Unit {
     
     let version = getVersionFromCjpm()
     let platform = if (args.size > 0) { args[0] } else { getCurrentPlatform() }
+    let buildDate = DateTime.now().toString()
     
     let targetDir = Path("${rootPath}/target/release")
     let releaseDir = Path("${rootPath}/release")
@@ -605,6 +582,119 @@ main(args: Array<String>): Unit {
     }
     
     println("")
+    println("[STEP] Creating SSL directory structure...")
+    
+    // Create SSL directories (but DO NOT copy actual certificates - they are sensitive)
+    let sslDest = Path("${targetDir}/ssl")
+    let sslBinDest = Path("${binDir}/ssl")
+    
+    if (!exists(sslDest)) {
+        Directory.create(sslDest, recursive: true)
+        println("  [OK] Created ssl directory in release root")
+    }
+    
+    if (!exists(sslBinDest)) {
+        Directory.create(sslBinDest, recursive: true)
+        println("  [OK] Created ssl directory in bin")
+    }
+    
+    // Create README in ssl directory to guide users
+    let sslReadme = """
+# SSL Certificates Directory
+
+This directory should contain your SSL certificates for HTTPS support.
+
+## Required Files
+
+- `server.crt` - SSL certificate file
+- `server.key` - SSL private key file
+
+## How to Generate Self-Signed Certificates (for development)
+
+```bash
+# Using OpenSSL
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes
+
+# Or using the provided script
+../bin/generate_ssl_cert.sh
+```
+
+## Production Use
+
+For production, use certificates from a trusted CA like Let's Encrypt:
+
+```bash
+# Using certbot
+certbot certonly --standalone -d yourdomain.com
+```
+
+Then copy the certificates to this directory:
+- `fullchain.pem` -> `server.crt`
+- `privkey.pem` -> `server.key`
+
+## Security Note
+
+**NEVER commit actual SSL certificates to version control!**
+"""
+    
+    let sslReadmePath = Path("${sslDest}/README.md")
+    File.writeTo(sslReadmePath, sslReadme.toArray())
+    println("  [OK] Created SSL README with instructions")
+    
+    let sslReadmeBinPath = Path("${sslBinDest}/README.md")
+    File.writeTo(sslReadmeBinPath, sslReadme.toArray())
+    println("  [OK] Created SSL README in bin directory")
+    
+    // Note: Actual SSL certificates should NOT be packaged
+    println("  [INFO] SSL certificates will NOT be packaged (sensitive information)")
+    println("  [INFO] Users should generate or copy their own certificates")
+    
+    println("")
+    println("[STEP] Creating logs directory...")
+    
+    let logsDir = Path("${targetDir}/logs")
+    let logsBinDir = Path("${binDir}/logs")
+    
+    if (!exists(logsDir)) {
+        Directory.create(logsDir, recursive: true)
+        println("  [OK] Created logs directory in release")
+    }
+    
+    if (!exists(logsBinDir)) {
+        Directory.create(logsBinDir, recursive: true)
+        println("  [OK] Created logs directory in bin")
+    }
+    
+    println("")
+    println("[STEP] Copying CJO files to bin...")
+    
+    let cjoCount = ArrayList<String>()
+    
+    // Copy all CJO files from target/release subdirectories to bin
+    Directory.walk(targetDir.toString()) { fileInfo =>
+        if (!fileInfo.isDirectory()) {
+            let name = fileInfo.path.fileName
+            
+            // Skip if already in bin directory
+            let parentPath = fileInfo.path.parent
+            if (parentPath.toString() == binDir.toString()) {
+                return true
+            }
+            
+            if (name.endsWith(".cjo")) {
+                let destPath = Path("${binDir}/${name}")
+                if (!exists(destPath)) {
+                    copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                    cjoCount.add(name)
+                }
+            }
+        }
+        true
+    }
+    
+    println("  [OK] Copied ${cjoCount.size.toString()} CJO files to bin/")
+    
+    println("")
     println("[STEP] Creating entry point...")
     
     let entryExe = Path("${binDir}/agentskills-runtime.exe")
@@ -619,26 +709,27 @@ main(args: Array<String>): Unit {
     }
     
     println("")
-    println("[STEP] Creating version file...")
-    
-    let buildDate = getBuildDate()
-    let versionFile = Path("${targetDir}/VERSION")
-    let versionContent = "AGENTSKILLS_RUNTIME_VERSION=${version}\nBUILD_PLATFORM=${platform}\nBUILD_DATE=${buildDate}\n"
-    File.writeTo(versionFile, versionContent.toArray())
-    println("  [OK] VERSION file created")
-    println("  [INFO] Version: ${version}, Platform: ${platform}, Date: ${buildDate}")
-    
-    println("")
     println("[STEP] Copying .env.example...")
     
+    // Copy .env.example to release root (configuration template)
     let envExampleSrc = Path("${rootPath}/.env.example")
     let envExampleDest = Path("${targetDir}/.env.example")
     if (exists(envExampleSrc)) {
         copy(envExampleSrc.toString(), to: envExampleDest.toString(), overwrite: true)
         println("  [OK] Copied .env.example to release package")
+        
+        // Also copy to bin directory for convenience
+        let envExampleBinDest = Path("${binDir}/.env.example")
+        copy(envExampleSrc.toString(), to: envExampleBinDest.toString(), overwrite: true)
+        println("  [OK] Copied .env.example to bin directory")
     } else {
         println("  [WARN] .env.example not found at ${envExampleSrc}, skipping")
     }
+    
+    // Note: .env file should NOT be packaged as it contains sensitive information
+    // Users should create .env from .env.example after extracting the package
+    println("  [INFO] .env file will NOT be packaged (contains sensitive information)")
+    println("  [INFO] Users should create .env from .env.example after extraction")
     
     println("")
     println("[STEP] Updating package.json runtime version...")
@@ -721,13 +812,14 @@ main(args: Array<String>): Unit {
     println("Platform: ${platform}")
     println("Build Date: ${buildDate}")
     println("Total DLLs copied: ${totalDlls.size.toString()}")
+    println("Total CJOs copied: ${cjoCount.size.toString()}")
     if (excludedDlls.size > 0) {
         println("Excluded DLLs: ${excludedDlls.size.toString()}")
     }
     println("")
     println("Directory structure in archive:")
     println("  release/")
-    println("    bin/              - Executables and ALL DLLs")
+    println("    bin/              - Executables, ALL DLLs, ALL CJOs, .env.example, ssl/, logs/")
     println("    magic/            - Runtime modules")
     println("    commonmark4cj/    - Markdown parser")
     println("    yaml4cj/          - YAML parser")
@@ -739,12 +831,27 @@ main(args: Array<String>): Unit {
     println("    logcj/            - Logging library")
     println("    opengauss/        - OpenGauss database driver")
     println("    blowfish/         - Blowfish encryption library")
+    println("    ssl/              - SSL certificates directory (empty, users provide their own)")
+    println("    logs/             - Log output directory")
     println("    VERSION           - Version info")
-    println("    .env.example      - Configuration template")
+    println("    .env.example      - Configuration template (users create .env from this)")
     println("")
-    println("Usage:")
+    println("Setup Instructions:")
     println("  1. Extract the archive to your desired location")
-    println("  2. Copy .env.example to bin/.env and configure API tokens")
-    println("  3. Run: agentskills-runtime.exe [port]")
+    println("  2. Copy .env.example to .env and configure:")
+    println("     - Database connection settings")
+    println("     - API tokens (STEPFUN_API_KEY, MAAS_API_KEY, etc.)")
+    println("     - SSL certificate paths")
+    println("     - Other required settings")
+    println("  3. Generate or copy SSL certificates to ssl/ directory:")
+    println("     - ssl/server.crt (certificate)")
+    println("     - ssl/server.key (private key)")
+    println("  4. Run from release directory: bin/agentskills-runtime.exe [port]")
+    println("     Or from bin directory: agentskills-runtime.exe [port]")
+    println("")
+    println("Security Notes:")
+    println("  - .env file contains sensitive information, NEVER commit it to version control")
+    println("  - SSL certificates are private, NEVER share or commit them")
+    println("  - Always use environment variables or secure storage for production")
     println("========================================")
 }

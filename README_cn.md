@@ -268,28 +268,42 @@ cjpm run --skip-build --name magic.app
 
 ## 快速开始
 
-### 最简单的演示方案（推荐）
+### 最简单的使用方案（推荐）
 
-如果您想快速体验 AgentSkills Runtime 的功能，**无需下载本项目源码**，只需部署 [UCToo 项目](https://gitee.com/uctoo/uctoo) 即可：
+如果您想快速体验 AgentSkills Runtime 的功能，**无需下载本项目源码**，只需克隆 UCToo 项目即可：
 
 #### 部署步骤
 
-1. **部署 UCToo 项目**
-   - 按照 [UCToo 部署文档](https://gitee.com/uctoo/uctoo) 部署 backend 和 web 端
-   - UCToo 已内置 AgentSkills Runtime JavaScript SDK
-
-2. **配置大模型 API Key**
-   - 在 backend 项目的 agentskills-runtime JavaScript SDK 目录中找到 `.env` 文件
-   - 配置大模型 API Key（支持 DeepSeek、OpenAI、华为云 MaaS 等）
-   ```ini
-   MODEL_PROVIDER=deepseek
-   MODEL_NAME=deepseek-chat
-   DEEPSEEK_API_KEY=your_api_key_here
+1. **克隆 UCToo 项目**
+   ```bash
+   git clone https://gitee.com/UCT/uctoo-app-client-pc.git
+   cd uctoo-app-client-pc
    ```
 
-3. **体验自然语言数据库查询**
-   - 打开 UCToo Web 端的 **AI 模块 -> 对话页面**
-   - 使用自然语言与 AI 对话，实现对 UCToo 数据库的 CRUD 操作
+2. **运行安装助手**
+   - 双击运行 `uctoo-app-client-pc/start-installer.bat`（Windows系统）
+   - 或在命令行中执行：
+     ```bash
+     cd uctoo-app-client-pc
+     start-installer.bat
+     ```
+
+3. **跟随安装助手配置环境**
+   - 安装助手会自动检查环境（Node.js、PostgreSQL、Redis等）
+   - 配置数据库连接信息
+   - 配置SSL证书（开发环境可选择自签名证书）
+   - 配置大模型API Key（支持 DeepSeek、OpenAI、华为云 MaaS 等）
+   - 创建管理员账号
+
+4. **使用 web-admin 中的 JavaScript SDK**
+   - 安装完成后，web-admin 已内置 AgentSkills Runtime JavaScript SDK
+   - 在 web-admin 管理后台中通过安装向导或配置页面安装并启动 agentskills-runtime
+
+5. **登录使用智能体应用**
+   - 打开 web-admin 管理后台（默认地址：http://localhost:3031）
+   - 使用创建的管理员账号登录
+   - 访问 **AI 模块 -> 对话页面** 使用智能体功能
+   - 使用自然语言与 AI 对话，实现对数据库的 CRUD 操作
    - 示例对话：
      - *"查询最近一周注册的用户列表"*
      - *"创建一个名为'张三'的新用户"*
@@ -297,9 +311,10 @@ cjpm run --skip-build --name magic.app
 
 #### 方案优势
 - **零配置**: 无需安装仓颉编程语言环境
-- **即开即用**: UCToo 已集成完整的运行时环境
+- **即开即用**: 一键启动安装助手，自动配置完整运行环境
 - **功能完整**: 支持内置的 uctoo-api-skill 技能，实现自然语言数据库操作
 - **易于扩展**: 可在 UCToo 框架基础上继续开发自定义技能
+- **可视化配置**: 通过 web-admin 图形界面轻松管理 runtime 和配置
 
 ### 从源码开始（开发者）
 
@@ -355,7 +370,7 @@ AgentSkills Runtime 提供了自动化打包脚本，可以从源码构建发布
 cjpm build
 
 # 2. 运行打包脚本（自动从 cjpm.toml 读取版本号）
-cjpm run --name magic.scripts.package_release
+cjpm run --skip-build --name magic.scripts.package_release
 ```
 
 #### 打包脚本功能

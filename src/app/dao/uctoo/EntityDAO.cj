@@ -243,28 +243,40 @@ public interface EntityDAO <: RootDAO {
      * 分页查询entity列表（带过滤条件）
      * @param link 链接模糊查询
      * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
      * @param page 页码（从1开始）
      * @param size 每页大小
      * @return 分页结果
      */
-    func findEntityByFilterPage(link: ?String, description: ?String, page: Int64, size: Int64): Pagination<EntityPO> {
+    func findEntityByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<EntityPO> {
         let sql = StringBuilder()
         sql.append("select * from entity where 1=1")
-        
+
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
                 sql.append(" and link like ${arg('%' + linkVal + '%')}")
             }
         }
-        
+
         if (let Some(descVal) <- description) {
             if (descVal != "") {
                 sql.append(" and description like ${arg('%' + descVal + '%')}")
             }
         }
-        
+
+        // 处理 deleted_at 筛选
+        if (let Some(deletedAtVal) <- deletedAt) {
+            if (deletedAtVal == "null") {
+                // 未删除的数据
+                sql.append(" and deleted_at is null")
+            } else if (deletedAtVal == "not_null") {
+                // 已删除的数据（回收站）
+                sql.append(" and deleted_at is not null")
+            }
+        }
+
         sql.append(" order by created_at desc")
-        
+
         executor.page<EntityPO>(sql.toString(), size, page: page)
     }
     
@@ -287,6 +299,74 @@ public interface EntityDAO <: RootDAO {
     func batchDeleteEntity(ids: ArrayList<String>): Int64 {
         executor.setSql('''
             delete from entity where id ${IN(ids)}
+        ''').delete
+    }
+    
+    /**
+     * 动态条件查询entity（支持完整查询操作符）
+     * 
+     * @param whereClause WHERE 子句字符串（不包含 WHERE 关键字）
+     * @param orderByClause ORDER BY 子句字符串（不包含 ORDER BY 关键字）
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     * 
+     * 使用示例：
+     * - whereClause: "name LIKE '%test%' AND status = 'active'"
+     * - orderByClause: "created_at DESC, name ASC"
+     */
+    func findEntityByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<EntityPO> {
+        let sql = StringBuilder()
+        sql.append("select * from entity")
+        
+        if (!whereClause.isEmpty()) {
+            sql.append(" where ${whereClause}")
+        }
+        
+        if (!orderByClause.isEmpty()) {
+            sql.append(" order by ${orderByClause}")
+        } else {
+            sql.append(" order by created_at desc")
+        }
+        
+        executor.page<EntityPO>(sql.toString(), size, page: page)
+    }
+    
+    /**
+     * 使用 f_orm Condition API 查询entity
+     * 
+     * @param whereClause WHERE 子句字符串
+     * @param orderByClause ORDER BY 子句字符串
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findEntityByCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<EntityPO> {
+        let fromClause = executor.FROM<EntityPO>()
+        
+        // 应用 WHERE 条件
+        if (!whereClause.isEmpty()) {
+            fromClause.WHERE(whereClause)
+        }
+        
+        // 应用 ORDER BY
+        if (!orderByClause.isEmpty()) {
+            fromClause.ORDER_BY { => orderByClause }
+        } else {
+            fromClause.ORDER_BY { => "created_at DESC" }
+        }
+        
+        // 执行分页查询
+        fromClause.page<EntityPO>(size, page: page)
+    }
+    
+    /**
+     * 清空回收站（硬删除所有已软删除的entity）
+     * @return 影响行数
+     */
+    func emptyRecycleBin(): Int64 {
+        executor.setSql('''
+            delete from entity where deleted_at is not null
         ''').delete
     }
 }

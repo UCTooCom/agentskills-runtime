@@ -9,6 +9,7 @@ import f_orm.*
 import magic.app.models.uctoo.EntityPO
 import magic.app.dao.uctoo.EntityDAO
 import magic.app.core.response.APIResult
+import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
 import magic.log.LogUtils
 
 /**
@@ -21,6 +22,9 @@ public class EntityService {
     private func getExecutor(): SqlExecutor {
         ORM.executor()
     }
+    
+    // 查询参数解析服务
+    private let requestParser = RequestParserService()
     
     public init() {}
     
@@ -306,7 +310,13 @@ public class EntityService {
     
     /**
      * 获取entity列表（分页）
-     * @param page 页码（从0开始）
+     * 
+     * 支持完整的 Prisma 风格查询：
+     * - 排序：sort="-created_at,id"
+     * - 过滤：filter={"name":{"contains":"test"},"status":{"equals":"active"}}
+     * - 条件组合：filter={"AND":[{"name":{"contains":"test"}},{"status":{"equals":"active"}}]}
+     * 
+     * @param page 页码（从1开始）
      * @param pageSize 每页大小
      * @param sort 排序参数（如 "-created_at,id"）
      * @param filter 过滤条件（JSON字符串）
@@ -318,49 +328,330 @@ public class EntityService {
         sort: String,
         filter: String
     ): (ArrayList<EntityPO>, Int64) {
-        // 解析过滤条件
-        var link: ?String = None<String>
-        var description: ?String = None<String>
+        try {
+            LogUtils.info("EntityService", "Raw filter: ${filter}")
+            LogUtils.info("EntityService", "Raw sort: ${sort}")
+            
+            // 1. 解析查询参数
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+            LogUtils.info("EntityService", "Parsed query: ${parsedQuery.toString()}")
+            
+            // 2. 构建 WHERE 条件
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                // 将组合条件转换为 WHERE 子句字符串
+                whereClause = buildWhereClause(filterCondition)
+                LogUtils.info("EntityService", "Generated WHERE clause: ${whereClause}")
+            }
+            
+            // 3. 构建 ORDER BY 子句
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+            LogUtils.info("EntityService", "Generated ORDER BY clause: ${orderByClause}")
+            
+            // 4. 执行查询
+            LogUtils.info("EntityService", "Executing query with whereClause: '${whereClause}', orderByClause: '${orderByClause}'")
+            let pagination = getExecutor().findEntityByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+            
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            LogUtils.error("EntityService", "Failed to get list: ${e.message}")
+            return (ArrayList<EntityPO>(), 0)
+        }
+    }
+    
+    /**
+     * 构建WHERE子句字符串
+     * 
+     * 将组合条件转换为SQL WHERE子句
+     */
+    private func buildWhereClause(composite: CompositeCondition): String {
+        let sb = StringBuilder()
         
-        // 简单解析filter JSON
-        if (!filter.isEmpty()) {
-            // 这里可以实现更复杂的JSON解析
-            // 暂时简单处理，假设filter格式为 {"link": "xxx", "description": "xxx"}
-            if (filter.contains("link")) {
-                if (let Some(start) <- filter.indexOf("link")) {
-                    if (let Some(colon) <- filter.indexOf(":", start)) {
-                        if (let Some(comma) <- filter.indexOf(",", colon)) {
-                            link = filter[colon + 2..comma - 1]
-                        }
-                    }
+        // 处理字段条件
+        let fieldConditions = composite.fieldConditions
+        for (fieldCondition in fieldConditions) {
+            if (sb.size > 0) {
+                match (composite.logic) {
+                    case LogicOperator.And => sb.append(" AND ")
+                    case LogicOperator.Or => sb.append(" OR ")
+                    case LogicOperator.Not => sb.append(" AND ")
                 }
             }
-            if (filter.contains("description")) {
-                if (let Some(start) <- filter.indexOf("description")) {
-                    if (let Some(colon) <- filter.indexOf(":", start)) {
-                        let end = if (let Some(comma) <- filter.indexOf(",", colon)) {
-                            comma - 1
-                        } else {
-                            filter.size - 1
-                        }
-                        description = filter[colon + 2..end]
-                    }
+            sb.append(buildFieldClause(fieldCondition))
+        }
+        
+        // 处理嵌套组合条件
+        let compositeConditions = composite.compositeConditions
+        for (nestedComposite in compositeConditions) {
+            if (sb.size > 0) {
+                match (composite.logic) {
+                    case LogicOperator.And => sb.append(" AND ")
+                    case LogicOperator.Or => sb.append(" OR ")
+                    case LogicOperator.Not => sb.append(" AND ")
                 }
+            }
+            let nestedClause = buildWhereClause(nestedComposite)
+            if (!nestedClause.isEmpty()) {
+                sb.append("(${nestedClause})")
             }
         }
         
-        let pagination = getExecutor().findEntityByFilterPage(
-            link,
-            description,
-            Int64(page + 1),
-            Int64(pageSize)
-        )
+        // 处理 NOT 逻辑操作符
+        match (composite.logic) {
+            case LogicOperator.Not =>
+                if (sb.size > 0) {
+                    // 对于 NOT 操作，需要将整个条件包在 NOT(...) 中
+                    return "NOT(${sb.toString()})"
+                } else {
+                    return sb.toString()
+                }
+            case _ =>
+                return sb.toString()
+        }
+    }
+    
+    /**
+     * 构建单个字段条件的SQL子句
+     */
+    private func buildFieldClause(fieldCondition: FieldCondition): String {
+        let field = fieldCondition.field
+        let op = fieldCondition.op
+        let value = fieldCondition.value
         
-        return (pagination.list, pagination.rows)
+        match (op) {
+            case QueryOperator.Equals => buildEqualsClause(field, value)
+            case QueryOperator.Not => buildNotClause(field, value)
+            case QueryOperator.Lt => buildLtClause(field, value)
+            case QueryOperator.Lte => buildLteClause(field, value)
+            case QueryOperator.Gt => buildGtClause(field, value)
+            case QueryOperator.Gte => buildGteClause(field, value)
+            case QueryOperator.Contains => buildContainsClause(field, value)
+            case QueryOperator.StartsWith => buildStartsWithClause(field, value)
+            case QueryOperator.EndsWith => buildEndsWithClause(field, value)
+            case QueryOperator.In => buildInClauseWrapper(field, value, true)
+            case QueryOperator.NotIn => buildInClauseWrapper(field, value, false)
+            case QueryOperator.IsSet => buildIsSetClause(field, value)
+            case QueryOperator.Between => buildBetweenClauseWrapper(field, value, true)
+            case QueryOperator.NotBetween => buildBetweenClauseWrapper(field, value, false)
+        }
+    }
+    
+    private func buildEqualsClause(field: String, value: QueryValue): String {
+        // 处理 null 值的特殊情况
+        if (value.isNull()) {
+            return "${field} IS NULL"
+        }
+        
+        if (let Some(v) <- value.stringValue) {
+            return "${field} = '${v}'"
+        } else if (let Some(v) <- value.intValue) {
+            return "${field} = ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} = ${v}"
+        } else if (let Some(v) <- value.boolValue) {
+            return "${field} = ${v}"
+        }
+        return ""
+    }
+    
+    private func buildNotClause(field: String, value: QueryValue): String {
+        // 处理 null 值的特殊情况
+        if (value.isNull()) {
+            return "${field} IS NOT NULL"
+        }
+        
+        if (let Some(v) <- value.stringValue) {
+            return "${field} != '${v}'"
+        } else if (let Some(v) <- value.intValue) {
+            return "${field} != ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} != ${v}"
+        } else if (let Some(v) <- value.boolValue) {
+            return "${field} != ${v}"
+        }
+        return ""
+    }
+    
+    private func buildLtClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} < ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} < ${v}"
+        }
+        return ""
+    }
+    
+    private func buildLteClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} <= ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} <= ${v}"
+        }
+        return ""
+    }
+    
+    private func buildGtClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} > ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} > ${v}"
+        }
+        return ""
+    }
+    
+    private func buildGteClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} >= ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} >= ${v}"
+        }
+        return ""
+    }
+    
+    private func buildContainsClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '%${v}%'"
+        }
+        return ""
+    }
+    
+    private func buildStartsWithClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '${v}%'"
+        }
+        return ""
+    }
+    
+    private func buildEndsWithClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '%${v}'"
+        }
+        return ""
+    }
+    
+    private func buildInClauseWrapper(field: String, value: QueryValue, isIn: Bool): String {
+        if (let Some(arr) <- value.arrayValue) {
+            return buildInClause(field, arr, isIn)
+        }
+        return ""
+    }
+    
+    private func buildIsSetClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.boolValue) {
+            if (v) {
+                return "${field} IS NOT NULL"
+            } else {
+                return "${field} IS NULL"
+            }
+        }
+        return ""
+    }
+    
+    private func buildBetweenClauseWrapper(field: String, value: QueryValue, isBetween: Bool): String {
+        if (let Some(arr) <- value.arrayValue) {
+            if (arr.size >= 2) {
+                return buildBetweenClause(field, arr[0], arr[1], isBetween)
+            }
+        }
+        return ""
+    }
+    
+    /**
+     * 构建IN子句
+     */
+    private func buildInClause(field: String, values: ArrayList<QueryValue>, isIn: Bool): String {
+        let sb = StringBuilder()
+        sb.append("${field} ")
+        if (!isIn) {
+            sb.append("NOT ")
+        }
+        sb.append("IN (")
+        
+        let size = values.size
+        for (i in 0..size) {
+            if (i > 0) {
+                sb.append(", ")
+            }
+            let v = values[i]
+            if (let Some(s) <- v.stringValue) {
+                sb.append("'${s}'")
+            } else if (let Some(n) <- v.intValue) {
+                sb.append("${n}")
+            } else if (let Some(f) <- v.floatValue) {
+                sb.append("${f}")
+            }
+        }
+        sb.append(")")
+        
+        return sb.toString()
+    }
+    
+    /**
+     * 构建BETWEEN子句
+     */
+    private func buildBetweenClause(field: String, v1: QueryValue, v2: QueryValue, isBetween: Bool): String {
+        let sb = StringBuilder()
+        sb.append("${field} ")
+        if (!isBetween) {
+            sb.append("NOT ")
+        }
+        sb.append("BETWEEN ")
+        
+        // 添加第一个值
+        if (let Some(s) <- v1.stringValue) {
+            sb.append("'${s}'")
+        } else if (let Some(n) <- v1.intValue) {
+            sb.append("${n}")
+        } else if (let Some(f) <- v1.floatValue) {
+            sb.append("${f}")
+        }
+        
+        sb.append(" AND ")
+        
+        // 添加第二个值
+        if (let Some(s) <- v2.stringValue) {
+            sb.append("'${s}'")
+        } else if (let Some(n) <- v2.intValue) {
+            sb.append("${n}")
+        } else if (let Some(f) <- v2.floatValue) {
+            sb.append("${f}")
+        }
+        
+        return sb.toString()
+    }
+    
+    /**
+     * 构建ORDER BY子句
+     */
+    private func buildOrderByClause(sort: ArrayList<SortCondition>): String {
+        if (sort.isEmpty()) {
+            return "created_at DESC"
+        }
+        
+        let sb = StringBuilder()
+        let size = sort.size
+        
+        for (i in 0..size) {
+            let condition = sort[i]
+            if (sb.size > 0) {
+                sb.append(", ")
+            }
+            sb.append("${condition.field} ${if (condition.ascending) { "ASC" } else { "DESC" }}")
+        }
+        
+        return sb.toString()
     }
     
     /**
      * 获取entity列表（带跳过参数）
+     * 
+     * 支持完整的 Prisma 风格查询
+     * 
      * @param page 页码（从0开始）
      * @param pageSize 每页大小
      * @param skip 跳过条数
@@ -375,14 +666,34 @@ public class EntityService {
         sort: String,
         filter: String
     ): (ArrayList<EntityPO>, Int64) {
-        // TODO: filter参数需要实现JSON解析和动态WHERE条件构建
-        // 当前版本暂不支持filter，只支持基本的分页查询
-        let pagination = getExecutor().findAllEntityPage(
-            Int64(page + 1),
-            Int64(pageSize)
-        )
-        
-        return (pagination.list, pagination.rows)
+        try {
+            // 1. 解析查询参数
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page + 1), Int64(pageSize))
+            LogUtils.info("EntityService", "Parsed query with skip: ${parsedQuery.toString()}")
+            
+            // 2. 构建 WHERE 条件
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+            
+            // 3. 构建 ORDER BY 子句
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+            
+            // 4. 执行查询（带跳过参数）
+            // 注意：skip 参数需要通过 LIMIT offset 实现
+            let pagination = getExecutor().findEntityByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+            
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            LogUtils.error("EntityService", "Failed to get list with skip: ${e.message}")
+            return (ArrayList<EntityPO>(), 0)
+        }
     }
     
     /**
@@ -448,22 +759,43 @@ public class EntityService {
      * @param pageSize 每页大小
      * @param link 链接模糊查询
      * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
      * @return entity列表和总数
      */
     public func getFilteredList(
         page: Int64,
         pageSize: Int64,
         link: ?String,
-        description: ?String
+        description: ?String,
+        deletedAt: ?String
     ): (ArrayList<EntityPO>, Int64) {
         let pagination = getExecutor().findEntityByFilterPage(
             link,
             description,
+            deletedAt,
             page,
             pageSize
         )
-        
+
         return (pagination.list, pagination.rows)
+    }
+    
+    /**
+     * 清空回收站（硬删除所有已软删除的entity）
+     * @return 删除结果
+     */
+    public func emptyRecycleBin(): APIResult<Bool> {
+        try {
+            let rows = getExecutor().emptyRecycleBin()
+            
+            if (rows > 0) {
+                return APIResult<Bool>(true)
+            } else {
+                return APIResult<Bool>(false, "回收站为空")
+            }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
     }
     
     /**

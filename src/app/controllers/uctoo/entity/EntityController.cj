@@ -292,24 +292,67 @@ public class EntityController {
                 Int32(1)  // 默认第一页
             }
             
-            if (pageSize > 100) {
-                res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
+            if (pageSize > 1000) {
+                res.status(400).json(APIError("40004", "请求数量不能超过1000条").toJson())
                 return
             }
             
-            // 解析查询参数中的 filter（link 和 description）
-            let linkParam = req.queryParam("link")
-            let descriptionParam = req.queryParam("description")
+            // 解析查询参数中的 sort 和 filter（支持完整的Prisma风格查询）
+            let sortParam = req.queryParam("sort")
+            let filterParam = req.queryParam("filter")
             
-            let link = if (let Some(l) <- linkParam) { Some<String>(l) } else { None<String> }
-            let description = if (let Some(d) <- descriptionParam) { Some<String>(d) } else { None<String> }
+            // 打印所有查询参数
+            LogUtils.info("EntityController", "=== All query params: ${req.queryParams} ===")
+            LogUtils.info("EntityController", "=== Raw filterParam from query: ${filterParam} ===")
+            LogUtils.info("EntityController", "=== Raw sortParam from query: ${sortParam} ===")
+            LogUtils.info("EntityController", "=== URI query: ${req.uri.query} ===")
             
-            // 调用带过滤条件的查询方法
-            let (entities, total) = service.getFilteredList(
-                Int64(currentPage),
-                Int64(pageSize),
-                link,
-                description
+            let sortStr = if (let Some(s) <- sortParam) { s } else { "" }
+            var filterStr = ""
+            if (let Some(f) <- filterParam) {
+                LogUtils.info("EntityController", "=== Before URL decode: ${f} ===")
+                // 对filter参数进行URL解码，因为浏览器会自动URL编码查询参数
+                let decodedFilter = f.replace("%7B", "{")
+                    .replace("%7D", "}")
+                    .replace("%22", "\"")
+                    .replace("%3A", ":")
+                    .replace("%2C", ",")
+                    .replace("+", " ")
+                LogUtils.info("EntityController", "=== After URL decode: ${decodedFilter} ===")
+                filterStr = decodedFilter
+            } else {
+                // 尝试从URI查询字符串中手动解析filter参数
+                let queryString = req.uri.query
+                if (!queryString.isEmpty()) {
+                    let params = queryString.split("&")
+                    for (param in params) {
+                        let parts = param.split("=")
+                        if (parts.size == 2) {
+                            let key = parts[0]
+                            let value = parts[1]
+                            if (key == "filter") {
+                                LogUtils.info("EntityController", "=== Manually parsed filter: ${value} ===")
+                                let decodedFilter = value.replace("%7B", "{")
+                                    .replace("%7D", "}")
+                                    .replace("%22", "\"")
+                                    .replace("%3A", ":")
+                                    .replace("%2C", ",")
+                                    .replace("+", " ")
+                                LogUtils.info("EntityController", "=== Manually decoded filter: ${decodedFilter} ===")
+                                filterStr = decodedFilter
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 调用完整的Prisma风格查询方法
+            let (entities, total) = service.getList(
+                currentPage,
+                pageSize,
+                sortStr,
+                filterStr
             )
             
             let totalPage = if (pageSize > 0) {
@@ -358,8 +401,8 @@ public class EntityController {
                 Int32(0)
             }
             
-            if (limitNum > 100) {
-                res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
+            if (limitNum > 1000) {
+                res.status(400).json(APIError("40004", "请求数量不能超过1000条").toJson())
                 return
             }
             
@@ -390,6 +433,27 @@ public class EntityController {
             res.status(200).json("{\"currentPage\":${pageNum},\"totalCount\":${total},\"totalPage\":${totalPage},\"skip\":${skipNum},\"entitys\":[${entitiesJson}]}")
         } catch (e: Exception) {
             res.status(500).json(APIError("50000", e.message).toJson())
+        }
+    }
+    
+    public func emptyRecycleBin(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            // 获取用户ID
+            let userId = req.getLocals("userId")
+            if (userId.isNone()) {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
+            }
+            
+            let result = service.emptyRecycleBin()
+            if (result.success) {
+                res.status(200).json("{\"desc\":\"清空回收站成功\"}")
+            } else {
+                let reason = result.reason ?? "清空回收站失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
     
@@ -637,7 +701,7 @@ public class EntityController {
     public func export(req: HttpRequest, res: HttpResponse): Unit {
         try {
             // 获取所有entity数据
-            let (entities, _) = service.getFilteredList(1, 1000, None<String>, None<String>)
+            let (entities, _) = service.getFilteredList(1, 1000, None<String>, None<String>, None<String>)
             
             // 构建CSV内容
             let sb = StringBuilder()

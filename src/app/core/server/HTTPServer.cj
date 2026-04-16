@@ -307,6 +307,20 @@ public class HTTPServer {
             }
         }
         
+        // 解析查询参数
+        let queryString = appReq.uri.query
+        if (!queryString.isEmpty()) {
+            let params = queryString.split("&")
+            for (param in params) {
+                let parts = param.split("=")
+                if (parts.size == 2) {
+                    let key = parts[0]
+                    let value = parts[1]
+                    appReq.queryParams[key] = value
+                }
+            }
+        }
+        
         return appReq
     }
     

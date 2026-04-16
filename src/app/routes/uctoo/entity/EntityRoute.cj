@@ -33,6 +33,9 @@ public class EntityRoute {
         // 导出功能
         router.get("/api/v1/uctoo/entity/export", controller.export)
         
+        // 清空回收站
+        router.post("/api/v1/uctoo/entity/empty-recycle-bin", controller.emptyRecycleBin)
+        
         return router
     }
     

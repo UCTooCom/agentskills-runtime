@@ -9,7 +9,7 @@ import f_orm.*
 import magic.app.models.uctoo.ApplicationPO
 import magic.app.dao.uctoo.ApplicationDAO
 import magic.app.core.response.APIResult
-import magic.app.core.query.{RequestParserService, QueryBuilderService, ParsedQuery}
+import magic.app.core.query.{RequestParserService, ParsedQuery}
 import magic.log.LogUtils
 
 /**
@@ -23,9 +23,8 @@ public class ApplicationService {
         ORM.executor()
     }
     
-    // 查询解析和构建服务
+    // 查询解析服务
     private let requestParser = RequestParserService()
-    private let queryBuilder = QueryBuilderService()
     
     public init() {}
     
@@ -301,21 +300,24 @@ public class ApplicationService {
             LogUtils.info("ApplicationService", "Filter: ${filter}")
             
             // 1. 解析查询参数
-            let parsedQuery = requestParser.parseQuery(filter, sort, page + 1, pageSize)
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page + 1), Int64(pageSize))
             
             // 2. 构建 SQL 子句
             let args = ArrayList<Any>()
             var whereClause = ""
             var orderByClause = "created_at desc"
             
-            if (let Some(filterCondition) <- parsedQuery.filter) {
-                whereClause = queryBuilder.buildWhereClause(filterCondition, args)
+            let filterCondition = parsedQuery.filter
+            if (filterCondition.isSome()) {
+                // TODO: 实现 WHERE 子句构建
+                // whereClause = queryBuilder.buildWhereClause(filterCondition.getOrThrow(), args)
                 LogUtils.info("ApplicationService", "WHERE clause: ${whereClause}")
                 LogUtils.info("ApplicationService", "Args count: ${args.size}")
             }
             
             if (!parsedQuery.sort.isEmpty()) {
-                orderByClause = queryBuilder.buildOrderByClause(parsedQuery.sort)
+                // TODO: 实现 ORDER BY 子句构建
+                // orderByClause = queryBuilder.buildOrderByClause(parsedQuery.sort)
                 LogUtils.info("ApplicationService", "ORDER BY clause: ${orderByClause}")
             }
             
@@ -363,19 +365,22 @@ public class ApplicationService {
             LogUtils.info("ApplicationService", "Page: ${page}, PageSize: ${pageSize}, Skip: ${skip}")
             
             // 1. 解析查询参数
-            let parsedQuery = requestParser.parseQuery(filter, sort, page + 1, pageSize)
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page + 1), Int64(pageSize))
             
             // 2. 构建 SQL 子句
             let args = ArrayList<Any>()
             var whereClause = ""
             var orderByClause = "created_at desc"
             
-            if (let Some(filterCondition) <- parsedQuery.filter) {
-                whereClause = queryBuilder.buildWhereClause(filterCondition, args)
+            let filterCondition = parsedQuery.filter
+            if (filterCondition.isSome()) {
+                // TODO: 实现 WHERE 子句构建
+                // whereClause = queryBuilder.buildWhereClause(filterCondition.getOrThrow(), args)
             }
             
             if (!parsedQuery.sort.isEmpty()) {
-                orderByClause = queryBuilder.buildOrderByClause(parsedQuery.sort)
+                // TODO: 实现 ORDER BY 子句构建
+                // orderByClause = queryBuilder.buildOrderByClause(parsedQuery.sort)
             }
             
             // 3. 执行查询（带 skip）

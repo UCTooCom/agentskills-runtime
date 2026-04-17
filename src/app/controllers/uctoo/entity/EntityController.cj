@@ -3,6 +3,8 @@
  */
 package magic.app.controllers.uctoo.entity
 
+//#region AutoCreateCode
+
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.core.response.{APIError, APIResult}
 import magic.app.models.uctoo.EntityPO
@@ -18,8 +20,6 @@ public class EntityController {
     public init(service: EntityService) {
         this.service = service
     }
-    
-    //#region AutoCreateCode
     
     public func add(req: HttpRequest, res: HttpResponse): Unit {
         try {
@@ -748,4 +748,6 @@ public class EntityController {
             res.status(500).json(APIError("50000", e.message).toJson())
         }
     }
+    
+//#endregion AutoCreateCode
 }

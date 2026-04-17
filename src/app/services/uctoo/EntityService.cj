@@ -3,6 +3,8 @@
  */
 package magic.app.services.uctoo
 
+//#region AutoCreateCode
+
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -27,8 +29,6 @@ public class EntityService {
     private let requestParser = RequestParserService()
     
     public init() {}
-    
-    //#region AutoCreateCode
     
     /**
      * 创建entity
@@ -807,4 +807,6 @@ public class EntityService {
         let random = (timestamp % 10000).toString()
         "entity-${timestamp}-${random}"
     }
+    
+//#endregion AutoCreateCode
 }

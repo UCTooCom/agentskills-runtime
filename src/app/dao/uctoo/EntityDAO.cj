@@ -3,6 +3,8 @@
  */
 package magic.app.dao.uctoo
 
+//#region AutoCreateCode
+
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -25,8 +27,6 @@ import magic.log.LogUtils
 @DAO
 public interface EntityDAO <: RootDAO {
     prop executor: SqlExecutor
-    
-    //#region AutoCreateCode
     
     // ==================== 插入操作 ====================
     
@@ -369,4 +369,6 @@ public interface EntityDAO <: RootDAO {
             delete from entity where deleted_at is not null
         ''').delete
     }
+    
+//#endregion AutoCreateCode
 }

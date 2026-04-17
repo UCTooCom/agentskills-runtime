@@ -3,6 +3,8 @@
  */
 package magic.app.routes.uctoo.entity
 
+//#region AutoCreateCode
+
 import magic.app.controllers.uctoo.entity.EntityController
 import magic.app.core.router.Router
 
@@ -14,8 +16,6 @@ public class EntityRoute {
         this.router = router
         this.controller = controller
     }
-    
-    //#region AutoCreateCode
     
     public func register(): Router {
         // 按照 uctoo v4 规范，路由路径带 /v1 前缀
@@ -39,7 +39,5 @@ public class EntityRoute {
         return router
     }
     
-    //#endregion AutoCreateCode
-    
-    // ========== 定制开发方法（在此区域添加自定义路由）==========
+//#endregion AutoCreateCode
 }

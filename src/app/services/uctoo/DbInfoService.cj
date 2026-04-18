@@ -9,6 +9,7 @@ import f_orm.*
 import magic.app.models.uctoo.DbInfoPO
 import magic.app.dao.uctoo.DbInfoDAO
 import magic.app.core.response.APIResult
+import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
 import magic.log.LogUtils
 
 /**
@@ -21,6 +22,9 @@ public class DbInfoService {
     private func getExecutor(): SqlExecutor {
         ORM.executor()
     }
+    
+    // 查询参数解析服务
+    private let requestParser = RequestParserService()
     
     public init() {}
     

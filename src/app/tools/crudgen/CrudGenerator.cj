@@ -67,12 +67,19 @@ public class CrudGenerator {
         tableInfo.dbName = dbName
         tableInfo.className = toPascalCase(tableName)
         
-        // 使用DbInfoService查询表字段信息
-        let filterStr = "table_catalog='${dbName}',table_name='${tableName}'"
-        let (dbInfoList, _) = dbInfoService.getList(0, 1000, "ordinal_position", filterStr)
+        // 直接使用ORM查询db_info表
+        let executor = ORM.executor()
+        let sql = """
+            SELECT *
+            FROM db_info
+            WHERE table_catalog = '${dbName}' AND table_name = '${tableName}'
+            ORDER BY ordinal_position
+        """
+        
+        let results = executor.setSql(sql).list<DbInfoPO>()
         
         // 将DbInfoPO转换为FieldInfo
-        for (dbInfo in dbInfoList) {
+        for (dbInfo in results) {
             let field = FieldInfo()
             field.columnName = dbInfo.columnName
             field.dataType = dbInfo.dataType ?? ""
@@ -91,15 +98,19 @@ public class CrudGenerator {
     public func readAllTables(dbName: String): ArrayList<String> {
         let tables = ArrayList<String>()
         
-        let filterStr = "table_catalog='${dbName}'"
-        let (dbInfoList, _) = dbInfoService.getList(0, 10000, "table_name", filterStr)
+        // 直接使用ORM查询db_info表
+        let executor = ORM.executor()
+        let sql = """
+            SELECT DISTINCT table_name
+            FROM db_info
+            WHERE table_catalog = '${dbName}'
+            ORDER BY table_name
+        """
         
-        var lastTableName = ""
-        for (dbInfo in dbInfoList) {
-            if (dbInfo.dbTableName != lastTableName) {
-                tables.add(dbInfo.dbTableName)
-                lastTableName = dbInfo.dbTableName
-            }
+        let results = executor.setSql(sql).list<DbInfoPO>()
+        
+        for (dbInfo in results) {
+            tables.add(dbInfo.dbTableName)
         }
         
         return tables
@@ -272,35 +283,277 @@ public class CrudGenerator {
     }
     
     /**
-     * 构建DAO层代码 - 简化版本
+     * 构建DAO层代码
      */
     private func buildDAOCode(tableInfo: TableInfo): String {
-        // TODO: 实现DAO代码生成
-        "// DAO code for ${tableInfo.tableName}"
+        let variables = HashMap<String, String>()
+        variables.add("dbName", tableInfo.dbName)
+        variables.add("tableName", tableInfo.tableName)
+        variables.add("className", tableInfo.className)
+        variables.add("insertColumns", buildInsertColumns(tableInfo))
+        variables.add("insertValues", buildInsertValues(tableInfo))
+        variables.add("updateSets", buildUpdateSets(tableInfo))
+
+        let templatePath = "./src/app/tools/crudgen/templates/DAO.cj.tpl"
+        let template = loadTemplateContent(templatePath)
+
+        replaceVariablesInTemplate(template, variables)
+    }
+
+    /**
+     * 构建插入列
+     */
+    private func buildInsertColumns(tableInfo: TableInfo): String {
+        let sb = StringBuilder()
+        var first = true
+        for (field in tableInfo.fields) {
+            if (field.columnName == "id") {
+                continue
+            }
+            if (!first) {
+                sb.append(",\n")
+            }
+            sb.append("                ${field.columnName}")
+            first = false
+        }
+        sb.toString()
+    }
+
+    /**
+     * 构建插入值
+     */
+    private func buildInsertValues(tableInfo: TableInfo): String {
+        let sb = StringBuilder()
+        var first = true
+        for (field in tableInfo.fields) {
+            if (field.columnName == "id") {
+                continue
+            }
+            let camelName = toCamelCase(field.columnName)
+            if (!first) {
+                sb.append(",\n                ")
+            }
+            sb.append("\${arg(entity.${camelName})}")
+            first = false
+        }
+        sb.toString()
+    }
+
+    /**
+     * 构建更新SET子句
+     */
+    private func buildUpdateSets(tableInfo: TableInfo): String {
+        let sb = StringBuilder()
+        var first = true
+        for (field in tableInfo.fields) {
+            if (field.columnName == "id" || field.columnName == "created_at") {
+                continue
+            }
+            if (!first) {
+                sb.append(",\n")
+            }
+            let camelName = toCamelCase(field.columnName)
+            if (field.columnName == "updated_at") {
+                sb.append("                ${field.columnName} = \${arg(DateTime.now())}")
+            } else {
+                sb.append("                ${field.columnName} = \${arg(entity.${camelName})}")
+            }
+            first = false
+        }
+        sb.toString()
     }
     
     /**
-     * 构建Service层代码 - 简化版本
+     * 构建Service层代码
      */
     private func buildServiceCode(tableInfo: TableInfo): String {
-        // TODO: 实现Service代码生成
-        "// Service code for ${tableInfo.tableName}"
+        let variables = HashMap<String, String>()
+        variables.add("dbName", tableInfo.dbName)
+        variables.add("tableName", tableInfo.tableName)
+        variables.add("className", tableInfo.className)
+        variables.add("fieldMergeCode", buildFieldMergeCode(tableInfo))
+
+        let templatePath = "./src/app/tools/crudgen/templates/Service.cj.tpl"
+        let template = loadTemplateContent(templatePath)
+
+        replaceVariablesInTemplate(template, variables)
+    }
+
+    /**
+     * 构建字段合并代码
+     */
+    private func buildFieldMergeCode(tableInfo: TableInfo): String {
+        let sb = StringBuilder()
+
+        for (field in tableInfo.fields) {
+            if (field.columnName == "id" || field.columnName == "created_at" || field.columnName == "updated_at") {
+                continue
+            }
+            let camelName = toCamelCase(field.columnName)
+            let cjType = mapDataType(field.dataType, field.isNullable)
+
+            if (cjType.startsWith("Option<")) {
+                sb.append("            if (entity.${camelName}.isSome()) {\n")
+                sb.append("                existingEntity.${camelName} = entity.${camelName}\n")
+                sb.append("            }\n")
+            } else if (cjType == "String") {
+                sb.append("            if (entity.${camelName}.size > 0) {\n")
+                sb.append("                existingEntity.${camelName} = entity.${camelName}\n")
+                sb.append("            }\n")
+            } else {
+                sb.append("            existingEntity.${camelName} = entity.${camelName}\n")
+            }
+        }
+
+        sb.toString()
     }
     
     /**
-     * 构建Controller层代码 - 简化版本
+     * 构建Controller层代码
      */
     private func buildControllerCode(tableInfo: TableInfo): String {
-        // TODO: 实现Controller代码生成
-        "// Controller code for ${tableInfo.tableName}"
+        // 构建字段映射代码
+        let fieldMappingCode = buildFieldMappingCode(tableInfo)
+
+        // 使用变量映射表进行替换
+        let variables = HashMap<String, String>()
+        variables.add("dbName", tableInfo.dbName)
+        variables.add("tableName", tableInfo.tableName)
+        variables.add("className", tableInfo.className)
+        variables.add("fieldMappingCode", fieldMappingCode)
+
+        // 读取Controller模板
+        let templatePath = "./src/app/tools/crudgen/templates/Controller.cj.tpl"
+        let template = loadTemplateContent(templatePath)
+
+        // 替换变量
+        replaceVariablesInTemplate(template, variables)
     }
     
     /**
-     * 构建Route层代码 - 简化版本
+     * 构建字段映射代码
+     */
+    private func buildFieldMappingCode(tableInfo: TableInfo): String {
+        let sb = StringBuilder()
+        
+        sb.append("    private func mapToEntity(map: Map<String, Any>): ${tableInfo.className}PO {\n")
+        sb.append("        let entity = ${tableInfo.className}PO()\n")
+        
+        for (field in tableInfo.fields) {
+            let fieldName = toCamelCase(field.columnName)
+            let cjType = mapDataType(field.dataType, field.isNullable)
+            
+            sb.append("        if (let Some(${fieldName}) <- map.get(\"${field.columnName}\")) {\n")
+            
+            if (cjType.startsWith("Option<")) {
+                // Option类型
+                let innerType = cjType[7..cjType.size - 1] // 去掉 "Option<" 和 ">"
+                if (innerType == "String") {
+                    sb.append("            let ${fieldName}Str = ${fieldName} as String\n")
+                    sb.append("            if (let Some(s) <- ${fieldName}Str) {\n")
+                    sb.append("                entity.${fieldName} = Some<String>(s)\n")
+                    sb.append("            }\n")
+                } else if (innerType == "Float64") {
+                    sb.append("            if (${fieldName} is Int64) {\n")
+                    sb.append("                let ${fieldName}Int = ${fieldName} as Int64\n")
+                    sb.append("                if (let Some(v) <- ${fieldName}Int) {\n")
+                    sb.append("                    entity.${fieldName} = Some<Float64>(Float64(v))\n")
+                    sb.append("                }\n")
+                    sb.append("            } else if (${fieldName} is Float64) {\n")
+                    sb.append("                let ${fieldName}Float = ${fieldName} as Float64\n")
+                    sb.append("                if (let Some(v) <- ${fieldName}Float) {\n")
+                    sb.append("                    entity.${fieldName} = Some<Float64>(v)\n")
+                    sb.append("                }\n")
+                    sb.append("            }\n")
+                } else if (innerType == "DateTime") {
+                    sb.append("            // DateTime类型, 由数据库处理\n")
+                } else {
+                    sb.append("            let ${fieldName}Str = ${fieldName} as String\n")
+                    sb.append("            if (let Some(s) <- ${fieldName}Str) {\n")
+                    sb.append("                entity.${fieldName} = Some<${innerType}>(s)\n")
+                    sb.append("            }\n")
+                }
+            } else if (cjType == "String") {
+                sb.append("            let ${fieldName}Str = ${fieldName} as String\n")
+                sb.append("            if (let Some(s) <- ${fieldName}Str) {\n")
+                sb.append("                entity.${fieldName} = s\n")
+                sb.append("            }\n")
+            } else if (cjType == "Int32") {
+                sb.append("            let ${fieldName}Int = ${fieldName} as Int64\n")
+                sb.append("            if (let Some(v) <- ${fieldName}Int) {\n")
+                sb.append("                entity.${fieldName} = Int32(v)\n")
+                sb.append("            }\n")
+            } else if (cjType == "Float64") {
+                sb.append("            if (${fieldName} is Int64) {\n")
+                sb.append("                let ${fieldName}Int = ${fieldName} as Int64\n")
+                sb.append("                if (let Some(v) <- ${fieldName}Int) {\n")
+                sb.append("                    entity.${fieldName} = Float64(v)\n")
+                sb.append("                }\n")
+                sb.append("            } else if (${fieldName} is Float64) {\n")
+                sb.append("                let ${fieldName}Float = ${fieldName} as Float64\n")
+                sb.append("                if (let Some(v) <- ${fieldName}Float) {\n")
+                sb.append("                    entity.${fieldName} = v\n")
+                sb.append("                }\n")
+                sb.append("            }\n")
+            } else if (cjType == "Bool") {
+                sb.append("            let ${fieldName}Bool = ${fieldName} as Bool\n")
+                sb.append("            if (let Some(v) <- ${fieldName}Bool) {\n")
+                sb.append("                entity.${fieldName} = v\n")
+                sb.append("            }\n")
+            }
+            
+            sb.append("        }\n")
+        }
+        
+        sb.append("        return entity\n")
+        sb.append("    }\n")
+        
+        return sb.toString()
+    }
+    
+    /**
+     * 加载模板内容
+     */
+    private func loadTemplateContent(templatePath: String): String {
+        try {
+            let bytes = File.readFrom(templatePath)
+            let content = String.fromUtf8(bytes)
+            content
+        } catch (e: Exception) {
+            ""
+        }
+    }
+    
+    /**
+     * 替换模板变量
+     */
+    private func replaceVariablesInTemplate(template: String, variables: HashMap<String, String>): String {
+        var result = template
+        
+        for ((key, value) in variables) {
+            let placeholder = "{{" + key + "}}"
+            result = result.replace(placeholder, value)
+        }
+        
+        result
+    }
+    
+    /**
+     * 构建Route层代码
      */
     private func buildRouteCode(tableInfo: TableInfo): String {
-        // TODO: 实现Route代码生成
-        "// Route code for ${tableInfo.tableName}"
+        // 使用变量映射表进行替换
+        let variables = HashMap<String, String>()
+        variables.add("dbName", tableInfo.dbName)
+        variables.add("tableName", tableInfo.tableName)
+        variables.add("className", tableInfo.className)
+
+        // 读取Route模板
+        let templatePath = "./src/app/tools/crudgen/templates/Route.cj.tpl"
+        let template = loadTemplateContent(templatePath)
+
+        // 替换变量
+        replaceVariablesInTemplate(template, variables)
     }
     
     /**
@@ -341,14 +594,14 @@ public class CrudGenerator {
     private func getDefaultValue(dataType: String, isNullable: String): String {
         if (isNullable == "YES") {
             let baseType = mapDataType(dataType, "NO")
-            "None<${baseType}>()"
+            "None<${baseType}>"
         } else {
             match (dataType.toAsciiLower()) {
                 case "integer" | "smallint" => "0"
                 case "bigint" => "0"
                 case "numeric" | "real" | "double precision" => "0.0"
                 case "boolean" => "false"
-                case "timestamp" | "date" | "time" => "DateTime.now()"
+                case "timestamp" | "timestamp with time zone" | "date" | "time" => "DateTime.now()"
                 case _ => "\"\""
             }
         }

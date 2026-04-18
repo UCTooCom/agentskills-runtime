@@ -276,15 +276,15 @@ cjpm run --skip-build --name magic.app
 
 1. **克隆 UCToo 项目**
    ```bash
-   git clone https://gitee.com/UCT/uctoo-app-client-pc.git
-   cd uctoo-app-client-pc
+   git clone https://gitee.com/uctoo/uctoo.git
+   cd uctoo
    ```
 
 2. **运行安装助手**
-   - 双击运行 `uctoo-app-client-pc/start-installer.bat`（Windows系统）
+   - 双击运行 `apps/web-admin/start-installer.bat`（Windows系统）
    - 或在命令行中执行：
      ```bash
-     cd uctoo-app-client-pc
+     cd apps/web-admin
      start-installer.bat
      ```
 

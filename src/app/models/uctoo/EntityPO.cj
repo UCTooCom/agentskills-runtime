@@ -13,7 +13,6 @@ import f_orm.*
 import json4cj.JsonValueSerializable
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 
-
 /**
  * EntityPO - entity表持久化对象
  * 
@@ -30,10 +29,10 @@ public class EntityPO {
     public var link: String = ""
 
         @ORMField['privacy_level']
-    public var privacyLevel: Option<Int32> = None<Int32>
+    public var privacyLevel: Int32 = 0
 
         @ORMField['stars']
-    public var stars: Option<Float64> = None<Float64>
+    public var stars: Float64 = 0.0
 
         @ORMField['description']
     public var description: Option<String> = None<String>
@@ -66,7 +65,7 @@ public class EntityPO {
     public var owner: Option<String> = None<String>
 
         @ORMField['creator']
-    public var creator: Option<String> = None<String>
+    public var creator: String = ""
 
         @ORMField['created_at']
     public var createdAt: DateTime = DateTime.now()
@@ -85,62 +84,62 @@ public class EntityPO {
 
         @ORMField['status']
     public var status: Option<String> = None<String>
-    
+
     public init() {}
-    
+
     public init(
                 id: String,
-        link: String,
-        privacyLevel: Option<Int32>,
-        stars: Option<Float64>,
-        description: Option<String>,
-        groupId: Option<String>,
-        picture: Option<String>,
-        images: Option<String>,
-        content: Option<String>,
-        json: Option<String>,
-        city: Option<String>,
-        price: Option<Float64>,
-        birthday: Option<DateTime>,
-        owner: Option<String>,
-        creator: Option<String>,
-        createdAt: DateTime,
-        updatedAt: DateTime,
-        deletedAt: Option<DateTime>,
-        endTime: Option<DateTime>,
-        startTime: Option<DateTime>,
-        status: Option<String>
+                link: String,
+                privacyLevel: Int32,
+                stars: Float64,
+                description: Option<String>,
+                groupId: Option<String>,
+                picture: Option<String>,
+                images: Option<String>,
+                content: Option<String>,
+                json: Option<String>,
+                city: Option<String>,
+                price: Option<Float64>,
+                birthday: Option<DateTime>,
+                owner: Option<String>,
+                creator: String,
+                createdAt: DateTime,
+                updatedAt: DateTime,
+                deletedAt: Option<DateTime>,
+                endTime: Option<DateTime>,
+                startTime: Option<DateTime>,
+                status: Option<String>
     ) {
                 this.id = id
-        this.link = link
-        this.privacyLevel = privacyLevel
-        this.stars = stars
-        this.description = description
-        this.groupId = groupId
-        this.picture = picture
-        this.images = images
-        this.content = content
-        this.json = json
-        this.city = city
-        this.price = price
-        this.birthday = birthday
-        this.owner = owner
-        this.creator = creator
-        this.createdAt = createdAt
-        this.updatedAt = updatedAt
-        this.deletedAt = deletedAt
-        this.endTime = endTime
-        this.startTime = startTime
-        this.status = status
+                this.link = link
+                this.privacyLevel = privacyLevel
+                this.stars = stars
+                this.description = description
+                this.groupId = groupId
+                this.picture = picture
+                this.images = images
+                this.content = content
+                this.json = json
+                this.city = city
+                this.price = price
+                this.birthday = birthday
+                this.owner = owner
+                this.creator = creator
+                this.createdAt = createdAt
+                this.updatedAt = updatedAt
+                this.deletedAt = deletedAt
+                this.endTime = endTime
+                this.startTime = startTime
+                this.status = status
     }
-    
+
     /// 序列化为 JsonValue
     public func toJsonValue(): JsonValue {
         var map = HashMap<String, JsonValue>()
         map.add("id", this.id.toJsonValue())
         map.add("link", this.link.toJsonValue())
-        map.add("privacy_level", optionToJsonValue(this.privacyLevel))
-        map.add("stars", optionToJsonValue(this.stars))
+        map.add("privacy_level", this.privacyLevel.toJsonValue())
+        map.add("stars", this.stars.toJsonValue())
         map.add("description", optionToJsonValue(this.description))
         map.add("group_id", optionToJsonValue(this.groupId))
         map.add("picture", optionToJsonValue(this.picture))
@@ -151,7 +150,7 @@ public class EntityPO {
         map.add("price", optionToJsonValue(this.price))
         map.add("birthday", optionToJsonValue(this.birthday))
         map.add("owner", optionToJsonValue(this.owner))
-        map.add("creator", optionToJsonValue(this.creator))
+        map.add("creator", this.creator.toJsonValue())
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
@@ -160,7 +159,7 @@ public class EntityPO {
         map.add("status", optionToJsonValue(this.status))
         return JsonObject(map)
     }
-    
+
     /// 辅助方法：将 Option<T> 转换为 JsonValue
     private static func optionToJsonValue<T>(opt: Option<T>): JsonValue where T <: JsonValueSerializable<T> {
         if (let Some(v) <- opt) {
@@ -169,11 +168,11 @@ public class EntityPO {
             return JsonNull()
         }
     }
-    
+
     /// 序列化为 JSON 字符串
     public func toJson(): String {
         return this.toJsonValue().toString()
     }
-    
+
 //#endregion AutoCreateCode
 }

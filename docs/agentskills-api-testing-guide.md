@@ -28,7 +28,7 @@
 cjpm build
 
 # 运行 API 服务（默认在 8080 端口）
-cjpm run --skip-build --name magic.api
+cjpm run --skip-build --name magic.app
 ```
 
 ### 2. 测试健康检查接口

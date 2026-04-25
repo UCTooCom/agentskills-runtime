@@ -350,10 +350,32 @@ public class HTTPServer {
             }
             
             let bodySize = bodySizeOpt.getOrThrow()
+            
+            // 安全检查：限制请求体大小，防止内存耗尽攻击
+            // 最大允许 10MB 的请求体
+            let maxBodySize = 10 * 1024 * 1024
+            if (bodySize <= 0 || bodySize > maxBodySize) {
+                logger.warn("Invalid or too large body size: ${bodySize}, ignoring body")
+                return ""
+            }
+            
             let buffer = Array<UInt8>(bodySize, repeat: 0)
-            req.body.read(buffer)
+            let bytesRead = req.body.read(buffer)
+            
+            // 检查实际读取的字节数
+            if (bytesRead != bodySize) {
+                logger.warn("Incomplete body read: expected ${bodySize}, got ${bytesRead}")
+                // 只使用实际读取的字节
+                if (bytesRead > 0) {
+                    let actualBuffer = buffer[0..bytesRead]
+                    return String.fromUtf8(actualBuffer)
+                }
+                return ""
+            }
+            
             return String.fromUtf8(buffer)
         } catch (ex: Exception) {
+            logger.error("Error reading request body: ${ex.message}")
             return ""
         }
     }

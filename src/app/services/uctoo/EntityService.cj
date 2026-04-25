@@ -15,28 +15,25 @@ import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeConditi
 import magic.log.LogUtils
 
 /**
- * EntityService - 实体服务类
- * 
- * 提供实体相关的业务逻辑处理，遵循UCTOO V4 ORM规范
+ * EntityService - entity服务类
+ *
+ * 提供entity相关的业务逻辑处理，遵循UCTOO V4 ORM规范
  * 使用DAO层进行数据访问
  */
 public class EntityService {
-    // 不缓存 SqlExecutor，每次都获取新的实例
-    // 缓存会导致连接被关闭后仍然被复用的问题
-    
     private func getExecutor(): SqlExecutor {
         ORM.executor()
     }
-    
+
     // 查询参数解析服务
     private let requestParser = RequestParserService()
-    
+
     public init() {}
-    
+
     /**
      * 创建entity
-     * @param entity entity对象
-     * @param creatorId 创建者ID（当用户未指定creator时使用）
+     * @param entity EntityPO对象
+     * @param creatorId 创建者ID
      * @return 创建结果
      */
     public func create(entity: EntityPO, creatorId: String): APIResult<EntityPO> {
@@ -44,12 +41,10 @@ public class EntityService {
             entity.createdAt = DateTime.now()
             entity.updatedAt = DateTime.now()
             
-            // 只有当用户未指定creator时，才使用登录用户ID
-            if (entity.creator.isEmpty()) {
-                entity.creator = creatorId
+            if (entity.creator.isNone()) {
+                entity.creator = Some(creatorId)
             }
             
-            // id 由数据库自动生成 UUID
             let id = getExecutor().insertEntity(entity)
             
             if (!id.isEmpty()) {
@@ -62,11 +57,11 @@ public class EntityService {
             return APIResult<EntityPO>(false, e.message)
         }
     }
-    
+
     /**
      * 更新entity
-     * @param entityId entityID
-     * @param entity entity对象（只包含要更新的字段）
+     * @param entityId ID
+     * @param entity EntityPO对象
      * @return 更新结果
      */
     public func update(entityId: String, entity: EntityPO): APIResult<EntityPO> {
@@ -83,7 +78,6 @@ public class EntityService {
                         if (entity.link.size > 0) {
                 existingEntity.link = entity.link
             }
-            // privacyLevel和stars是基本类型,直接更新
             existingEntity.privacyLevel = entity.privacyLevel
             existingEntity.stars = entity.stars
             if (entity.description.isSome()) {
@@ -116,8 +110,7 @@ public class EntityService {
             if (entity.owner.isSome()) {
                 existingEntity.owner = entity.owner
             }
-            // creator是String类型,检查是否为空
-            if (entity.creator.size > 0) {
+            if (entity.creator.isSome()) {
                 existingEntity.creator = entity.creator
             }
             if (entity.deletedAt.isSome()) {
@@ -132,6 +125,7 @@ public class EntityService {
             if (entity.status.isSome()) {
                 existingEntity.status = entity.status
             }
+
             
             // 设置更新时间和ID
             existingEntity.updatedAt = DateTime.now()
@@ -148,7 +142,7 @@ public class EntityService {
             return APIResult<EntityPO>(false, e.message)
         }
     }
-    
+
     /**
      * 批量更新entity
      * @param entities entity列表
@@ -157,16 +151,16 @@ public class EntityService {
     public func updateMultiple(entities: ArrayList<EntityPO>): APIResult<ArrayList<EntityPO>> {
         try {
             let updatedEntities = ArrayList<EntityPO>()
-            
+
             for (entity in entities) {
                 entity.updatedAt = DateTime.now()
                 let rows = getExecutor().updateEntity(entity)
-                
+
                 if (rows > 0) {
                     updatedEntities.add(entity)
                 }
             }
-            
+
             if (updatedEntities.size > 0) {
                 return APIResult<ArrayList<EntityPO>>(updatedEntities)
             } else {
@@ -176,10 +170,10 @@ public class EntityService {
             return APIResult<ArrayList<EntityPO>>(false, e.message)
         }
     }
-    
+
     /**
      * 删除entity
-     * @param entityId entityID
+     * @param entityId ID
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
      */
@@ -207,7 +201,7 @@ public class EntityService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
      * 批量删除entity
      * @param ids entityID列表
@@ -222,7 +216,7 @@ public class EntityService {
             } else {
                 rows = getExecutor().batchSoftDeleteEntity(ids)
             }
-            
+
             if (rows > 0) {
                 return APIResult<Bool>(true)
             } else {
@@ -232,7 +226,7 @@ public class EntityService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
      * 恢复软删除的entity
      * @param entityId entityID
@@ -241,7 +235,7 @@ public class EntityService {
     public func restore(entityId: String): APIResult<EntityPO> {
         try {
             let rows = getExecutor().restoreEntityById(entityId)
-            
+
             if (rows > 0) {
                 let result = getExecutor().findEntityById(entityId)
                 if (let Some(entity) <- result) {
@@ -256,7 +250,7 @@ public class EntityService {
             return APIResult<EntityPO>(false, e.message)
         }
     }
-    
+
     /**
      * 批量恢复软删除的entity
      * @param ids entityID列表
@@ -268,7 +262,7 @@ public class EntityService {
             for (id in ids) {
                 rows = rows + getExecutor().restoreEntityById(id)
             }
-            
+
             if (rows > 0) {
                 return APIResult<Bool>(true)
             } else {
@@ -278,101 +272,98 @@ public class EntityService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
      * 根据ID获取entity
-     * 
-     * 设计说明：
-     * - 通过ID获取entity时，返回该ID对应的数据，无论是否被软删除
-     * - 这样API使用方可以实现回收站功能，恢复软删除的数据
-     * - 软删除数据是否显示由API使用方根据业务需求决定
-     * 
-     * @param entityId entityID
+     * @param entityId ID
      * @return entity对象
      */
     public func getById(entityId: String): APIResult<EntityPO> {
         try {
-            LogUtils.info("EntityService", "=== EntityService.getById() called with id: ${entityId} ===")
             let result = getExecutor().findEntityById(entityId)
-            LogUtils.info("EntityService", "=== findEntityById result: ${result.isSome()} ===")
             
             if (let Some(entity) <- result) {
-                LogUtils.info("EntityService", "=== Entity found, id: ${entity.id} ===")
                 return APIResult<EntityPO>(entity)
             } else {
-                LogUtils.info("EntityService", "=== Entity not found for id: ${entityId} ===")
                 return APIResult<EntityPO>(false, "未找到该entity")
             }
         } catch (e: Exception) {
-            LogUtils.error("EntityService", "=== EntityService.getById() exception: ${e.message} ===")
             return APIResult<EntityPO>(false, e.message)
         }
     }
-    
+
     /**
      * 获取entity列表（分页）
-     * 
+     * @param page 页码
+     * @param pageSize 每页大小
+     * @return entity列表和总数
+     */
+    public func getList(page: Int64, pageSize: Int64): (ArrayList<EntityPO>, Int64) {
+        try {
+            let pagination = getExecutor().findAllEntityPage(page, pageSize)
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            LogUtils.error("EntityService", "getList error: ${e.message}")
+            return (ArrayList<EntityPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取entity列表（分页，支持排序和过滤）
+     *
      * 支持完整的 Prisma 风格查询：
      * - 排序：sort="-created_at,id"
      * - 过滤：filter={"name":{"contains":"test"},"status":{"equals":"active"}}
      * - 条件组合：filter={"AND":[{"name":{"contains":"test"}},{"status":{"equals":"active"}}]}
-     * 
+     *
      * @param page 页码（从1开始）
      * @param pageSize 每页大小
      * @param sort 排序参数（如 "-created_at,id"）
      * @param filter 过滤条件（JSON字符串）
      * @return entity列表和总数
      */
-    public func getList(
+    public func getListWithFilter(
         page: Int32,
         pageSize: Int32,
         sort: String,
         filter: String
     ): (ArrayList<EntityPO>, Int64) {
         try {
-            LogUtils.info("EntityService", "Raw filter: ${filter}")
-            LogUtils.info("EntityService", "Raw sort: ${sort}")
-            
             // 1. 解析查询参数
             let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
-            LogUtils.info("EntityService", "Parsed query: ${parsedQuery.toString()}")
-            
+
             // 2. 构建 WHERE 条件
             var whereClause = ""
             if (let Some(filterCondition) <- parsedQuery.filter) {
-                // 将组合条件转换为 WHERE 子句字符串
                 whereClause = buildWhereClause(filterCondition)
-                LogUtils.info("EntityService", "Generated WHERE clause: ${whereClause}")
             }
-            
+
             // 3. 构建 ORDER BY 子句
             let orderByClause = buildOrderByClause(parsedQuery.sort)
-            LogUtils.info("EntityService", "Generated ORDER BY clause: ${orderByClause}")
-            
+
             // 4. 执行查询
-            LogUtils.info("EntityService", "Executing query with whereClause: '${whereClause}', orderByClause: '${orderByClause}'")
             let pagination = getExecutor().findEntityByCondition(
                 whereClause,
                 orderByClause,
                 parsedQuery.page,
                 parsedQuery.pageSize
             )
-            
+
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
             LogUtils.error("EntityService", "Failed to get list: ${e.message}")
             return (ArrayList<EntityPO>(), 0)
         }
     }
-    
+
     /**
      * 构建WHERE子句字符串
-     * 
+     *
      * 将组合条件转换为SQL WHERE子句
      */
     private func buildWhereClause(composite: CompositeCondition): String {
         let sb = StringBuilder()
-        
+
         // 处理字段条件
         let fieldConditions = composite.fieldConditions
         for (fieldCondition in fieldConditions) {
@@ -385,7 +376,7 @@ public class EntityService {
             }
             sb.append(buildFieldClause(fieldCondition))
         }
-        
+
         // 处理嵌套组合条件
         let compositeConditions = composite.compositeConditions
         for (nestedComposite in compositeConditions) {
@@ -401,12 +392,11 @@ public class EntityService {
                 sb.append("(${nestedClause})")
             }
         }
-        
+
         // 处理 NOT 逻辑操作符
         match (composite.logic) {
             case LogicOperator.Not =>
                 if (sb.size > 0) {
-                    // 对于 NOT 操作，需要将整个条件包在 NOT(...) 中
                     return "NOT(${sb.toString()})"
                 } else {
                     return sb.toString()
@@ -415,7 +405,7 @@ public class EntityService {
                 return sb.toString()
         }
     }
-    
+
     /**
      * 构建单个字段条件的SQL子句
      */
@@ -423,7 +413,7 @@ public class EntityService {
         let field = fieldCondition.field
         let op = fieldCondition.op
         let value = fieldCondition.value
-        
+
         match (op) {
             case QueryOperator.Equals => buildEqualsClause(field, value)
             case QueryOperator.Not => buildNotClause(field, value)
@@ -441,13 +431,12 @@ public class EntityService {
             case QueryOperator.NotBetween => buildBetweenClauseWrapper(field, value, false)
         }
     }
-    
+
     private func buildEqualsClause(field: String, value: QueryValue): String {
-        // 处理 null 值的特殊情况
         if (value.isNull()) {
             return "${field} IS NULL"
         }
-        
+
         if (let Some(v) <- value.stringValue) {
             return "${field} = '${v}'"
         } else if (let Some(v) <- value.intValue) {
@@ -459,13 +448,12 @@ public class EntityService {
         }
         return ""
     }
-    
+
     private func buildNotClause(field: String, value: QueryValue): String {
-        // 处理 null 值的特殊情况
         if (value.isNull()) {
             return "${field} IS NOT NULL"
         }
-        
+
         if (let Some(v) <- value.stringValue) {
             return "${field} != '${v}'"
         } else if (let Some(v) <- value.intValue) {
@@ -477,7 +465,7 @@ public class EntityService {
         }
         return ""
     }
-    
+
     private func buildLtClause(field: String, value: QueryValue): String {
         if (let Some(v) <- value.intValue) {
             return "${field} < ${v}"
@@ -486,7 +474,7 @@ public class EntityService {
         }
         return ""
     }
-    
+
     private func buildLteClause(field: String, value: QueryValue): String {
         if (let Some(v) <- value.intValue) {
             return "${field} <= ${v}"
@@ -495,7 +483,7 @@ public class EntityService {
         }
         return ""
     }
-    
+
     private func buildGtClause(field: String, value: QueryValue): String {
         if (let Some(v) <- value.intValue) {
             return "${field} > ${v}"
@@ -504,7 +492,7 @@ public class EntityService {
         }
         return ""
     }
-    
+
     private func buildGteClause(field: String, value: QueryValue): String {
         if (let Some(v) <- value.intValue) {
             return "${field} >= ${v}"
@@ -513,35 +501,35 @@ public class EntityService {
         }
         return ""
     }
-    
+
     private func buildContainsClause(field: String, value: QueryValue): String {
         if (let Some(v) <- value.stringValue) {
             return "${field} LIKE '%${v}%'"
         }
         return ""
     }
-    
+
     private func buildStartsWithClause(field: String, value: QueryValue): String {
         if (let Some(v) <- value.stringValue) {
             return "${field} LIKE '${v}%'"
         }
         return ""
     }
-    
+
     private func buildEndsWithClause(field: String, value: QueryValue): String {
         if (let Some(v) <- value.stringValue) {
             return "${field} LIKE '%${v}'"
         }
         return ""
     }
-    
+
     private func buildInClauseWrapper(field: String, value: QueryValue, isIn: Bool): String {
         if (let Some(arr) <- value.arrayValue) {
             return buildInClause(field, arr, isIn)
         }
         return ""
     }
-    
+
     private func buildIsSetClause(field: String, value: QueryValue): String {
         if (let Some(v) <- value.boolValue) {
             if (v) {
@@ -552,7 +540,7 @@ public class EntityService {
         }
         return ""
     }
-    
+
     private func buildBetweenClauseWrapper(field: String, value: QueryValue, isBetween: Bool): String {
         if (let Some(arr) <- value.arrayValue) {
             if (arr.size >= 2) {
@@ -561,10 +549,7 @@ public class EntityService {
         }
         return ""
     }
-    
-    /**
-     * 构建IN子句
-     */
+
     private func buildInClause(field: String, values: ArrayList<QueryValue>, isIn: Bool): String {
         let sb = StringBuilder()
         sb.append("${field} ")
@@ -572,7 +557,7 @@ public class EntityService {
             sb.append("NOT ")
         }
         sb.append("IN (")
-        
+
         let size = values.size
         for (i in 0..size) {
             if (i > 0) {
@@ -587,23 +572,24 @@ public class EntityService {
                 sb.append("${f}")
             }
         }
+
         sb.append(")")
-        
         return sb.toString()
     }
-    
+
+
     /**
      * 构建BETWEEN子句
      */
     private func buildBetweenClause(field: String, v1: QueryValue, v2: QueryValue, isBetween: Bool): String {
         let sb = StringBuilder()
         sb.append("${field} ")
+
         if (!isBetween) {
             sb.append("NOT ")
         }
         sb.append("BETWEEN ")
-        
-        // 添加第一个值
+
         if (let Some(s) <- v1.stringValue) {
             sb.append("'${s}'")
         } else if (let Some(n) <- v1.intValue) {
@@ -611,10 +597,9 @@ public class EntityService {
         } else if (let Some(f) <- v1.floatValue) {
             sb.append("${f}")
         }
-        
+
         sb.append(" AND ")
-        
-        // 添加第二个值
+
         if (let Some(s) <- v2.stringValue) {
             sb.append("'${s}'")
         } else if (let Some(n) <- v2.intValue) {
@@ -622,10 +607,10 @@ public class EntityService {
         } else if (let Some(f) <- v2.floatValue) {
             sb.append("${f}")
         }
-        
+
         return sb.toString()
     }
-    
+
     /**
      * 构建ORDER BY子句
      */
@@ -633,10 +618,10 @@ public class EntityService {
         if (sort.isEmpty()) {
             return "created_at DESC"
         }
-        
+
         let sb = StringBuilder()
         let size = sort.size
-        
+
         for (i in 0..size) {
             let condition = sort[i]
             if (sb.size > 0) {
@@ -644,15 +629,15 @@ public class EntityService {
             }
             sb.append("${condition.field} ${if (condition.ascending) { "ASC" } else { "DESC" }}")
         }
-        
+
         return sb.toString()
     }
-    
+
     /**
      * 获取entity列表（带跳过参数）
-     * 
+     *
      * 支持完整的 Prisma 风格查询
-     * 
+     *
      * @param page 页码（从0开始）
      * @param pageSize 每页大小
      * @param skip 跳过条数
@@ -670,33 +655,30 @@ public class EntityService {
         try {
             // 1. 解析查询参数
             let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page + 1), Int64(pageSize))
-            LogUtils.info("EntityService", "Parsed query with skip: ${parsedQuery.toString()}")
-            
+
             // 2. 构建 WHERE 条件
             var whereClause = ""
             if (let Some(filterCondition) <- parsedQuery.filter) {
                 whereClause = buildWhereClause(filterCondition)
             }
-            
+
             // 3. 构建 ORDER BY 子句
             let orderByClause = buildOrderByClause(parsedQuery.sort)
-            
+
             // 4. 执行查询（带跳过参数）
-            // 注意：skip 参数需要通过 LIMIT offset 实现
             let pagination = getExecutor().findEntityByCondition(
                 whereClause,
                 orderByClause,
                 parsedQuery.page,
                 parsedQuery.pageSize
             )
-            
+
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("EntityService", "Failed to get list with skip: ${e.message}")
             return (ArrayList<EntityPO>(), 0)
         }
     }
-    
+
     /**
      * 获取所有entity列表（分页）
      * @param page 页码
@@ -711,10 +693,10 @@ public class EntityService {
             Int64(page + 1),
             Int64(pageSize)
         )
-        
+
         return (pagination.list, pagination.rows)
     }
-    
+
     /**
      * 批量获取entity
      * @param ids ID列表
@@ -723,7 +705,7 @@ public class EntityService {
     public func getByIds(ids: ArrayList<String>): ArrayList<EntityPO> {
         getExecutor().findEntityByIds(ids)
     }
-    
+
     /**
      * 统计用户的entity数量
      * @param userId 用户ID
@@ -732,7 +714,7 @@ public class EntityService {
     public func countByUser(userId: String): Int64 {
         getExecutor().countEntityByCreator(userId)
     }
-    
+
     /**
      * 统计所有entity数量
      * @return entity数量
@@ -740,11 +722,7 @@ public class EntityService {
     public func countAll(): Int64 {
         getExecutor().countAllEntity()
     }
-    
-    //#endregion AutoCreateCode
-    
-    // ========== 定制开发方法（在此区域添加自定义方法）==========
-    
+
     /**
      * TODO: 实现行级数据权限
      * 
@@ -780,15 +758,15 @@ public class EntityService {
 
         return (pagination.list, pagination.rows)
     }
-    
+
     /**
      * 清空回收站（硬删除所有已软删除的entity）
      * @return 删除结果
      */
-    public func emptyRecycleBin(): APIResult<Bool> {
+    public func emptyRecycleBinEntity(): APIResult<Bool> {
         try {
-            let rows = getExecutor().emptyRecycleBin()
-            
+            let rows = getExecutor().emptyRecycleBinEntity()
+
             if (rows > 0) {
                 return APIResult<Bool>(true)
             } else {
@@ -798,16 +776,6 @@ public class EntityService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
-    /**
-     * 生成UUID
-     * @return UUID字符串
-     */
-    private func generateId(): String {
-        let timestamp = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
-        let random = (timestamp % 10000).toString()
-        "entity-${timestamp}-${random}"
-    }
-    
+
 //#endregion AutoCreateCode
 }

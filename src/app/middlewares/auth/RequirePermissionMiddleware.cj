@@ -96,8 +96,8 @@ public class RequirePermissionMiddleware <: Middleware {
         if (route.contains("/public/")) {
             return true
         }
-        // 健康检查
-        if (route == "/health" || route == "/") {
+        // 健康检查路由
+        if (route == "/health" || route == "/hello" || route == "/api/v1/health" || route == "/api/v1/info" || route == "/") {
             return true
         }
         false

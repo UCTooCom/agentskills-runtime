@@ -288,7 +288,7 @@ public class {{className}}Controller {
                 filterStr = decodedFilter
             }
 
-            let (entities, total) = service.getList(
+            let (entities, total) = service.getListWithFilter(
                 currentPage,
                 pageSize,
                 sortStr,
@@ -372,7 +372,7 @@ public class {{className}}Controller {
         }
     }
 
-    public func emptyRecycleBin(req: HttpRequest, res: HttpResponse): Unit {
+    public func emptyRecycleBin{{className}}(req: HttpRequest, res: HttpResponse): Unit {
         try {
             let userId = req.getLocals("userId")
             if (userId.isNone()) {
@@ -380,7 +380,7 @@ public class {{className}}Controller {
                 return
             }
 
-            let result = service.emptyRecycleBin()
+            let result = service.emptyRecycleBin{{className}}()
             if (result.success) {
                 res.status(200).json("{\"desc\":\"清空回收站成功\"}")
             } else {
@@ -498,6 +498,8 @@ public class {{className}}Controller {
             1
         }
     }
+
+{{exportCode}}
 
 //#endregion AutoCreateCode
 }

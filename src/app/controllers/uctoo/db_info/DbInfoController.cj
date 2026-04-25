@@ -3,12 +3,13 @@
  */
 package magic.app.controllers.uctoo.db_info
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+//#region AutoCreateCode
 
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.core.response.{APIError, APIResult}
 import magic.app.models.uctoo.DbInfoPO
 import magic.app.services.uctoo.DbInfoService
+import magic.app.services.uctoo.DbTableInfo
 import magic.log.LogUtils
 import std.collection.{HashMap, Map, ArrayList}
 import std.convert.*
@@ -270,8 +271,8 @@ public class DbInfoController {
                 Int32(1)  // 默认第一页
             }
             
-            if (limitNum > 100) {
-                res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
+            if (limitNum > 10000) {
+                res.status(400).json(APIError("40004", "请求数量不能超过10000条").toJson())
                 return
             }
             
@@ -331,8 +332,8 @@ public class DbInfoController {
                 Int32(0)
             }
             
-            if (limitNum > 100) {
-                res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
+            if (limitNum > 10000) {
+                res.status(400).json(APIError("40004", "请求数量不能超过10000条").toJson())
                 return
             }
             
@@ -626,6 +627,79 @@ public class DbInfoController {
     }
     
     //#endregion AutoCreateCode
-    
+
     // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    /**
+     * 从数据库结构获取数据库信息并添加到db_info表
+     * @param req 请求对象
+     * @param res 响应对象
+     */
+    public func loadDbInfo(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let dbName = req.queryParam("dbName")
+            if (dbName.isNone()) {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少数据库名称参数\"}")
+                return
+            }
+
+            let result = service.loadDbInfo(dbName.getOrThrow())
+            if (result.success) {
+                if (let Some(count) <- result.data) {
+                    res.status(200).json("{\"desc\":\"数据库信息加载成功\",\"count\":${count}}")
+                } else {
+                    res.status(200).json("{\"desc\":\"数据库信息加载成功\",\"count\":0}")
+                }
+            } else {
+                let reason = result.reason ?? "加载失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
+    /**
+     * 获取数据库表列表（从information_schema直接查询，不保存到数据库）
+     * @param req 请求对象
+     * @param res 响应对象
+     */
+    public func getDbTableList(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let dbName = req.queryParam("dbName")
+            if (dbName.isNone()) {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少数据库名称参数\"}")
+                return
+            }
+
+            let result = service.getDbTableList(dbName.getOrThrow())
+            if (result.success) {
+                if (let Some(tables) <- result.data) {
+                    let tablesJson = tablesToJson(tables)
+                    res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":{\"db_tables\":${tablesJson}}}")
+                } else {
+                    res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":{\"db_tables\":[]}}")
+                }
+            } else {
+                let reason = result.reason ?? "查询失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
+    private func tablesToJson(tables: ArrayList<DbTableInfo>): String {
+        let sb = StringBuilder()
+        sb.append("[")
+        let tableCount = tables.size
+        for (i in 0..tableCount) {
+            sb.append(tables[i].toJson())
+            if (i < tableCount - 1) {
+                sb.append(",")
+            }
+        }
+        sb.append("]")
+        return sb.toString()
+    }
 }

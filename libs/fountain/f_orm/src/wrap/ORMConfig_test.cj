@@ -21,7 +21,7 @@ import std.unittest.testmacro.*
 @Test
 public class ORMConfigTest {
     @TestCase
-    public func test(): Unit {
+    public func testORMConfig(): Unit {
         ORMConfig.refresh{}
     }
 }

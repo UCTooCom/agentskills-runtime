@@ -3,7 +3,7 @@
  */
 package magic.app.dao.uctoo
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+//#region AutoCreateCode
 
 import std.collection.*
 import std.time.DateTime
@@ -31,8 +31,6 @@ import magic.log.LogUtils
 public interface DbInfoDAO <: RootDAO {
     prop executor: SqlExecutor
     
-    //#region AutoCreateCode
-    
     // ==================== 插入操作 ====================
     
     /**
@@ -41,8 +39,15 @@ public interface DbInfoDAO <: RootDAO {
      * @return 插入成功返回生成的ID，失败返回空字符串
      */
     func insertDbInfo(entity: DbInfoPO): String {
-        executor.setSql('''
+        let idStr = entity.id ?? ""
+        let idValue = if (idStr.isEmpty()) {
+            "DEFAULT"
+        } else {
+            "'${idStr}'"
+        }
+        let sqlPrefix = '''
             insert into db_info(
+                id,
                 table_catalog,
                 table_schema,
                 table_name,
@@ -69,6 +74,8 @@ public interface DbInfoDAO <: RootDAO {
                 migration_id,
                 character_maximum_length
             ) values(
+                '''
+        let sqlSuffix = '''
                 ${arg(entity.tableCatalog)},
                 ${arg(entity.tableSchema)},
                 ${arg(entity.dbTableName)},
@@ -96,7 +103,8 @@ public interface DbInfoDAO <: RootDAO {
                 ${arg(entity.characterMaximumLength)}
             )
             returning id
-        ''').singleFirst<String>() ?? ""
+        '''
+        executor.setSql(sqlPrefix + idValue + sqlSuffix).singleFirst<String>() ?? ""
     }
     
     // ==================== 单条查询 ====================
@@ -258,4 +266,86 @@ public interface DbInfoDAO <: RootDAO {
     //#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    /**
+     * 根据table_catalog删除dbInfo记录
+     * @param tableCatalog 数据库名称
+     * @return 删除的行数
+     */
+    func deleteDbInfoByTableCatalog(tableCatalog: String): Int64 {
+        executor.setSql('''
+            delete from db_info where table_catalog = ${arg(tableCatalog)}
+        ''').delete
+    }
+
+    /**
+     * 批量插入dbInfo记录（用于loadDbInfo）
+     * @param entities dbInfo列表
+     * @return 插入的行数
+     */
+    func batchInsertDbInfo(entities: ArrayList<DbInfoPO>): Int64 {
+        var count: Int64 = 0
+        for (entity in entities) {
+            let id = executor.setSql('''
+                insert into db_info(
+                    table_catalog,
+                    table_schema,
+                    table_name,
+                    column_name,
+                    column_default,
+                    is_nullable,
+                    data_type,
+                    vue_component_type,
+                    react_component_type,
+                    arkui_component_type,
+                    uniapp_component_type,
+                    rules,
+                    pattern,
+                    weight,
+                    creator,
+                    created_at,
+                    updated_at,
+                    deleted_at,
+                    placeholder,
+                    is_column_hidden,
+                    is_table_hidden,
+                    column_comment,
+                    ordinal_position,
+                    migration_id,
+                    character_maximum_length
+                ) values(
+                    ${arg(entity.tableCatalog)},
+                    ${arg(entity.tableSchema)},
+                    ${arg(entity.dbTableName)},
+                    ${arg(entity.columnName)},
+                    ${arg(entity.columnDefault)},
+                    ${arg(entity.isNullable)},
+                    ${arg(entity.dataType)},
+                    ${arg(entity.vueComponentType)},
+                    ${arg(entity.reactComponentType)},
+                    ${arg(entity.arkuiComponentType)},
+                    ${arg(entity.uniappComponentType)},
+                    ${arg(entity.rules)},
+                    ${arg(entity.pattern)},
+                    ${arg(entity.weight)},
+                    ${arg(entity.creator)},
+                    ${arg(entity.createdAt)},
+                    ${arg(entity.updatedAt)},
+                    ${arg(entity.deletedAt)},
+                    ${arg(entity.placeholder)},
+                    ${arg(entity.isColumnHidden)},
+                    ${arg(entity.isTableHidden)},
+                    ${arg(entity.columnComment)},
+                    ${arg(entity.ordinalPosition)},
+                    ${arg(entity.migrationId)},
+                    ${arg(entity.characterMaximumLength)}
+                )
+                returning id
+            ''').singleFirst<String>()
+            if (id.isSome()) {
+                count = count + 1
+            }
+        }
+        return count
+    }
 }

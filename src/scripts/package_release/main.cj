@@ -229,6 +229,38 @@ main(args: Array<String>): Unit {
     }
     
     println("")
+    println("[STEP] Copying json4cj DLLs to bin...")
+    
+    let jsonDir = Path("${targetDir}/json4cj")
+    if (exists(jsonDir) && exists(binDir)) {
+        let dllCount = ArrayList<String>()
+        
+        Directory.walk(jsonDir.toString()) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    if (shouldExcludeDll(name)) {
+                        excludedDlls.add(name)
+                        return true
+                    }
+                    let destPath = Path("${binDir}/${name}")
+                    if (!exists(destPath)) {
+                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+            }
+            true
+        }
+        
+        println("  [OK] Copied ${dllCount.size.toString()} json4cj DLLs to bin/")
+    } else {
+        println("  [WARN] Directory not found: ${jsonDir}")
+    }
+    
+    println("")
     println("[STEP] Copying yaml4cj DLLs to bin...")
     
     let yamlDir = Path("${targetDir}/yaml4cj")

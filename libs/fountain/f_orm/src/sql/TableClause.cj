@@ -371,6 +371,18 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         sqlgen.append(' on duplicate key update ').append(columns())
         this
     }
+    public func ON_CONFLICT(columns: Array<String>, DO_UPDATE_SET!: () -> String): This {
+        sqlgen.append(' on conflict (')
+        let s = sqlgen.size
+        for(c in columns){
+            if(sqlgen.size > s){
+                sqlgen.append(',')
+            }
+            sqlgen.append(c)
+        }
+        sqlgen.append(') do update set ${DO_UPDATE_SET()}')
+        this
+    }
     public func execute() {
         setSql().insert
     }

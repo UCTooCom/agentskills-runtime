@@ -69,7 +69,7 @@ public class ToolAuditService {
                 operateLog.deletedAt = None<DateTime>
                 
                 // 写入数据库
-                let result = operateLogService.create(operateLog)
+                let result = operateLogService.create(operateLog, userId)
                 if (result.success) {
                     if (let Some(log) <- result.data) {
                         LogUtils.debug("[ToolAuditService] Audit log created: ${log.id}")

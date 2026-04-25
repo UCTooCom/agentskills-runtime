@@ -7,7 +7,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "0.0.19"
+  version = "0.0.20"
 
 [dependencies]
   yaml4cj = { path = "./libs/yaml4cj" }
@@ -15,6 +15,7 @@
   f_orm = { path = "./libs/fountain/f_orm" }
   f_data = { path = "./libs/fountain/f_data" }
   f_config = { path = "./libs/fountain/f_config" }
+  f_util = { path = "./libs/fountain/f_util" }
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", compile-option = "-Woff unused" }
   jwt4cj = { git = "https://gitcode.com/Cangjie-TPC/jwt4cj.git", branch = "develop", compile-option = "-Woff unused" }
   logcj = { git = "https://gitcode.com/Cangjie-TPC/log-cj.git", branch = "develop", compile-option = "-Woff unused" }
@@ -23,6 +24,8 @@
 #  pbkdf2 = { path = "../CangjieMagic/resource/TPC/pbkdf2" }
 #  hicrypto = { path = "../CangjieMagic/resource/TPC/hicrypto" }
   blowfish = { path = "./libs/blowfish-cj" }
+  json4cj = { path = "./libs/json4cj" }
+
 
 #----------------------------------------
 #  Build Profile Configuration
@@ -74,6 +77,8 @@
 [package.package-configuration."magic.app"]
   output-type = "executable"
 [package.package-configuration."magic.scripts.package_release"]
+  output-type = "executable"
+[package.package-configuration."magic.app.tools.crudgen"]
   output-type = "executable"
 #[package.package-configuration."magic.app.test.integration"]
 #  output-type = "executable"

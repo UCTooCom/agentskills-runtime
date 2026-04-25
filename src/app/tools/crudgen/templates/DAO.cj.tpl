@@ -38,19 +38,12 @@ public interface {{className}}DAO <: RootDAO {
     func insert{{className}}(entity: {{className}}PO): String {
         executor.setSql('''
             insert into {{tableName}}(
-{{insertColumns}}            ) values(
-{{insertValues}}            )
+{{insertColumns}}
+            ) values(
+{{insertValues}}
+            )
             returning id
         ''').singleFirst<String>() ?? ""
-    }
-
-    /**
-     * 插入{{tableName}}（兼容旧版方法名）
-     * @param entity {{className}}PO对象
-     * @return 插入成功返回生成的ID，失败返回空字符串
-     */
-    func insertEntity(entity: {{className}}PO): String {
-        insert{{className}}(entity)
     }
 
     // ==================== 单条查询 ====================
@@ -66,37 +59,20 @@ public interface {{className}}DAO <: RootDAO {
         ''').first<{{className}}PO>()
     }
 
-    /**
-     * 根据ID查询{{tableName}}（兼容旧版方法名）
-     * @param id {{tableName}}ID
-     * @return {{tableName}}对象（Option类型）
-     */
-    func findEntityById(id: String): Option<{{className}}PO> {
-        find{{className}}ById(id)
-    }
-
     // ==================== 更新操作 ====================
 
     /**
      * 更新{{tableName}}
-     * @param entity {{className}}PO对象
+     * @param entity {{tableName}}对象
      * @return 影响行数
      */
     func update{{className}}(entity: {{className}}PO): Int64 {
         executor.setSql('''
             update {{tableName}} set
-{{updateSets}}                updated_at = ${arg(DateTime.now())}
+{{updateSets}}
+                updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
-    }
-
-    /**
-     * 更新{{tableName}}（兼容旧版方法名）
-     * @param entity {{className}}PO对象
-     * @return 影响行数
-     */
-    func updateEntity(entity: {{className}}PO): Int64 {
-        update{{className}}(entity)
     }
 
     // ==================== 删除操作 ====================
@@ -113,15 +89,6 @@ public interface {{className}}DAO <: RootDAO {
     }
 
     /**
-     * 软删除{{tableName}}（兼容旧版方法名）
-     * @param id {{tableName}}ID
-     * @return 影响行数
-     */
-    func softDeleteEntityById(id: String): Int64 {
-        softDelete{{className}}ById(id)
-    }
-
-    /**
      * 恢复软删除的{{tableName}}
      * @param id {{tableName}}ID
      * @return 影响行数
@@ -133,15 +100,6 @@ public interface {{className}}DAO <: RootDAO {
     }
 
     /**
-     * 恢复软删除的{{tableName}}（兼容旧版方法名）
-     * @param id {{tableName}}ID
-     * @return 影响行数
-     */
-    func restoreEntityById(id: String): Int64 {
-        restore{{className}}ById(id)
-    }
-
-    /**
      * 硬删除{{tableName}}
      * @param id {{tableName}}ID
      * @return 影响行数
@@ -150,15 +108,6 @@ public interface {{className}}DAO <: RootDAO {
         executor.setSql('''
             delete from {{tableName}} where id = ${arg(id)}
         ''').delete
-    }
-
-    /**
-     * 硬删除{{tableName}}（兼容旧版方法名）
-     * @param id {{tableName}}ID
-     * @return 影响行数
-     */
-    func deleteEntityById(id: String): Int64 {
-        delete{{className}}ById(id)
     }
 
     // ==================== 列表查询 ====================
@@ -173,16 +122,6 @@ public interface {{className}}DAO <: RootDAO {
         executor.page<{{className}}PO>('''
             select * from {{tableName}} order by created_at desc
         ''', size, page: page)
-    }
-
-    /**
-     * 分页查询所有{{tableName}}（兼容旧版方法名）
-     * @param page 页码（从1开始）
-     * @param size 每页大小
-     * @return 分页结果
-     */
-    func findAllEntityPage(page: Int64, size: Int64): Pagination<{{className}}PO> {
-        findAll{{className}}Page(page, size)
     }
 
     /**
@@ -242,17 +181,6 @@ public interface {{className}}DAO <: RootDAO {
         ''').first<Int64>() ?? 0
     }
 
-    /**
-     * 统计所有{{tableName}}数量（兼容旧版方法名）
-     * @return 数量
-     */
-    func countAllEntity(): Int64 {
-        countAll{{className}}()
-    }
-
-//#endregion AutoCreateCode
-
-    // ========== 定制开发方法（在此区域添加自定义方法）==========
 
     /**
      * 分页查询{{tableName}}列表（带过滤条件）
@@ -307,15 +235,6 @@ public interface {{className}}DAO <: RootDAO {
     }
 
     /**
-     * 批量软删除{{tableName}}（兼容旧版方法名）
-     * @param ids ID列表
-     * @return 影响行数
-     */
-    func batchSoftDeleteEntity(ids: ArrayList<String>): Int64 {
-        batchSoftDelete{{className}}(ids)
-    }
-
-    /**
      * 批量硬删除{{tableName}}
      * @param ids ID列表
      * @return 影响行数
@@ -324,15 +243,6 @@ public interface {{className}}DAO <: RootDAO {
         executor.setSql('''
             delete from {{tableName}} where id ${IN(ids)}
         ''').delete
-    }
-
-    /**
-     * 批量硬删除{{tableName}}（兼容旧版方法名）
-     * @param ids ID列表
-     * @return 影响行数
-     */
-    func batchDeleteEntity(ids: ArrayList<String>): Int64 {
-        batchDelete{{className}}(ids)
     }
 
     /**
@@ -380,8 +290,6 @@ public interface {{className}}DAO <: RootDAO {
         // 应用 WHERE 条件
         if (!whereClause.isEmpty()) {
             fromClause.WHERE(whereClause)
-        } else {
-            fromClause.WHERE("1=1")
         }
 
         // 应用 ORDER BY
@@ -399,7 +307,7 @@ public interface {{className}}DAO <: RootDAO {
      * 清空回收站（硬删除所有已软删除的{{tableName}}）
      * @return 影响行数
      */
-    func emptyRecycleBin(): Int64 {
+    func emptyRecycleBin{{className}}(): Int64 {
         executor.setSql('''
             delete from {{tableName}} where deleted_at is not null
         ''').delete

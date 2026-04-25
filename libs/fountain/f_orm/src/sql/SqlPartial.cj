@@ -198,7 +198,7 @@ extend SqlExecutor <: SqlPartial {
     }
     private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
         let partial_ = partial.trimAsciiStart()
-        if(partial_[0 .. 6].toAsciiLower() == 'select' && partial_[7] <= b' '){
+        if(partial_.size < 8 || partial_[0 .. 6].toAsciiLower() != 'select' || partial_[6] > b' '){
             throw ORMException('${partial} is not a select.')
         }
         let countSql = 'select count(*) from (${partial}) as __tmp___'//如果sql中包含order by 这样也可以执行

@@ -31,7 +31,7 @@
 cjpm build
 
 # 运行项目（开发态）
-cjpm run --skip-build --name magic.api
+cjpm run --skip-build --name magic.app
 ```
 
 ### 目录结构

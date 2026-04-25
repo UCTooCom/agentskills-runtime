@@ -134,12 +134,12 @@ public class DB2Dialect <: SqlDialect {
     }
 }
 @Bean
-@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('mockdb'))]
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains(ORMConfig.mockdb))]
 public class MockdbDialect <: SqlDialect {
     private var mock_: String = 'opengauss'
     public prop dialect: String {
         get(){
-            'mockdb'
+            ORMConfig.mockdb
         }
     }
     public mut prop mock: String {

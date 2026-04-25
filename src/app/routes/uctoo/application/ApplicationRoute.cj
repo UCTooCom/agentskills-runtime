@@ -3,7 +3,7 @@
  */
 package magic.app.routes.uctoo.application
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+//#region AutoCreateCode
 
 import magic.app.controllers.uctoo.application.ApplicationController
 import magic.app.core.router.Router
@@ -20,7 +20,7 @@ public class ApplicationRoute {
         this.controller = controller
     }
     
-    //#region AutoCreateCode
+    
     
     public func register(): Router {
         // 按照 uctoo v4 规范，路由路径带 /v1 前缀

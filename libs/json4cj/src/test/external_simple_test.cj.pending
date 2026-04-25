@@ -1,0 +1,68 @@
+package json4cj.test
+
+import std.unittest.*
+import std.unittest.testmacro.*
+import json4cj.{JsonCodec, JsonValueSerializable}
+import json4cj.jsonmacro.{JsonSerialize, JsonTypeInfo, JsonSubTypes, JsonType}
+import std.collection.ArrayList
+
+/*
+ * Simple test for External Tagging strategy.
+ * External: {"Dog":{"name":"Buddy","breed":"Lab"}}
+ */
+
+@JsonTypeInfo[EXTERNAL]
+@JsonSubTypes["dog" => ExtDog, "cat" => ExtCat]
+@JsonSerialize
+open class ExtAnimal {
+    var species: String = ""  // Add a base field
+}
+
+@JsonSerialize
+@JsonType["dog"]
+class ExtDog <: ExtAnimal {
+    var name: String = ""
+    var breed: String = ""
+}
+
+@JsonSerialize
+@JsonType["cat"]
+class ExtCat <: ExtAnimal {
+    var name: String = ""
+    var lives: Int64 = 9
+}
+
+@Test
+public class TestExternalSimple {
+    
+    @TestCase
+    func testExternalDogSerialize(): Unit {
+        let dog = ExtDog()
+        dog.species = "Canine"
+        dog.name = "Buddy"
+        dog.breed = "Labrador"
+        
+        let json = dog.toJson()
+        println("External Dog JSON: " + json)
+        
+        // Should be: {"ExtDog":{"species":"Canine","name":"Buddy","breed":"Labrador"}}
+        @Assert(json.contains("\"ExtDog\""), true)
+        @Assert(json.contains("\"name\":\"Buddy\""), true)
+        @Assert(json.contains("\"breed\":\"Labrador\""), true)
+    }
+    
+    @TestCase
+    func testExternalCatSerialize(): Unit {
+        let cat = ExtCat()
+        cat.species = "Feline"
+        cat.name = "Whiskers"
+        cat.lives = 7
+        
+        let json = cat.toJson()
+        println("External Cat JSON: " + json)
+        
+        // Should be: {"ExtCat":{"species":"Feline","name":"Whiskers","lives":7}}
+        @Assert(json.contains("\"ExtCat\""), true)
+        @Assert(json.contains("\"name\":\"Whiskers\""), true)
+    }
+}

@@ -66,6 +66,9 @@ private let DEFAULT_PROVIDER_MAP = HashMap<String, ProviderConfig>([
     ("sophnet",   ProviderConfig("SOPHNET_BASE_URL", // openai-compatible
                                 "https://www.sophnet.com/api/open-apis/v1",
                                 "SOPHNET_API_KEY")),
+    ("orbitai",   ProviderConfig("ORBITAI_BASE_URL", // openai-compatible
+                                "https://aiapi.orbitai.global/v1",
+                                "ORBITAI_API_KEY")),
     ("atomgit",   ProviderConfig("ATOMGIT_BASE_URL", // openai-compatible
                                 "https://api.atomgit.com/api/v5",
                                 "ATOMGIT_API_KEY")),
@@ -202,7 +205,7 @@ public struct ModelManager {
     public static func createChatModel(modelConfig: ModelConfig): ChatModel {
         match (modelConfig.provider) {
             case "openai" | "dashscope" | "ark" | "deepseek" |
-                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" | "atomgit" =>
+                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" | "orbitai" | "atomgit" =>
                 return OpenAIChatModel(modelConfig.provider, modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "ollama" =>
                 return OllamaChatModel(modelConfig.name, baseURL: modelConfig.baseURL)
@@ -228,7 +231,7 @@ public struct ModelManager {
 
     public static func createEmbeddingModel(modelConfig: ModelConfig): EmbeddingModel {
         match (modelConfig.provider) {
-            case "openai" | "ark" | "siliconflow" | "stepfun" | "sophnet" =>
+            case "openai" | "ark" | "siliconflow" | "stepfun" | "sophnet" | "orbitai" =>
                 return OpenAIEmbeddingModel(modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "dashscope" =>
                 return DashscopeEmbeddingModel(modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
@@ -258,7 +261,7 @@ public struct ModelManager {
 
     public static func createImageModel(modelConfig: ModelConfig): ImageModel {
         match (modelConfig.provider) {
-            case "openai" | "stepfun" | "sophnet" =>
+            case "openai" | "stepfun" | "sophnet" | "orbitai" =>
                 return OpenAIImageModel(modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "siliconflow" =>
                 return SiliconflowImageModel(modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)

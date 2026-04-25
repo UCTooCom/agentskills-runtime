@@ -32,10 +32,10 @@ cjpm build
 
 ```bash
 # 使用默认端口 8080 运行 API 服务
-cjpm run --skip-build --name magic.api
+cjpm run --skip-build --name magic.app
 
 # 或者指定自定义端口
-cjpm run --skip-build --name magic.api 8081
+cjpm run --skip-build --name magic.app 8081
 ```
 
 ## API 服务配置
@@ -46,7 +46,7 @@ API 服务默认运行在 8080 端口。可以通过以下方式更改：
 
 1. 在命令行中传递端口号参数：
    ```bash
-   cjpm run --skip-build --name magic.api <port_number>
+   cjpm run --skip-build --name magic.app <port_number>
    ```
 
 2. 默认情况下，如果未提供端口号，服务将在 8080 端口启动。
@@ -117,7 +117,7 @@ API 服务默认运行在 8080 端口。可以通过以下方式更改：
 
 ```bash
 # 启动 API 服务
-cjpm run --skip-build --name magic.api
+cjpm run --skip-build --name magic.app
 ```
 
 ### 停止服务

@@ -3,11 +3,16 @@
  */
 package magic.app.services.uctoo
 
+//#region AutoCreateCode
+
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
 import magic.app.models.uctoo.DbInfoPO
+import magic.app.models.uctoo.DbConnectionPO
 import magic.app.dao.uctoo.DbInfoDAO
+import magic.app.dao.uctoo.DbConnectionDAO
+import f_orm.sql.SqlExecutor
 import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
 import magic.log.LogUtils
@@ -27,9 +32,7 @@ public class DbInfoService {
     private let requestParser = RequestParserService()
     
     public init() {}
-    
-    //#region AutoCreateCode
-    
+
     /**
      * 创建dbInfo
      * @param entity dbInfo对象
@@ -110,9 +113,7 @@ public class DbInfoService {
             if (entity.pattern.isSome()) {
                 existingEntity.pattern = entity.pattern
             }
-            if (entity.weight.isSome()) {
-                existingEntity.weight = entity.weight
-            }
+            existingEntity.weight = entity.weight
             if (entity.creator.isSome()) {
                 existingEntity.creator = entity.creator
             }
@@ -131,15 +132,11 @@ public class DbInfoService {
             if (entity.columnComment.isSome()) {
                 existingEntity.columnComment = entity.columnComment
             }
-            if (entity.ordinalPosition.isSome()) {
-                existingEntity.ordinalPosition = entity.ordinalPosition
-            }
+            existingEntity.ordinalPosition = entity.ordinalPosition
             if (entity.migrationId.isSome()) {
                 existingEntity.migrationId = entity.migrationId
             }
-            if (entity.characterMaximumLength.isSome()) {
-                existingEntity.characterMaximumLength = entity.characterMaximumLength
-            }
+            existingEntity.characterMaximumLength = entity.characterMaximumLength
             
             // 设置更新时间和ID
             existingEntity.updatedAt = DateTime.now()
@@ -417,6 +414,365 @@ public class DbInfoService {
     }
     
     //#endregion AutoCreateCode
-    
-    // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    /**
+     * 从数据库结构获取数据库信息并添加到db_info表
+     * 参考 backend v3 loadDbInfo.ts 实现
+     * @param dbName 数据库名称
+     * @return 操作结果
+     */
+    public func loadDbInfo(dbName: String): APIResult<Int32> {
+        try {
+            LogUtils.info("DbInfoService", "=== loadDbInfo called with dbName: ${dbName} ===")
+
+            // 优先从db_connection表获取数据库连接信息
+            let executor = getExecutor()
+            let connectionData = executor.findByDatabaseName(dbName)
+            var provider: String = "postgresql"
+            var connection: ?DbConnectionPO = None<DbConnectionPO>
+
+            if (connectionData.size > 0) {
+                connection = Some<DbConnectionPO>(connectionData[0])
+                provider = connection.getOrThrow().provider
+                LogUtils.info("DbInfoService", "=== Using connection from db_connection table: ${provider} ===")
+            } else {
+                LogUtils.info("DbInfoService", "=== Using default connection: ${provider} ===")
+            }
+
+            // 连接PostgreSQL数据库读取数据库信息
+            if (provider == "postgresql") {
+                LogUtils.info("DbInfoService", "=== Connecting to PostgreSQL database: ${dbName} ===")
+
+                let checkDbSql = """
+                    SELECT datname FROM pg_catalog.pg_database WHERE lower(datname) = lower('${dbName}')
+                """
+                let dbExists = executor.setSql(checkDbSql).singleFirst<String>()
+
+                if (dbExists.isNone()) {
+                    LogUtils.error("DbInfoService", "=== Database ${dbName} does not exist ===")
+                    return APIResult<Int32>(false, "数据库 ${dbName} 不存在")
+                }
+
+                // 先清空db_info表
+                executor.deleteDbInfoByTableCatalog(dbName)
+                LogUtils.info("DbInfoService", "=== Deleted existing db_info records for ${dbName} ===")
+
+                let columnInfoSql = """
+                    SELECT
+                        c.table_catalog,
+                        c.table_schema,
+                        c.table_name,
+                        c.column_name,
+                        c.ordinal_position,
+                        c.column_default,
+                        c.is_nullable,
+                        c.data_type,
+                        c.character_maximum_length,
+                        pgd.description AS column_comment
+                    FROM
+                        information_schema.columns c
+                    LEFT JOIN
+                        pg_catalog.pg_class cl ON (
+                            c.table_name = cl.relname
+                        )
+                    LEFT JOIN
+                        pg_catalog.pg_namespace n ON (
+                            cl.relnamespace = n.oid
+                        )
+                    LEFT JOIN
+                        pg_catalog.pg_attribute a ON (
+                            n.nspname = c.table_schema AND
+                            cl.oid = a.attrelid AND
+                            c.column_name = a.attname
+                        )
+                    LEFT JOIN
+                        pg_catalog.pg_description pgd ON (
+                            pgd.objoid = cl.oid AND
+                            pgd.objsubid = a.attnum
+                        )
+                    WHERE
+                        c.table_schema NOT IN ('pg_catalog', 'information_schema')
+                    ORDER BY
+                        c.table_schema,
+                        c.table_name,
+                        c.ordinal_position
+                """
+
+                let dbInfoList = executor.setSql(columnInfoSql).list<DbInfoPO>()
+                LogUtils.info("DbInfoService", "=== Retrieved ${dbInfoList.size} columns from information_schema ===")
+
+                var insertedCount: Int64 = 0
+                for (dbInfo in dbInfoList) {
+                    // 打印查询结果中的id值
+                    LogUtils.info("DbInfoService", "=== Query result - table: ${dbInfo.dbTableName}, column: ${dbInfo.columnName}, id from query: ${dbInfo.id} ===")
+                    
+                    // 为每条记录生成UUID作为id，确保插入时id字段有值
+                    let uuid = generateUUID()
+                    LogUtils.info("DbInfoService", "=== Processing column: ${dbInfo.dbTableName}.${dbInfo.columnName}, generated UUID: ${uuid} ===")
+                    
+                    dbInfo.id = Some<String>(uuid)
+                    dbInfo.tableCatalog = dbName
+                    dbInfo.createdAt = DateTime.now()
+                    dbInfo.updatedAt = DateTime.now()
+                    dbInfo.deletedAt = None<DateTime>
+                    dbInfo.migrationId = Some<String>("loadDbInfo")
+                    dbInfo.isColumnHidden = ""
+                    dbInfo.isTableHidden = ""
+                    
+                    LogUtils.info("DbInfoService", "=== Before insert - id: ${dbInfo.id}, tableCatalog: ${dbInfo.tableCatalog}, tableName: ${dbInfo.dbTableName}, columnName: ${dbInfo.columnName} ===")
+                    
+                    try {
+                        let id = executor.insertDbInfo(dbInfo)
+                        LogUtils.info("DbInfoService", "=== Insert result: ${id} ===")
+                        if (id != "") {
+                            insertedCount = insertedCount + 1
+                        }
+                    } catch (e: Exception) {
+                        LogUtils.error("DbInfoService", "=== Insert failed for ${dbInfo.dbTableName}.${dbInfo.columnName}: ${e.message} ===")
+                        LogUtils.error("DbInfoService", "=== Exception stack trace: ${e} ===")
+                    }
+                }
+
+                LogUtils.info("DbInfoService", "=== Inserted ${insertedCount} records into db_info ===")
+                return APIResult<Int32>(Int32(insertedCount))
+            }
+            // 连接MySQL数据库读取数据库信息
+            else if (provider == "mysql") {
+                LogUtils.info("DbInfoService", "=== Connecting to MySQL database: ${dbName} ===")
+
+                let checkDbSql = """
+                    SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${dbName}'
+                """
+                let dbExists = executor.setSql(checkDbSql).singleFirst<String>()
+
+                if (dbExists.isNone()) {
+                    LogUtils.error("DbInfoService", "=== Database ${dbName} does not exist ===")
+                    return APIResult<Int32>(false, "数据库 ${dbName} 不存在")
+                }
+
+                // 先清空db_info表
+                executor.deleteDbInfoByTableCatalog(dbName)
+                LogUtils.info("DbInfoService", "=== Deleted existing db_info records for ${dbName} ===")
+
+                // MySQL查询表结构信息，mysql中的table_schema和table_catalog与对应postgresql中的对换了
+                let columnInfoSql = """
+                    SELECT
+                        TABLE_CATALOG AS table_schema,
+                        TABLE_SCHEMA AS table_catalog,
+                        TABLE_NAME AS table_name,
+                        COLUMN_NAME AS column_name,
+                        ORDINAL_POSITION AS ordinal_position,
+                        COLUMN_DEFAULT AS column_default,
+                        IS_NULLABLE AS is_nullable,
+                        DATA_TYPE AS data_type,
+                        CHARACTER_MAXIMUM_LENGTH AS character_maximum_length,
+                        COLUMN_COMMENT AS column_comment
+                    FROM
+                        INFORMATION_SCHEMA.COLUMNS
+                    WHERE
+                        TABLE_SCHEMA NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
+                    ORDER BY
+                        TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
+                """
+
+                let dbInfoList = executor.setSql(columnInfoSql).list<DbInfoPO>()
+                LogUtils.info("DbInfoService", "=== Retrieved ${dbInfoList.size} columns from information_schema ===")
+
+                var insertedCount: Int64 = 0
+                for (dbInfo in dbInfoList) {
+                    // 为每条记录生成UUID作为id，确保插入时id字段有值
+                    let uuid = generateUUID()
+                    LogUtils.info("DbInfoService", "=== Processing column: ${dbInfo.dbTableName}.${dbInfo.columnName}, generated UUID: ${uuid} ===")
+                    
+                    dbInfo.id = Some<String>(uuid)
+                    dbInfo.tableCatalog = dbName
+                    dbInfo.createdAt = DateTime.now()
+                    dbInfo.updatedAt = DateTime.now()
+                    dbInfo.deletedAt = None<DateTime>
+                    dbInfo.migrationId = Some<String>("loadDbInfo")
+                    dbInfo.isColumnHidden = ""
+                    dbInfo.isTableHidden = ""
+                    
+                    LogUtils.info("DbInfoService", "=== Before insert - id: ${dbInfo.id}, tableCatalog: ${dbInfo.tableCatalog}, tableName: ${dbInfo.dbTableName}, columnName: ${dbInfo.columnName} ===")
+                    
+                    try {
+                        let id = executor.insertDbInfo(dbInfo)
+                        LogUtils.info("DbInfoService", "=== Insert result: ${id} ===")
+                        if (id != "") {
+                            insertedCount = insertedCount + 1
+                        }
+                    } catch (e: Exception) {
+                        LogUtils.error("DbInfoService", "=== Insert failed for ${dbInfo.dbTableName}.${dbInfo.columnName}: ${e.message} ===")
+                    }
+                }
+
+                LogUtils.info("DbInfoService", "=== Inserted ${insertedCount} records into db_info ===")
+                return APIResult<Int32>(Int32(insertedCount))
+            }
+            else {
+                return APIResult<Int32>(false, "不支持的数据库类型: ${provider}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("DbInfoService", "=== loadDbInfo error: ${e.message} ===")
+            return APIResult<Int32>(false, e.message)
+        }
+    }
+
+    /**
+     * 获取数据库表列表（从information_schema直接查询，不保存到db_info表）
+     * @param dbName 数据库名称
+     * @return 表信息列表
+     */
+    public func getDbTableList(dbName: String): APIResult<ArrayList<DbTableInfo>> {
+        try {
+            LogUtils.info("DbInfoService", "=== getDbTableList called with dbName: ${dbName} ===")
+
+            let executor = getExecutor()
+
+            let tablesSql = """
+                SELECT
+                    table_catalog,
+                    table_schema,
+                    table_name,
+                    table_type
+                FROM
+                    information_schema.tables
+                WHERE
+                    table_schema NOT IN ('pg_catalog', 'information_schema')
+                    AND table_catalog = '${dbName}'
+                ORDER BY
+                    table_schema,
+                    table_name
+            """
+
+            let columnsSql = """
+                SELECT
+                    c.table_catalog,
+                    c.table_schema,
+                    c.table_name,
+                    c.column_name,
+                    c.ordinal_position,
+                    c.column_default,
+                    c.is_nullable,
+                    c.data_type,
+                    c.character_maximum_length,
+                    pgd.description AS column_comment
+                FROM
+                    information_schema.columns c
+                LEFT JOIN
+                    pg_catalog.pg_class cl ON (
+                        c.table_name = cl.relname
+                    )
+                LEFT JOIN
+                    pg_catalog.pg_namespace n ON (
+                        cl.relnamespace = n.oid
+                    )
+                LEFT JOIN
+                    pg_catalog.pg_attribute a ON (
+                        n.nspname = c.table_schema AND
+                        cl.oid = a.attrelid AND
+                        c.column_name = a.attname
+                    )
+                LEFT JOIN
+                    pg_catalog.pg_description pgd ON (
+                        pgd.objoid = cl.oid AND
+                        pgd.objsubid = a.attnum
+                    )
+                WHERE
+                    c.table_schema NOT IN ('pg_catalog', 'information_schema')
+                    AND c.table_catalog = '${dbName}'
+                ORDER BY
+                    c.table_schema,
+                    c.table_name,
+                    c.ordinal_position
+            """
+
+            let columnsResult = executor.setSql(columnsSql).list<DbInfoPO>()
+            LogUtils.info("DbInfoService", "=== Retrieved ${columnsResult.size} columns ===")
+
+            let columnMap = HashMap<String, ArrayList<DbColumnInfo>>()
+            for (col in columnsResult) {
+                let key = "${col.tableSchema}.${col.dbTableName}"
+                if (!columnMap.contains(key)) {
+                    columnMap.add(key, ArrayList<DbColumnInfo>())
+                }
+                let colInfo = DbColumnInfo()
+                colInfo.columnName = col.columnName
+                colInfo.dataType = col.dataType ?? ""
+                colInfo.isNullable = col.isNullable
+                colInfo.columnDefault = col.columnDefault ?? ""
+                colInfo.ordinalPosition = col.ordinalPosition ?? 0
+                colInfo.characterMaximumLength = col.characterMaximumLength ?? 0
+                colInfo.columnComment = col.columnComment ?? ""
+                columnMap.get(key).getOrThrow().add(colInfo)
+            }
+
+            let tableList = executor.setSql(tablesSql).list<DbInfoPO>()
+            LogUtils.info("DbInfoService", "=== Retrieved ${tableList.size} tables ===")
+
+            let result = ArrayList<DbTableInfo>()
+            for (table in tableList) {
+                let tableInfo = DbTableInfo()
+                tableInfo.tableCatalog = table.tableCatalog
+                tableInfo.tableSchema = table.tableSchema ?? ""
+                tableInfo.tableName = table.dbTableName
+                tableInfo.tableType = ""
+
+                let key = "${tableInfo.tableSchema}.${tableInfo.tableName}"
+                if (columnMap.contains(key)) {
+                    tableInfo.children = columnMap.get(key).getOrThrow()
+                }
+
+                result.add(tableInfo)
+            }
+
+            LogUtils.info("DbInfoService", "=== Returning ${result.size} tables with columns ===")
+            return APIResult<ArrayList<DbTableInfo>>(result)
+        } catch (e: Exception) {
+            LogUtils.error("DbInfoService", "=== getDbTableList error: ${e.message} ===")
+            return APIResult<ArrayList<DbTableInfo>>(false, e.message)
+        }
+    }
+
+    /**
+     * 生成UUID字符串
+     * 用于为没有id字段的表生成唯一标识符
+     * @return UUID字符串
+     */
+    private func generateUUID(): String {
+        // 使用当前时间生成简单的UUID
+        let now = DateTime.now()
+        // 使用时间的哈希值作为随机种子
+        let hash1 = now.hashCode()
+        let hash2 = (hash1 * 2654435761) % 2147483647
+        let hash3 = (hash2 * 2654435761) % 2147483647
+        let hash4 = (hash3 * 2654435761) % 2147483647
+
+        // 格式化为UUID格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        let sb = StringBuilder()
+        sb.append("${toHex(Int64(hash1), 8)}-")
+        sb.append("${toHex(Int64(hash2 >> 16), 4)}-")
+        sb.append("${toHex(Int64((hash2 & 0xFFFF) | 0x4000), 4)}-")  // 版本4 UUID
+        sb.append("${toHex(Int64((hash3 >> 16) | 0x8000), 4)}-")     // 变体1 UUID
+        sb.append("${toHex(Int64(hash3 & 0xFFFF), 4)}")
+        sb.append("${toHex(Int64(hash4), 8)}")
+        return sb.toString()
+    }
+
+    /**
+     * 将整数转换为指定长度的十六进制字符串
+     * @param value 整数值
+     * @param length 目标长度
+     * @return 十六进制字符串
+     */
+    private func toHex(value: Int64, length: Int64): String {
+        let hexChars = "0123456789abcdef"
+        var result = StringBuilder()
+        var v = value
+        for (i in 0..length) {
+            let index = (v >> ((length - 1 - i) * 4)) & 0xF
+            result.append(hexChars[Int64(index)])
+        }
+        return result.toString()
+    }
 }

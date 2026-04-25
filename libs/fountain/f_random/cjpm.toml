@@ -1,5 +1,6 @@
 [dependencies]
   f_base  = {path = "../f_base", version = "1.0.45"}
+  stdx = { path = "../../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm" }
 [package]
   cjc-version = "1.0.4"
   compile-option = "-Woff all --dy-std"

@@ -3,15 +3,15 @@
  */
 package magic.app.models.uctoo
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+//#region AutoCreateCode
 
 import std.time.DateTime
 import f_orm.macros.{QueryMappersGenerator, ORMField}
 import f_data.macros.DataAssist
 import f_data.{ObjectData, Data, DataConversionFlag, ObjectFields, MutableField, DataObject, f_data_tryFromData}
 import f_orm.*
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+import json4cj.JsonValueSerializable
+import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 
 /**
  * OperateLogPO - operate_log表持久化对象
@@ -22,101 +22,97 @@ import f_orm.*
 @DataAssist[fields]
 @QueryMappersGenerator["operate_log"]
 public class OperateLogPO {
-        // 注意: 数据库列名 'id' 是关键字，已重命名为 'id'
-    @ORMField[true 'id']
-    private var id: String = ""
+        @ORMField['id']
+    public var id: String = ""
 
-        // 注意: 数据库列名 'module' 是关键字，已重命名为 'module'
-    @ORMField['module']
-    private var module: String = ""
+        @ORMField['module']
+    public var module: String = ""
 
-        // 注意: 数据库列名 'operate' 是关键字，已重命名为 'operate'
-    @ORMField['operate']
-    private var operate: String = ""
+        @ORMField['operate']
+    public var operate: String = ""
 
-        // 注意: 数据库列名 'route' 是关键字，已重命名为 'route'
-    @ORMField['route']
-    private var route: String = ""
+        @ORMField['route']
+    public var route: String = ""
 
-        // 注意: 数据库列名 'params' 是关键字，已重命名为 'params'
-    @ORMField['params']
-    private var params: String = ""
+        @ORMField['params']
+    public var params: String = ""
 
-        // 注意: 数据库列名 'ip' 是关键字，已重命名为 'ip'
-    @ORMField['ip']
-    private var ip: String = ""
+        @ORMField['ip']
+    public var ip: String = ""
 
-        // 注意: 数据库列名 'method' 是关键字，已重命名为 'method'
-    @ORMField['method']
-    private var method: String = ""
+        @ORMField['method']
+    public var method: String = ""
 
-        // 注意: 数据库列名 'creator' 是关键字，已重命名为 'creator'
-    @ORMField['creator']
-    private var creator: ?String = None<String>
+        @ORMField['creator']
+    public var creator: Option<String> = None<String>
 
-        // 注意: 数据库列名 'created_at' 是关键字，已重命名为 'createdAt'
-    @ORMField['created_at']
-    private var createdAt: DateTime = DateTime.now()
+        @ORMField['created_at']
+    public var createdAt: DateTime = DateTime.now()
 
-        // 注意: 数据库列名 'updated_at' 是关键字，已重命名为 'updatedAt'
-    @ORMField['updated_at']
-    private var updatedAt: DateTime = DateTime.now()
+        @ORMField['updated_at']
+    public var updatedAt: DateTime = DateTime.now()
 
-        // 注意: 数据库列名 'deleted_at' 是关键字，已重命名为 'deletedAt'
-    @ORMField['deleted_at']
-    private var deletedAt: ?DateTime = None<DateTime>
-    
+        @ORMField['deleted_at']
+    public var deletedAt: Option<DateTime> = None<DateTime>
+
     public init() {}
-    
+
     public init(
                 id: String,
-        module: String,
-        operate: String,
-        route: String,
-        params: String,
-        ip: String,
-        method: String,
-        creator: ?String,
-        createdAt: DateTime,
-        updatedAt: DateTime,
-        deletedAt: ?DateTime
+                module: String,
+                operate: String,
+                route: String,
+                params: String,
+                ip: String,
+                method: String,
+                creator: Option<String>,
+                createdAt: DateTime,
+                updatedAt: DateTime,
+                deletedAt: Option<DateTime>
     ) {
                 this.id = id
-        this.module = module
-        this.operate = operate
-        this.route = route
-        this.params = params
-        this.ip = ip
-        this.method = method
-        this.creator = creator
-        this.createdAt = createdAt
-        this.updatedAt = updatedAt
-        this.deletedAt = deletedAt
+                this.module = module
+                this.operate = operate
+                this.route = route
+                this.params = params
+                this.ip = ip
+                this.method = method
+                this.creator = creator
+                this.createdAt = createdAt
+                this.updatedAt = updatedAt
+                this.deletedAt = deletedAt
     }
-    
+
+    /// 序列化为 JsonValue
+    public func toJsonValue(): JsonValue {
+        var map = HashMap<String, JsonValue>()
+        map.add("id", this.id.toJsonValue())
+        map.add("module", this.module.toJsonValue())
+        map.add("operate", this.operate.toJsonValue())
+        map.add("route", this.route.toJsonValue())
+        map.add("params", this.params.toJsonValue())
+        map.add("ip", this.ip.toJsonValue())
+        map.add("method", this.method.toJsonValue())
+        map.add("creator", optionToJsonValue(this.creator))
+        map.add("created_at", this.createdAt.toJsonValue())
+        map.add("updated_at", this.updatedAt.toJsonValue())
+        map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        return JsonObject(map)
+    }
+
+    /// 辅助方法：将 Option<T> 转换为 JsonValue
+    private static func optionToJsonValue<T>(opt: Option<T>): JsonValue where T <: JsonValueSerializable<T> {
+        if (let Some(v) <- opt) {
+            return v.toJsonValue()
+        } else {
+            return JsonNull()
+        }
+    }
+
+    /// 序列化为 JSON 字符串
     public func toJson(): String {
-        let sb = StringBuilder()
-        sb.append("{")
-                sb.append("\"id\":\"${id}\",")
-        sb.append("\"module\":\"${module}\",")
-        sb.append("\"operate\":\"${operate}\",")
-        sb.append("\"route\":\"${route}\",")
-        sb.append("\"params\":\"${params}\",")
-        sb.append("\"ip\":\"${ip}\",")
-        sb.append("\"method\":\"${method}\",")
-        if (let Some(v) <- creator) {
-            sb.append("\"creator\":\"${v}\",")
-        } else {
-            sb.append("\"creator\":\"\",")
-        }
-        sb.append("\"created_at\":\"${createdAt}\",")
-        sb.append("\"updated_at\":\"${updatedAt}\",")
-        if (let Some(v) <- deletedAt) {
-            sb.append("\"deleted_at\":\"${v}\"")
-        } else {
-            sb.append("\"deleted_at\":\"\"")
-        }
-        sb.append("}")
-        return sb.toString()
+        return this.toJsonValue().toString()
     }
+
+//#endregion AutoCreateCode
 }

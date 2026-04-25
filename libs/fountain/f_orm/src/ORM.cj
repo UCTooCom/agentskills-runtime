@@ -43,12 +43,12 @@ public class ORM {
         }
     }
     protected static prop driverNames: Iterator<String> {
-        get(){
+        get() {
             datasources.keys().iterator()
         }
     }
     public static func registerTransactionHooks<T>(): Unit where T <: TransactionHook {
-        for(hook in lookupList<T>()) {
+        for (hook in lookupList<T>()) {
             registerTransactionHook<T>(hook)
         }
     }
@@ -57,11 +57,11 @@ public class ORM {
     }
 
     public static func register(datasource: NamedDatasource, default!: Bool = true): Unit {
-        if(datasources.addIfAbsent(datasource.driverName, datasource).isNone()){
-            if(default){
+        if (datasources.addIfAbsent(datasource.driverName, datasource).isNone()) {
+            if (default) {
                 ORM.default = datasource.driverName
             }
-        }else{
+        } else {
             datasource.close()
         }
     }
@@ -70,70 +70,76 @@ public class ORM {
         register(ds, default: default)
     }
     public static func register(driver: Driver, default!: Bool = true): Unit {
-        if(datasources.contains(driver.name)){
-            log.warn{'driver ${driver.name} has been registered'}
+        if (datasources.contains(driver.name)) {
+            log.warn {'driver ${driver.name} has been registered'}
             return
         }
-        log.debug{'driver ${driver.name} registering...'}
+        log.debug {'driver ${driver.name} registering...'}
         register(NamedDatasource(driver), default: default)
     }
     public static func register(driver: Driver, opts: Array<(String, String)>, default!: Bool = true): Unit {
-        if(datasources.contains(driver.name)){
+        if (datasources.contains(driver.name)) {
             return
         }
-        log.debug{'driver ${driver.name} registering...'}
+        log.debug {'driver ${driver.name} registering...'}
         register(NamedDatasource(driver, opts), default: default)
     }
     public static func register(driver: Driver, url: String, default!: Bool = true): Unit {
-        if(datasources.contains(driver.name)){
-            log.warn{'driver ${driver.name} has been registered'}
+        if (datasources.contains(driver.name)) {
+            log.warn {'driver ${driver.name} has been registered'}
             return
         }
         log.debug('driver ${driver.name} registering...')
         register(NamedDatasource(driver, url), default: default)
     }
     public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
-        if(datasources.contains(driver.name)){
-            log.warn{'driver ${driver.name} has been registered'}
+        if (datasources.contains(driver.name)) {
+            log.warn {'driver ${driver.name} has been registered'}
             return
         }
         register(NamedDatasource(driver, url, opts), default: default)
     }
-    public static func getDriver(driver: String){
+    public static func getDriver(driver: String) {
         ORMConfig.getDriver(driver)
     }
     public static func register(driver: String, default!: Bool = true): Unit {
         register(NamedDatasource(getDriver(driver)), default: default)
     }
-    public static func register(driver: String, opts: Array<(String, String)>, default!: Bool = true){
+    public static func register(driver: String, opts: Array<(String, String)>, default!: Bool = true) {
         register(NamedDatasource(getDriver(driver), opts), default: default)
     }
-    public static func register(driver: String, url: String, default!: Bool = true){
+    public static func register(driver: String, url: String, default!: Bool = true) {
         register(NamedDatasource(getDriver(driver), url), default: default)
     }
-    public static func register(driver: String, url: String, opts: Array<(String, String)>, default!: Bool = true){
+    public static func register(driver: String, url: String, opts: Array<(String, String)>, default!: Bool = true) {
         register(NamedDatasource(getDriver(driver), url, opts), default: default)
     }
-    public static func register(){
+    public static func register() {
         let default = ORMConfig.getDefaultDriver()
-        for(d in ORMConfig.getDrivers()){
-            if(ORMConfig.getUseThirdPartyPool(d.name)){
-                continue
+        func doRegister(driver: Driver) {
+            register(NamedDatasource(driver), default: default.isEmpty() || driver.name == default)
+        }
+        for (d in ORMConfig.getDriverNames() where d == ORMConfig.mockdb) { //使用mockdb的时候不再初始化其他驱动的Datasource
+            if (!ORMConfig.getUseThirdPartyPool(d)) {
+                getDriver(d) |> doRegister
             }
-            register(NamedDatasource(d), default: default.isEmpty() || d.name == default)
+            return
+        }
+        for (d in ORMConfig.getDrivers() where !ORMConfig.getUseThirdPartyPool(d.name)) {
+            doRegister(d)
         }
     }
-    public static func initialize(){
-        try{
+    public static func initialize() {
+        try {
             register()
             registerTransactionHooks<TransactionHook>()
-        }catch(e: Exception){
+        } catch (e: Exception) {
             log.error('ORM initialization failed', e)
             throw e
         }
     }
     public static func deregister(name: String): Unit {
-        if(let Some(d) <- datasources.remove(name)){
+        if (let Some(d) <- datasources.remove(name)) {
             DriverManager.deregister(name)
             d.close()
         }
@@ -158,25 +164,25 @@ public class ORM {
 
     public static func connection(): Connection {
         hasDefault()
-        return connection(default)
+        connection(default)
     }
     public static func connection(name: String): Connection {
         if (name.isEmpty()) {
-            return datasources[default].connect()
+            datasources[default].connect()
         } else {
-            return datasources[name].connect()
+            datasources[name].connect()
         }
     }
     public static func executor(driverName: String): SqlExecutor {
         if (driverName.isEmpty()) {
             hasDefault()
-            return SqlExecutor.getInstance(default)
+            SqlExecutor.getInstance(default)
         } else {
-            return SqlExecutor.getInstance(driverName)
+            SqlExecutor.getInstance(driverName)
         }
     }
     public static func executor(): SqlExecutor {
         hasDefault()
-        return executor(default)
+        executor(default)
     }
 }

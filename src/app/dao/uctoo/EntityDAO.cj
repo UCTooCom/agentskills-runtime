@@ -14,10 +14,10 @@ import magic.app.models.uctoo.EntityPO
 import magic.log.LogUtils
 
 /**
- * EntityDAO - 实体数据访问接口
- * 
+ * EntityDAO - entity数据访问接口
+ *
  * 提供entity表的标准CRUD操作，遵循UCTOO V4 ORM规范
- * 
+ *
  * 设计原则：
  * 1. DAO层只负责数据访问，不包含业务逻辑
  * 2. 所有查询方法不过滤软删除数据，返回完整数据集
@@ -27,12 +27,12 @@ import magic.log.LogUtils
 @DAO
 public interface EntityDAO <: RootDAO {
     prop executor: SqlExecutor
-    
+
     // ==================== 插入操作 ====================
-    
+
     /**
      * 插入entity（id由数据库自动生成UUID）
-     * @param entity entity对象
+     * @param entity EntityPO对象
      * @return 插入成功返回生成的ID，失败返回空字符串
      */
     func insertEntity(entity: EntityPO): String {
@@ -59,7 +59,7 @@ public interface EntityDAO <: RootDAO {
                 start_time,
                 status
             ) values(
-                ${arg(entity.link)},
+${arg(entity.link)},
                 ${arg(entity.privacyLevel)},
                 ${arg(entity.stars)},
                 ${arg(entity.description)},
@@ -83,9 +83,9 @@ public interface EntityDAO <: RootDAO {
             returning id
         ''').singleFirst<String>() ?? ""
     }
-    
+
     // ==================== 单条查询 ====================
-    
+
     /**
      * 根据ID查询entity
      * @param id entityID
@@ -96,9 +96,9 @@ public interface EntityDAO <: RootDAO {
             select * from entity where id = ${arg(id)}
         ''').first<EntityPO>()
     }
-    
+
     // ==================== 更新操作 ====================
-    
+
     /**
      * 更新entity
      * @param entity entity对象
@@ -120,6 +120,7 @@ public interface EntityDAO <: RootDAO {
                 price = ${arg(entity.price)},
                 birthday = ${arg(entity.birthday)},
                 owner = ${arg(entity.owner)},
+                creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
                 end_time = ${arg(entity.endTime)},
                 start_time = ${arg(entity.startTime)},
@@ -128,9 +129,9 @@ public interface EntityDAO <: RootDAO {
             where id = ${arg(entity.id)}
         ''').update
     }
-    
+
     // ==================== 删除操作 ====================
-    
+
     /**
      * 软删除entity
      * @param id entityID
@@ -141,7 +142,7 @@ public interface EntityDAO <: RootDAO {
             update entity set deleted_at = ${arg(DateTime.now())} where id = ${arg(id)}
         ''').update
     }
-    
+
     /**
      * 恢复软删除的entity
      * @param id entityID
@@ -152,7 +153,7 @@ public interface EntityDAO <: RootDAO {
             update entity set deleted_at = null where id = ${arg(id)}
         ''').update
     }
-    
+
     /**
      * 硬删除entity
      * @param id entityID
@@ -163,9 +164,9 @@ public interface EntityDAO <: RootDAO {
             delete from entity where id = ${arg(id)}
         ''').delete
     }
-    
+
     // ==================== 列表查询 ====================
-    
+
     /**
      * 分页查询所有entity
      * @param page 页码（从1开始）
@@ -177,7 +178,7 @@ public interface EntityDAO <: RootDAO {
             select * from entity order by created_at desc
         ''', size, page: page)
     }
-    
+
     /**
      * 分页查询entity列表（按创建者）
      * @param creator 创建者ID
@@ -190,7 +191,7 @@ public interface EntityDAO <: RootDAO {
             select * from entity where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
-    
+
     /**
      * 查询所有entity（不分页）
      * @return entity列表
@@ -200,7 +201,7 @@ public interface EntityDAO <: RootDAO {
             select * from entity order by created_at desc
         ''').list<EntityPO>()
     }
-    
+
     /**
      * 批量查询entity
      * @param ids ID列表
@@ -211,9 +212,9 @@ public interface EntityDAO <: RootDAO {
             select * from entity where id ${IN(ids)}
         ''').list<EntityPO>()
     }
-    
+
     // ==================== 统计操作 ====================
-    
+
     /**
      * 统计创建者的entity数量
      * @param creator 创建者ID
@@ -224,7 +225,7 @@ public interface EntityDAO <: RootDAO {
             select count(*) from entity where creator = ${arg(creator)}
         ''').first<Int64>() ?? 0
     }
-    
+
     /**
      * 统计所有entity数量
      * @return 数量
@@ -234,11 +235,8 @@ public interface EntityDAO <: RootDAO {
             select count(*) from entity
         ''').first<Int64>() ?? 0
     }
-    
-    //#endregion AutoCreateCode
-    
-    // ========== 定制开发方法（在此区域添加自定义方法）==========
-    
+
+
     /**
      * 分页查询entity列表（带过滤条件）
      * @param link 链接模糊查询
@@ -279,7 +277,7 @@ public interface EntityDAO <: RootDAO {
 
         executor.page<EntityPO>(sql.toString(), size, page: page)
     }
-    
+
     /**
      * 批量软删除entity
      * @param ids ID列表
@@ -290,7 +288,7 @@ public interface EntityDAO <: RootDAO {
             update entity set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
     }
-    
+
     /**
      * 批量硬删除entity
      * @param ids ID列表
@@ -301,16 +299,16 @@ public interface EntityDAO <: RootDAO {
             delete from entity where id ${IN(ids)}
         ''').delete
     }
-    
+
     /**
      * 动态条件查询entity（支持完整查询操作符）
-     * 
+     *
      * @param whereClause WHERE 子句字符串（不包含 WHERE 关键字）
      * @param orderByClause ORDER BY 子句字符串（不包含 ORDER BY 关键字）
      * @param page 页码（从1开始）
      * @param size 每页大小
      * @return 分页结果
-     * 
+     *
      * 使用示例：
      * - whereClause: "name LIKE '%test%' AND status = 'active'"
      * - orderByClause: "created_at DESC, name ASC"
@@ -318,23 +316,23 @@ public interface EntityDAO <: RootDAO {
     func findEntityByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<EntityPO> {
         let sql = StringBuilder()
         sql.append("select * from entity")
-        
+
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")
         }
-        
+
         if (!orderByClause.isEmpty()) {
             sql.append(" order by ${orderByClause}")
         } else {
             sql.append(" order by created_at desc")
         }
-        
+
         executor.page<EntityPO>(sql.toString(), size, page: page)
     }
-    
+
     /**
      * 使用 f_orm Condition API 查询entity
-     * 
+     *
      * @param whereClause WHERE 子句字符串
      * @param orderByClause ORDER BY 子句字符串
      * @param page 页码（从1开始）
@@ -343,32 +341,32 @@ public interface EntityDAO <: RootDAO {
      */
     func findEntityByCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<EntityPO> {
         let fromClause = executor.FROM<EntityPO>()
-        
+
         // 应用 WHERE 条件
         if (!whereClause.isEmpty()) {
             fromClause.WHERE(whereClause)
         }
-        
+
         // 应用 ORDER BY
         if (!orderByClause.isEmpty()) {
             fromClause.ORDER_BY { => orderByClause }
         } else {
             fromClause.ORDER_BY { => "created_at DESC" }
         }
-        
+
         // 执行分页查询
         fromClause.page<EntityPO>(size, page: page)
     }
-    
+
     /**
      * 清空回收站（硬删除所有已软删除的entity）
      * @return 影响行数
      */
-    func emptyRecycleBin(): Int64 {
+    func emptyRecycleBinEntity(): Int64 {
         executor.setSql('''
             delete from entity where deleted_at is not null
         ''').delete
     }
-    
+
 //#endregion AutoCreateCode
 }

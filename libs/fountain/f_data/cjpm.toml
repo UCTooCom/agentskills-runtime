@@ -8,6 +8,7 @@
   f_macros  = {path = "../f_macros", version = "1.0.45"}
   f_regex  = {path = "../f_regex", version = "1.0.45"}
   f_time  = {path = "../f_time", version = "1.0.45"}
+  stdx = { path = "../../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm" }
 [package]
   cjc-version = "1.0.4"
   compile-option = "-Woff all --dy-std"
@@ -30,27 +31,27 @@
   compile-option = "-Woff all --dy-std -ldl"
   override-compile-option = "-Woff all --dy-std -ldl"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["../../agentskills-runtime/libs/cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../../cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
 [target.aarch64-unknown-linux-gnu]
   compile-option = "-Woff all --dy-std -ldl"
   override-compile-option = "-Woff all --dy-std -ldl"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["../../agentskills-runtime/libs/cangjie-stdx-linux-aarch64-1.0.0.1/linux_aarch64_llvm/dynamic/stdx"]
+  path-option = ["../../cangjie-stdx-linux-aarch64-1.0.0.1/linux_aarch64_llvm/dynamic/stdx"]
 [target.x86_64-w64-mingw32]
   compile-option = "-Woff all --dy-std -lcrypt32"
   override-compile-option = "-Woff all --dy-std -lcrypt32"
 [target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["../../agentskills-runtime/libs/cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
 [target.x86_64-apple-darwin]
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
 [target.x86_64-apple-darwin.bin-dependencies]
-  path-option = ["../../agentskills-runtime/libs/cangjie-stdx-mac-x64-1.0.0.1/darwin_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../../cangjie-stdx-mac-x64-1.0.0.1/darwin_x86_64_llvm/dynamic/stdx"]
 [target.aarch64-apple-darwin]
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
 [target.aarch64-apple-darwin.bin-dependencies]
-  path-option = ["../../agentskills-runtime/libs/cangjie-stdx-mac-aarch64-1.0.0.1/darwin_aarch64_llvm/dynamic/stdx"]
+  path-option = ["../../cangjie-stdx-mac-aarch64-1.0.0.1/darwin_aarch64_llvm/dynamic/stdx"]
 [target.aarch64-linux-ohos]
   compile-option = "-Woff all --dy-std -ldl"
   override-compile-option = "-Woff all --dy-std -ldl"

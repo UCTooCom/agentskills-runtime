@@ -5,6 +5,7 @@ package magic.app.controllers.uctoo.application
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+    //#region AutoCreateCode
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.core.response.{APIError, APIResult}
 import magic.app.models.uctoo.ApplicationPO
@@ -24,7 +25,6 @@ public class ApplicationController {
         this.service = service
     }
     
-    //#region AutoCreateCode
     
     public func add(req: HttpRequest, res: HttpResponse): Unit {
         try {

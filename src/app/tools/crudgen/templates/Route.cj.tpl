@@ -18,6 +18,9 @@ public class {{className}}Route {
     }
 
     public func register(): Router {
+        // 先注册自定义路由，避免被动态路由 :id 匹配
+        registerCustomRoutes()
+
         // 按照 uctoo v4 规范，路由路径带 /v1 前缀
         router.post("/api/v1/{{dbName}}/{{tableName}}/add", controller.add)
         router.post("/api/v1/{{dbName}}/{{tableName}}/edit", controller.edit)
@@ -33,7 +36,7 @@ public class {{className}}Route {
         // 导出功能
         router.get("/api/v1/{{dbName}}/{{tableName}}/export", controller.export)
         // 清空回收站
-        router.post("/api/v1/{{dbName}}/{{tableName}}/empty-recycle-bin", controller.emptyRecycleBin)
+        router.post("/api/v1/{{dbName}}/{{tableName}}/empty-recycle-bin", controller.emptyRecycleBin{{className}})
 
         return router
     }
@@ -45,7 +48,7 @@ public class {{className}}Route {
      * 在此方法中添加定制开发的路由
      */
     public func registerCustomRoutes(): Router {
-    
+
         return router
     }
 }

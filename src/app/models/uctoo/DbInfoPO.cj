@@ -3,7 +3,7 @@
  */
 package magic.app.models.uctoo
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+//#region AutoCreateCode
 
 import std.time.DateTime
 import f_orm.macros.{QueryMappersGenerator, ORMField}
@@ -23,8 +23,8 @@ import f_orm.*
 @DataAssist[fields]
 @QueryMappersGenerator["db_info"]
 public class DbInfoPO {
-        @ORMField['id']
-    public var id: String = ""
+    @ORMField['id']
+    public var id: ?String = None<String>
 
         @ORMField['table_catalog']
     public var tableCatalog: String = ""
@@ -213,7 +213,11 @@ public class DbInfoPO {
         } else {
             sb.append("\"pattern\":\"\",")
         }
-        sb.append("\"weight\":${weight},")
+        if (let Some(v) <- weight) {
+            sb.append("\"weight\":${v},")
+        } else {
+            sb.append("\"weight\":null,")
+        }
         if (let Some(v) <- creator) {
             sb.append("\"creator\":\"${v}\",")
         } else {
@@ -238,7 +242,11 @@ public class DbInfoPO {
         } else {
             sb.append("\"column_comment\":\"\",")
         }
-        sb.append("\"ordinal_position\":${ordinalPosition},")
+        if (let Some(v) <- ordinalPosition) {
+            sb.append("\"ordinal_position\":${v},")
+        } else {
+            sb.append("\"ordinal_position\":null,")
+        }
         if (let Some(v) <- migrationId) {
             sb.append("\"migration_id\":\"${v}\",")
         } else {
@@ -252,4 +260,6 @@ public class DbInfoPO {
         sb.append("}")
         return sb.toString()
     }
+
+//#endregion AutoCreateCode
 }

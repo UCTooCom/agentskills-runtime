@@ -3,6 +3,8 @@
  */
 package magic.app.services.uctoo
 
+//#region AutoCreateCode
+
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -28,7 +30,7 @@ public class ApplicationService {
     
     public init() {}
     
-    //#region AutoCreateCode
+    
     
     /**
      * 创建application

@@ -4,7 +4,7 @@
 package magic.app.models.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
-
+//#region AutoCreateCode
 import std.time.DateTime
 import f_orm.macros.{QueryMappersGenerator, ORMField}
 import f_data.macros.DataAssist
@@ -103,4 +103,5 @@ public class ApplicationPO {
         sb.append("}")
         return sb.toString()
     }
+    //#endregion AutoCreateCode
 }

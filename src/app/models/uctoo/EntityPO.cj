@@ -65,7 +65,7 @@ public class EntityPO {
     public var owner: Option<String> = None<String>
 
         @ORMField['creator']
-    public var creator: String = ""
+    public var creator: Option<String> = None<String>
 
         @ORMField['created_at']
     public var createdAt: DateTime = DateTime.now()
@@ -102,7 +102,7 @@ public class EntityPO {
                 price: Option<Float64>,
                 birthday: Option<DateTime>,
                 owner: Option<String>,
-                creator: String,
+                creator: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
                 deletedAt: Option<DateTime>,
@@ -150,7 +150,7 @@ public class EntityPO {
         map.add("price", optionToJsonValue(this.price))
         map.add("birthday", optionToJsonValue(this.birthday))
         map.add("owner", optionToJsonValue(this.owner))
-        map.add("creator", this.creator.toJsonValue())
+        map.add("creator", optionToJsonValue(this.creator))
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))

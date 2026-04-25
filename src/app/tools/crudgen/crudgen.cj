@@ -104,20 +104,24 @@ main(args: Array<String>) {
             // 生成所有表的CRUD代码
             print("开始生成 ${dbName} 数据库所有表的CRUD代码...")
             let tables = generator.readAllTables(dbName)
-            
+
             for (table in tables) {
                 print("生成表 ${table} 的CRUD代码...")
                 let tableInfo = generator.readTableInfo(dbName, table)
                 generator.generateAllLayers(tableInfo)
+                // 生成权限节点
+                generator.generatePermissionNodes(dbName, table)
                 print("表 ${table} 的CRUD代码生成完成")
             }
-            
+
             print("\n所有表的CRUD代码生成完成！")
         } else {
             // 生成指定表的CRUD代码
             print("开始生成 ${dbName}.${tableName} 表的CRUD代码...")
             let tableInfo = generator.readTableInfo(dbName, tableName)
             generator.generateAllLayers(tableInfo)
+            // 生成权限节点
+            generator.generatePermissionNodes(dbName, tableName)
             print("表 ${tableName} 的CRUD代码生成完成！")
         }
     } catch (e: Exception) {

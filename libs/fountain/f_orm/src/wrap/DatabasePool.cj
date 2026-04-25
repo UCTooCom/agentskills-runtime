@@ -162,7 +162,7 @@ public class DatabasePool <: Resource & Datasource {
 
     public func getConnection(timeout!: Duration = connectTimeout): Option<Connection> {
         if (isClosed()) {
-            return None<Connection>
+            throw ConnectionException('database pool is closed')
         }
         pool.borrow(timeout: timeout)?.activate(pool.giveBack)
     }

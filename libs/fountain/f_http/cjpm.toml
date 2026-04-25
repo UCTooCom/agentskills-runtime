@@ -28,6 +28,7 @@
   f_random  = {path = "../f_random", version = "1.0.45"}
   f_regex  = {path = "../f_regex", version = "1.0.45"}
   f_util  = {path = "../f_util", version = "1.0.45"}
+  stdx = { path = "../../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm" }
 
 [target]
 [target.x86_64-unknown-linux-gnu]

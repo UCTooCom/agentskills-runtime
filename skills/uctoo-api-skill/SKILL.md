@@ -1,20 +1,33 @@
 ---
 name: uctoo-api-skill
-description: 完整的 uctoo 后端 API 集成技能。将自然语言请求转换为 uctoo-backend API 调用，支持用户管理、产品管理、订单管理、登录认证等功能。使用时用户提及 "uctoo"、"后端API"、"用户管理"、"产品"、"订单"、"登录"、"认证" 等关键词时，你应该直接使用 http_request 工具发起实际的 API 请求。
+description: 完整的 uctoo V4.0 后端 API 集成技能。将自然语言请求转换为 uctoo-backend V4 API 调用，遵循RESTful API规范和UMI全栈模型同构设计。支持完整的CRUD操作、批量操作、软删除/硬删除、Prisma风格查询、动态排序和过滤等功能。使用时用户提及 "uctoo"、"后端API"、"entity"、"CRUD"、"查询"、"新增"、"编辑"、"删除"、"恢复"、"登录"、"认证" 等关键词时，你应该直接使用 http_request 工具发起实际的 API 请求。
 license: MIT
 compatibility: 需要网络访问 uctoo 后端 API
 metadata:
   author: UCToo Team
-  version: "7.0.0"
+  version: "8.0.0"
   category: api-integration
+  api_version: "v4.0"
+  specification: "uctoo-v4-api-specification.md"
 allowedTools:
 ---
 
-# UCTOO API Skill - 后端 API 集成技能
+# UCTOO V4.0 API Skill - 后端 API 集成技能
 
 ## 概述
 
 **本技能指导你使用框架内置的 `http_request` 工具来发起 HTTP 请求。**
+
+**uctoo V4.0 API 特性：**
+- ✅ RESTful API 规范
+- ✅ UMI 全栈模型同构设计
+- ✅ JWT 认证机制
+- ✅ 完整的 CRUD 操作
+- ✅ 批量操作支持
+- ✅ 软删除/硬删除
+- ✅ Prisma 风格查询（14个操作符）
+- ✅ 动态排序和过滤
+- ✅ 回收站功能
 
 **当用户请求 uctoo 相关的 API 操作时，你必须：**
 1. 分析用户需求，确定要调用哪个 API 端点
@@ -71,15 +84,28 @@ allowedTools:
 | `/api/uctoo/auth/logout` | GET | 用户登出 | 自动 |
 | `/api/uctoo/auth/me` | GET | 获取当前用户信息 | 自动 |
 
-### Entity 相关
+### Entity 相关（V4.0 完整CRUD）
 
 | 端点 | 方法 | 说明 | 需要认证 |
 |------|------|------|----------|
-| `/api/uctoo/entity/{limit}/{page}` | GET | 获取实体列表 | 否 |
-| `/api/uctoo/entity/{id}` | GET | 获取单个实体 | 否 |
-| `/api/uctoo/entity/add` | POST | 添加实体 | 自动 |
-| `/api/uctoo/entity/edit` | POST | 编辑实体 | 自动 |
-| `/api/uctoo/entity/del` | POST | 删除实体 | 自动 |
+| `/api/v1/uctoo/entity/{limit}/{page}` | GET | 分页查询实体列表 | 否 |
+| `/api/v1/uctoo/entity/{limit}/{page}/{skip}` | GET | 分页查询（带跳过） | 否 |
+| `/api/v1/uctoo/entity/{id}` | GET | 查询单个实体 | 否 |
+| `/api/v1/uctoo/entity/add` | POST | 新增实体 | 自动 |
+| `/api/v1/uctoo/entity/edit` | POST | 更新实体（支持批量） | 自动 |
+| `/api/v1/uctoo/entity/del` | POST | 删除实体（支持批量、软删除/硬删除） | 自动 |
+| `/api/v1/uctoo/entity/empty-recycle-bin` | POST | 清空回收站 | 自动 |
+| `/api/v1/uctoo/entity/export` | GET | 导出实体数据 | 自动 |
+
+**V4.0 新增功能：**
+- ✅ 批量更新（通过 `ids` 参数）
+- ✅ 批量删除（通过 `ids` 参数）
+- ✅ 软删除（默认）和硬删除（`force: 1`）
+- ✅ 恢复软删除数据（`deleted_at: "0"`）
+- ✅ 清空回收站
+- ✅ Prisma 风格查询（14个操作符）
+- ✅ 动态排序（`sort` 参数）
+- ✅ 动态过滤（`filter` 参数）
 
 ## 完整调用示例
 
@@ -198,3 +224,144 @@ allowedTools:
 6. **❌ 不要调用 uctoo-api-skill 工具**
 7. **❌ 不要使用 `实体ID`、`YOUR_ID` 等占位符**
 8. **❌ 不要手动添加 Authorization header（系统自动注入）**
+
+## V4.0 查询操作符
+
+uctoo V4.0 支持完整的 Prisma 风格查询操作符：
+
+### 基础操作符
+
+| 操作符 | 说明 | 示例 |
+|--------|------|------|
+| `equals` | 等于 | `{"name": {"equals": "test"}}` |
+| `not` | 不等于 | `{"status": {"not": "deleted"}}` |
+| `lt` | 小于 | `{"age": {"lt": 18}}` |
+| `lte` | 小于等于 | `{"price": {"lte": 100}}` |
+| `gt` | 大于 | `{"score": {"gt": 60}}` |
+| `gte` | 大于等于 | `{"level": {"gte": 5}}` |
+| `contains` | 包含 | `{"title": {"contains": "关键词"}}` |
+| `startsWith` | 以...开头 | `{"code": {"startsWith": "PRD"}}` |
+| `endsWith` | 以...结尾 | `{"link": {"endsWith": ".com"}}` |
+| `in` | 在列表中 | `{"status": {"in": ["active", "pending"]}}` |
+| `notIn` | 不在列表中 | `{"role": {"notIn": ["admin", "super"]}}` |
+| `isSet` | 字段是否设置 | `{"deletedAt": {"isSet": false}}` |
+| `between` | 区间查询 | `{"age": {"between": [18, 60]}}` |
+| `notBetween` | 不在区间 | `{"price": {"notBetween": [100, 500]}}` |
+
+### 逻辑操作符
+
+| 操作符 | 说明 | 示例 |
+|--------|------|------|
+| `AND` | 逻辑与 | `{"AND": [{"status": "active"}, {"level": {"gte": 5}}]}` |
+| `OR` | 逻辑或 | `{"OR": [{"role": "admin"}, {"role": "super"}]}` |
+| `NOT` | 逻辑非 | `{"NOT": {"status": "deleted"}}` |
+
+### 排序语法
+
+- 正序：字段名（如 `created_at`）
+- 倒序：字段名前加负号（如 `-created_at`）
+- 多字段：用逗号分隔（如 `-created_at,name`）
+
+## V4.0 高级示例
+
+### 示例 5：带过滤和排序的查询
+
+**用户请求：** "查询 privacy_level 大于等于 2 且名称包含'测试'的实体，按创建时间降序排列"
+
+**调用 http_request 工具：**
+```json
+{
+  "method": "GET",
+  "url": "https://javatoarktsapi.uctoo.com/api/v1/uctoo/entity/10/1?sort=-created_at&filter={\"AND\":[{\"privacy_level\":{\"gte\":2}},{\"name\":{\"contains\":\"测试\"}}]}"
+}
+```
+
+### 示例 6：批量删除
+
+**用户请求：** "批量删除 ID 为 xxx 和 yyy 的实体"
+
+**调用 http_request 工具：**
+```json
+{
+  "method": "POST",
+  "url": "https://javatoarktsapi.uctoo.com/api/v1/uctoo/entity/del",
+  "headers": "{\"Content-Type\": \"application/json\"}",
+  "body": "{\"ids\": \"[\\\"xxx\\\", \\\"yyy\\\"]\"}"
+}
+```
+
+### 示例 7：硬删除
+
+**用户请求：** "永久删除 ID 为 xxx 的实体（硬删除）"
+
+**调用 http_request 工具：**
+```json
+{
+  "method": "POST",
+  "url": "https://javatoarktsapi.uctoo.com/api/v1/uctoo/entity/del",
+  "headers": "{\"Content-Type\": \"application/json\"}",
+  "body": "{\"id\": \"xxx\", \"force\": 1}"
+}
+```
+
+### 示例 8：恢复软删除的数据
+
+**用户请求：** "恢复 ID 为 xxx 的已删除实体"
+
+**调用 http_request 工具：**
+```json
+{
+  "method": "POST",
+  "url": "https://javatoarktsapi.uctoo.com/api/v1/uctoo/entity/edit",
+  "headers": "{\"Content-Type\": \"application/json\"}",
+  "body": "{\"id\": \"xxx\", \"deleted_at\": \"0\"}"
+}
+```
+
+### 示例 9：查询回收站数据
+
+**用户请求：** "查看回收站中的所有实体"
+
+**调用 http_request 工具：**
+```json
+{
+  "method": "GET",
+  "url": "https://javatoarktsapi.uctoo.com/api/v1/uctoo/entity/20/1?filter={\"deleted_at\":{\"not\":null}}"
+}
+```
+
+### 示例 10：清空回收站
+
+**用户请求：** "清空entity回收站"
+
+**调用 http_request 工具：**
+```json
+{
+  "method": "POST",
+  "url": "https://javatoarktsapi.uctoo.com/api/v1/uctoo/entity/empty-recycle-bin",
+  "headers": "{\"Content-Type\": \"application/json\"}"
+}
+```
+
+## UMI 全栈模型同构规范
+
+**列表数据响应格式：**
+```json
+{
+  "entitys": [...],
+  "currentPage": 1,
+  "totalCount": 100,
+  "totalPage": 10
+}
+```
+
+**说明**：
+- 列表数据的键名为表名加 `s`（如 `entity` 表 → `entitys` 键名）
+- 符合 UMI 全栈模型同构规范
+- 前端使用 `dataKey: 'entitys'` 配置自动映射数据
+
+## 参考文档
+
+- uctoo V4.0 API 规范：`docs/uctoo-v4/uctoo-v4-api-specification.md`
+- uctoo API 设计规范：`https://gitee.com/uctoo/uctoo/blob/master/apps/uctoo-backend/docs/uctoo-api-design-specification.md`
+- uctoo 数据库设计：`https://gitee.com/uctoo/uctoo/blob/master/apps/uctoo-backend/docs/uctoo-database-design-document.md`

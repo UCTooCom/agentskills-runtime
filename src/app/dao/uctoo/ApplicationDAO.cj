@@ -3,8 +3,8 @@
  */
 package magic.app.dao.uctoo
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
-
+// ========== 自定义引入区域（此区域添加自定义import，不会被覆盖）==========
+//#region AutoCreateCode
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -74,7 +74,7 @@ public func convertToSqlString(value: Any): String {
 public interface ApplicationDAO <: RootDAO {
     prop executor: SqlExecutor
     
-    //#region AutoCreateCode
+    
     
     // ==================== 插入操作 ====================
     
@@ -322,5 +322,5 @@ public interface ApplicationDAO <: RootDAO {
     
     //#endregion AutoCreateCode
     
-    // ========== 定制开发方法（在此区域添加自定义方法）==========
+    // ========== 定制开发方法==========
 }

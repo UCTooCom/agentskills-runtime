@@ -12,7 +12,7 @@
  Target Server Version : 160008 (160008)
  File Encoding         : 65001
 
- Date: 01/04/2026 16:00:31
+ Date: 21/04/2026 12:25:23
 */
 
 
@@ -1408,7 +1408,7 @@ CREATE TABLE "public"."db_connection" (
   "port" varchar COLLATE "pg_catalog"."default" NOT NULL,
   "database_name" varchar COLLATE "pg_catalog"."default" NOT NULL,
   "ssl" int4 NOT NULL DEFAULT 0,
-  "creator" uuid,
+  "creator" uuid NOT NULL,
   "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "deleted_at" timestamptz(6),
@@ -1652,7 +1652,7 @@ CREATE TABLE "public"."entity" (
   "price" float8 DEFAULT 0,
   "birthday" date,
   "owner" varchar COLLATE "pg_catalog"."default",
-  "creator" uuid NOT NULL,
+  "creator" uuid,
   "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "deleted_at" timestamptz(6),
@@ -1832,8 +1832,8 @@ CREATE TABLE "public"."i18" (
   "content" text COLLATE "pg_catalog"."default" NOT NULL,
   "lang_id" uuid,
   "creator" uuid,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "created_at" timestamptz(6) DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) DEFAULT CURRENT_TIMESTAMP,
   "deleted_at" timestamptz(6)
 )
 ;
@@ -1881,8 +1881,8 @@ CREATE TABLE "public"."lang" (
   "code" varchar COLLATE "pg_catalog"."default" NOT NULL,
   "status" int4 NOT NULL DEFAULT 1,
   "creator" uuid,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "created_at" timestamptz(6) DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) DEFAULT CURRENT_TIMESTAMP,
   "deleted_at" timestamptz(6)
 )
 ;
@@ -3739,7 +3739,7 @@ CREATE TABLE "public"."permissions" (
   "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "deleted_at" timestamptz(6),
   "keepalive" int4 NOT NULL DEFAULT 1,
-  "path" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "path" varchar COLLATE "pg_catalog"."default",
   "title" varchar COLLATE "pg_catalog"."default",
   "parent_id" uuid,
   "meta" jsonb,
@@ -3754,7 +3754,7 @@ COMMENT ON COLUMN "public"."permissions"."icon" IS '菜单图标';
 COMMENT ON COLUMN "public"."permissions"."module" IS '模块';
 COMMENT ON COLUMN "public"."permissions"."component" IS '组件名称';
 COMMENT ON COLUMN "public"."permissions"."redirect" IS '跳转地址';
-COMMENT ON COLUMN "public"."permissions"."type" IS '类型。1 菜单 2 按钮';
+COMMENT ON COLUMN "public"."permissions"."type" IS '类型。1 菜单 2 按钮 3路由 4工具';
 COMMENT ON COLUMN "public"."permissions"."hidden" IS '是否隐藏。0隐藏，1显示';
 COMMENT ON COLUMN "public"."permissions"."weight" IS '排序';
 COMMENT ON COLUMN "public"."permissions"."creator" IS '创建人';
@@ -3928,10 +3928,10 @@ DROP TABLE IF EXISTS "public"."uctoo_role";
 CREATE TABLE "public"."uctoo_role" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "name" varchar COLLATE "pg_catalog"."default" NOT NULL,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "created_at" timestamptz(6) DEFAULT CURRENT_TIMESTAMP,
   "creator" uuid,
   "deleted_at" timestamptz(6),
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  "updated_at" timestamptz(6) DEFAULT CURRENT_TIMESTAMP
 )
 ;
 COMMENT ON COLUMN "public"."uctoo_role"."created_at" IS '创建时间';
@@ -4000,6 +4000,8 @@ COMMENT ON COLUMN "public"."uctoo_user"."last_login_ip" IS '最近一次登录ip
 COMMENT ON COLUMN "public"."uctoo_user"."last_login_time" IS '最近一次登录时间';
 COMMENT ON COLUMN "public"."uctoo_user"."remember_token" IS '是否记录token。用于再次自动登录';
 COMMENT ON COLUMN "public"."uctoo_user"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."uctoo_user"."access_token" IS '登录后获取的jwt token';
+COMMENT ON COLUMN "public"."uctoo_user"."refresh_token" IS '登录后获取的jwt refresh_token';
 COMMENT ON TABLE "public"."uctoo_user" IS '用户表。相当于account。RBAC中的用户';
 
 -- ----------------------------

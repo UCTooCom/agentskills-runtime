@@ -1,7 +1,7 @@
 # AgentSkills Runtime
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.19-blue.svg)](https://github.com/uctoo/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.20-blue.svg)](https://github.com/uctoo/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## Project Introduction
@@ -242,12 +242,19 @@ cjpm run --skip-build --name magic.app
 - **Dependency Management**: Intelligent handling of dependency relationships and version conflicts in multi-language projects
 
 ### Multi-Language SDK Support
-- **JavaScript/TypeScript SDK**: Complete Node.js and browser environment support
-- **Python SDK**: Integration with popular Python AI and data science libraries
-- **Java SDK**: Enterprise application and Android platform support
-- **Go SDK**: High-performance concurrent processing and cloud-native application support
-- **Rust SDK**: System-level performance and memory safety guarantees
-- **C# SDK**: .NET ecosystem and Windows platform integration
+- **JavaScript/TypeScript SDK**: Complete Node.js and browser environment support, for web applications and frontend integration
+- **Python SDK**: Integration with popular Python AI and data science libraries, suitable for data analysis and AI model integration
+- **Java SDK**: Enterprise application and Android platform support, suitable for large enterprise systems
+- **Go SDK**: High-performance concurrent processing and cloud-native application support, suitable for microservice architecture
+- **Rust SDK**: System-level performance and memory safety guarantees, suitable for performance-critical scenarios
+- **C# SDK**: .NET ecosystem and Windows platform integration, suitable for enterprise internal systems
+
+### SDK Core Value
+- **Traditional Systems + AI**: Quickly integrate AI capabilities into existing digital systems without rebuilding existing architecture
+- **Skill Market Access**: Easily access the skill market through SDK, enabling unlimited capability expansion
+- **Standardized Integration**: Provide unified API interfaces, simplifying cross-language integration complexity
+- **Out-of-the-Box**: Built-in runtime installation and management functionality, no manual configuration required
+- **Cross-Platform Support**: The same API adapts to different technology stacks, reducing learning costs
 
 ## Core Features
 

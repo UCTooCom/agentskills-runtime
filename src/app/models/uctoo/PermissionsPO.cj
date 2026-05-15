@@ -5,14 +5,17 @@ package magic.app.models.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+
+//#region AutoCreateCode
+
 import std.time.DateTime
 import f_orm.macros.{QueryMappersGenerator, ORMField}
 import f_data.macros.DataAssist
 import f_data.{ObjectData, Data, DataConversionFlag, ObjectFields, MutableField, DataObject, f_data_tryFromData}
 import f_orm.*
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
-
+import json4cj.JsonValueSerializable
+import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 
 /**
  * PermissionsPO - permissions表持久化对象
@@ -23,221 +26,163 @@ import f_orm.*
 @DataAssist[fields]
 @QueryMappersGenerator["permissions"]
 public class PermissionsPO {
-        @ORMField[true 'id']
-    private var id: String = ""
+        @ORMField['id']
+    public var id: String = ""
 
         @ORMField['permission_name']
-    private var permissionName: String = ""
+    public var permissionName: String = ""
 
         @ORMField['level']
-    private var level: ?String = None<String>
+    public var level: Option<String> = None<String>
 
         @ORMField['icon']
-    private var icon: ?String = None<String>
+    public var icon: Option<String> = None<String>
 
         @ORMField['module']
-    private var module: ?String = None<String>
+    public var module: Option<String> = None<String>
 
         @ORMField['component']
-    private var component: ?String = None<String>
+    public var component: Option<String> = None<String>
 
         @ORMField['redirect']
-    private var redirect: ?String = None<String>
+    public var redirect: Option<String> = None<String>
 
-        // 注意: 数据库列名 'type' 是关键字，已重命名为 'permissionType'
-    @ORMField['type']
-    private var permissionType: ?Int32 = None<Int32>
+        @ORMField['type']
+    public var typeVal: Int32 = 0
 
         @ORMField['hidden']
-    private var hidden: ?Int32 = None<Int32>
+    public var hidden: Int32 = 0
 
         @ORMField['weight']
-    private var weight: ?Int32 = None<Int32>
+    public var weight: Int32 = 0
 
         @ORMField['creator']
-    private var creator: ?String = None<String>
+    public var creator: Option<String> = None<String>
 
         @ORMField['created_at']
-    private var createdAt: DateTime = DateTime.now()
+    public var createdAt: DateTime = DateTime.now()
 
         @ORMField['updated_at']
-    private var updatedAt: ?DateTime = None<DateTime>
+    public var updatedAt: DateTime = DateTime.now()
 
         @ORMField['deleted_at']
-    private var deletedAt: ?DateTime = None<DateTime>
+    public var deletedAt: Option<DateTime> = None<DateTime>
 
         @ORMField['keepalive']
-    private var keepalive: ?Int32 = None<Int32>
+    public var keepalive: Int32 = 0
 
         @ORMField['path']
-    private var path: String = ""
+    public var path: Option<String> = None<String>
 
         @ORMField['title']
-    private var title: ?String = None<String>
+    public var title: Option<String> = None<String>
 
         @ORMField['parent_id']
-    private var parentId: ?String = None<String>
+    public var parentId: Option<String> = None<String>
 
         @ORMField['meta']
-    private var meta: ?String = None<String>
+    public var meta: Option<String> = None<String>
 
         @ORMField['method']
-    private var method: ?String = None<String>
+    public var method: Option<String> = None<String>
 
         @ORMField['menu_type']
-    private var menuType: ?String = None<String>
+    public var menuType: Option<String> = None<String>
 
         @ORMField['locale']
-    private var locale: ?String = None<String>
+    public var locale: Option<String> = None<String>
 
     public init() {}
-    
+
     public init(
                 id: String,
-        permissionName: String,
-        level: ?String,
-        icon: ?String,
-        module: ?String,
-        component: ?String,
-        redirect: ?String,
-        permissionType: ?Int32,
-        hidden: ?Int32,
-        weight: ?Int32,
-        creator: ?String,
-        createdAt: DateTime,
-        updatedAt: ?DateTime,
-        deletedAt: ?DateTime,
-        keepalive: ?Int32,
-        path: String,
-        title: ?String,
-        parentId: ?String,
-        meta: ?String,
-        method: ?String,
-        menuType: ?String,
-        locale: ?String
+                permissionName: String,
+                level: Option<String>,
+                icon: Option<String>,
+                module: Option<String>,
+                component: Option<String>,
+                redirect: Option<String>,
+                typeVal: Int32,
+                hidden: Int32,
+                weight: Int32,
+                creator: Option<String>,
+                createdAt: DateTime,
+                updatedAt: DateTime,
+                deletedAt: Option<DateTime>,
+                keepalive: Int32,
+                path: Option<String>,
+                title: Option<String>,
+                parentId: Option<String>,
+                meta: Option<String>,
+                method: Option<String>,
+                menuType: Option<String>,
+                locale: Option<String>
     ) {
                 this.id = id
-        this.permissionName = permissionName
-        this.level = level
-        this.icon = icon
-        this.module = module
-        this.component = component
-        this.redirect = redirect
-        this.permissionType = permissionType
-        this.hidden = hidden
-        this.weight = weight
-        this.creator = creator
-        this.createdAt = createdAt
-        this.updatedAt = updatedAt
-        this.deletedAt = deletedAt
-        this.keepalive = keepalive
-        this.path = path
-        this.title = title
-        this.parentId = parentId
-        this.meta = meta
-        this.method = method
-        this.menuType = menuType
-        this.locale = locale
+                this.permissionName = permissionName
+                this.level = level
+                this.icon = icon
+                this.module = module
+                this.component = component
+                this.redirect = redirect
+                this.typeVal = typeVal
+                this.hidden = hidden
+                this.weight = weight
+                this.creator = creator
+                this.createdAt = createdAt
+                this.updatedAt = updatedAt
+                this.deletedAt = deletedAt
+                this.keepalive = keepalive
+                this.path = path
+                this.title = title
+                this.parentId = parentId
+                this.meta = meta
+                this.method = method
+                this.menuType = menuType
+                this.locale = locale
     }
-    
+
+    /// 序列化为 JsonValue
+    public func toJsonValue(): JsonValue {
+        var map = HashMap<String, JsonValue>()
+        map.add("id", this.id.toJsonValue())
+        map.add("permission_name", this.permissionName.toJsonValue())
+        map.add("level", optionToJsonValue(this.level))
+        map.add("icon", optionToJsonValue(this.icon))
+        map.add("module", optionToJsonValue(this.module))
+        map.add("component", optionToJsonValue(this.component))
+        map.add("redirect", optionToJsonValue(this.redirect))
+        map.add("type", this.typeVal.toJsonValue())
+        map.add("hidden", this.hidden.toJsonValue())
+        map.add("weight", this.weight.toJsonValue())
+        map.add("creator", optionToJsonValue(this.creator))
+        map.add("created_at", this.createdAt.toJsonValue())
+        map.add("updated_at", this.updatedAt.toJsonValue())
+        map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("keepalive", this.keepalive.toJsonValue())
+        map.add("path", optionToJsonValue(this.path))
+        map.add("title", optionToJsonValue(this.title))
+        map.add("parent_id", optionToJsonValue(this.parentId))
+        map.add("meta", optionToJsonValue(this.meta))
+        map.add("method", optionToJsonValue(this.method))
+        map.add("menu_type", optionToJsonValue(this.menuType))
+        map.add("locale", optionToJsonValue(this.locale))
+        return JsonObject(map)
+    }
+
+    /// 辅助方法：将 Option<T> 转换为 JsonValue
+    private static func optionToJsonValue<T>(opt: Option<T>): JsonValue where T <: JsonValueSerializable<T> {
+        if (let Some(v) <- opt) {
+            return v.toJsonValue()
+        } else {
+            return JsonNull()
+        }
+    }
+
+    /// 序列化为 JSON 字符串
     public func toJson(): String {
-        let sb = StringBuilder()
-        sb.append("{")
-                sb.append("\"id\":\"${id}\",")
-        sb.append("\"permission_name\":\"${permissionName}\",")
-        if (let Some(v) <- level) {
-            sb.append("\"level\":\"${v}\",")
-        } else {
-            sb.append("\"level\":\"\",")
-        }
-        if (let Some(v) <- icon) {
-            sb.append("\"icon\":\"${v}\",")
-        } else {
-            sb.append("\"icon\":\"\",")
-        }
-        if (let Some(v) <- module) {
-            sb.append("\"module\":\"${v}\",")
-        } else {
-            sb.append("\"module\":\"\",")
-        }
-        if (let Some(v) <- component) {
-            sb.append("\"component\":\"${v}\",")
-        } else {
-            sb.append("\"component\":\"\",")
-        }
-        if (let Some(v) <- redirect) {
-            sb.append("\"redirect\":\"${v}\",")
-        } else {
-            sb.append("\"redirect\":\"\",")
-        }
-        if (let Some(v) <- permissionType) {
-            sb.append("\"type\":${v},")
-        } else {
-            sb.append("\"type\":null,")
-        }
-        if (let Some(v) <- hidden) {
-            sb.append("\"hidden\":${v},")
-        } else {
-            sb.append("\"hidden\":null,")
-        }
-        if (let Some(v) <- weight) {
-            sb.append("\"weight\":${v},")
-        } else {
-            sb.append("\"weight\":null,")
-        }
-        if (let Some(v) <- creator) {
-            sb.append("\"creator\":\"${v}\",")
-        } else {
-            sb.append("\"creator\":\"\",")
-        }
-        sb.append("\"created_at\":\"${createdAt}\",")
-        if (let Some(v) <- updatedAt) {
-            sb.append("\"updated_at\":\"${v}\",")
-        } else {
-            sb.append("\"updated_at\":\"\",")
-        }
-        if (let Some(v) <- deletedAt) {
-            sb.append("\"deleted_at\":\"${v}\",")
-        } else {
-            sb.append("\"deleted_at\":\"\",")
-        }
-        if (let Some(v) <- keepalive) {
-            sb.append("\"keepalive\":${v},")
-        } else {
-            sb.append("\"keepalive\":null,")
-        }
-        sb.append("\"path\":\"${path}\",")
-        if (let Some(v) <- title) {
-            sb.append("\"title\":\"${v}\",")
-        } else {
-            sb.append("\"title\":\"\",")
-        }
-        if (let Some(v) <- parentId) {
-            sb.append("\"parent_id\":\"${v}\",")
-        } else {
-            sb.append("\"parent_id\":\"\",")
-        }
-        if (let Some(v) <- meta) {
-            sb.append("\"meta\":\"${v}\",")
-        } else {
-            sb.append("\"meta\":\"\",")
-        }
-        if (let Some(v) <- method) {
-            sb.append("\"method\":\"${v}\",")
-        } else {
-            sb.append("\"method\":\"\",")
-        }
-        if (let Some(v) <- menuType) {
-            sb.append("\"menu_type\":\"${v}\",")
-        } else {
-            sb.append("\"menu_type\":\"\",")
-        }
-        if (let Some(v) <- locale) {
-            sb.append("\"locale\":\"${v}\"")
-        } else {
-            sb.append("\"locale\":\"\"")
-        }
-        sb.append("}")
-        return sb.toString()
+        return this.toJsonValue().toString()
     }
+
+//#endregion AutoCreateCode
 }

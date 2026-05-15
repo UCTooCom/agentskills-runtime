@@ -38,16 +38,22 @@ public class CORSMiddleware <: Middleware {
     
     public func handle(req: HttpRequest, res: HttpResponse, next: () -> Unit): Unit {
         // 设置 CORS 头
+        // 注意：当使用 credentials 时，不能使用通配符 *
+        // 需要读取请求的 Origin 头并回显
+        let origin = req.header("Origin")
         let allowOrigin = if (isProduction) {
             frontendUrl
         } else {
-            "*"  // 开发环境允许所有来源
+            origin ?? "*"
         }
         
         res.header("Access-Control-Allow-Origin", allowOrigin)
         res.header("Access-Control-Allow-Credentials", "true")
+        if ((origin ?? "") != "") {
+            res.header("Vary", "Origin")
+        }
         res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-        res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, x-lang")
+        res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, x-lang, mcp-protocol-version")
         res.header("Access-Control-Max-Age", "86400")  // 预检请求缓存 24 小时
         
         // 处理 OPTIONS 预检请求

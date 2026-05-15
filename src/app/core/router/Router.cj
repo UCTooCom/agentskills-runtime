@@ -34,8 +34,17 @@ public class Route {
 public class Router {
     private var routes: ArrayList<Route> = ArrayList<Route>()
     private var middlewareChain: ArrayList<Middleware> = ArrayList<Middleware>()
+    static var globalRouter: ?Router = None<Router>
     
     public init() {}
+    
+    public func registerAsGlobal(): Unit {
+        Router.globalRouter = Some<Router>(this)
+    }
+    
+    public static func getGlobalRouter(): ?Router {
+        Router.globalRouter
+    }
     
     public func use(middleware: Middleware): Router {
         middlewareChain.add(middleware)
@@ -69,6 +78,10 @@ public class Router {
             }
         }
         return None<Route>
+    }
+    
+    public func matchRoute(req: HttpRequest): ?Route {
+        return this.`match`(req)
     }
     
     public func findRoute(method: HttpMethod, path: String): ?Route {

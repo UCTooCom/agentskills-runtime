@@ -5,6 +5,8 @@ package magic.app.dao.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+//#region AutoCreateCode
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -13,7 +15,7 @@ import f_orm.sql.{Pagination, SqlPartial}
 import magic.app.models.uctoo.RoleHasPermissionPO
 import magic.log.LogUtils
 
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+
 
 /**
  * RoleHasPermissionDAO - 角色权限关联数据访问接口
@@ -32,7 +34,7 @@ import magic.log.LogUtils
 public interface RoleHasPermissionDAO <: RootDAO {
     prop executor: SqlExecutor
     
-    //#region AutoCreateCode
+    
     
     // ==================== 插入操作 ====================
     

@@ -3,23 +3,24 @@
  */
 package magic.app.services.uctoo
 
+import magic.app.models.uctoo.DbConnectionPO
+import magic.app.dao.uctoo.DbConnectionDAO
+import f_orm.sql.SqlExecutor
+
 //#region AutoCreateCode
 
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
 import magic.app.models.uctoo.DbInfoPO
-import magic.app.models.uctoo.DbConnectionPO
 import magic.app.dao.uctoo.DbInfoDAO
-import magic.app.dao.uctoo.DbConnectionDAO
-import f_orm.sql.SqlExecutor
 import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
 import magic.log.LogUtils
 
 /**
  * DbInfoService - db_info服务类
- * 
+ *
  * 提供db_info相关的业务逻辑处理，遵循UCTOO V4 ORM规范
  * 使用DAO层进行数据访问
  */
@@ -27,23 +28,27 @@ public class DbInfoService {
     private func getExecutor(): SqlExecutor {
         ORM.executor()
     }
-    
+
     // 查询参数解析服务
     private let requestParser = RequestParserService()
-    
+
     public init() {}
 
     /**
-     * 创建dbInfo
-     * @param entity dbInfo对象
+     * 创建db_info
+     * @param entity DbInfoPO对象
+     * @param creatorId 创建者ID
      * @return 创建结果
      */
-    public func create(entity: DbInfoPO): APIResult<DbInfoPO> {
+    public func create(entity: DbInfoPO, creatorId: String): APIResult<DbInfoPO> {
         try {
             entity.createdAt = DateTime.now()
             entity.updatedAt = DateTime.now()
             
-            // id 由数据库自动生成 UUID
+            if (entity.creator.isNone()) {
+                entity.creator = Some(creatorId)
+            }
+            
             let id = getExecutor().insertDbInfo(entity)
             
             if (!id.isEmpty()) {
@@ -56,11 +61,11 @@ public class DbInfoService {
             return APIResult<DbInfoPO>(false, e.message)
         }
     }
-    
+
     /**
-     * 更新dbInfo
-     * @param entityId dbInfoID
-     * @param entity dbInfo对象（只包含要更新的字段）
+     * 更新db_info
+     * @param entityId ID
+     * @param entity DbInfoPO对象
      * @return 更新结果
      */
     public func update(entityId: String, entity: DbInfoPO): APIResult<DbInfoPO> {
@@ -68,7 +73,7 @@ public class DbInfoService {
             let existing = getExecutor().findDbInfoById(entityId)
             
             if (existing.isNone()) {
-                return APIResult<DbInfoPO>(false, "dbInfo不存在")
+                return APIResult<DbInfoPO>(false, "db_info不存在")
             }
             
             let existingEntity = existing.getOrThrow()
@@ -136,7 +141,10 @@ public class DbInfoService {
             if (entity.migrationId.isSome()) {
                 existingEntity.migrationId = entity.migrationId
             }
-            existingEntity.characterMaximumLength = entity.characterMaximumLength
+            if (entity.characterMaximumLength.isSome()) {
+                existingEntity.characterMaximumLength = entity.characterMaximumLength
+            }
+
             
             // 设置更新时间和ID
             existingEntity.updatedAt = DateTime.now()
@@ -153,25 +161,25 @@ public class DbInfoService {
             return APIResult<DbInfoPO>(false, e.message)
         }
     }
-    
+
     /**
-     * 批量更新dbInfo
-     * @param entities dbInfo列表
+     * 批量更新db_info
+     * @param entities db_info列表
      * @return 更新结果
      */
     public func updateMultiple(entities: ArrayList<DbInfoPO>): APIResult<ArrayList<DbInfoPO>> {
         try {
             let updatedEntities = ArrayList<DbInfoPO>()
-            
+
             for (entity in entities) {
                 entity.updatedAt = DateTime.now()
                 let rows = getExecutor().updateDbInfo(entity)
-                
+
                 if (rows > 0) {
                     updatedEntities.add(entity)
                 }
             }
-            
+
             if (updatedEntities.size > 0) {
                 return APIResult<ArrayList<DbInfoPO>>(updatedEntities)
             } else {
@@ -181,10 +189,10 @@ public class DbInfoService {
             return APIResult<ArrayList<DbInfoPO>>(false, e.message)
         }
     }
-    
+
     /**
-     * 删除dbInfo
-     * @param entityId dbInfoID
+     * 删除db_info
+     * @param entityId ID
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
      */
@@ -193,7 +201,7 @@ public class DbInfoService {
             let existing = getExecutor().findDbInfoById(entityId)
             
             if (existing.isNone()) {
-                return APIResult<Bool>(false, "dbInfo不存在")
+                return APIResult<Bool>(false, "db_info不存在")
             }
             
             let rows: Int64
@@ -212,27 +220,22 @@ public class DbInfoService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
-     * 批量删除dbInfo
-     * @param ids dbInfoID列表
+     * 批量删除db_info
+     * @param ids db_infoID列表
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
      */
     public func deleteMultiple(ids: ArrayList<String>, force: Bool): APIResult<Bool> {
         try {
-            var rows: Int64 = 0
-            for (id in ids) {
-                let existing = getExecutor().findDbInfoById(id)
-                if (existing.isSome()) {
-                    if (force) {
-                        rows = rows + getExecutor().deleteDbInfoById(id)
-                    } else {
-                        rows = rows + getExecutor().softDeleteDbInfoById(id)
-                    }
-                }
+            let rows: Int64
+            if (force) {
+                rows = getExecutor().batchDeleteDbInfo(ids)
+            } else {
+                rows = getExecutor().batchSoftDeleteDbInfo(ids)
             }
-            
+
             if (rows > 0) {
                 return APIResult<Bool>(true)
             } else {
@@ -242,16 +245,16 @@ public class DbInfoService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
-     * 恢复软删除的dbInfo
-     * @param entityId dbInfoID
+     * 恢复软删除的db_info
+     * @param entityId db_infoID
      * @return 恢复结果
      */
     public func restore(entityId: String): APIResult<DbInfoPO> {
         try {
             let rows = getExecutor().restoreDbInfoById(entityId)
-            
+
             if (rows > 0) {
                 let result = getExecutor().findDbInfoById(entityId)
                 if (let Some(entity) <- result) {
@@ -266,10 +269,10 @@ public class DbInfoService {
             return APIResult<DbInfoPO>(false, e.message)
         }
     }
-    
+
     /**
-     * 批量恢复软删除的dbInfo
-     * @param ids dbInfoID列表
+     * 批量恢复软删除的db_info
+     * @param ids db_infoID列表
      * @return 恢复结果
      */
     public func restoreMultiple(ids: ArrayList<String>): APIResult<Bool> {
@@ -278,7 +281,7 @@ public class DbInfoService {
             for (id in ids) {
                 rows = rows + getExecutor().restoreDbInfoById(id)
             }
-            
+
             if (rows > 0) {
                 return APIResult<Bool>(true)
             } else {
@@ -288,69 +291,378 @@ public class DbInfoService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
-     * 根据ID获取dbInfo
-     * 
-     * 设计说明：
-     * - 通过ID获取dbInfo时，返回该ID对应的数据，无论是否被软删除
-     * - 这样API使用方可以实现回收站功能，恢复软删除的数据
-     * - 软删除数据是否显示由API使用方根据业务需求决定
-     * 
-     * @param entityId dbInfoID
-     * @return dbInfo对象
+     * 根据ID获取db_info
+     * @param entityId ID
+     * @return db_info对象
      */
     public func getById(entityId: String): APIResult<DbInfoPO> {
         try {
-            LogUtils.info("DbInfoService", "=== DbInfoService.getById() called with id: ${entityId} ===")
             let result = getExecutor().findDbInfoById(entityId)
-            LogUtils.info("DbInfoService", "=== findDbInfoById result: ${result.isSome()} ===")
             
             if (let Some(entity) <- result) {
-                LogUtils.info("DbInfoService", "=== DbInfo found, id: ${entity.id} ===")
                 return APIResult<DbInfoPO>(entity)
             } else {
-                LogUtils.info("DbInfoService", "=== DbInfo not found for id: ${entityId} ===")
-                return APIResult<DbInfoPO>(false, "未找到该dbInfo")
+                return APIResult<DbInfoPO>(false, "未找到该db_info")
             }
         } catch (e: Exception) {
-            LogUtils.error("DbInfoService", "=== DbInfoService.getById() exception: ${e.message} ===")
             return APIResult<DbInfoPO>(false, e.message)
         }
     }
-    
+
     /**
-     * 获取dbInfo列表（分页）
-     * @param page 页码（从0开始）
+     * 获取db_info列表（分页）
+     * @param page 页码
+     * @param pageSize 每页大小
+     * @return db_info列表和总数
+     */
+    public func getList(page: Int64, pageSize: Int64): (ArrayList<DbInfoPO>, Int64) {
+        try {
+            let pagination = getExecutor().findAllDbInfoPage(page, pageSize)
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            LogUtils.error("DbInfoService", "getList error: ${e.message}")
+            return (ArrayList<DbInfoPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取db_info列表（分页，支持排序和过滤）
+     *
+     * 支持完整的 Prisma 风格查询：
+     * - 排序：sort="-created_at,id"
+     * - 过滤：filter={"name":{"contains":"test"},"status":{"equals":"active"}}
+     * - 条件组合：filter={"AND":[{"name":{"contains":"test"}},{"status":{"equals":"active"}}]}
+     *
+     * @param page 页码（从1开始）
      * @param pageSize 每页大小
      * @param sort 排序参数（如 "-created_at,id"）
      * @param filter 过滤条件（JSON字符串）
-     * @return dbInfo列表和总数
+     * @return db_info列表和总数
      */
-    public func getList(
+    public func getListWithFilter(
         page: Int32,
         pageSize: Int32,
         sort: String,
         filter: String
     ): (ArrayList<DbInfoPO>, Int64) {
-        // TODO: filter参数需要实现JSON解析和动态WHERE条件构建
-        // 当前版本暂不支持filter，只支持基本的分页查询
-        let pagination = getExecutor().findAllDbInfoPage(
-            Int64(page + 1),
-            Int64(pageSize)
-        )
-        
-        return (pagination.list, pagination.rows)
+        try {
+            // 1. 解析查询参数
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            // 2. 构建 WHERE 条件
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            // 3. 构建 ORDER BY 子句
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            // 4. 执行查询
+            let pagination = getExecutor().findDbInfoByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            LogUtils.error("DbInfoService", "Failed to get list: ${e.message}")
+            return (ArrayList<DbInfoPO>(), 0)
+        }
     }
-    
+
     /**
-     * 获取dbInfo列表（带跳过参数）
+     * 构建WHERE子句字符串
+     *
+     * 将组合条件转换为SQL WHERE子句
+     */
+    private func buildWhereClause(composite: CompositeCondition): String {
+        let sb = StringBuilder()
+
+        // 处理字段条件
+        let fieldConditions = composite.fieldConditions
+        for (fieldCondition in fieldConditions) {
+            if (sb.size > 0) {
+                match (composite.logic) {
+                    case LogicOperator.And => sb.append(" AND ")
+                    case LogicOperator.Or => sb.append(" OR ")
+                    case LogicOperator.Not => sb.append(" AND ")
+                }
+            }
+            sb.append(buildFieldClause(fieldCondition))
+        }
+
+        // 处理嵌套组合条件
+        let compositeConditions = composite.compositeConditions
+        for (nestedComposite in compositeConditions) {
+            if (sb.size > 0) {
+                match (composite.logic) {
+                    case LogicOperator.And => sb.append(" AND ")
+                    case LogicOperator.Or => sb.append(" OR ")
+                    case LogicOperator.Not => sb.append(" AND ")
+                }
+            }
+            let nestedClause = buildWhereClause(nestedComposite)
+            if (!nestedClause.isEmpty()) {
+                sb.append("(${nestedClause})")
+            }
+        }
+
+        // 处理 NOT 逻辑操作符
+        match (composite.logic) {
+            case LogicOperator.Not =>
+                if (sb.size > 0) {
+                    return "NOT(${sb.toString()})"
+                } else {
+                    return sb.toString()
+                }
+            case _ =>
+                return sb.toString()
+        }
+    }
+
+    /**
+     * 构建单个字段条件的SQL子句
+     */
+    private func buildFieldClause(fieldCondition: FieldCondition): String {
+        let field = fieldCondition.field
+        let op = fieldCondition.op
+        let value = fieldCondition.value
+
+        match (op) {
+            case QueryOperator.Equals => buildEqualsClause(field, value)
+            case QueryOperator.Not => buildNotClause(field, value)
+            case QueryOperator.Lt => buildLtClause(field, value)
+            case QueryOperator.Lte => buildLteClause(field, value)
+            case QueryOperator.Gt => buildGtClause(field, value)
+            case QueryOperator.Gte => buildGteClause(field, value)
+            case QueryOperator.Contains => buildContainsClause(field, value)
+            case QueryOperator.StartsWith => buildStartsWithClause(field, value)
+            case QueryOperator.EndsWith => buildEndsWithClause(field, value)
+            case QueryOperator.In => buildInClauseWrapper(field, value, true)
+            case QueryOperator.NotIn => buildInClauseWrapper(field, value, false)
+            case QueryOperator.IsSet => buildIsSetClause(field, value)
+            case QueryOperator.Between => buildBetweenClauseWrapper(field, value, true)
+            case QueryOperator.NotBetween => buildBetweenClauseWrapper(field, value, false)
+        }
+    }
+
+    private func buildEqualsClause(field: String, value: QueryValue): String {
+        if (value.isNull()) {
+            return "${field} IS NULL"
+        }
+
+        if (let Some(v) <- value.stringValue) {
+            return "${field} = '${v}'"
+        } else if (let Some(v) <- value.intValue) {
+            return "${field} = ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} = ${v}"
+        } else if (let Some(v) <- value.boolValue) {
+            return "${field} = ${v}"
+        }
+        return ""
+    }
+
+    private func buildNotClause(field: String, value: QueryValue): String {
+        if (value.isNull()) {
+            return "${field} IS NOT NULL"
+        }
+
+        if (let Some(v) <- value.stringValue) {
+            return "${field} != '${v}'"
+        } else if (let Some(v) <- value.intValue) {
+            return "${field} != ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} != ${v}"
+        } else if (let Some(v) <- value.boolValue) {
+            return "${field} != ${v}"
+        }
+        return ""
+    }
+
+    private func buildLtClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} < ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} < ${v}"
+        }
+        return ""
+    }
+
+    private func buildLteClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} <= ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} <= ${v}"
+        }
+        return ""
+    }
+
+    private func buildGtClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} > ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} > ${v}"
+        }
+        return ""
+    }
+
+    private func buildGteClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} >= ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} >= ${v}"
+        }
+        return ""
+    }
+
+    private func buildContainsClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '%${v}%'"
+        }
+        return ""
+    }
+
+    private func buildStartsWithClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '${v}%'"
+        }
+        return ""
+    }
+
+    private func buildEndsWithClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '%${v}'"
+        }
+        return ""
+    }
+
+    private func buildInClauseWrapper(field: String, value: QueryValue, isIn: Bool): String {
+        if (let Some(arr) <- value.arrayValue) {
+            return buildInClause(field, arr, isIn)
+        }
+        return ""
+    }
+
+    private func buildIsSetClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.boolValue) {
+            if (v) {
+                return "${field} IS NOT NULL"
+            } else {
+                return "${field} IS NULL"
+            }
+        }
+        return ""
+    }
+
+    private func buildBetweenClauseWrapper(field: String, value: QueryValue, isBetween: Bool): String {
+        if (let Some(arr) <- value.arrayValue) {
+            if (arr.size >= 2) {
+                return buildBetweenClause(field, arr[0], arr[1], isBetween)
+            }
+        }
+        return ""
+    }
+
+    private func buildInClause(field: String, values: ArrayList<QueryValue>, isIn: Bool): String {
+        let sb = StringBuilder()
+        sb.append("${field} ")
+        if (!isIn) {
+            sb.append("NOT ")
+        }
+        sb.append("IN (")
+
+        let size = values.size
+        for (i in 0..size) {
+            if (i > 0) {
+                sb.append(", ")
+            }
+            let v = values[i]
+            if (let Some(s) <- v.stringValue) {
+                sb.append("'${s}'")
+            } else if (let Some(n) <- v.intValue) {
+                sb.append("${n}")
+            } else if (let Some(f) <- v.floatValue) {
+                sb.append("${f}")
+            }
+        }
+
+        sb.append(")")
+        return sb.toString()
+    }
+
+
+    /**
+     * 构建BETWEEN子句
+     */
+    private func buildBetweenClause(field: String, v1: QueryValue, v2: QueryValue, isBetween: Bool): String {
+        let sb = StringBuilder()
+        sb.append("${field} ")
+
+        if (!isBetween) {
+            sb.append("NOT ")
+        }
+        sb.append("BETWEEN ")
+
+        if (let Some(s) <- v1.stringValue) {
+            sb.append("'${s}'")
+        } else if (let Some(n) <- v1.intValue) {
+            sb.append("${n}")
+        } else if (let Some(f) <- v1.floatValue) {
+            sb.append("${f}")
+        }
+
+        sb.append(" AND ")
+
+        if (let Some(s) <- v2.stringValue) {
+            sb.append("'${s}'")
+        } else if (let Some(n) <- v2.intValue) {
+            sb.append("${n}")
+        } else if (let Some(f) <- v2.floatValue) {
+            sb.append("${f}")
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 构建ORDER BY子句
+     */
+    private func buildOrderByClause(sort: ArrayList<SortCondition>): String {
+        if (sort.isEmpty()) {
+            return "created_at DESC"
+        }
+
+        let sb = StringBuilder()
+        let size = sort.size
+
+        for (i in 0..size) {
+            let condition = sort[i]
+            if (sb.size > 0) {
+                sb.append(", ")
+            }
+            sb.append("${condition.field} ${if (condition.ascending) { "ASC" } else { "DESC" }}")
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 获取db_info列表（带跳过参数）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
      * @param page 页码（从0开始）
      * @param pageSize 每页大小
      * @param skip 跳过条数
      * @param sort 排序参数
      * @param filter 过滤条件
-     * @return dbInfo列表和总数
+     * @return db_info列表和总数
      */
     public func getListWithSkip(
         page: Int32,
@@ -359,21 +671,38 @@ public class DbInfoService {
         sort: String,
         filter: String
     ): (ArrayList<DbInfoPO>, Int64) {
-        // TODO: filter参数需要实现JSON解析和动态WHERE条件构建
-        // 当前版本暂不支持filter，只支持基本的分页查询
-        let pagination = getExecutor().findAllDbInfoPage(
-            Int64(page + 1),
-            Int64(pageSize)
-        )
-        
-        return (pagination.list, pagination.rows)
+        try {
+            // 1. 解析查询参数
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page + 1), Int64(pageSize))
+
+            // 2. 构建 WHERE 条件
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            // 3. 构建 ORDER BY 子句
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            // 4. 执行查询（带跳过参数）
+            let pagination = getExecutor().findDbInfoByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<DbInfoPO>(), 0)
+        }
     }
-    
+
     /**
-     * 获取所有dbInfo列表（分页）
+     * 获取所有db_info列表（分页）
      * @param page 页码
      * @param pageSize 每页大小
-     * @return dbInfo列表和总数
+     * @return db_info列表和总数
      */
     public func getAllList(
         page: Int32,
@@ -383,37 +712,82 @@ public class DbInfoService {
             Int64(page + 1),
             Int64(pageSize)
         )
-        
+
         return (pagination.list, pagination.rows)
     }
-    
+
     /**
-     * 批量获取dbInfo
+     * 批量获取db_info
      * @param ids ID列表
-     * @return dbInfo列表
+     * @return db_info列表
      */
     public func getByIds(ids: ArrayList<String>): ArrayList<DbInfoPO> {
         getExecutor().findDbInfoByIds(ids)
     }
-    
+
     /**
-     * 统计用户的dbInfo数量
+     * 统计用户的db_info数量
      * @param userId 用户ID
-     * @return dbInfo数量
+     * @return db_info数量
      */
     public func countByUser(userId: String): Int64 {
         getExecutor().countDbInfoByCreator(userId)
     }
-    
+
     /**
-     * 统计所有dbInfo数量
-     * @return dbInfo数量
+     * 统计所有db_info数量
+     * @return db_info数量
      */
     public func countAll(): Int64 {
         getExecutor().countAllDbInfo()
     }
-    
-    //#endregion AutoCreateCode
+
+    /**
+     * 获取db_info列表（带过滤条件）
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
+     * @return db_info列表和总数
+     */
+    public func getFilteredList(
+        page: Int64,
+        pageSize: Int64,
+        link: ?String,
+        description: ?String,
+        deletedAt: ?String
+    ): (ArrayList<DbInfoPO>, Int64) {
+        let pagination = getExecutor().findDbInfoByFilterPage(
+            link,
+            description,
+            deletedAt,
+            page,
+            pageSize
+        )
+
+        return (pagination.list, pagination.rows)
+    }
+
+    /**
+     * 清空回收站（硬删除所有已软删除的db_info）
+     * @return 删除结果
+     */
+    public func emptyRecycleBinDbInfo(): APIResult<Bool> {
+        try {
+            let rows = getExecutor().emptyRecycleBinDbInfo()
+
+            if (rows > 0) {
+                return APIResult<Bool>(true)
+            } else {
+                return APIResult<Bool>(false, "回收站为空")
+            }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+//#endregion AutoCreateCode
 
     /**
      * 从数据库结构获取数据库信息并添加到db_info表
@@ -453,11 +827,27 @@ public class DbInfoService {
                     return APIResult<Int32>(false, "数据库 ${dbName} 不存在")
                 }
 
-                // 先清空db_info表
                 executor.deleteDbInfoByTableCatalog(dbName)
                 LogUtils.info("DbInfoService", "=== Deleted existing db_info records for ${dbName} ===")
 
-                let columnInfoSql = """
+                let insertSql = """
+                    INSERT INTO db_info (
+                        table_catalog,
+                        table_schema,
+                        table_name,
+                        column_name,
+                        ordinal_position,
+                        column_default,
+                        is_nullable,
+                        data_type,
+                        character_maximum_length,
+                        column_comment,
+                        is_column_hidden,
+                        is_table_hidden,
+                        migration_id,
+                        created_at,
+                        updated_at
+                    )
                     SELECT
                         c.table_catalog,
                         c.table_schema,
@@ -468,7 +858,12 @@ public class DbInfoService {
                         c.is_nullable,
                         c.data_type,
                         c.character_maximum_length,
-                        pgd.description AS column_comment
+                        pgd.description,
+                        'NO',
+                        'NO',
+                        'loadDbInfo',
+                        CURRENT_TIMESTAMP,
+                        CURRENT_TIMESTAMP
                     FROM
                         information_schema.columns c
                     LEFT JOIN
@@ -498,45 +893,10 @@ public class DbInfoService {
                         c.ordinal_position
                 """
 
-                let dbInfoList = executor.setSql(columnInfoSql).list<DbInfoPO>()
-                LogUtils.info("DbInfoService", "=== Retrieved ${dbInfoList.size} columns from information_schema ===")
-
-                var insertedCount: Int64 = 0
-                for (dbInfo in dbInfoList) {
-                    // 打印查询结果中的id值
-                    LogUtils.info("DbInfoService", "=== Query result - table: ${dbInfo.dbTableName}, column: ${dbInfo.columnName}, id from query: ${dbInfo.id} ===")
-                    
-                    // 为每条记录生成UUID作为id，确保插入时id字段有值
-                    let uuid = generateUUID()
-                    LogUtils.info("DbInfoService", "=== Processing column: ${dbInfo.dbTableName}.${dbInfo.columnName}, generated UUID: ${uuid} ===")
-                    
-                    dbInfo.id = Some<String>(uuid)
-                    dbInfo.tableCatalog = dbName
-                    dbInfo.createdAt = DateTime.now()
-                    dbInfo.updatedAt = DateTime.now()
-                    dbInfo.deletedAt = None<DateTime>
-                    dbInfo.migrationId = Some<String>("loadDbInfo")
-                    dbInfo.isColumnHidden = ""
-                    dbInfo.isTableHidden = ""
-                    
-                    LogUtils.info("DbInfoService", "=== Before insert - id: ${dbInfo.id}, tableCatalog: ${dbInfo.tableCatalog}, tableName: ${dbInfo.dbTableName}, columnName: ${dbInfo.columnName} ===")
-                    
-                    try {
-                        let id = executor.insertDbInfo(dbInfo)
-                        LogUtils.info("DbInfoService", "=== Insert result: ${id} ===")
-                        if (id != "") {
-                            insertedCount = insertedCount + 1
-                        }
-                    } catch (e: Exception) {
-                        LogUtils.error("DbInfoService", "=== Insert failed for ${dbInfo.dbTableName}.${dbInfo.columnName}: ${e.message} ===")
-                        LogUtils.error("DbInfoService", "=== Exception stack trace: ${e} ===")
-                    }
-                }
-
-                LogUtils.info("DbInfoService", "=== Inserted ${insertedCount} records into db_info ===")
-                return APIResult<Int32>(Int32(insertedCount))
+                let rows = executor.setSql(insertSql).update
+                LogUtils.info("DbInfoService", "=== Inserted ${rows} records into db_info ===")
+                return APIResult<Int32>(Int32(rows))
             }
-            // 连接MySQL数据库读取数据库信息
             else if (provider == "mysql") {
                 LogUtils.info("DbInfoService", "=== Connecting to MySQL database: ${dbName} ===")
 
@@ -550,23 +910,43 @@ public class DbInfoService {
                     return APIResult<Int32>(false, "数据库 ${dbName} 不存在")
                 }
 
-                // 先清空db_info表
                 executor.deleteDbInfoByTableCatalog(dbName)
                 LogUtils.info("DbInfoService", "=== Deleted existing db_info records for ${dbName} ===")
 
-                // MySQL查询表结构信息，mysql中的table_schema和table_catalog与对应postgresql中的对换了
-                let columnInfoSql = """
+                let insertSql = """
+                    INSERT INTO db_info (
+                        table_catalog,
+                        table_schema,
+                        table_name,
+                        column_name,
+                        ordinal_position,
+                        column_default,
+                        is_nullable,
+                        data_type,
+                        character_maximum_length,
+                        column_comment,
+                        is_column_hidden,
+                        is_table_hidden,
+                        migration_id,
+                        created_at,
+                        updated_at
+                    )
                     SELECT
-                        TABLE_CATALOG AS table_schema,
-                        TABLE_SCHEMA AS table_catalog,
-                        TABLE_NAME AS table_name,
-                        COLUMN_NAME AS column_name,
-                        ORDINAL_POSITION AS ordinal_position,
-                        COLUMN_DEFAULT AS column_default,
-                        IS_NULLABLE AS is_nullable,
-                        DATA_TYPE AS data_type,
-                        CHARACTER_MAXIMUM_LENGTH AS character_maximum_length,
-                        COLUMN_COMMENT AS column_comment
+                        TABLE_SCHEMA,
+                        TABLE_CATALOG,
+                        TABLE_NAME,
+                        COLUMN_NAME,
+                        ORDINAL_POSITION,
+                        COLUMN_DEFAULT,
+                        IS_NULLABLE,
+                        DATA_TYPE,
+                        CHARACTER_MAXIMUM_LENGTH,
+                        COLUMN_COMMENT,
+                        'NO',
+                        'NO',
+                        'loadDbInfo',
+                        NOW(),
+                        NOW()
                     FROM
                         INFORMATION_SCHEMA.COLUMNS
                     WHERE
@@ -575,39 +955,9 @@ public class DbInfoService {
                         TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
                 """
 
-                let dbInfoList = executor.setSql(columnInfoSql).list<DbInfoPO>()
-                LogUtils.info("DbInfoService", "=== Retrieved ${dbInfoList.size} columns from information_schema ===")
-
-                var insertedCount: Int64 = 0
-                for (dbInfo in dbInfoList) {
-                    // 为每条记录生成UUID作为id，确保插入时id字段有值
-                    let uuid = generateUUID()
-                    LogUtils.info("DbInfoService", "=== Processing column: ${dbInfo.dbTableName}.${dbInfo.columnName}, generated UUID: ${uuid} ===")
-                    
-                    dbInfo.id = Some<String>(uuid)
-                    dbInfo.tableCatalog = dbName
-                    dbInfo.createdAt = DateTime.now()
-                    dbInfo.updatedAt = DateTime.now()
-                    dbInfo.deletedAt = None<DateTime>
-                    dbInfo.migrationId = Some<String>("loadDbInfo")
-                    dbInfo.isColumnHidden = ""
-                    dbInfo.isTableHidden = ""
-                    
-                    LogUtils.info("DbInfoService", "=== Before insert - id: ${dbInfo.id}, tableCatalog: ${dbInfo.tableCatalog}, tableName: ${dbInfo.dbTableName}, columnName: ${dbInfo.columnName} ===")
-                    
-                    try {
-                        let id = executor.insertDbInfo(dbInfo)
-                        LogUtils.info("DbInfoService", "=== Insert result: ${id} ===")
-                        if (id != "") {
-                            insertedCount = insertedCount + 1
-                        }
-                    } catch (e: Exception) {
-                        LogUtils.error("DbInfoService", "=== Insert failed for ${dbInfo.dbTableName}.${dbInfo.columnName}: ${e.message} ===")
-                    }
-                }
-
-                LogUtils.info("DbInfoService", "=== Inserted ${insertedCount} records into db_info ===")
-                return APIResult<Int32>(Int32(insertedCount))
+                let rows = executor.setSql(insertSql).update
+                LogUtils.info("DbInfoService", "=== Inserted ${rows} records into db_info ===")
+                return APIResult<Int32>(Int32(rows))
             }
             else {
                 return APIResult<Int32>(false, "不支持的数据库类型: ${provider}")
@@ -701,8 +1051,8 @@ public class DbInfoService {
                 colInfo.dataType = col.dataType ?? ""
                 colInfo.isNullable = col.isNullable
                 colInfo.columnDefault = col.columnDefault ?? ""
-                colInfo.ordinalPosition = col.ordinalPosition ?? 0
-                colInfo.characterMaximumLength = col.characterMaximumLength ?? 0
+                colInfo.ordinalPosition = col.ordinalPosition
+                colInfo.characterMaximumLength = match (col.characterMaximumLength) { case Some(v) => Int32(v) case _ => 0 }
                 colInfo.columnComment = col.columnComment ?? ""
                 columnMap.get(key).getOrThrow().add(colInfo)
             }

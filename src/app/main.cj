@@ -8,12 +8,15 @@ import magic.app.core.log.{LoggerFactory, Logger}
 import magic.app.core.cache.{CacheManager, CacheConfig}
 import magic.app.core.database.{DatabaseConnection, DatabaseConfig, DatabaseConnectionPool}
 import magic.app.middlewares.auth.{DeserializeUserMiddleware, RequirePermissionMiddleware}
+import magic.app.middlewares.permission.RowLevelPermissionMiddleware
 import magic.app.middlewares.CORSMiddleware
 import magic.app.services.uctoo.{PermissionsService, UserHasRolesService, RoleHasPermissionService, UctooSessionService}
 import magic.app.utils.auth.{JWTUtil, CookieUtil}
 import magic.app.controllers.uctoo.ws.WsChatController
 import magic.app.routes.skill.SkillRoutes
 import magic.app.routes.tool.ToolRoutes
+import magic.app.routes.webmcp.WebMCPRoutes
+import magic.app.routes.uctoo.ai.AIRoutes
 import magic.tool.{ToolDispatcher, BuiltinToolsRegistry, SimpleToolManager}
 import magic.app.services.tool.ToolAuditService
 import magic.app.services.uctoo.OperateLogService
@@ -339,10 +342,17 @@ public class Application {
         )
         server.use(requirePermissionMiddleware)
 
-        logger.info("Middlewares configured: CORS -> DeserializeUser -> RequirePermission (V4 RBAC)")
+        // 3. 行级数据权限中间件 - 检查数据行级别的访问控制
+        let rowLevelPermissionMiddleware = RowLevelPermissionMiddleware("entity")
+        server.use(rowLevelPermissionMiddleware)
+
+        logger.info("Middlewares configured: CORS -> DeserializeUser -> RequirePermission (V4 RBAC) -> RowLevelPermission")
     }
 
     private func setupRoutes(): Unit {
+        // 注册全局Router引用（供loadRouteFromApp等接口在运行时获取所有路由）
+        router.registerAsGlobal()
+        
         // 使用自动路由注册器注册所有路由
         let routeRegistry = AutoRouteRegistry(router)
         routeRegistry.registerAllRoutes()
@@ -377,13 +387,23 @@ public class Application {
         let wsChatController = WsChatController(_skillManager, _chatModel)
         server.registerWebSocketRoute("/api/v1/uctoo/ws/chat", wsChatController.handleChat)
         
-        // 注册健康检查和应用信息接口
-        router.get("/api/v1/health", { req, res =>
-            res.status(200).json("{\"status\":\"ok\",\"version\":\"0.0.19\"}")
-        })
+        // 注册 WebMCP 路由（支持前端 webmcp-sdk 通信）
+        let webmcpRoutes = WebMCPRoutes(router, _skillManager, _chatModel)
+        webmcpRoutes.register()
+        LogUtils.info("WebMCP routes registered successfully")
         
+        // 注册 AI 聊天路由（OpenAI 兼容 API）
+        let aiRoutes = AIRoutes(router, _skillManager, _chatModel)
+        aiRoutes.register()
+        LogUtils.info("AI routes registered successfully")
+        
+        // 注册健康检查和应用信息接口,todo:从cjpm.toml配置文件读取version版本号
+        router.get("/api/v1/health", { req, res =>
+            res.status(200).json("{\"status\":\"ok\",\"version\":\"0.0.20\"}")
+        })
+        // todo:从cjpm.toml配置文件读取系统信息
         router.get("/api/v1/info", { req, res =>
-            res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"0.0.19\",\"language\":\"cangjie\"}")
+            res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"0.0.20\",\"language\":\"cangjie\"}")
         })
         
         server.setRouter(router)

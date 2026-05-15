@@ -3,16 +3,15 @@
  */
 package magic.app.models.uctoo
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+//#region AutoCreateCode
 
 import std.time.DateTime
 import f_orm.macros.{QueryMappersGenerator, ORMField}
 import f_data.macros.DataAssist
 import f_data.{ObjectData, Data, DataConversionFlag, ObjectFields, MutableField, DataObject, f_data_tryFromData}
 import f_orm.*
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
-
+import json4cj.JsonValueSerializable
+import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 
 /**
  * I18PO - i18表持久化对象
@@ -23,7 +22,7 @@ import f_orm.*
 @DataAssist[fields]
 @QueryMappersGenerator["i18"]
 public class I18PO {
-        @ORMField[true 'id']
+        @ORMField['id']
     public var id: String = ""
 
         @ORMField['key']
@@ -33,102 +32,69 @@ public class I18PO {
     public var content: String = ""
 
         @ORMField['lang_id']
-    public var langId: ?String = None<String>
+    public var langId: Option<String> = None<String>
 
         @ORMField['creator']
-    public var creator: ?String = None<String>
+    public var creator: Option<String> = None<String>
 
         @ORMField['created_at']
-    public var createdAt: DateTime = DateTime.now()
+    public var createdAt: Option<DateTime> = None<DateTime>
 
         @ORMField['updated_at']
-    public var updatedAt: DateTime = DateTime.now()
+    public var updatedAt: Option<DateTime> = None<DateTime>
 
         @ORMField['deleted_at']
-    public var deletedAt: ?DateTime = None<DateTime>
-    
+    public var deletedAt: Option<DateTime> = None<DateTime>
+
     public init() {}
-    
+
     public init(
                 id: String,
-        key: String,
-        content: String,
-        langId: ?String,
-        creator: ?String,
-        createdAt: DateTime,
-        updatedAt: DateTime,
-        deletedAt: ?DateTime
+                key: String,
+                content: String,
+                langId: Option<String>,
+                creator: Option<String>,
+                createdAt: Option<DateTime>,
+                updatedAt: Option<DateTime>,
+                deletedAt: Option<DateTime>
     ) {
                 this.id = id
-        this.key = key
-        this.content = content
-        this.langId = langId
-        this.creator = creator
-        this.createdAt = createdAt
-        this.updatedAt = updatedAt
-        this.deletedAt = deletedAt
+                this.key = key
+                this.content = content
+                this.langId = langId
+                this.creator = creator
+                this.createdAt = createdAt
+                this.updatedAt = updatedAt
+                this.deletedAt = deletedAt
     }
-    
-    private func escapeJsonString(s: String): String {
-        let sb = StringBuilder()
-        for (char in s.runes()) {
-            if (char == r'"') {
-                sb.append("\\\"")
-            } else if (char == r'\\') {
-                sb.append("\\\\")
-            } else if (char == r'\n') {
-                sb.append("\\n")
-            } else if (char == r'\r') {
-                sb.append("\\r")
-            } else if (char == r'\t') {
-                sb.append("\\t")
-            } else {
-                sb.append(char)
-            }
+
+    /// 序列化为 JsonValue
+    public func toJsonValue(): JsonValue {
+        var map = HashMap<String, JsonValue>()
+        map.add("id", this.id.toJsonValue())
+        map.add("key", this.key.toJsonValue())
+        map.add("content", this.content.toJsonValue())
+        map.add("lang_id", optionToJsonValue(this.langId))
+        map.add("creator", optionToJsonValue(this.creator))
+        map.add("created_at", optionToJsonValue(this.createdAt))
+        map.add("updated_at", optionToJsonValue(this.updatedAt))
+        map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        return JsonObject(map)
+    }
+
+    /// 辅助方法：将 Option<T> 转换为 JsonValue
+    private static func optionToJsonValue<T>(opt: Option<T>): JsonValue where T <: JsonValueSerializable<T> {
+        if (let Some(v) <- opt) {
+            return v.toJsonValue()
+        } else {
+            return JsonNull()
         }
-        return sb.toString()
     }
-    
+
+    /// 序列化为 JSON 字符串
     public func toJson(): String {
-        let sb = StringBuilder()
-        sb.append("{")
-                sb.append("\"id\":\"")
-        sb.append(escapeJsonString(id))
-        sb.append("\",")
-        sb.append("\"key\":\"")
-        sb.append(escapeJsonString(key))
-        sb.append("\",")
-        sb.append("\"content\":\"")
-        sb.append(escapeJsonString(content))
-        sb.append("\",")
-        if (let Some(v) <- langId) {
-            sb.append("\"lang_id\":\"")
-            sb.append(escapeJsonString(v))
-            sb.append("\",")
-        } else {
-            sb.append("\"lang_id\":\"\",")
-        }
-        if (let Some(v) <- creator) {
-            sb.append("\"creator\":\"")
-            sb.append(escapeJsonString(v))
-            sb.append("\",")
-        } else {
-            sb.append("\"creator\":\"\",")
-        }
-        sb.append("\"created_at\":\"")
-        sb.append(escapeJsonString(createdAt.toString()))
-        sb.append("\",")
-        sb.append("\"updated_at\":\"")
-        sb.append(escapeJsonString(updatedAt.toString()))
-        sb.append("\",")
-        if (let Some(v) <- deletedAt) {
-            sb.append("\"deleted_at\":\"")
-            sb.append(escapeJsonString(v.toString()))
-            sb.append("\"")
-        } else {
-            sb.append("\"deleted_at\":\"\"")
-        }
-        sb.append("}")
-        return sb.toString()
+        return this.toJsonValue().toString()
     }
+
+//#endregion AutoCreateCode
 }

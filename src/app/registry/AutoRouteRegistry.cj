@@ -13,6 +13,8 @@ import magic.app.middlewares.auth.{DeserializeUserMiddleware, RequireUserMiddlew
 import magic.app.utils.auth.{JWTUtil, BcryptUtil, CookieUtil, AuthorizeUtil}
 import magic.app.routes.uctoo.mcp.McpRoute
 import magic.app.controllers.uctoo.mcp.McpController
+import magic.core.skill.SkillManager
+import magic.core.model.ChatModel
 
 /**
  * AutoRouteRegistry - 自动路由注册器
@@ -22,7 +24,7 @@ import magic.app.controllers.uctoo.mcp.McpController
  * 
  * 使用方法：
  * ```cangjie
- * let registry = AutoRouteRegistry(router)
+ * let registry = AutoRouteRegistry(router, skillManager, chatModel)
  * registry.registerAllRoutes()
  * ```
  * 
@@ -35,11 +37,26 @@ public class AutoRouteRegistry {
     private let router: Router
     private let logger: Logger
     private let registry: RouteRegistry
+    private var skillManager: ?SkillManager
+    private var chatModel: ?ChatModel
     
     public init(router: Router) {
         this.router = router
         this.logger = LoggerFactory.getInstance().getLogger("AutoRouteRegistry")
         this.registry = RouteRegistry()
+        this.skillManager = None
+        this.chatModel = None
+        
+        // 初始化路由配置
+        AutoRouteConfig.initRegistry(registry)
+    }
+    
+    public init(router: Router, skillManager: SkillManager, chatModel: ChatModel) {
+        this.router = router
+        this.logger = LoggerFactory.getInstance().getLogger("AutoRouteRegistry")
+        this.registry = RouteRegistry()
+        this.skillManager = Some(skillManager)
+        this.chatModel = Some(chatModel)
         
         // 初始化路由配置
         AutoRouteConfig.initRegistry(registry)
@@ -129,7 +146,12 @@ public class AutoRouteRegistry {
     public func registerMcpRoutes(): Unit {
         logger.info("Registering MCP routes...")
         
-        let mcpController = McpController()
+        // 根据是否有 skillManager 和 chatModel 创建 McpController
+        var mcpController = McpController()
+        if (skillManager.isSome() && chatModel.isSome()) {
+            mcpController = McpController(skillManager.getOrThrow(), chatModel.getOrThrow())
+        }
+        
         let mcpRoute = McpRoute(router, mcpController)
         mcpRoute.register()
         logger.info("✓ McpRoute registered")

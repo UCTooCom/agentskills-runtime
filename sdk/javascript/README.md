@@ -32,7 +32,7 @@ npx @opencangjie/skills add ./my-skill
 npx skills install-runtime
 
 # Or specify a version
-npx skills install-runtime --runtime-version 0.0.19
+npx skills install-runtime --runtime-version 0.0.20
 ```
 
 ### 2. Configure the Runtime

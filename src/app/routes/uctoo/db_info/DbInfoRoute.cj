@@ -20,7 +20,7 @@ public class DbInfoRoute {
     public func register(): Router {
         // 先注册自定义路由，避免被动态路由 :id 匹配
         registerCustomRoutes()
-  
+
         // 按照 uctoo v4 规范，路由路径带 /v1 前缀
         router.post("/api/v1/uctoo/db_info/add", controller.add)
         router.post("/api/v1/uctoo/db_info/edit", controller.edit)
@@ -32,6 +32,11 @@ public class DbInfoRoute {
         // 列表查询：支持 :limit/:page 和 :limit/:page/:skip 两种格式
         router.get("/api/v1/uctoo/db_info/:limit/:page/:skip", controller.getManyWithSkip)
         router.get("/api/v1/uctoo/db_info/:limit/:page", controller.getManyWithPathParams)
+
+        // 导出功能
+        router.get("/api/v1/uctoo/db_info/export", controller.export)
+        // 清空回收站
+        router.post("/api/v1/uctoo/db_info/empty-recycle-bin", controller.emptyRecycleBinDbInfo)
 
         return router
     }
@@ -46,6 +51,10 @@ public class DbInfoRoute {
         router.post("/api/v1/uctoo/db_info/load-db-info", controller.loadDbInfo)
 
         router.get("/api/v1/uctoo/db_info/get-db-table-list", controller.getDbTableList)
+
+        router.post("/api/v1/uctoo/db_info/generateCrud", controller.generateCrud)
+        
+        router.post("/api/v1/uctoo/db_info/generate-all-crud", controller.generateAllCrud)
 
         return router
     }

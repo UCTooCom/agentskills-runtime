@@ -369,4 +369,7 @@ ${arg(entity.link)},
     }
 
 //#endregion AutoCreateCode
+    
+    // ========== 定制开发方法（在此区域添加自定义方法）==========
+
 }

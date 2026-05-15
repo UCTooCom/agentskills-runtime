@@ -3,7 +3,7 @@
  */
 package magic.app.dao.uctoo
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+//#region AutoCreateCode
 
 import std.collection.*
 import std.time.DateTime
@@ -13,13 +13,11 @@ import f_orm.sql.{Pagination, SqlPartial}
 import magic.app.models.uctoo.AgentSkillsPO
 import magic.log.LogUtils
 
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
-
 /**
  * AgentSkillsDAO - agent_skills数据访问接口
- * 
- * 提供标准CRUD操作，遵循UCTOO V4 ORM规范
- * 
+ *
+ * 提供agent_skills表的标准CRUD操作，遵循UCTOO V4 ORM规范
+ *
  * 设计原则：
  * 1. DAO层只负责数据访问，不包含业务逻辑
  * 2. 所有查询方法不过滤软删除数据，返回完整数据集
@@ -29,14 +27,12 @@ import magic.log.LogUtils
 @DAO
 public interface AgentSkillsDAO <: RootDAO {
     prop executor: SqlExecutor
-    
-    //#region AutoCreateCode
-    
+
     // ==================== 插入操作 ====================
-    
+
     /**
-     * 插入agentSkills（id由数据库自动生成UUID）
-     * @param entity agentSkills对象
+     * 插入agent_skills（id由数据库自动生成UUID）
+     * @param entity AgentSkillsPO对象
      * @return 插入成功返回生成的ID，失败返回空字符串
      */
     func insertAgentSkills(entity: AgentSkillsPO): String {
@@ -55,44 +51,44 @@ public interface AgentSkillsDAO <: RootDAO {
                 homepage,
                 license,
                 keywords,
-                tags,
-                categories,
                 install_path,
-                compatibility,
-                allowed_tools,
-                dependencies,
-                permissions,
-                parameters,
-                instructions,
-                scripts_dir_exists,
-                references_dir_exists,
-                assets_dir_exists,
                 status,
                 runtime_status,
-                validation_status,
-                validation_errors,
-                last_validated_at,
-                config,
-                env_vars,
-                timeout,
-                retry_count,
-                run_count,
-                success_count,
-                error_count,
                 last_run_at,
-                last_error,
-                avg_execution_time,
-                generation_prompt,
-                generation_model,
-                generation_status,
-                parent_skill_id,
-                extra_metadata,
+                run_count,
+                config,
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                allowed_tools,
+                assets_dir_exists,
+                avg_execution_time,
+                categories,
+                compatibility,
+                dependencies,
+                env_vars,
+                error_count,
+                extra_metadata,
+                generation_model,
+                generation_prompt,
+                generation_status,
+                instructions,
+                last_error,
+                last_validated_at,
+                parameters,
+                parent_skill_id,
+                permissions,
+                references_dir_exists,
+                retry_count,
+                scripts_dir_exists,
+                success_count,
+                tags,
+                timeout,
+                validation_errors,
+                validation_status
             ) values(
-                ${arg(entity.name)},
+${arg(entity.name)},
                 ${arg(entity.description)},
                 ${arg(entity.source)},
                 ${arg(entity.sourceUrl)},
@@ -105,65 +101,65 @@ public interface AgentSkillsDAO <: RootDAO {
                 ${arg(entity.homepage)},
                 ${arg(entity.license)},
                 ${arg(entity.keywords)},
-                ${arg(entity.tags)},
-                ${arg(entity.categories)},
                 ${arg(entity.installPath)},
-                ${arg(entity.compatibility)},
-                ${arg(entity.allowedTools)},
-                ${arg(entity.dependencies)},
-                ${arg(entity.permissions)},
-                ${arg(entity.parameters)},
-                ${arg(entity.instructions)},
-                ${arg(entity.scriptsDirExists)},
-                ${arg(entity.referencesDirExists)},
-                ${arg(entity.assetsDirExists)},
                 ${arg(entity.status)},
                 ${arg(entity.runtimeStatus)},
-                ${arg(entity.validationStatus)},
-                ${arg(entity.validationErrors)},
-                ${arg(entity.lastValidatedAt)},
-                ${arg(entity.config)},
-                ${arg(entity.envVars)},
-                ${arg(entity.timeout)},
-                ${arg(entity.retryCount)},
-                ${arg(entity.runCount)},
-                ${arg(entity.successCount)},
-                ${arg(entity.errorCount)},
                 ${arg(entity.lastRunAt)},
-                ${arg(entity.lastError)},
-                ${arg(entity.avgExecutionTime)},
-                ${arg(entity.generationPrompt)},
-                ${arg(entity.generationModel)},
-                ${arg(entity.generationStatus)},
-                ${arg(entity.parentSkillId)},
-                ${arg(entity.extraMetadata)},
+                ${arg(entity.runCount)},
+                ${arg(entity.config)},
                 ${arg(entity.creator)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.allowedTools)},
+                ${arg(entity.assetsDirExists)},
+                ${arg(entity.avgExecutionTime)},
+                ${arg(entity.categories)},
+                ${arg(entity.compatibility)},
+                ${arg(entity.dependencies)},
+                ${arg(entity.envVars)},
+                ${arg(entity.errorCount)},
+                ${arg(entity.extraMetadata)},
+                ${arg(entity.generationModel)},
+                ${arg(entity.generationPrompt)},
+                ${arg(entity.generationStatus)},
+                ${arg(entity.instructions)},
+                ${arg(entity.lastError)},
+                ${arg(entity.lastValidatedAt)},
+                ${arg(entity.parameters)},
+                ${arg(entity.parentSkillId)},
+                ${arg(entity.permissions)},
+                ${arg(entity.referencesDirExists)},
+                ${arg(entity.retryCount)},
+                ${arg(entity.scriptsDirExists)},
+                ${arg(entity.successCount)},
+                ${arg(entity.tags)},
+                ${arg(entity.timeout)},
+                ${arg(entity.validationErrors)},
+                ${arg(entity.validationStatus)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
     }
-    
+
     // ==================== 单条查询 ====================
-    
+
     /**
-     * 根据ID查询agentSkills
-     * @param id agentSkillsID
-     * @return agentSkills对象（Option类型）
+     * 根据ID查询agent_skills
+     * @param id agent_skillsID
+     * @return agent_skills对象（Option类型）
      */
     func findAgentSkillsById(id: String): Option<AgentSkillsPO> {
         executor.setSql('''
             select * from agent_skills where id = ${arg(id)}
         ''').first<AgentSkillsPO>()
     }
-    
+
     // ==================== 更新操作 ====================
-    
+
     /**
-     * 更新agentSkills
-     * @param entity agentSkills对象
+     * 更新agent_skills
+     * @param entity agent_skills对象
      * @return 影响行数
      */
     func updateAgentSkills(entity: AgentSkillsPO): Int64 {
@@ -182,49 +178,50 @@ public interface AgentSkillsDAO <: RootDAO {
                 homepage = ${arg(entity.homepage)},
                 license = ${arg(entity.license)},
                 keywords = ${arg(entity.keywords)},
-                tags = ${arg(entity.tags)},
-                categories = ${arg(entity.categories)},
                 install_path = ${arg(entity.installPath)},
-                compatibility = ${arg(entity.compatibility)},
-                allowed_tools = ${arg(entity.allowedTools)},
-                dependencies = ${arg(entity.dependencies)},
-                permissions = ${arg(entity.permissions)},
-                parameters = ${arg(entity.parameters)},
-                instructions = ${arg(entity.instructions)},
-                scripts_dir_exists = ${arg(entity.scriptsDirExists)},
-                references_dir_exists = ${arg(entity.referencesDirExists)},
-                assets_dir_exists = ${arg(entity.assetsDirExists)},
                 status = ${arg(entity.status)},
                 runtime_status = ${arg(entity.runtimeStatus)},
-                validation_status = ${arg(entity.validationStatus)},
-                validation_errors = ${arg(entity.validationErrors)},
-                last_validated_at = ${arg(entity.lastValidatedAt)},
-                config = ${arg(entity.config)},
-                env_vars = ${arg(entity.envVars)},
-                timeout = ${arg(entity.timeout)},
-                retry_count = ${arg(entity.retryCount)},
-                run_count = ${arg(entity.runCount)},
-                success_count = ${arg(entity.successCount)},
-                error_count = ${arg(entity.errorCount)},
                 last_run_at = ${arg(entity.lastRunAt)},
-                last_error = ${arg(entity.lastError)},
-                avg_execution_time = ${arg(entity.avgExecutionTime)},
-                generation_prompt = ${arg(entity.generationPrompt)},
-                generation_model = ${arg(entity.generationModel)},
-                generation_status = ${arg(entity.generationStatus)},
-                parent_skill_id = ${arg(entity.parentSkillId)},
-                extra_metadata = ${arg(entity.extraMetadata)},
+                run_count = ${arg(entity.runCount)},
+                config = ${arg(entity.config)},
+                creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
+                allowed_tools = ${arg(entity.allowedTools)},
+                assets_dir_exists = ${arg(entity.assetsDirExists)},
+                avg_execution_time = ${arg(entity.avgExecutionTime)},
+                categories = ${arg(entity.categories)},
+                compatibility = ${arg(entity.compatibility)},
+                dependencies = ${arg(entity.dependencies)},
+                env_vars = ${arg(entity.envVars)},
+                error_count = ${arg(entity.errorCount)},
+                extra_metadata = ${arg(entity.extraMetadata)},
+                generation_model = ${arg(entity.generationModel)},
+                generation_prompt = ${arg(entity.generationPrompt)},
+                generation_status = ${arg(entity.generationStatus)},
+                instructions = ${arg(entity.instructions)},
+                last_error = ${arg(entity.lastError)},
+                last_validated_at = ${arg(entity.lastValidatedAt)},
+                parameters = ${arg(entity.parameters)},
+                parent_skill_id = ${arg(entity.parentSkillId)},
+                permissions = ${arg(entity.permissions)},
+                references_dir_exists = ${arg(entity.referencesDirExists)},
+                retry_count = ${arg(entity.retryCount)},
+                scripts_dir_exists = ${arg(entity.scriptsDirExists)},
+                success_count = ${arg(entity.successCount)},
+                tags = ${arg(entity.tags)},
+                timeout = ${arg(entity.timeout)},
+                validation_errors = ${arg(entity.validationErrors)},
+                validation_status = ${arg(entity.validationStatus)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
     }
-    
+
     // ==================== 删除操作 ====================
-    
+
     /**
-     * 软删除agentSkills
-     * @param id agentSkillsID
+     * 软删除agent_skills
+     * @param id agent_skillsID
      * @return 影响行数
      */
     func softDeleteAgentSkillsById(id: String): Int64 {
@@ -232,10 +229,10 @@ public interface AgentSkillsDAO <: RootDAO {
             update agent_skills set deleted_at = ${arg(DateTime.now())} where id = ${arg(id)}
         ''').update
     }
-    
+
     /**
-     * 恢复软删除的agentSkills
-     * @param id agentSkillsID
+     * 恢复软删除的agent_skills
+     * @param id agent_skillsID
      * @return 影响行数
      */
     func restoreAgentSkillsById(id: String): Int64 {
@@ -243,10 +240,10 @@ public interface AgentSkillsDAO <: RootDAO {
             update agent_skills set deleted_at = null where id = ${arg(id)}
         ''').update
     }
-    
+
     /**
-     * 硬删除agentSkills
-     * @param id agentSkillsID
+     * 硬删除agent_skills
+     * @param id agent_skillsID
      * @return 影响行数
      */
     func deleteAgentSkillsById(id: String): Int64 {
@@ -254,11 +251,11 @@ public interface AgentSkillsDAO <: RootDAO {
             delete from agent_skills where id = ${arg(id)}
         ''').delete
     }
-    
+
     // ==================== 列表查询 ====================
-    
+
     /**
-     * 分页查询所有agentSkills
+     * 分页查询所有agent_skills
      * @param page 页码（从1开始）
      * @param size 每页大小
      * @return 分页结果
@@ -268,9 +265,9 @@ public interface AgentSkillsDAO <: RootDAO {
             select * from agent_skills order by created_at desc
         ''', size, page: page)
     }
-    
+
     /**
-     * 分页查询agentSkills列表（按创建者）
+     * 分页查询agent_skills列表（按创建者）
      * @param creator 创建者ID
      * @param page 页码（从1开始）
      * @param size 每页大小
@@ -281,32 +278,32 @@ public interface AgentSkillsDAO <: RootDAO {
             select * from agent_skills where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
-    
+
     /**
-     * 查询所有agentSkills（不分页）
-     * @return agentSkills列表
+     * 查询所有agent_skills（不分页）
+     * @return agent_skills列表
      */
     func listAllAgentSkills(): ArrayList<AgentSkillsPO> {
         executor.setSql('''
             select * from agent_skills order by created_at desc
         ''').list<AgentSkillsPO>()
     }
-    
+
     /**
-     * 批量查询agentSkills
+     * 批量查询agent_skills
      * @param ids ID列表
-     * @return agentSkills列表
+     * @return agent_skills列表
      */
     func findAgentSkillsByIds(ids: ArrayList<String>): ArrayList<AgentSkillsPO> {
         executor.setSql('''
             select * from agent_skills where id ${IN(ids)}
         ''').list<AgentSkillsPO>()
     }
-    
+
     // ==================== 统计操作 ====================
-    
+
     /**
-     * 统计创建者的agentSkills数量
+     * 统计创建者的agent_skills数量
      * @param creator 创建者ID
      * @return 数量
      */
@@ -315,9 +312,9 @@ public interface AgentSkillsDAO <: RootDAO {
             select count(*) from agent_skills where creator = ${arg(creator)}
         ''').first<Int64>() ?? 0
     }
-    
+
     /**
-     * 统计所有agentSkills数量
+     * 统计所有agent_skills数量
      * @return 数量
      */
     func countAllAgentSkills(): Int64 {
@@ -325,8 +322,138 @@ public interface AgentSkillsDAO <: RootDAO {
             select count(*) from agent_skills
         ''').first<Int64>() ?? 0
     }
-    
-    //#endregion AutoCreateCode
-    
-    // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+
+    /**
+     * 分页查询agent_skills列表（带过滤条件）
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findAgentSkillsByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentSkillsPO> {
+        let sql = StringBuilder()
+        sql.append("select * from agent_skills where 1=1")
+
+        if (let Some(linkVal) <- link) {
+            if (linkVal != "") {
+                sql.append(" and link like ${arg('%' + linkVal + '%')}")
+            }
+        }
+
+        if (let Some(descVal) <- description) {
+            if (descVal != "") {
+                sql.append(" and description like ${arg('%' + descVal + '%')}")
+            }
+        }
+
+        // 处理 deleted_at 筛选
+        if (let Some(deletedAtVal) <- deletedAt) {
+            if (deletedAtVal == "null") {
+                // 未删除的数据
+                sql.append(" and deleted_at is null")
+            } else if (deletedAtVal == "not_null") {
+                // 已删除的数据（回收站）
+                sql.append(" and deleted_at is not null")
+            }
+        }
+
+        sql.append(" order by created_at desc")
+
+        executor.page<AgentSkillsPO>(sql.toString(), size, page: page)
+    }
+
+    /**
+     * 批量软删除agent_skills
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchSoftDeleteAgentSkills(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            update agent_skills set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
+        ''').update
+    }
+
+    /**
+     * 批量硬删除agent_skills
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchDeleteAgentSkills(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            delete from agent_skills where id ${IN(ids)}
+        ''').delete
+    }
+
+    /**
+     * 动态条件查询agent_skills（支持完整查询操作符）
+     *
+     * @param whereClause WHERE 子句字符串（不包含 WHERE 关键字）
+     * @param orderByClause ORDER BY 子句字符串（不包含 ORDER BY 关键字）
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     *
+     * 使用示例：
+     * - whereClause: "name LIKE '%test%' AND status = 'active'"
+     * - orderByClause: "created_at DESC, name ASC"
+     */
+    func findAgentSkillsByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentSkillsPO> {
+        let sql = StringBuilder()
+        sql.append("select * from agent_skills")
+
+        if (!whereClause.isEmpty()) {
+            sql.append(" where ${whereClause}")
+        }
+
+        if (!orderByClause.isEmpty()) {
+            sql.append(" order by ${orderByClause}")
+        } else {
+            sql.append(" order by created_at desc")
+        }
+
+        executor.page<AgentSkillsPO>(sql.toString(), size, page: page)
+    }
+
+    /**
+     * 使用 f_orm Condition API 查询agent_skills
+     *
+     * @param whereClause WHERE 子句字符串
+     * @param orderByClause ORDER BY 子句字符串
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findAgentSkillsByCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentSkillsPO> {
+        let fromClause = executor.FROM<AgentSkillsPO>()
+
+        // 应用 WHERE 条件
+        if (!whereClause.isEmpty()) {
+            fromClause.WHERE(whereClause)
+        }
+
+        // 应用 ORDER BY
+        if (!orderByClause.isEmpty()) {
+            fromClause.ORDER_BY { => orderByClause }
+        } else {
+            fromClause.ORDER_BY { => "created_at DESC" }
+        }
+
+        // 执行分页查询
+        fromClause.page<AgentSkillsPO>(size, page: page)
+    }
+
+    /**
+     * 清空回收站（硬删除所有已软删除的agent_skills）
+     * @return 影响行数
+     */
+    func emptyRecycleBinAgentSkills(): Int64 {
+        executor.setSql('''
+            delete from agent_skills where deleted_at is not null
+        ''').delete
+    }
+
+//#endregion AutoCreateCode
 }

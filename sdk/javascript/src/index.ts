@@ -425,7 +425,9 @@ SKILL_INSTALL_PATH=./skills
 
   stop(): boolean {
     const pidFile = path.join(getRuntimeDir(), 'runtime.pid');
+    let success = false;
     
+    // 1. Try to stop by PID file
     if (fs.existsSync(pidFile)) {
       const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
       try {
@@ -434,29 +436,40 @@ SKILL_INSTALL_PATH=./skills
         } else {
           process.kill(pid, 'SIGTERM');
         }
-        fs.unlinkSync(pidFile);
-        return true;
+        success = true;
       } catch {
-        try {
-          fs.unlinkSync(pidFile);
-        } catch {}
-        return false;
+        // Ignore errors
       }
+      try {
+        fs.unlinkSync(pidFile);
+      } catch {}
     }
     
-    if (this.process) {
+    // 2. Try to stop by process reference
+    if (!success && this.process) {
       try {
         if (process.platform === 'win32') {
           execSync(`taskkill /F /PID ${this.process.pid}`, { stdio: 'ignore' });
         } else {
           this.process.kill('SIGTERM');
         }
+        success = true;
       } catch {}
       this.process = null;
-      return true;
     }
     
-    return false;
+    // 3. On Windows, try to stop by process name as a fallback
+    if (!success && process.platform === 'win32') {
+      try {
+        // Use taskkill to terminate by process name
+        execSync('taskkill /F /IM agentskills-runtime.exe', { stdio: 'ignore' });
+        success = true;
+      } catch {
+        // Ignore errors
+      }
+    }
+    
+    return success;
   }
 
   async status(): Promise<RuntimeStatus> {

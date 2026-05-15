@@ -19,7 +19,6 @@ extend HttpContext {
         this.responseBuilder.header("Cache-Control", "no-cache")
         this.responseBuilder.header("Connection", "keep-alive")
         this.responseBuilder.header("Transfer-Encoding", "chunked")
-        this.responseBuilder.header("Access-Control-Allow-Origin", "*")
         this.responseBuilder.status(200)
     }
 }

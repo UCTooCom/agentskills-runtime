@@ -3,6 +3,9 @@
  */
 package magic.app.services.{{dbName}}
 
+// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 //#region AutoCreateCode
 
 import std.collection.*
@@ -13,6 +16,8 @@ import magic.app.dao.{{dbName}}.{{className}}DAO
 import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
 import magic.log.LogUtils
+import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
+import magic.app.utils.PermissionUtils
 
 /**
  * {{className}}Service - {{tableName}}服务类
@@ -719,4 +724,5 @@ public class {{className}}Service {
     }
 
 //#endregion AutoCreateCode
+// ========== 定制开发方法（在此区域添加自定义方法）==========
 }

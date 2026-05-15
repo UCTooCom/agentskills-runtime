@@ -83,6 +83,8 @@ public class WsChatController {
     private let _sessions: HashMap<String, WebSocketSession>
     private let _sessionsMutex: Mutex
     private var _sessionCounter: Int64 = 0
+    // 存储前端注册的工具（会话级别的）
+    private var _frontendTools: ArrayList<JsonObject> = ArrayList<JsonObject>()
 
     public init(skillManager: SkillManager, chatModel: ChatModel) {
         _skillManager = skillManager
@@ -124,13 +126,9 @@ public class WsChatController {
         let websocket = WebSocket.upgradeFromServer(
             ctx,
             subProtocols: ArrayList<String>(["skill-chat", "agent-execution"]),
-            userFunc: { request =>
+            userFunc: { _ =>
                 let headers = HttpHeaders()
                 headers.add("X-Connection-Type", "skill-chat")
-                headers.add("Access-Control-Allow-Origin", "*")
-                headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-                headers.add("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Sec-WebSocket-Key, Sec-WebSocket-Version")
-                headers.add("Access-Control-Allow-Credentials", "true")
                 headers
             }
         )
@@ -210,6 +208,7 @@ public class WsChatController {
                 case "execute_skill" => _handleSkillExecution(session, jsonObj)
                 case "list_skills" => _handleListSkills(session)
                 case "ping" => _handlePing(session)
+                case "register_tools" => _handleRegisterTools(session, jsonObj)
                 case _ => _handleUnknownMessage(session, messageType)
             }
         } catch (ex: Exception) {
@@ -272,6 +271,65 @@ public class WsChatController {
         skillInfoBuilder.append("   - body: JSON 字符串格式的请求体（可选，POST/PUT 需要）\n")
         skillInfoBuilder.append("3. 当用户需要调用后端 API 时，请直接使用 http_request 工具。\n\n")
 
+        // 添加前端页面工具信息
+        if (!_frontendTools.isEmpty()) {
+            skillInfoBuilder.append("【前端页面工具】\n")
+            skillInfoBuilder.append("以下工具对应前端页面的操作功能，调用时会自动跳转到对应页面执行：\n\n")
+            for (toolObj in _frontendTools) {
+                let nameOpt = toolObj.get("name")
+                let titleOpt = toolObj.get("title")
+                let descriptionOpt = toolObj.get("description")
+                let routeOpt = toolObj.get("route")
+                
+                if (nameOpt.isSome()) {
+                    let nameVal = nameOpt.getOrThrow()
+                    if (nameVal is JsonString) {
+                        let name = nameVal.asString().getValue()
+                        var title = ""
+                        if (titleOpt.isSome()) {
+                            let titleVal = titleOpt.getOrThrow()
+                            if (titleVal is JsonString) {
+                                title = titleVal.asString().getValue()
+                            }
+                        }
+                        let description = if (descriptionOpt.isSome()) {
+                            let descVal = descriptionOpt.getOrThrow()
+                            if (descVal is JsonString) {
+                                descVal.asString().getValue()
+                            } else {
+                                ""
+                            }
+                        } else {
+                            ""
+                        }
+                        let route = if (routeOpt.isSome()) {
+                            let routeVal = routeOpt.getOrThrow()
+                            if (routeVal is JsonString) {
+                                routeVal.asString().getValue()
+                            } else {
+                                ""
+                            }
+                        } else {
+                            ""
+                        }
+
+                        skillInfoBuilder.append("### ${name}")
+                        if (!title.isEmpty() && title != name) {
+                            skillInfoBuilder.append(" (${title})")
+                        }
+                        skillInfoBuilder.append("\n")
+                        if (!description.isEmpty()) {
+                            skillInfoBuilder.append("${description}\n")
+                        }
+                        if (!route.isEmpty()) {
+                            skillInfoBuilder.append("对应页面: ${route}\n")
+                        }
+                        skillInfoBuilder.append("\n")
+                    }
+                }
+            }
+        }
+
         if (!skills.isEmpty()) {
             skillInfoBuilder.append("【已安装的技能知识库】\n")
             for (skill in skills) {
@@ -283,6 +341,128 @@ public class WsChatController {
         return skillInfoBuilder.toString()
     }
 
+    /**
+     * 处理前端工具注册消息
+     * 前端通过 WebSocket 发送工具注册消息，后端接收并存储这些工具
+     */
+    private func _handleRegisterTools(session: WebSocketSession, jsonObj: JsonObject): Unit {
+        let payloadOpt = jsonObj.get("payload")
+        
+        if (payloadOpt.isNone()) {
+            _sendErrorMessage(session, "Missing 'payload' field")
+            return
+        }
+        
+        let payloadVal = payloadOpt.getOrThrow()
+        if (!(payloadVal is JsonObject)) {
+            _sendErrorMessage(session, "Invalid 'payload' field type")
+            return
+        }
+        
+        let payload = payloadVal.asObject()
+        let toolsOpt = payload.get("tools")
+        
+        if (toolsOpt.isNone()) {
+            _sendErrorMessage(session, "Missing 'tools' field in payload")
+            return
+        }
+        
+        let toolsVal = toolsOpt.getOrThrow()
+        if (!(toolsVal is JsonArray)) {
+            _sendErrorMessage(session, "Invalid 'tools' field type")
+            return
+        }
+        
+        let toolsArray = toolsVal.asArray()
+        
+        // 清空之前注册的前端工具
+        _frontendTools.clear()
+        
+        // 存储前端工具
+        var toolCount = 0
+        let size = toolsArray.size()
+        var i = 0
+        while (i < size) {
+            let toolOpt = toolsArray.get(i)
+            if (toolOpt.isSome()) {
+                let toolVal = toolOpt.getOrThrow()
+                if (toolVal is JsonObject) {
+                    _frontendTools.add(toolVal.asObject())
+                    toolCount = toolCount + 1
+                }
+            }
+            i = i + 1
+        }
+        
+        LogUtils.info("Registered ${toolCount} frontend tools from session: ${session.sessionId}")
+        
+        // 注册前端工具到 agent
+        _registerFrontendToolsToAgent()
+        
+        // 发送成功响应
+        let resultPayload = JsonObject()
+        resultPayload.put("success", JsonString("true"))
+        resultPayload.put("message", JsonString("Tools registered successfully"))
+        resultPayload.put("count", JsonString("${toolCount}"))
+        
+        let message = WebSocketMessage("tools_registered", resultPayload, (DateTime.now() - DateTime.UnixEpoch).toMilliseconds())
+        session.sendMessage(message)
+    }
+    
+    /**
+     * 将前端工具注册到 agent
+     */
+    private func _registerFrontendToolsToAgent(): Unit {
+        for (toolObj in _frontendTools) {
+            let nameOpt = toolObj.get("name")
+            if (nameOpt.isSome()) {
+                let nameVal = nameOpt.getOrThrow()
+                if (nameVal is JsonString) {
+                    let name = nameVal.asString().getValue()
+
+                    var title: ?String = None
+                    let titleOpt = toolObj.get("title")
+                    if (titleOpt.isSome()) {
+                        let titleVal = titleOpt.getOrThrow()
+                        if (titleVal is JsonString) {
+                            title = Some(titleVal.asString().getValue())
+                        }
+                    }
+
+                    var description: ?String = None
+                    let descriptionOpt = toolObj.get("description")
+                    if (descriptionOpt.isSome()) {
+                        let descVal = descriptionOpt.getOrThrow()
+                        if (descVal is JsonString) {
+                            description = Some(descVal.asString().getValue())
+                        }
+                    }
+
+                    var route: ?String = None
+                    let routeOpt = toolObj.get("route")
+                    if (routeOpt.isSome()) {
+                        let routeVal = routeOpt.getOrThrow()
+                        if (routeVal is JsonString) {
+                            route = Some(routeVal.asString().getValue())
+                        }
+                    }
+
+                    var inputSchema: ?JsonObject = None
+                    let inputSchemaOpt = toolObj.get("inputSchema")
+                    if (inputSchemaOpt.isSome()) {
+                        let schemaVal = inputSchemaOpt.getOrThrow()
+                        if (schemaVal is JsonObject) {
+                            inputSchema = Some(schemaVal.asObject())
+                        }
+                    }
+
+                    // 调用 agent 的方法注册前端工具
+                    _agent.addFrontendTool(name, title, description, route, inputSchema)
+                }
+            }
+        }
+    }
+    
     private func _handleSkillExecution(session: WebSocketSession, jsonObj: JsonObject): Unit {
         let skillId = _getJsonString(jsonObj, "skill_id", "")
 

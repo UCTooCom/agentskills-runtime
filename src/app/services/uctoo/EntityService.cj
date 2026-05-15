@@ -3,6 +3,9 @@
  */
 package magic.app.services.uctoo
 
+// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 //#region AutoCreateCode
 
 import std.collection.*
@@ -13,6 +16,8 @@ import magic.app.dao.uctoo.EntityDAO
 import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
 import magic.log.LogUtils
+import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
+import magic.app.utils.PermissionUtils
 
 /**
  * EntityService - entity服务类
@@ -665,7 +670,7 @@ public class EntityService {
             // 3. 构建 ORDER BY 子句
             let orderByClause = buildOrderByClause(parsedQuery.sort)
 
-            // 4. 执行查询（带跳过参数）
+            // 4. 执行查询
             let pagination = getExecutor().findEntityByCondition(
                 whereClause,
                 orderByClause,
@@ -675,6 +680,55 @@ public class EntityService {
 
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
+            return (ArrayList<EntityPO>(), 0)
+        }
+    }
+
+    public func getListWithSkipWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        skip: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<EntityPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "entity")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pageNum = if (pageSize > 0) { (skip / pageSize) + 1 } else { Int32(1) }
+            let pagination = getExecutor().findEntityByCondition(
+                whereClause,
+                orderByClause,
+                Int64(pageNum),
+                Int64(pageSize)
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            LogUtils.error("EntityService", "getListWithSkipWithPermission error: ${e.message}")
             return (ArrayList<EntityPO>(), 0)
         }
     }
@@ -772,6 +826,115 @@ public class EntityService {
             } else {
                 return APIResult<Bool>(false, "回收站为空")
             }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    // ==================== 行级权限集成方法（每个表都需要的标准化代码） ====================
+
+    public func createWithPermission(entity: EntityPO, creatorId: String): APIResult<EntityPO> {
+        let result = create(entity, creatorId)
+        if (result.success) {
+            if (result.data.isSome()) {
+                let data = result.data.getOrThrow()
+                if (!data.id.isEmpty()) {
+                    PermissionUtils.autoGrantCreatorPermission(creatorId, data.id, "entity")
+                } else {
+                    LogUtils.error("EntityService", "createWithPermission: data.id is empty, skip autoGrant")
+                }
+            }
+        }
+        return result
+    }
+
+    public func getByIdWithPermission(entityId: String, userId: String): APIResult<EntityPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkReadPermission(userId, entityId, "entity")
+            LogUtils.info("EntityService", "getByIdWithPermission: userId=${userId}, entityId=${entityId}, hasPermission=${hasPermission}, reason=${reason}")
+            if (!hasPermission) {
+                return APIResult<EntityPO>(false, reason)
+            }
+            return getById(entityId)
+        } catch (e: Exception) {
+            return APIResult<EntityPO>(false, e.message)
+        }
+    }
+
+    public func getListWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<EntityPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                LogUtils.info("EntityService", "getListWithPermission: userId=${userId} has wildcard, skip filter")
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "entity")
+            LogUtils.info("EntityService", "getListWithPermission: userId=${userId}, permFilter=${permFilter}")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                LogUtils.info("EntityService", "getListWithPermission: permFilter is 1=1 or empty, skip filter")
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            LogUtils.info("EntityService", "getListWithPermission: final whereClause=${whereClause}")
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pagination = getExecutor().findEntityByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            LogUtils.info("EntityService", "getListWithPermission: result size=${pagination.list.size}, rows=${pagination.rows}")
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            LogUtils.error("EntityService", "getListWithPermission error: ${e.message}")
+            return (ArrayList<EntityPO>(), 0)
+        }
+    }
+
+    public func updateWithPermission(entityId: String, entity: EntityPO, userId: String): APIResult<EntityPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "entity")
+            LogUtils.info("EntityService", "updateWithPermission: userId=${userId}, entityId=${entityId}, hasPermission=${hasPermission}, reason=${reason}")
+            if (!hasPermission) {
+                return APIResult<EntityPO>(false, reason)
+            }
+            return update(entityId, entity)
+        } catch (e: Exception) {
+            return APIResult<EntityPO>(false, e.message)
+        }
+    }
+
+    public func deleteWithPermission(entityId: String, force: Bool, userId: String): APIResult<Bool> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "entity")
+            LogUtils.info("EntityService", "deleteWithPermission: userId=${userId}, entityId=${entityId}, hasPermission=${hasPermission}, reason=${reason}")
+            if (!hasPermission) {
+                return APIResult<Bool>(false, reason)
+            }
+            return delete(entityId, force)
         } catch (e: Exception) {
             return APIResult<Bool>(false, e.message)
         }

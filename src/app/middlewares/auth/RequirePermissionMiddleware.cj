@@ -100,6 +100,22 @@ public class RequirePermissionMiddleware <: Middleware {
         if (route == "/health" || route == "/hello" || route == "/api/v1/health" || route == "/api/v1/info" || route == "/") {
             return true
         }
+        // AI 聊天相关路由（OpenAI 兼容 API）
+        if (route.contains("/api/v1/ai/")) {
+            return true
+        }
+        // WebMCP 相关路由
+        if (route.contains("/webmcp/")) {
+            return true
+        }
+        // i18n 多语言资源路由（所有用户都需要获取多语言资源）
+        if (route.contains("/i18/format")) {
+            return true
+        }
+        // lang 语言包路由（所有用户都需要获取语言包）
+        if (route.contains("/api/v1/uctoo/lang/")) {
+            return true
+        }
         false
     }
 

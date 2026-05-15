@@ -5,14 +5,15 @@ package magic.app.services.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+
+//#region AutoCreateCode
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
 import magic.app.models.uctoo.UserHasGroupPO
 import magic.app.dao.uctoo.UserHasGroupDAO
 import magic.log.LogUtils
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
 /**
  * UserHasGroupService - 用户组关联服务
@@ -28,7 +29,7 @@ public class UserHasGroupService {
     
     public init() {}
     
-    //#region AutoCreateCode
+    
     
     // ==================== 创建操作 ====================
     

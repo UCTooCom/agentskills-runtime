@@ -3,6 +3,11 @@
  */
 package magic.app.services.uctoo
 
+// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+//#region AutoCreateCode
+
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -24,7 +29,6 @@ public class UctooSessionService {
     
     public init() {}
     
-    //#region AutoCreateCode
     
     /**
      * 创建uctooSession

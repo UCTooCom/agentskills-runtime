@@ -379,10 +379,7 @@ public class CrudGenerator {
             field.dataType = dbInfo.dataType ?? ""
             field.isNullable = dbInfo.isNullable
             field.columnDefault = dbInfo.columnDefault
-            field.ordinalPosition = match (dbInfo.ordinalPosition) {
-                case Some(v) => v
-                case None => 0
-            }
+            field.ordinalPosition = dbInfo.ordinalPosition
             tableInfo.fields.add(field)
         }
         
@@ -422,6 +419,7 @@ public class CrudGenerator {
         generateService(tableInfo)
         generateController(tableInfo)
         generateRoute(tableInfo)
+        updateAutoRouteConfig(tableInfo)
     }
     
     /**
@@ -548,7 +546,7 @@ public class CrudGenerator {
                 case None =>
                     let tablePermission = PermissionsPO()
                     tablePermission.permissionName = tablePermissionName
-                    tablePermission.permissionType = 1
+                    tablePermission.typeVal = 1
                     tablePermission.hidden = 1
                     tablePermission.weight = 1
                     tablePermission.creator = parentCreator
@@ -575,7 +573,7 @@ public class CrudGenerator {
                             ${optArg(tablePermission.module)},
                             ${optArg(tablePermission.component)},
                             ${optArg(tablePermission.redirect)},
-                            ${optArg(tablePermission.permissionType)},
+                            ${optArg(tablePermission.typeVal)},
                             ${optArg(tablePermission.hidden)},
                             ${optArg(tablePermission.weight)},
                             '505cf909-5e0e-4dde-b215-74274d2cc548',
@@ -1556,6 +1554,143 @@ public class CrudGenerator {
             }
         } catch (e: Exception) {
             println("插入 i18 数据失败: ${e.message}")
+        }
+    }
+    
+    /**
+     * 更新 AutoRouteConfig.cj 文件，注册新生成的路由
+     */
+    private func updateAutoRouteConfig(tableInfo: TableInfo): Unit {
+        let autoRouteConfigPath = "${outputDir}/../registry/AutoRouteConfig.cj"
+        
+        // 检查文件是否存在
+        if (!fileExists(autoRouteConfigPath)) {
+            println("AutoRouteConfig.cj 文件不存在，跳过路由注册")
+            return
+        }
+        
+        // 读取文件内容
+        let content = try {
+            let bytes = File.readFrom(autoRouteConfigPath)
+            String.fromUtf8(bytes)
+        } catch (e: Exception) {
+            println("读取 AutoRouteConfig.cj 文件失败: ${e.message}")
+            return
+        }
+        
+        let tableName = tableInfo.tableName
+        let className = tableInfo.className
+        let dbName = tableInfo.dbName
+        
+        // 检查路由是否已注册（检查路由名称或路径）
+        if (content.contains("\"${tableName}\"")) {
+            println("路由已存在: ${tableName}")
+            return
+        }
+        
+        // 构建导入语句
+        let routeImport = "import magic.app.routes.${dbName}.${tableName}.${className}Route"
+        let controllerImport = "import magic.app.controllers.${dbName}.${tableName}.${className}Controller"
+        let serviceImport = "${className}Service,"
+        
+        // 构建路由注册代码
+        let routeRegistration = """
+        // ${className} 路由
+        registry.add(RouteEntry(
+            "${tableName}",
+            "/api/v1/${dbName}/${tableName}",
+            10,
+            true,
+            { router: Router =>
+                let service = ${className}Service()
+                let controller = ${className}Controller(service)
+                let route = ${className}Route(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+"""
+        
+        // 更新导入语句
+        var updatedContent = content
+        
+        // 添加 Route 导入
+        if (!updatedContent.contains(routeImport)) {
+            // 找到最后一个 import 语句的位置
+            let lastImportIndex = updatedContent.lastIndexOf("import ")
+            if (lastImportIndex.isSome()) {
+                let idx = lastImportIndex.getOrThrow()
+                let nextLineIndex = updatedContent.indexOf("\n", idx)
+                if (nextLineIndex.isSome()) {
+                    let lineIdx = nextLineIndex.getOrThrow()
+                    let insertPosition = lineIdx + 1
+                    updatedContent = updatedContent[0..insertPosition] + "${routeImport}\n" + updatedContent[insertPosition..updatedContent.size]
+                }
+            }
+        }
+        
+        // 添加 Controller 导入
+        if (!updatedContent.contains(controllerImport)) {
+            // 找到最后一个 import 语句的位置
+            let lastImportIndex = updatedContent.lastIndexOf("import ")
+            if (lastImportIndex.isSome()) {
+                let idx = lastImportIndex.getOrThrow()
+                let nextLineIndex = updatedContent.indexOf("\n", idx)
+                if (nextLineIndex.isSome()) {
+                    let lineIdx = nextLineIndex.getOrThrow()
+                    let insertPosition = lineIdx + 1
+                    updatedContent = updatedContent[0..insertPosition] + "${controllerImport}\n" + updatedContent[insertPosition..updatedContent.size]
+                }
+            }
+        }
+        
+        // 添加 Service 导入
+        if (!updatedContent.contains(serviceImport)) {
+            // 找到 services 导入块
+            let servicesImportStart = updatedContent.indexOf("import magic.app.services.${dbName}.{")
+            if (servicesImportStart.isSome()) {
+                let startIdx = servicesImportStart.getOrThrow()
+                let servicesImportEnd = updatedContent.indexOf("}", startIdx)
+                if (servicesImportEnd.isSome()) {
+                    let endIdx = servicesImportEnd.getOrThrow()
+                    let insertPosition = endIdx
+                    updatedContent = updatedContent[0..insertPosition] + "\n    ${serviceImport}" + updatedContent[insertPosition..updatedContent.size]
+                }
+            }
+        }
+        
+        // 添加路由注册代码
+        // 找到 "// ==================== CRUD 路由配置 ====================" 行
+        let crudRouteComment = "// ==================== CRUD 路由配置 ===================="
+        let crudRouteIndex = updatedContent.indexOf(crudRouteComment)
+        if (crudRouteIndex.isSome()) {
+            let idx = crudRouteIndex.getOrThrow()
+            let nextLineIndex = updatedContent.indexOf("\n", idx)
+            if (nextLineIndex.isSome()) {
+                let lineIdx = nextLineIndex.getOrThrow()
+                let insertPosition = lineIdx + 1
+                updatedContent = updatedContent[0..insertPosition] + "${routeRegistration}\n" + updatedContent[insertPosition..updatedContent.size]
+            }
+        }
+        
+        // 写入更新后的内容
+        try {
+            File.writeTo(autoRouteConfigPath, updatedContent.toArray())
+            println("已更新 AutoRouteConfig.cj，注册路由: ${tableName}")
+        } catch (e: Exception) {
+            println("写入 AutoRouteConfig.cj 文件失败: ${e.message}")
+        }
+    }
+    
+    /**
+     * 检查文件是否存在
+     */
+    private func fileExists(path: String): Bool {
+        try {
+            let bytes = File.readFrom(path)
+            true
+        } catch (e: Exception) {
+            false
         }
     }
 }

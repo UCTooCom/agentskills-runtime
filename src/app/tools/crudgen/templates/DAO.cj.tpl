@@ -3,6 +3,9 @@
  */
 package magic.app.dao.{{dbName}}
 
+// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 //#region AutoCreateCode
 
 import std.collection.*
@@ -314,4 +317,5 @@ public interface {{className}}DAO <: RootDAO {
     }
 
 //#endregion AutoCreateCode
+// ========== 定制开发方法（在此区域添加自定义方法）==========
 }

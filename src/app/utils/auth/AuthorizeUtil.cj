@@ -305,11 +305,7 @@ public class AuthorizeUtil {
         }
         sb.append("\"created_at\":\"${user.createdAt}\",")
         sb.append("\"last_login\":\"${user.lastLogin}\",")
-        if (let Some(v) <- user.authProvider) {
-            sb.append("\"auth_provider\":${v},")
-        } else {
-            sb.append("\"auth_provider\":null,")
-        }
+        sb.append("\"auth_provider\":${user.authProvider},")
         if (let Some(v) <- user.creator) {
             sb.append("\"creator\":\"${v}\",")
         } else {
@@ -331,11 +327,7 @@ public class AuthorizeUtil {
         } else {
             sb.append("\"remember_token\":\"\",")
         }
-        if (let Some(v) <- user.status) {
-            sb.append("\"status\":${v},")
-        } else {
-            sb.append("\"status\":null,")
-        }
+        sb.append("\"status\":${user.status},")
         sb.append("\"updated_at\":\"${user.updatedAt}\",")
         
         // 添加角色信息
@@ -381,11 +373,7 @@ public class AuthorizeUtil {
         }
         sb.append("\"created_at\":\"${user.createdAt}\",")
         sb.append("\"last_login\":\"${user.lastLogin}\",")
-        if (let Some(v) <- user.authProvider) {
-            sb.append("\"auth_provider\":${v},")
-        } else {
-            sb.append("\"auth_provider\":null,")
-        }
+        sb.append("\"auth_provider\":${user.authProvider},")
         if (let Some(v) <- user.creator) {
             sb.append("\"creator\":\"${v}\",")
         } else {
@@ -407,11 +395,7 @@ public class AuthorizeUtil {
         } else {
             sb.append("\"remember_token\":\"\",")
         }
-        if (let Some(v) <- user.status) {
-            sb.append("\"status\":${v},")
-        } else {
-            sb.append("\"status\":null,")
-        }
+        sb.append("\"status\":${user.status},")
         sb.append("\"updated_at\":\"${user.updatedAt}\",")
         if (let Some(v) <- user.accessToken) {
             sb.append("\"access_token\":\"${v}\"")

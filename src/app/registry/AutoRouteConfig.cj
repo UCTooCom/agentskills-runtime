@@ -29,6 +29,7 @@ import magic.app.routes.uctoo.application.ApplicationRoute
 import magic.app.routes.uctoo.i18.I18Route
 import magic.app.routes.uctoo.lang.LangRoute
 import magic.app.routes.uctoo.app_access_token.AppAccessTokenRoute
+import magic.app.routes.uctoo.agent_skills.AgentSkillsRoute
 import magic.app.controllers.uctoo.entity.EntityController
 import magic.app.controllers.uctoo.uctoo_user.UctooUserController
 import magic.app.controllers.uctoo.uctoo_session.UctooSessionController
@@ -48,6 +49,7 @@ import magic.app.controllers.uctoo.application.ApplicationController
 import magic.app.controllers.uctoo.i18.I18Controller
 import magic.app.controllers.uctoo.lang.LangController
 import magic.app.controllers.uctoo.app_access_token.AppAccessTokenController
+import magic.app.controllers.uctoo.agent_skills.AgentSkillsController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -67,7 +69,8 @@ import magic.app.services.uctoo.{
     ApplicationService,
     I18Service,
     LangService,
-    AppAccessTokenService
+    AppAccessTokenService,
+    AgentSkillsService
 }
 
 /**
@@ -88,7 +91,7 @@ public class AutoRouteConfig {
         registry.add(RouteEntry(
             "db_info",
             "/api/v1/uctoo/db_info",
-            130,
+            10,
             true,
             { router: Router =>
                 let service = DbInfoService()
@@ -149,7 +152,8 @@ public class AutoRouteConfig {
             true,
             { router: Router =>
                 let service = UctooUserService()
-                let controller = UctooUserController(service)
+                let userHasRolesService = UserHasRolesService()
+                let controller = UctooUserController(service, userHasRolesService)
                 let route = UctooUserRoute(router, controller)
                 route.register()
             }
@@ -350,6 +354,20 @@ public class AutoRouteConfig {
                 let service = AppAccessTokenService()
                 let controller = AppAccessTokenController(service)
                 let route = AppAccessTokenRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // 17. AgentSkills 路由 (Agent技能管理)
+        registry.add(RouteEntry(
+            "agent_skills",
+            "/api/v1/uctoo/agent_skills",
+            200,
+            true,
+            { router: Router =>
+                let service = AgentSkillsService()
+                let controller = AgentSkillsController(service)
+                let route = AgentSkillsRoute(router, controller)
                 route.register()
             }
         ))

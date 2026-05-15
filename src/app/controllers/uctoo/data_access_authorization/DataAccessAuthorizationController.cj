@@ -3,7 +3,11 @@
  */
 package magic.app.controllers.uctoo.data_access_authorization
 
-// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+// ========== 自定义引入区域（在此区域添加&添加自定义import，不会被覆盖）==========
+
+
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+//#region AutoCreateCode
 
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.core.response.{APIError, APIResult}
@@ -11,53 +15,67 @@ import magic.app.models.uctoo.DataAccessAuthorizationPO
 import magic.app.services.uctoo.DataAccessAuthorizationService
 import magic.log.LogUtils
 import std.collection.{HashMap, Map, ArrayList}
-import std.convert.*
+import std.convert
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool, JsonArray}
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
-
+import magic.app.core.{PermissionLevel, hasPermission}
+import magic.app.utils.PermissionUtils
 
 public class DataAccessAuthorizationController {
     private var service: DataAccessAuthorizationService
-    
+
     public init(service: DataAccessAuthorizationService) {
         this.service = service
     }
-    
-    //#region AutoCreateCode
-    
+
     public func add(req: HttpRequest, res: HttpResponse): Unit {
         try {
-            let body = parseBody(req)
-            if (let Some(b) <- body) {
-                let entity = mapToEntity(b)
-                let result = service.create(entity)
-                if (result.success) {
-                    if (let Some(data) <- result.data) {
-                        res.status(200).json(data.toJson())
+            let userId = req.getLocals("userId")
+            if (userId.isNone()) {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
+            }
+
+            let userIdStr = userId.getOrThrow() as String
+            if (let Some(str) <- userIdStr) {
+                if (str.isEmpty()) {
+                    res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                    return
+                }
+
+                let body = parseBody(req)
+                if (let Some(b) <- body) {
+                    let entity = mapToEntity(b)
+                    let result = service.create(entity, str)
+                    if (result.success) {
+                        if (result.data.isSome()) {
+                            let data = result.data.getOrThrow()
+                            res.status(200).json(data.toJson())
+                        } else {
+                            res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"创建失败\"}")
+                        }
                     } else {
-                        res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"创建失败\"}")
+                        let reason = result.reason ?? "创建失败"
+                        res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
                     }
                 } else {
-                    let reason = result.reason ?? "创建失败"
-                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                    res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
                 }
             } else {
-                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
             }
         } catch (e: Exception) {
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
-    
+
     public func edit(req: HttpRequest, res: HttpResponse): Unit {
         try {
             let body = parseBody(req)
             if (let Some(b) <- body) {
                 let ids = b.get("ids")
                 let id = b.get("id")
-                
-                // 检查是否是恢复软删除数据 (deleted_at === "0")
+
                 let deletedAt = b.get("deleted_at")
                 let isRestore = if (let Some(da) <- deletedAt) {
                     let daStr = da as String
@@ -69,16 +87,13 @@ public class DataAccessAuthorizationController {
                 } else {
                     false
                 }
-                
+
                 if (let Some(idsVal) <- ids) {
-                    // 批量编辑
                     let idsStrOpt = idsVal as String
                     if (let Some(idsStr) <- idsStrOpt) {
-                        // 使用JSON.parse解析ids数组，与backend保持一致
                         let idArray = parseIdsArray(idsStr)
-                        
+
                         if (isRestore) {
-                            // 批量恢复软删除数据
                             let result = service.restoreMultiple(idArray)
                             if (result.success) {
                                 res.status(200).json("{\"desc\":\"恢复成功\"}")
@@ -93,7 +108,7 @@ public class DataAccessAuthorizationController {
                                 entity.id = idStr
                                 entities.add(entity)
                             }
-                            
+
                             let result = service.updateMultiple(entities)
                             if (result.success) {
                                 if (let Some(data) <- result.data) {
@@ -120,12 +135,10 @@ public class DataAccessAuthorizationController {
                         res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"IDs参数格式错误\"}")
                     }
                 } else {
-                    // 单个编辑
                     if (let Some(idVal) <- id) {
                         let idStrOpt = idVal as String
                         if (let Some(idStr) <- idStrOpt) {
                             if (isRestore) {
-                                // 恢复软删除数据
                                 let result = service.restore(idStr)
                                 if (result.success) {
                                     if (let Some(data) <- result.data) {
@@ -165,7 +178,7 @@ public class DataAccessAuthorizationController {
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
-    
+
     public func delete(req: HttpRequest, res: HttpResponse): Unit {
         try {
             let body = parseBody(req)
@@ -174,12 +187,10 @@ public class DataAccessAuthorizationController {
                 let ids = b.get("ids")
                 let forceOpt = b.get("force")
                 let force = parseForce(forceOpt)
-                
+
                 if (let Some(idsVal) <- ids) {
-                    // 批量删除
                     let idsStrOpt = idsVal as String
                     if (let Some(idsStr) <- idsStrOpt) {
-                        // 使用JSON.parse解析ids数组，与backend保持一致
                         let idArray = parseIdsArray(idsStr)
                         let result = service.deleteMultiple(idArray, force)
                         if (result.success) {
@@ -192,7 +203,6 @@ public class DataAccessAuthorizationController {
                         res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"IDs参数格式错误\"}")
                     }
                 } else if (let Some(idVal) <- id) {
-                    // 单个删除
                     let idStrOpt = idVal as String
                     if (let Some(idStr) <- idStrOpt) {
                         let result = service.delete(idStr, force)
@@ -215,82 +225,88 @@ public class DataAccessAuthorizationController {
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
-    
+
     public func getSingle(req: HttpRequest, res: HttpResponse): Unit {
         try {
-            LogUtils.info("DataAccessAuthorizationController", "=== DataAccessAuthorizationController.getSingle() called ===")
-            LogUtils.info("DataAccessAuthorizationController", "=== Request path: ${req.uri.path} ===")
             let id = req.pathParam("id")
-            
+
             if (let Some(idVal) <- id) {
-                LogUtils.info("DataAccessAuthorizationController", "=== Got id value: ${idVal} ===")
                 let result = service.getById(idVal)
-                let reasonStr = result.reason ?? "none"
-                LogUtils.info("DataAccessAuthorizationController", "=== service.getById result - success: ${result.success}, reason: ${reasonStr} ===")
-                
+
                 if (result.success) {
                     if (let Some(data) <- result.data) {
-                        LogUtils.info("DataAccessAuthorizationController", "=== DataAccessAuthorization found, returning data ===")
-                        // 与backend保持一致，直接返回实体对象，不包装在data中
                         res.status(200).json(data.toJson())
                     } else {
-                        LogUtils.info("DataAccessAuthorizationController", "=== result.data is None ===")
-                        res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该dataAccessAuthorization或您没有权限访问\"}")
+                        res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该data_access_authorization或您没有权限访问\"}")
                     }
                 } else {
-                    LogUtils.info("DataAccessAuthorizationController", "=== result.success is false ===")
-                    res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该dataAccessAuthorization\"}")
+                    res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该data_access_authorization\"}")
                 }
             } else {
-                LogUtils.info("DataAccessAuthorizationController", "=== id pathParam is None ===")
                 res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少ID参数\"}")
             }
         } catch (e: Exception) {
-            LogUtils.error("DataAccessAuthorizationController", "=== DataAccessAuthorizationController.getSingle() exception: ${e.message} ===")
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
-    
+
     public func getManyWithPathParams(req: HttpRequest, res: HttpResponse): Unit {
         try {
-            // 按照 backend 规范：/api/uctoo/data_access_authorization/:limit/:page
-            // 页码从1开始，1表示第一页（符合业界最佳实践）
+            let currentPageParam = req.queryParam("currentPage")
+            let pageSizeParam = req.queryParam("pageSize")
+
             let limitParam = req.pathParam("limit")
             let pageParam = req.pathParam("page")
-            
-            let limitNum = if (let Some(l) <- limitParam) {
+
+            let pageSize = if (let Some(ps) <- pageSizeParam) {
+                Int32.parse(ps)
+            } else if (let Some(l) <- limitParam) {
                 Int32.parse(l)
             } else {
                 Int32(10)
             }
-            
-            let pageNum = if (let Some(p) <- pageParam) {
+
+            let currentPage = if (let Some(cp) <- currentPageParam) {
+                Int32.parse(cp)
+            } else if (let Some(p) <- pageParam) {
                 Int32.parse(p)
             } else {
-                Int32(1)  // 默认第一页
+                Int32(1)
             }
-            
-            if (limitNum > 100) {
-                res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
+
+            if (pageSize > 1000) {
+                res.status(400).json(APIError("40004", "请求数量不能超过1000条").toJson())
                 return
             }
-            
-            // 解析查询参数中的 sort 和 filter
+
             let sortParam = req.queryParam("sort")
             let filterParam = req.queryParam("filter")
-            
+
             let sortStr = if (let Some(s) <- sortParam) { s } else { "" }
-            let filterStr = if (let Some(f) <- filterParam) { f } else { "" }
-            
-            // 页码从1开始，转换为内部页码（从0开始）
-            let (entities, total) = service.getList(pageNum - 1, limitNum, sortStr, filterStr)
-            
-            let totalPage = if (limitNum > 0) {
-                Int32((total + Int64(limitNum) - 1) / Int64(limitNum))
+            var filterStr = ""
+            if (let Some(f) <- filterParam) {
+                let decodedFilter = f.replace("%7B", "{")
+                    .replace("%7D", "}")
+                    .replace("%22", "\"")
+                    .replace("%3A", ":")
+                    .replace("%2C", ",")
+                    .replace("+", " ")
+                filterStr = decodedFilter
+            }
+
+            let (entities, total) = service.getListWithFilter(
+                currentPage,
+                pageSize,
+                sortStr,
+                filterStr
+            )
+
+            let totalPage = if (pageSize > 0) {
+                Int32((total + Int64(pageSize) - 1) / Int64(pageSize))
             } else {
                 Int32(0)
             }
-            
+
             var entitiesJson = ""
             for (e in entities) {
                 if (entitiesJson.isEmpty()) {
@@ -299,59 +315,55 @@ public class DataAccessAuthorizationController {
                     entitiesJson = entitiesJson + "," + e.toJson()
                 }
             }
-            res.status(200).json("{\"currentPage\":${pageNum},\"totalCount\":${total},\"totalPage\":${totalPage},\"data_access_authorizations\":[${entitiesJson}]}")
+            res.status(200).json("{\"currentPage\":${currentPage},\"totalCount\":${total},\"totalPage\":${totalPage},\"data_access_authorizations\":[${entitiesJson}]}")
         } catch (e: Exception) {
             res.status(500).json(APIError("50000", e.message).toJson())
         }
     }
-    
+
     public func getManyWithSkip(req: HttpRequest, res: HttpResponse): Unit {
         try {
-            // 按照 backend 规范：/api/uctoo/data_access_authorization/:limit/:page/:skip
-            // 页码从1开始，1表示第一页（符合业界最佳实践）
             let limitParam = req.pathParam("limit")
             let pageParam = req.pathParam("page")
             let skipParam = req.pathParam("skip")
-            
+
             let limitNum = if (let Some(l) <- limitParam) {
                 Int32.parse(l)
             } else {
                 Int32(10)
             }
-            
+
             let pageNum = if (let Some(p) <- pageParam) {
                 Int32.parse(p)
             } else {
-                Int32(1)  // 默认第一页
+                Int32(1)
             }
-            
+
             let skipNum = if (let Some(s) <- skipParam) {
                 Int32.parse(s)
             } else {
                 Int32(0)
             }
-            
-            if (limitNum > 100) {
-                res.status(400).json(APIError("40004", "请求数量不能超过100条").toJson())
+
+            if (limitNum > 1000) {
+                res.status(400).json(APIError("40004", "请求数量不能超过1000条").toJson())
                 return
             }
-            
-            // 解析查询参数中的 sort 和 filter
+
             let sortParam = req.queryParam("sort")
             let filterParam = req.queryParam("filter")
-            
+
             let sortStr = if (let Some(s) <- sortParam) { s } else { "" }
             let filterStr = if (let Some(f) <- filterParam) { f } else { "" }
-            
-            // 页码从1开始，转换为内部页码（从0开始）
+
             let (entities, total) = service.getListWithSkip(pageNum - 1, limitNum, skipNum, sortStr, filterStr)
-            
+
             let totalPage = if (limitNum > 0) {
                 Int32((total + Int64(limitNum) - 1) / Int64(limitNum))
             } else {
                 Int32(0)
             }
-            
+
             var entitiesJson = ""
             for (e in entities) {
                 if (entitiesJson.isEmpty()) {
@@ -365,7 +377,27 @@ public class DataAccessAuthorizationController {
             res.status(500).json(APIError("50000", e.message).toJson())
         }
     }
-    
+
+    public func emptyRecycleBinDataAccessAuthorization(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let userId = req.getLocals("userId")
+            if (userId.isNone()) {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
+            }
+
+            let result = service.emptyRecycleBinDataAccessAuthorization()
+            if (result.success) {
+                res.status(200).json("{\"desc\":\"清空回收站成功\"}")
+            } else {
+                let reason = result.reason ?? "清空回收站失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
     private func parseBody(req: HttpRequest): ?Map<String, Any> {
         try {
             let body = req.body
@@ -406,10 +438,10 @@ public class DataAccessAuthorizationController {
             return ""
         }
     }
-    
+
     private func mapToEntity(map: Map<String, Any>): DataAccessAuthorizationPO {
         let entity = DataAccessAuthorizationPO()
-                if (let Some(id) <- map.get("id")) {
+        if (let Some(id) <- map.get("id")) {
             let idStr = id as String
             if (let Some(s) <- idStr) {
                 entity.id = s
@@ -434,9 +466,9 @@ public class DataAccessAuthorizationController {
             }
         }
         if (let Some(permission) <- map.get("permission")) {
-            let permissionInt64 = permission as Int64
-            if (let Some(s) <- permissionInt64) {
-                entity.permission = Some<Int32>(Int32(s))
+            let permissionInt = permission as Int64
+            if (let Some(v) <- permissionInt) {
+                entity.permission = Int32(v)
             }
         }
         if (let Some(creator) <- map.get("creator")) {
@@ -445,21 +477,23 @@ public class DataAccessAuthorizationController {
                 entity.creator = Some<String>(s)
             }
         }
-        // createdAt is DateTime type, handled by database
-        // updatedAt is DateTime type, handled by database
-        // deletedAt is DateTime type, handled by database
+        if (let Some(createdAt) <- map.get("created_at")) {
+        }
+        if (let Some(updatedAt) <- map.get("updated_at")) {
+        }
+        if (let Some(deletedAt) <- map.get("deleted_at")) {
+            // DateTime类型, 由数据库处理
+        }
         return entity
     }
-    
+
+
     private func parseForce(forceOpt: ?Any): Bool {
         if (let Some(f) <- forceOpt) {
-            // 支持数字1或字符串"true"作为硬删除标志，与backend保持一致
-            // 先尝试转换为Int64（因为jsonValueToAny返回Int64）
             let fInt64 = f as Int64
             if (let Some(v) <- fInt64) {
                 v == 1
             } else {
-                // 再尝试Int32
                 let fInt32 = f as Int32
                 if (let Some(v) <- fInt32) {
                     v == 1
@@ -476,11 +510,7 @@ public class DataAccessAuthorizationController {
             false
         }
     }
-    
-    /**
-     * 解析JSON格式的ids数组
-     * 支持格式: "[\"uuid1\",\"uuid2\"]" 或 "[\"uuid1\", \"uuid2\"]"
-     */
+
     private func parseIdsArray(idsStr: String): ArrayList<String> {
         let idArray = ArrayList<String>()
         try {
@@ -495,7 +525,6 @@ public class DataAccessAuthorizationController {
                 }
             }
         } catch (e: Exception) {
-            // 如果JSON解析失败，尝试逗号分隔格式
             let parts = idsStr.split(",")
             for (part in parts) {
                 let trimmed = part.trimAscii()
@@ -506,7 +535,7 @@ public class DataAccessAuthorizationController {
         }
         return idArray
     }
-    
+
     private func parseLimit(limit: ?String): Int32 {
         if (let Some(l) <- limit) {
             Int32.parse(l)
@@ -514,7 +543,7 @@ public class DataAccessAuthorizationController {
             10
         }
     }
-    
+
     private func parsePage(page: ?String): Int32 {
         if (let Some(p) <- page) {
             Int32.parse(p)
@@ -522,8 +551,222 @@ public class DataAccessAuthorizationController {
             1
         }
     }
-    
-    //#endregion AutoCreateCode
+
+    public func export(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            // 获取所有data_access_authorization数据
+            let (entities, _) = service.getList(1, 1000)
+
+            // 构建CSV内容
+            let sb = StringBuilder()
+            // 写入CSV头部
+            sb.append("id,entity_id,entity_type,user_id,permission,creator,created_at,updated_at,deleted_at\n")
+
+            // 写入数据行
+            for (entity in entities) {
+                sb.append("\"" + "${entity.id}" + ",")
+                sb.append("\"" + "${entity.entityId}" + ",")
+                sb.append("\"" + "${entity.entityType}" + ",")
+                sb.append("\"" + "${entity.userId}" + ",")
+                sb.append("${entity.permission}")
+                sb.append(",")
+                sb.append(if (let Some(v) <- entity.creator) { "\"" + v + "\"," } else { "" })
+                sb.append("\"" + "${entity.createdAt.toString()}" + ",")
+                sb.append("\"" + "${entity.updatedAt.toString()}" + ",")
+                sb.append(if (let Some(v) <- entity.deletedAt) { "\"" + v.toString() + "\"," } else { "" })
+                sb.append("\n")
+            }
+
+            // 设置响应头
+            res.header("Content-Type", "text/csv")
+            res.header("Content-Disposition", "attachment; filename=data_access_authorization_export.csv")
+            res.status(200).send(sb.toString())
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"" + e.message + "\"}")
+        }
+    }
+
+
+//#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    public func authorize(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let userId = req.getLocals("userId")
+            if (userId.isNone()) {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
+            }
+
+            let userIdStr = userId.getOrThrow() as String
+            if (let Some(str) <- userIdStr) {
+                let body = parseBody(req)
+                if (let Some(b) <- body) {
+                    var entityType = ""
+                    var entityId = ""
+                    var targetUserId = ""
+                    var permissionValue = Int32(1)
+
+                    if (let Some(v) <- b.get("entity_type")) {
+                        let sOpt = v as String
+                        if (let Some(s) <- sOpt) { entityType = s }
+                    }
+                    if (let Some(v) <- b.get("entity_id")) {
+                        let sOpt = v as String
+                        if (let Some(s) <- sOpt) { entityId = s }
+                    }
+                    if (let Some(v) <- b.get("user_id")) {
+                        let sOpt = v as String
+                        if (let Some(s) <- sOpt) { targetUserId = s }
+                    }
+                    if (let Some(v) <- b.get("permission")) {
+                        let sOpt = v as String
+                        if (let Some(s) <- sOpt) {
+                            permissionValue = Int32(Int64.parse(s))
+                        }
+                    }
+
+                    let permLevel = PermissionLevel.fromInt32OrDefault(permissionValue)
+
+                    if (entityType.isEmpty() || entityId.isEmpty() || targetUserId.isEmpty()) {
+                        res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"参数无效: entity_type/entity_id/user_id不能为空\"}")
+                        return
+                    }
+
+                    let result = service.createAuthorization(entityType, entityId, targetUserId, permLevel, str)
+
+                    if (result.success) {
+                        if (result.data.isSome()) {
+                            let data = result.data.getOrThrow()
+                            res.status(200).json(data.toJson())
+                        } else {
+                            res.status(200).json("{\"desc\":\"授权成功\"}")
+                        }
+                    } else {
+                        let reason = result.reason ?? "授权失败"
+                        if (let Some(r) <- result.reason) {
+                            if (r.contains("对自己")) {
+                                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"${reason}\"}")
+                            } else if (r.contains("权限")) {
+                                res.status(403).json("{\"errno\":\"40300\",\"errmsg\":\"${reason}\"}")
+                            } else if (r.contains("更高级别")) {
+                                res.status(409).json("{\"errno\":\"40901\",\"errmsg\":\"${reason}\"}")
+                            } else {
+                                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                            }
+                        } else {
+                            res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                        }
+                    }
+                } else {
+                    res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
+                }
+            } else {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
+    public func revoke(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let userId = req.getLocals("userId")
+            if (userId.isNone()) {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
+            }
+
+            let userIdStr = userId.getOrThrow() as String
+            if (let Some(str) <- userIdStr) {
+                let body = parseBody(req)
+                if (let Some(b) <- body) {
+                    var authId = ""
+                    if (let Some(v) <- b.get("id")) {
+                        let sOpt = v as String
+                        if (let Some(s) <- sOpt) { authId = s }
+                    }
+
+                    let result = service.deleteAuthorization(authId, str)
+                    if (result.success) {
+                        res.status(200).json("{\"desc\":\"撤销授权成功\"}")
+                    } else {
+                        let reason = result.reason ?? "撤销授权失败"
+                        if (let Some(r) <- result.reason) {
+                            if (r.contains("不存在")) {
+                                res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"${reason}\"}")
+                            } else if (r.contains("权限")) {
+                                res.status(403).json("{\"errno\":\"40300\",\"errmsg\":\"${reason}\"}")
+                            } else {
+                                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                            }
+                        } else {
+                            res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                        }
+                    }
+                } else {
+                    res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"提交数据格式错误\"}")
+                }
+            } else {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
+    public func getAuthorizations(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let userId = req.getLocals("userId")
+            if (userId.isNone()) {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
+            }
+
+            let userIdStr = userId.getOrThrow() as String
+            if (let Some(str) <- userIdStr) {
+                let entityType = req.pathParam("entityType")
+                let entityId = req.pathParam("entityId")
+
+                var entityTypeStr = ""
+                var entityIdStr = ""
+                if (let Some(v) <- entityType) { entityTypeStr = v }
+                if (let Some(v) <- entityId) { entityIdStr = v }
+
+                let result = service.getEntityAuthorizations(entityTypeStr, entityIdStr, str)
+                if (result.success) {
+                    if (result.data.isSome()) {
+                        let data = result.data.getOrThrow()
+                        var entitiesJson = ""
+                        for (e in data) {
+                            if (entitiesJson.isEmpty()) {
+                                entitiesJson = e.toJson()
+                            } else {
+                                entitiesJson = entitiesJson + "," + e.toJson()
+                            }
+                        }
+                        res.status(200).json("[${entitiesJson}]")
+                    } else {
+                        res.status(200).json("[]")
+                    }
+                } else {
+                    let reason = result.reason ?? "查询授权记录失败"
+                    if (let Some(r) <- result.reason) {
+                        if (r.contains("权限")) {
+                            res.status(403).json("{\"errno\":\"40300\",\"errmsg\":\"${reason}\"}")
+                        } else {
+                            res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                        }
+                    } else {
+                        res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                    }
+                }
+            } else {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+            }
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
 }

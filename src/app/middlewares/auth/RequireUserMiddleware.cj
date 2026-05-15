@@ -58,12 +58,10 @@ public class RequireUserMiddleware <: Middleware {
             if (result.success) {
                 if (let Some(u) <- result.data) {
                     // 检查用户状态
-                    if (let Some(status) <- u.status) {
-                        if (status == 0) {
-                            // 用户被禁用
-                            LogUtils.info("User ${uid} is disabled")
-                            return false
-                        }
+                    if (u.status == 0) {
+                        // 用户被禁用
+                        LogUtils.info("User ${uid} is disabled")
+                        return false
                     }
                     
                     // 检查是否被软删除

@@ -10,7 +10,7 @@ import magic.app.utils.auth.{BcryptUtil, AuthorizeUtil, JWTUtil, AuthProvider}
 import magic.log.LogUtils
 import std.time.DateTime
 import std.collection.{HashMap, Map, ArrayList}
-import stdx.encoding.json.{JsonValue, JsonObject, JsonString}
+import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool}
 
 /**
  * UctooUserAuthController - 用户认证控制器
@@ -89,11 +89,9 @@ public class UctooUserAuthController {
             }
             
             // 检查用户状态
-            if (let Some(status) <- u.status) {
-                if (status == 0) {
-                    res.status(403).json("{\"errno\":\"40302\",\"errmsg\":\"用户已被禁用\"}")
-                    return
-                }
+            if (u.status == 0) {
+                res.status(403).json("{\"errno\":\"40302\",\"errmsg\":\"用户已被禁用\"}")
+                return
             }
             
             // 授权登录
@@ -154,14 +152,10 @@ public class UctooUserAuthController {
             user.status = 1
             user.createdAt = DateTime.now()
             
-            let result = userService.create(user)
+            let result = userService.create(user, "")
             if (result.success) {
-                if (let Some(newUser) <- result.data) {
-                    // 注册成功，自动登录
-                    authorizeUtil.authorizeAndEnd(newUser, req, res, AuthProvider.Local, true)
-                } else {
-                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"注册失败\"}")
-                }
+                // 注册成功，自动登录
+                authorizeUtil.authorizeAndEnd(user, req, res, AuthProvider.Local, true)
             } else {
                 res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"注册失败\"}")
             }
@@ -246,61 +240,77 @@ public class UctooUserAuthController {
     }
     
     /**
-     * 重置密码
+     * 管理员重置密码
      * POST /api/v1/uctoo/uctoo_user/resetpassword
+     * 
+     * 管理员强制重置用户密码，无需验证旧密码
+     * 参数：{ "email": "xxx@example.com", "new_password": "xxx" }
      */
     public func resetPassword(req: HttpRequest, res: HttpResponse): Unit {
         try {
             let body = req.body
+            LogUtils.info("ResetPassword", "=== Received body: [${body}] ===")
+            LogUtils.info("ResetPassword", "=== Body length: ${body.size} ===")
+
+            if (body.isEmpty()) {
+                LogUtils.error("ResetPassword", "=== Body is empty! ===")
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"请求体为空\"}")
+                return
+            }
+
             let jsonValue = JsonValue.fromStr(body)
+            LogUtils.info("ResetPassword", "=== JSON parsed, type check: isJsonObject=${jsonValue is JsonObject} ===")
             
             if (!(jsonValue is JsonObject)) {
+                LogUtils.error("ResetPassword", "=== JSON is not JsonObject! ===")
                 res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"请求格式错误\"}")
                 return
             }
             
             let obj = jsonValue.asObject()
-            
-            // 获取参数
-            let userId = getStringFromJson(obj, "user_id")
-            let oldPassword = getStringFromJson(obj, "old_password")
-            let newPassword = getStringFromJson(obj, "new_password")
-            
-            if (userId.isEmpty() || oldPassword.isEmpty() || newPassword.isEmpty()) {
-                res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"参数不完整\"}")
-                return
+            LogUtils.info("ResetPassword", "=== JsonObject fields count: iterating to log keys ===")
+            for ((key, value) in obj.getFields()) {
+                if (value is JsonString) {
+                    LogUtils.info("ResetPassword", "=== Field: ${key} = ${value.asString().getValue()} ===")
+                } else {
+                    LogUtils.info("ResetPassword", "=== Field: ${key} = (non-string type) ===")
+                }
             }
             
-            // 查询用户
-            let userResult = userService.getById(userId)
-            if (!userResult.success) {
+            let email = getStringFromJson(obj, "email")
+            let newPassword = getStringFromJson(obj, "new_password")
+            LogUtils.info("ResetPassword", "=== Parsed email: [${email}], newPassword: [${newPassword}] ===")
+
+            if (email.isEmpty() || newPassword.isEmpty()) {
+                LogUtils.error("ResetPassword", "=== Parameter missing! email.isEmpty=${email.isEmpty()}, newPassword.isEmpty=${newPassword.isEmpty()} ===")
+                res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"参数不完整，email和new_password不能为空\"}")
+                return
+            }
+
+            let userResult = userService.findByEmail(email)
+            LogUtils.info("ResetPassword", "=== findByEmail result: isNone=${userResult.isNone()} ===")
+            if (userResult.isNone()) {
                 res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"用户不存在\"}")
                 return
             }
-            
-            if (let Some(u) <- userResult.data) {
-                // 验证旧密码
-                if (!bcryptUtil.comparePassword(oldPassword, u.password)) {
-                    res.status(400).json("{\"errno\":\"40005\",\"errmsg\":\"旧密码错误\"}")
-                    return
-                }
-                
-                // 更新密码
+
+            if (let Some(u) <- userResult) {
                 let newHash = bcryptUtil.hashPassword(newPassword)
                 u.password = newHash
                 u.updatedAt = DateTime.now()
-                
-                if (userService.update(userId, u).success) {
+
+                if (userService.update(u.id, u).success) {
+                    LogUtils.info("ResetPassword", "=== Password reset success for user: ${email} ===")
                     res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"密码重置成功\"}")
                 } else {
+                    LogUtils.error("ResetPassword", "=== Password reset failed for user: ${email} ===")
                     res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"密码重置失败\"}")
                 }
             } else {
                 res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"用户不存在\"}")
             }
-            
         } catch (e: Exception) {
-            LogUtils.error("Reset password failed: ${e.message}")
+            LogUtils.error("ResetPassword", "=== Exception: ${e.message} ===")
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
@@ -333,11 +343,59 @@ public class UctooUserAuthController {
     // ==================== 辅助方法 ====================
     
     private func getStringFromJson(obj: JsonObject, key: String): String {
-        if (let Some(value) <- obj.get(key)) {
+        let valueOpt = obj.get(key)
+        if (valueOpt.isNone()) {
+            LogUtils.info("GetStringFromJson", "=== Key '${key}' not found in JsonObject ===")
+            return ""
+        }
+        if (let Some(value) <- valueOpt) {
             if (value is JsonString) {
                 return value.asString().getValue()
+            } else {
+                LogUtils.info("GetStringFromJson", "=== Key '${key}' value is not JsonString, type mismatch ===")
             }
         }
         ""
+    }
+
+    private func parseBody(req: HttpRequest): ?Map<String, Any> {
+        try {
+            let body = req.body
+
+            if (body.isEmpty()) {
+                return None<Map<String, Any>>
+            }
+
+            let jsonValue = JsonValue.fromStr(body)
+            if (!(jsonValue is JsonObject)) {
+                return None<Map<String, Any>>
+            }
+
+            let jsonObj = jsonValue.asObject()
+            let map = HashMap<String, Any>()
+
+            for ((key, value) in jsonObj.getFields()) {
+                let anyValue = jsonValueToAny(value)
+                map.add(key, anyValue)
+            }
+
+            return Some<Map<String, Any>>(map)
+        } catch (e: Exception) {
+            return None<Map<String, Any>>
+        }
+    }
+
+    private func jsonValueToAny(value: JsonValue): Any {
+        if (value is JsonString) {
+            return value.asString().getValue()
+        } else if (value is JsonInt) {
+            return value.asInt().getValue()
+        } else if (value is JsonFloat) {
+            return value.asFloat().getValue()
+        } else if (value is JsonBool) {
+            return value.asBool().getValue()
+        } else {
+            return ""
+        }
     }
 }

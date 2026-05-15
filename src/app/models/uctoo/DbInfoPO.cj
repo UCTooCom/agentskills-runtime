@@ -10,9 +10,8 @@ import f_orm.macros.{QueryMappersGenerator, ORMField}
 import f_data.macros.DataAssist
 import f_data.{ObjectData, Data, DataConversionFlag, ObjectFields, MutableField, DataObject, f_data_tryFromData}
 import f_orm.*
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
-
+import json4cj.JsonValueSerializable
+import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 
 /**
  * DbInfoPO - db_info表持久化对象
@@ -23,54 +22,54 @@ import f_orm.*
 @DataAssist[fields]
 @QueryMappersGenerator["db_info"]
 public class DbInfoPO {
-    @ORMField['id']
-    public var id: ?String = None<String>
+        @ORMField['id']
+    public var id: String = ""
 
         @ORMField['table_catalog']
     public var tableCatalog: String = ""
 
         @ORMField['table_schema']
-    public var tableSchema: ?String = None<String>
+    public var tableSchema: Option<String> = None<String>
 
         // 注意: 数据库列名 'table_name' 是关键字，已重命名为 'dbTableName'
-    @ORMField['table_name']
+        @ORMField['table_name']
     public var dbTableName: String = ""
 
         @ORMField['column_name']
     public var columnName: String = ""
 
         @ORMField['column_default']
-    public var columnDefault: ?String = None<String>
+    public var columnDefault: Option<String> = None<String>
 
         @ORMField['is_nullable']
     public var isNullable: String = ""
 
         @ORMField['data_type']
-    public var dataType: ?String = None<String>
+    public var dataType: Option<String> = None<String>
 
         @ORMField['vue_component_type']
-    public var vueComponentType: ?String = None<String>
+    public var vueComponentType: Option<String> = None<String>
 
         @ORMField['react_component_type']
-    public var reactComponentType: ?String = None<String>
+    public var reactComponentType: Option<String> = None<String>
 
         @ORMField['arkui_component_type']
-    public var arkuiComponentType: ?String = None<String>
+    public var arkuiComponentType: Option<String> = None<String>
 
         @ORMField['uniapp_component_type']
-    public var uniappComponentType: ?String = None<String>
+    public var uniappComponentType: Option<String> = None<String>
 
         @ORMField['rules']
-    public var rules: ?String = None<String>
+    public var rules: Option<String> = None<String>
 
         @ORMField['pattern']
-    public var pattern: ?String = None<String>
+    public var pattern: Option<String> = None<String>
 
         @ORMField['weight']
-    public var weight: ?Int32 = None<Int32>
+    public var weight: Int32 = 0
 
         @ORMField['creator']
-    public var creator: ?String = None<String>
+    public var creator: Option<String> = None<String>
 
         @ORMField['created_at']
     public var createdAt: DateTime = DateTime.now()
@@ -79,10 +78,10 @@ public class DbInfoPO {
     public var updatedAt: DateTime = DateTime.now()
 
         @ORMField['deleted_at']
-    public var deletedAt: ?DateTime = None<DateTime>
+    public var deletedAt: Option<DateTime> = None<DateTime>
 
         @ORMField['placeholder']
-    public var placeholder: ?String = None<String>
+    public var placeholder: Option<String> = None<String>
 
         @ORMField['is_column_hidden']
     public var isColumnHidden: String = ""
@@ -91,174 +90,119 @@ public class DbInfoPO {
     public var isTableHidden: String = ""
 
         @ORMField['column_comment']
-    public var columnComment: ?String = None<String>
+    public var columnComment: Option<String> = None<String>
 
         @ORMField['ordinal_position']
-    public var ordinalPosition: ?Int32 = None<Int32>
+    public var ordinalPosition: Int32 = 0
 
         @ORMField['migration_id']
-    public var migrationId: ?String = None<String>
+    public var migrationId: Option<String> = None<String>
 
         @ORMField['character_maximum_length']
-    public var characterMaximumLength: ?Int32 = None<Int32>
-    
+    public var characterMaximumLength: Option<Int64> = None<Int64>
+
     public init() {}
-    
+
     public init(
                 id: String,
-        tableCatalog: String,
-        tableSchema: ?String,
-        dbTableName: String,
-        columnName: String,
-        columnDefault: ?String,
-        isNullable: String,
-        dataType: ?String,
-        vueComponentType: ?String,
-        reactComponentType: ?String,
-        arkuiComponentType: ?String,
-        uniappComponentType: ?String,
-        rules: ?String,
-        pattern: ?String,
-        weight: ?Int32,
-        creator: ?String,
-        createdAt: DateTime,
-        updatedAt: DateTime,
-        deletedAt: ?DateTime,
-        placeholder: ?String,
-        isColumnHidden: String,
-        isTableHidden: String,
-        columnComment: ?String,
-        ordinalPosition: ?Int32,
-        migrationId: ?String,
-        characterMaximumLength: ?Int32
+                tableCatalog: String,
+                tableSchema: Option<String>,
+                dbTableName: String,
+                columnName: String,
+                columnDefault: Option<String>,
+                isNullable: String,
+                dataType: Option<String>,
+                vueComponentType: Option<String>,
+                reactComponentType: Option<String>,
+                arkuiComponentType: Option<String>,
+                uniappComponentType: Option<String>,
+                rules: Option<String>,
+                pattern: Option<String>,
+                weight: Int32,
+                creator: Option<String>,
+                createdAt: DateTime,
+                updatedAt: DateTime,
+                deletedAt: Option<DateTime>,
+                placeholder: Option<String>,
+                isColumnHidden: String,
+                isTableHidden: String,
+                columnComment: Option<String>,
+                ordinalPosition: Int32,
+                migrationId: Option<String>,
+                characterMaximumLength: Option<Int64>
     ) {
                 this.id = id
-        this.tableCatalog = tableCatalog
-        this.tableSchema = tableSchema
-        this.dbTableName = dbTableName
-        this.columnName = columnName
-        this.columnDefault = columnDefault
-        this.isNullable = isNullable
-        this.dataType = dataType
-        this.vueComponentType = vueComponentType
-        this.reactComponentType = reactComponentType
-        this.arkuiComponentType = arkuiComponentType
-        this.uniappComponentType = uniappComponentType
-        this.rules = rules
-        this.pattern = pattern
-        this.weight = weight
-        this.creator = creator
-        this.createdAt = createdAt
-        this.updatedAt = updatedAt
-        this.deletedAt = deletedAt
-        this.placeholder = placeholder
-        this.isColumnHidden = isColumnHidden
-        this.isTableHidden = isTableHidden
-        this.columnComment = columnComment
-        this.ordinalPosition = ordinalPosition
-        this.migrationId = migrationId
-        this.characterMaximumLength = characterMaximumLength
+                this.tableCatalog = tableCatalog
+                this.tableSchema = tableSchema
+                this.dbTableName = dbTableName
+                this.columnName = columnName
+                this.columnDefault = columnDefault
+                this.isNullable = isNullable
+                this.dataType = dataType
+                this.vueComponentType = vueComponentType
+                this.reactComponentType = reactComponentType
+                this.arkuiComponentType = arkuiComponentType
+                this.uniappComponentType = uniappComponentType
+                this.rules = rules
+                this.pattern = pattern
+                this.weight = weight
+                this.creator = creator
+                this.createdAt = createdAt
+                this.updatedAt = updatedAt
+                this.deletedAt = deletedAt
+                this.placeholder = placeholder
+                this.isColumnHidden = isColumnHidden
+                this.isTableHidden = isTableHidden
+                this.columnComment = columnComment
+                this.ordinalPosition = ordinalPosition
+                this.migrationId = migrationId
+                this.characterMaximumLength = characterMaximumLength
     }
-    
+
+    /// 序列化为 JsonValue
+    public func toJsonValue(): JsonValue {
+        var map = HashMap<String, JsonValue>()
+        map.add("id", this.id.toJsonValue())
+        map.add("table_catalog", this.tableCatalog.toJsonValue())
+        map.add("table_schema", optionToJsonValue(this.tableSchema))
+        map.add("table_name", this.dbTableName.toJsonValue())
+        map.add("column_name", this.columnName.toJsonValue())
+        map.add("column_default", optionToJsonValue(this.columnDefault))
+        map.add("is_nullable", this.isNullable.toJsonValue())
+        map.add("data_type", optionToJsonValue(this.dataType))
+        map.add("vue_component_type", optionToJsonValue(this.vueComponentType))
+        map.add("react_component_type", optionToJsonValue(this.reactComponentType))
+        map.add("arkui_component_type", optionToJsonValue(this.arkuiComponentType))
+        map.add("uniapp_component_type", optionToJsonValue(this.uniappComponentType))
+        map.add("rules", optionToJsonValue(this.rules))
+        map.add("pattern", optionToJsonValue(this.pattern))
+        map.add("weight", this.weight.toJsonValue())
+        map.add("creator", optionToJsonValue(this.creator))
+        map.add("created_at", this.createdAt.toJsonValue())
+        map.add("updated_at", this.updatedAt.toJsonValue())
+        map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("placeholder", optionToJsonValue(this.placeholder))
+        map.add("is_column_hidden", this.isColumnHidden.toJsonValue())
+        map.add("is_table_hidden", this.isTableHidden.toJsonValue())
+        map.add("column_comment", optionToJsonValue(this.columnComment))
+        map.add("ordinal_position", this.ordinalPosition.toJsonValue())
+        map.add("migration_id", optionToJsonValue(this.migrationId))
+        map.add("character_maximum_length", optionToJsonValue(this.characterMaximumLength))
+        return JsonObject(map)
+    }
+
+    /// 辅助方法：将 Option<T> 转换为 JsonValue
+    private static func optionToJsonValue<T>(opt: Option<T>): JsonValue where T <: JsonValueSerializable<T> {
+        if (let Some(v) <- opt) {
+            return v.toJsonValue()
+        } else {
+            return JsonNull()
+        }
+    }
+
+    /// 序列化为 JSON 字符串
     public func toJson(): String {
-        let sb = StringBuilder()
-        sb.append("{")
-                sb.append("\"id\":\"${id}\",")
-        sb.append("\"table_catalog\":\"${tableCatalog}\",")
-        if (let Some(v) <- tableSchema) {
-            sb.append("\"table_schema\":\"${v}\",")
-        } else {
-            sb.append("\"table_schema\":\"\",")
-        }
-        sb.append("\"table_name\":\"${dbTableName}\",")
-        sb.append("\"column_name\":\"${columnName}\",")
-        if (let Some(v) <- columnDefault) {
-            sb.append("\"column_default\":\"${v}\",")
-        } else {
-            sb.append("\"column_default\":\"\",")
-        }
-        sb.append("\"is_nullable\":\"${isNullable}\",")
-        if (let Some(v) <- dataType) {
-            sb.append("\"data_type\":\"${v}\",")
-        } else {
-            sb.append("\"data_type\":\"\",")
-        }
-        if (let Some(v) <- vueComponentType) {
-            sb.append("\"vue_component_type\":\"${v}\",")
-        } else {
-            sb.append("\"vue_component_type\":\"\",")
-        }
-        if (let Some(v) <- reactComponentType) {
-            sb.append("\"react_component_type\":\"${v}\",")
-        } else {
-            sb.append("\"react_component_type\":\"\",")
-        }
-        if (let Some(v) <- arkuiComponentType) {
-            sb.append("\"arkui_component_type\":\"${v}\",")
-        } else {
-            sb.append("\"arkui_component_type\":\"\",")
-        }
-        if (let Some(v) <- uniappComponentType) {
-            sb.append("\"uniapp_component_type\":\"${v}\",")
-        } else {
-            sb.append("\"uniapp_component_type\":\"\",")
-        }
-        if (let Some(v) <- rules) {
-            sb.append("\"rules\":\"${v}\",")
-        } else {
-            sb.append("\"rules\":\"\",")
-        }
-        if (let Some(v) <- pattern) {
-            sb.append("\"pattern\":\"${v}\",")
-        } else {
-            sb.append("\"pattern\":\"\",")
-        }
-        if (let Some(v) <- weight) {
-            sb.append("\"weight\":${v},")
-        } else {
-            sb.append("\"weight\":null,")
-        }
-        if (let Some(v) <- creator) {
-            sb.append("\"creator\":\"${v}\",")
-        } else {
-            sb.append("\"creator\":\"\",")
-        }
-        sb.append("\"created_at\":\"${createdAt}\",")
-        sb.append("\"updated_at\":\"${updatedAt}\",")
-        if (let Some(v) <- deletedAt) {
-            sb.append("\"deleted_at\":\"${v}\",")
-        } else {
-            sb.append("\"deleted_at\":\"\",")
-        }
-        if (let Some(v) <- placeholder) {
-            sb.append("\"placeholder\":\"${v}\",")
-        } else {
-            sb.append("\"placeholder\":\"\",")
-        }
-        sb.append("\"is_column_hidden\":\"${isColumnHidden}\",")
-        sb.append("\"is_table_hidden\":\"${isTableHidden}\",")
-        if (let Some(v) <- columnComment) {
-            sb.append("\"column_comment\":\"${v}\",")
-        } else {
-            sb.append("\"column_comment\":\"\",")
-        }
-        if (let Some(v) <- ordinalPosition) {
-            sb.append("\"ordinal_position\":${v},")
-        } else {
-            sb.append("\"ordinal_position\":null,")
-        }
-        if (let Some(v) <- migrationId) {
-            sb.append("\"migration_id\":\"${v}\",")
-        } else {
-            sb.append("\"migration_id\":\"\",")
-        }
-        if (let Some(v) <- characterMaximumLength) {
-            sb.append("\"character_maximum_length\":${v}")
-        } else {
-            sb.append("\"character_maximum_length\":null")
-        }
-        sb.append("}")
-        return sb.toString()
+        return this.toJsonValue().toString()
     }
 
 //#endregion AutoCreateCode

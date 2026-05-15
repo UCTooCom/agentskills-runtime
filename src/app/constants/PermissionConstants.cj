@@ -6,6 +6,7 @@ package magic.app.constants
 /**
  * PermissionConstants - 权限常量定义
  * 
+ * 本文件实际未使用，系统使用uctoo数据库permissions表定义全部权限节点   
  * 定义系统中所有权限节点的常量,遵循V3命名规范:
  * - API权限(type=3): 使用路由路径
  * - 菜单权限(type=1): 使用database.{db}.{table}或自定义名称
@@ -92,6 +93,22 @@ public class PermissionConstants {
     public static let PERMISSION_EDIT_BUTTON = "button.permission.edit"
     public static let PERMISSION_DELETE_BUTTON = "button.permission.delete"
     public static let PERMISSION_ASSIGN_BUTTON = "button.permission.assign"
+    
+    // ========== 行级数据权限 ==========
+    
+    // 行级数据权限API (type=3)
+    public static let DATA_ACCESS_AUTHORIZATION_API = "/api/v1/uctoo/data_access_authorization"
+    public static let DATA_ACCESS_AUTHORIZATION_AUTHORIZE_API = "/api/v1/uctoo/data_access_authorization/authorize"
+    public static let DATA_ACCESS_AUTHORIZATION_REVOKE_API = "/api/v1/uctoo/data_access_authorization/revoke"
+    public static let DATA_ACCESS_AUTHORIZATION_LIST_API = "/api/v1/uctoo/data_access_authorization/:entityType/:entityId/authorizations"
+    
+    // 行级数据权限菜单 (type=1)
+    public static let DATA_ACCESS_AUTHORIZATION_MENU = "database.uctoo.data_access_authorization"
+    
+    // 行级数据权限按钮 (type=2)
+    public static let DATA_ACCESS_AUTHORIZATION_GRANT_BUTTON = "button.data_access_authorization.grant"
+    public static let DATA_ACCESS_AUTHORIZATION_REVOKE_BUTTON = "button.data_access_authorization.revoke"
+    public static let DATA_ACCESS_AUTHORIZATION_VIEW_BUTTON = "button.data_access_authorization.view"
     
     // ========== 辅助方法 ==========
     

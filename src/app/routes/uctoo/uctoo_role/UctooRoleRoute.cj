@@ -5,10 +5,11 @@ package magic.app.routes.uctoo.uctoo_role
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+
+    //#region AutoCreateCode
 import magic.app.controllers.uctoo.uctoo_role.UctooRoleController
 import magic.app.core.router.Router
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
 
 public class UctooRoleRoute {
@@ -20,9 +21,10 @@ public class UctooRoleRoute {
         this.controller = controller
     }
     
-    //#region AutoCreateCode
     
     public func register(): Router {
+    // 先注册自定义路由，避免被动态路由 :id 匹配
+        registerCustomRoutes()
         // 按照 uctoo v4 规范，路由路径带 /v1 前缀
         router.post("/api/v1/uctoo/uctoo_role/add", controller.add)
         router.post("/api/v1/uctoo/uctoo_role/edit", controller.edit)
@@ -41,4 +43,13 @@ public class UctooRoleRoute {
     //#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义路由）==========
+    
+    /**
+     * 注册自定义路由
+     * 在此方法中添加定制开发的路由
+     */
+    public func registerCustomRoutes(): Router {
+
+        return router
+    }
 }

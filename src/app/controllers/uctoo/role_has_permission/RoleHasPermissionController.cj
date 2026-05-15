@@ -5,6 +5,9 @@ package magic.app.controllers.uctoo.role_has_permission
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+//#region AutoCreateCode
+
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.core.response.{APIError, APIResult}
 import magic.app.models.uctoo.RoleHasPermissionPO
@@ -13,8 +16,6 @@ import magic.log.LogUtils
 import std.collection.{HashMap, Map, ArrayList}
 import std.convert.*
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool, JsonArray}
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
 /**
  * RoleHasPermissionController - 角色权限关联控制器

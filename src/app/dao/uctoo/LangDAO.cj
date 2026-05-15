@@ -5,6 +5,10 @@ package magic.app.dao.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+    
+    //#region AutoCreateCode
+
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -13,14 +17,11 @@ import f_orm.sql.{Pagination, SqlPartial}
 import magic.app.models.uctoo.LangPO
 import magic.log.LogUtils
 
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
-
-
 /**
  * LangDAO - lang数据访问接口
- * 
- * 提供标准CRUD操作，遵循UCTOO V4 ORM规范
- * 
+ *
+ * 提供lang表的标准CRUD操作，遵循UCTOO V4 ORM规范
+ *
  * 设计原则：
  * 1. DAO层只负责数据访问，不包含业务逻辑
  * 2. 所有查询方法不过滤软删除数据，返回完整数据集
@@ -30,14 +31,12 @@ import magic.log.LogUtils
 @DAO
 public interface LangDAO <: RootDAO {
     prop executor: SqlExecutor
-    
-    //#region AutoCreateCode
-    
+
     // ==================== 插入操作 ====================
-    
+
     /**
      * 插入lang（id由数据库自动生成UUID）
-     * @param entity lang对象
+     * @param entity LangPO对象
      * @return 插入成功返回生成的ID，失败返回空字符串
      */
     func insertLang(entity: LangPO): String {
@@ -51,7 +50,7 @@ public interface LangDAO <: RootDAO {
                 updated_at,
                 deleted_at
             ) values(
-                ${arg(entity.name)},
+${arg(entity.name)},
                 ${arg(entity.code)},
                 ${arg(entity.status)},
                 ${arg(entity.creator)},
@@ -62,9 +61,9 @@ public interface LangDAO <: RootDAO {
             returning id
         ''').singleFirst<String>() ?? ""
     }
-    
+
     // ==================== 单条查询 ====================
-    
+
     /**
      * 根据ID查询lang
      * @param id langID
@@ -75,9 +74,9 @@ public interface LangDAO <: RootDAO {
             select * from lang where id = ${arg(id)}
         ''').first<LangPO>()
     }
-    
+
     // ==================== 更新操作 ====================
-    
+
     /**
      * 更新lang
      * @param entity lang对象
@@ -89,14 +88,15 @@ public interface LangDAO <: RootDAO {
                 name = ${arg(entity.name)},
                 code = ${arg(entity.code)},
                 status = ${arg(entity.status)},
+                creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
     }
-    
+
     // ==================== 删除操作 ====================
-    
+
     /**
      * 软删除lang
      * @param id langID
@@ -107,7 +107,7 @@ public interface LangDAO <: RootDAO {
             update lang set deleted_at = ${arg(DateTime.now())} where id = ${arg(id)}
         ''').update
     }
-    
+
     /**
      * 恢复软删除的lang
      * @param id langID
@@ -118,7 +118,7 @@ public interface LangDAO <: RootDAO {
             update lang set deleted_at = null where id = ${arg(id)}
         ''').update
     }
-    
+
     /**
      * 硬删除lang
      * @param id langID
@@ -129,9 +129,9 @@ public interface LangDAO <: RootDAO {
             delete from lang where id = ${arg(id)}
         ''').delete
     }
-    
+
     // ==================== 列表查询 ====================
-    
+
     /**
      * 分页查询所有lang
      * @param page 页码（从1开始）
@@ -143,7 +143,7 @@ public interface LangDAO <: RootDAO {
             select * from lang order by created_at desc
         ''', size, page: page)
     }
-    
+
     /**
      * 分页查询lang列表（按创建者）
      * @param creator 创建者ID
@@ -156,7 +156,7 @@ public interface LangDAO <: RootDAO {
             select * from lang where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
-    
+
     /**
      * 查询所有lang（不分页）
      * @return lang列表
@@ -166,7 +166,7 @@ public interface LangDAO <: RootDAO {
             select * from lang order by created_at desc
         ''').list<LangPO>()
     }
-    
+
     /**
      * 批量查询lang
      * @param ids ID列表
@@ -177,9 +177,9 @@ public interface LangDAO <: RootDAO {
             select * from lang where id ${IN(ids)}
         ''').list<LangPO>()
     }
-    
+
     // ==================== 统计操作 ====================
-    
+
     /**
      * 统计创建者的lang数量
      * @param creator 创建者ID
@@ -190,7 +190,7 @@ public interface LangDAO <: RootDAO {
             select count(*) from lang where creator = ${arg(creator)}
         ''').first<Int64>() ?? 0
     }
-    
+
     /**
      * 统计所有lang数量
      * @return 数量
@@ -200,8 +200,140 @@ public interface LangDAO <: RootDAO {
             select count(*) from lang
         ''').first<Int64>() ?? 0
     }
-    
-    //#endregion AutoCreateCode
+
+
+    /**
+     * 分页查询lang列表（带过滤条件）
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findLangByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<LangPO> {
+        let sql = StringBuilder()
+        sql.append("select * from lang where 1=1")
+
+        if (let Some(linkVal) <- link) {
+            if (linkVal != "") {
+                sql.append(" and link like ${arg('%' + linkVal + '%')}")
+            }
+        }
+
+        if (let Some(descVal) <- description) {
+            if (descVal != "") {
+                sql.append(" and description like ${arg('%' + descVal + '%')}")
+            }
+        }
+
+        // 处理 deleted_at 筛选
+        if (let Some(deletedAtVal) <- deletedAt) {
+            if (deletedAtVal == "null") {
+                // 未删除的数据
+                sql.append(" and deleted_at is null")
+            } else if (deletedAtVal == "not_null") {
+                // 已删除的数据（回收站）
+                sql.append(" and deleted_at is not null")
+            }
+        }
+
+        sql.append(" order by created_at desc")
+
+        executor.page<LangPO>(sql.toString(), size, page: page)
+    }
+
+    /**
+     * 批量软删除lang
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchSoftDeleteLang(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            update lang set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
+        ''').update
+    }
+
+    /**
+     * 批量硬删除lang
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchDeleteLang(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            delete from lang where id ${IN(ids)}
+        ''').delete
+    }
+
+    /**
+     * 动态条件查询lang（支持完整查询操作符）
+     *
+     * @param whereClause WHERE 子句字符串（不包含 WHERE 关键字）
+     * @param orderByClause ORDER BY 子句字符串（不包含 ORDER BY 关键字）
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     *
+     * 使用示例：
+     * - whereClause: "name LIKE '%test%' AND status = 'active'"
+     * - orderByClause: "created_at DESC, name ASC"
+     */
+    func findLangByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<LangPO> {
+        let sql = StringBuilder()
+        sql.append("select * from lang")
+
+        if (!whereClause.isEmpty()) {
+            sql.append(" where ${whereClause}")
+        }
+
+        if (!orderByClause.isEmpty()) {
+            sql.append(" order by ${orderByClause}")
+        } else {
+            sql.append(" order by created_at desc")
+        }
+
+        executor.page<LangPO>(sql.toString(), size, page: page)
+    }
+
+    /**
+     * 使用 f_orm Condition API 查询lang
+     *
+     * @param whereClause WHERE 子句字符串
+     * @param orderByClause ORDER BY 子句字符串
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findLangByCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<LangPO> {
+        let fromClause = executor.FROM<LangPO>()
+
+        // 应用 WHERE 条件
+        if (!whereClause.isEmpty()) {
+            fromClause.WHERE(whereClause)
+        }
+
+        // 应用 ORDER BY
+        if (!orderByClause.isEmpty()) {
+            fromClause.ORDER_BY { => orderByClause }
+        } else {
+            fromClause.ORDER_BY { => "created_at DESC" }
+        }
+
+        // 执行分页查询
+        fromClause.page<LangPO>(size, page: page)
+    }
+
+    /**
+     * 清空回收站（硬删除所有已软删除的lang）
+     * @return 影响行数
+     */
+    func emptyRecycleBinLang(): Int64 {
+        executor.setSql('''
+            delete from lang where deleted_at is not null
+        ''').delete
+    }
+
+//#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义方法）==========
     

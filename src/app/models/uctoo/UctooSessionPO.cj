@@ -5,13 +5,14 @@ package magic.app.models.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+
+//#region AutoCreateCode
 import std.time.DateTime
 import f_orm.macros.{QueryMappersGenerator, ORMField}
 import f_data.macros.DataAssist
 import f_data.{ObjectData, Data, DataConversionFlag, ObjectFields, MutableField, DataObject, f_data_tryFromData}
 import f_orm.*
-
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
 /**
  * UctooSessionPO - uctoo_session表持久化对象
@@ -114,4 +115,5 @@ public class UctooSessionPO {
         sb.append("}")
         return sb.toString()
     }
+   //#endregion AutoCreateCode     
 }

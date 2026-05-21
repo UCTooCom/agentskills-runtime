@@ -58,7 +58,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func find{{className}}ById(id: String): Option<{{className}}PO> {
         executor.setSql('''
-            select * from {{tableName}} where id = ${arg(id)}
+            select {{selectColumns}} from {{tableName}} where id = ${arg(id)}
         ''').first<{{className}}PO>()
     }
 
@@ -123,7 +123,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func findAll{{className}}Page(page: Int64, size: Int64): Pagination<{{className}}PO> {
         executor.page<{{className}}PO>('''
-            select * from {{tableName}} order by created_at desc
+            select {{selectColumns}} from {{tableName}} order by created_at desc
         ''', size, page: page)
     }
 
@@ -136,7 +136,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func find{{className}}ByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<{{className}}PO> {
         executor.page<{{className}}PO>('''
-            select * from {{tableName}} where creator = ${arg(creator)} order by created_at desc
+            select {{selectColumns}} from {{tableName}} where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -146,7 +146,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func listAll{{className}}(): ArrayList<{{className}}PO> {
         executor.setSql('''
-            select * from {{tableName}} order by created_at desc
+            select {{selectColumns}} from {{tableName}} order by created_at desc
         ''').list<{{className}}PO>()
     }
 
@@ -157,7 +157,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func find{{className}}ByIds(ids: ArrayList<String>): ArrayList<{{className}}PO> {
         executor.setSql('''
-            select * from {{tableName}} where id ${IN(ids)}
+            select {{selectColumns}} from {{tableName}} where id ${IN(ids)}
         ''').list<{{className}}PO>()
     }
 
@@ -196,7 +196,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func find{{className}}ByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<{{className}}PO> {
         let sql = StringBuilder()
-        sql.append("select * from {{tableName}} where 1=1")
+        sql.append("select {{selectColumns}} from {{tableName}} where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -263,7 +263,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func find{{className}}ByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<{{className}}PO> {
         let sql = StringBuilder()
-        sql.append("select * from {{tableName}}")
+        sql.append("select {{selectColumns}} from {{tableName}}")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

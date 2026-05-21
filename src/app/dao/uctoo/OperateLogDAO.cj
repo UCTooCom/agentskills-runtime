@@ -11,7 +11,6 @@ import f_orm.*
 import f_orm.macros.*
 import f_orm.sql.{Pagination, SqlPartial}
 import magic.app.models.uctoo.OperateLogPO
-import magic.log.LogUtils
 
 /**
  * OperateLogDAO - operate_log数据访问接口

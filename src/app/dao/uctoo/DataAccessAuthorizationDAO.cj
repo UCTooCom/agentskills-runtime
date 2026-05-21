@@ -333,6 +333,10 @@ ${arg(entity.entityId)},
         ''').delete
     }
 
+//#endregion AutoCreateCode
+    
+    // ========== 定制开发方法（在此区域添加自定义方法）==========
+    
     // ==================== 行级权限查询方法 ====================
 
     /**
@@ -390,7 +394,4 @@ ${arg(entity.entityId)},
         ''').list<DataAccessAuthorizationPO>()
     }
 
-//#endregion AutoCreateCode
-    
-    // ========== 定制开发方法（在此区域添加自定义方法）==========
 }

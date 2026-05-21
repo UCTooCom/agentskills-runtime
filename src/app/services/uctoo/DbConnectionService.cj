@@ -12,6 +12,8 @@ import magic.app.models.uctoo.DbConnectionPO
 import magic.app.dao.uctoo.DbConnectionDAO
 import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
+import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
+import magic.app.utils.PermissionUtils
 import magic.log.LogUtils
 
 /**
@@ -59,7 +61,7 @@ public class DbConnectionService {
     }
 
     /**
-     * 更新db_connection
+     * 更新db_connection（无权限检查）
      * @param entityId ID
      * @param entity DbConnectionPO对象
      * @return 更新结果
@@ -150,7 +152,7 @@ public class DbConnectionService {
     }
 
     /**
-     * 删除db_connection
+     * 删除db_connection（无权限检查）
      * @param entityId ID
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
@@ -252,7 +254,7 @@ public class DbConnectionService {
     }
 
     /**
-     * 根据ID获取db_connection
+     * 根据ID获取db_connection（无权限检查）
      * @param entityId ID
      * @return db_connection对象
      */
@@ -281,13 +283,12 @@ public class DbConnectionService {
             let pagination = getExecutor().findAllDbConnectionPage(page, pageSize)
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("DbConnectionService", "getList error: ${e.message}")
             return (ArrayList<DbConnectionPO>(), 0)
         }
     }
 
     /**
-     * 获取db_connection列表（分页，支持排序和过滤）
+     * 获取db_connection列表（分页，支持排序和过滤，无权限过滤）
      *
      * 支持完整的 Prisma 风格查询：
      * - 排序：sort="-created_at,id"
@@ -329,7 +330,6 @@ public class DbConnectionService {
 
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("DbConnectionService", "Failed to get list: ${e.message}")
             return (ArrayList<DbConnectionPO>(), 0)
         }
     }
@@ -612,7 +612,68 @@ public class DbConnectionService {
     }
 
     /**
-     * 获取db_connection列表（带跳过参数）
+     * 获取db_connection列表（带跳过参数，带权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
+     * @param page 页码（从0开始）
+     * @param pageSize 每页大小
+     * @param skip 跳过条数
+     * @param sort 排序参数
+     * @param filter 过滤条件
+     * @param userId 用户ID
+     * @return db_connection列表和总数
+     */
+    public func getListWithSkipWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        skip: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<DbConnectionPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "db_connection")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pageNum = if (pageSize > 0) { (skip / pageSize) + 1 } else { Int32(1) }
+            let pagination = getExecutor().findDbConnectionByCondition(
+                whereClause,
+                orderByClause,
+                Int64(pageNum),
+                Int64(pageSize)
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<DbConnectionPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取db_connection列表（带跳过参数，无权限过滤）
      *
      * 支持完整的 Prisma 风格查询
      *
@@ -741,6 +802,103 @@ public class DbConnectionService {
             } else {
                 return APIResult<Bool>(false, "回收站为空")
             }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    // ==================== 行级权限集成方法（每个表都需要的标准化代码） ====================
+
+    public func createWithPermission(entity: DbConnectionPO, creatorId: String): APIResult<DbConnectionPO> {
+        let result = create(entity, creatorId)
+        if (result.success) {
+            if (result.data.isSome()) {
+                let data = result.data.getOrThrow()
+                if (!data.id.isEmpty()) {
+                    PermissionUtils.autoGrantCreatorPermission(creatorId, data.id, "db_connection")
+                }
+            }
+        }
+        return result
+    }
+
+    public func getByIdWithPermission(entityId: String, userId: String): APIResult<DbConnectionPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkReadPermission(userId, entityId, "db_connection")
+            if (!hasPermission) {
+                return APIResult<DbConnectionPO>(false, reason)
+            }
+            return getById(entityId)
+        } catch (e: Exception) {
+            return APIResult<DbConnectionPO>(false, e.message)
+        }
+    }
+
+    public func getListWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<DbConnectionPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "db_connection")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pagination = getExecutor().findDbConnectionByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<DbConnectionPO>(), 0)
+        }
+    }
+
+    public func updateWithPermission(entityId: String, entity: DbConnectionPO, userId: String): APIResult<DbConnectionPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "db_connection")
+            if (!hasPermission) {
+                return APIResult<DbConnectionPO>(false, reason)
+            }
+            return update(entityId, entity)
+        } catch (e: Exception) {
+            return APIResult<DbConnectionPO>(false, e.message)
+        }
+    }
+
+    public func deleteWithPermission(entityId: String, force: Bool, userId: String): APIResult<Bool> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "db_connection")
+            if (!hasPermission) {
+                return APIResult<Bool>(false, reason)
+            }
+            return delete(entityId, force)
         } catch (e: Exception) {
             return APIResult<Bool>(false, e.message)
         }

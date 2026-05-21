@@ -3,9 +3,11 @@
  */
 package magic.app.routes.uctoo.uctoo_user
 
+//#region AutoCreateCode
 import magic.app.controllers.uctoo.uctoo_user.UctooUserAuthController
 import magic.app.middlewares.auth.{DeserializeUserMiddleware, RequireUserMiddleware}
 import magic.app.core.router.Router
+
 
 /**
  * UctooUserAuthRoute - 用户认证路由
@@ -31,6 +33,9 @@ public class UctooUserAuthRoute {
     }
     
     public func register(): Router {
+        // 先注册自定义路由，避免被动态路由 :id 匹配
+        registerCustomRoutes()
+
         // ========== 公开接口（无需认证）==========
 
         // 用户登录
@@ -61,6 +66,17 @@ public class UctooUserAuthRoute {
             .use(deserializeUserMiddleware)
             .use(requireUserMiddleware)
 
+        return router
+    }
+
+//#endregion AutoCreateCode
+    
+    /**
+     * 注册自定义路由
+     * 在此方法中添加定制开发的路由
+     */
+    public func registerCustomRoutes(): Router {
+        
         return router
     }
 }

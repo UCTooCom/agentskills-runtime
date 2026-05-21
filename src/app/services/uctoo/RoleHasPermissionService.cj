@@ -48,7 +48,7 @@ public class RoleHasPermissionService {
         let roleHasPermission = RoleHasPermissionPO(
             roleId, 
             permissionName, 
-            Some<Int32>(0), 
+            0, 
             creator, 
             DateTime.now(), 
             DateTime.now(), 

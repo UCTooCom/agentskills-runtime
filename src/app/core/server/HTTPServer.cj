@@ -216,7 +216,7 @@ public class HTTPServer {
         
         for (route in routes) {
             logger.info("Registering route: ${route.path}")
-            let handler = createRouteHandler(route.path, route.handler)
+            let handler = createRouteHandler(route)
             _distributor.register(route.path, handler)
         }
         
@@ -227,11 +227,12 @@ public class HTTPServer {
         logger.info("All routes registered successfully")
     }
     
-    private func createRouteHandler(routePath: String, appHandler: (AppHttpRequest, AppHttpResponse) -> Unit): HttpRequestHandler {
+    private func createRouteHandler(route: Route): HttpRequestHandler {
+        let routePath = route.path
         return FuncHandler({ context =>
             eprintln("=== createRouteHandler: Processing request to ${routePath} ===")
             let req = context.request
-            
+
             let appReq = convertRequest(req)
 
             // 提取路径参数
@@ -244,7 +245,7 @@ public class HTTPServer {
                 // 先执行中间件链,最后执行业务handler
                 let finalHandler = { => 
                     eprintln("=== Executing final handler ===")
-                    appHandler(appReq, appRes)
+                    route.handler(appReq, appRes)
                 }
                 middlewareChain.execute(appReq, appRes, finalHandler)
                 eprintln("=== Middleware chain completed ===")
@@ -346,10 +347,12 @@ public class HTTPServer {
         try {
             let bodySizeOpt = req.bodySize
             if (bodySizeOpt.isNone()) {
+                eprintln("=== readRequestBody: bodySize is None, returning empty ===")
                 return ""
             }
             
             let bodySize = bodySizeOpt.getOrThrow()
+            eprintln("=== readRequestBody: bodySize=${bodySize} ===")
             
             // 安全检查：限制请求体大小，防止内存耗尽攻击
             // 最大允许 10MB 的请求体
@@ -361,6 +364,7 @@ public class HTTPServer {
             
             let buffer = Array<UInt8>(bodySize, repeat: 0)
             let bytesRead = req.body.read(buffer)
+            eprintln("=== readRequestBody: bytesRead=${bytesRead}, expected=${bodySize} ===")
             
             // 检查实际读取的字节数
             if (bytesRead != bodySize) {
@@ -373,9 +377,12 @@ public class HTTPServer {
                 return ""
             }
             
-            return String.fromUtf8(buffer)
+            let bodyStr = String.fromUtf8(buffer)
+            eprintln("=== readRequestBody: body content: [${bodyStr}] ===")
+            return bodyStr
         } catch (ex: Exception) {
             logger.error("Error reading request body: ${ex.message}")
+            eprintln("=== readRequestBody exception: ${ex.message} ===")
             return ""
         }
     }

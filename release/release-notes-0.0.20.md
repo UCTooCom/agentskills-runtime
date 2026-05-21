@@ -314,14 +314,14 @@ POST /mcp/execute   # 执行工具
 
 所有SDK已更新到v1.1.0：
 
-- ✅ JavaScript SDK v1.1.0（新增WebMCP支持）
-- ✅ Python SDK v1.1.0
-- ✅ Java SDK v1.1.0
-- ✅ PHP SDK v1.1.0
-- ✅ Go SDK v1.1.0
-- ✅ Rust SDK v1.1.0
-- ✅ ArkTS SDK v1.1.0
-- ✅ UniApp SDK v1.1.0
+- ✅ JavaScript SDK v1.0.1（新增WebMCP支持）
+- ✅ Python SDK v1.0.1
+- ✅ Java SDK v1.0.1
+- ✅ PHP SDK v1.0.1
+- ✅ Go SDK v1.0.1
+- ✅ Rust SDK v1.0.1
+- ✅ ArkTS SDK v1.0.1
+- ✅ UniApp SDK v1.0.1
 
 ## 迁移指南
 
@@ -433,6 +433,7 @@ start-installer.bat
 
 感谢以下贡献者对本版本的贡献：
 - UCToo Team
+- OpenCangjie开源社区
 
 ## 支持
 

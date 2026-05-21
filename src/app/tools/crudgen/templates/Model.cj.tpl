@@ -14,7 +14,7 @@ import f_data.{ObjectData, Data, DataConversionFlag, ObjectFields, MutableField,
 import f_orm.*
 import json4cj.JsonValueSerializable
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
-
+import magic.log.LogUtils
 
 /**
  * {{className}}PO - {{tableName}}表持久化对象

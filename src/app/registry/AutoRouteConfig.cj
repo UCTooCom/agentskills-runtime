@@ -30,6 +30,7 @@ import magic.app.routes.uctoo.i18.I18Route
 import magic.app.routes.uctoo.lang.LangRoute
 import magic.app.routes.uctoo.app_access_token.AppAccessTokenRoute
 import magic.app.routes.uctoo.agent_skills.AgentSkillsRoute
+import magic.app.routes.uctoo.db_connection.DbConnectionRoute
 import magic.app.controllers.uctoo.entity.EntityController
 import magic.app.controllers.uctoo.uctoo_user.UctooUserController
 import magic.app.controllers.uctoo.uctoo_session.UctooSessionController
@@ -50,6 +51,14 @@ import magic.app.controllers.uctoo.i18.I18Controller
 import magic.app.controllers.uctoo.lang.LangController
 import magic.app.controllers.uctoo.app_access_token.AppAccessTokenController
 import magic.app.controllers.uctoo.agent_skills.AgentSkillsController
+
+import magic.app.controllers.uctoo.db_connection.DbConnectionController
+import magic.app.routes.uctoo.crontab.CrontabRoute
+import magic.app.controllers.uctoo.crontab.CrontabController
+import magic.app.routes.uctoo.crontab_log.CrontabLogRoute
+import magic.app.controllers.uctoo.crontab_log.CrontabLogController
+import magic.app.routes.uctoo.crontab_task_registry.CrontabTaskRegistryRoute
+import magic.app.controllers.uctoo.crontab_task_registry.CrontabTaskRegistryController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -70,8 +79,13 @@ import magic.app.services.uctoo.{
     I18Service,
     LangService,
     AppAccessTokenService,
-    AgentSkillsService
-}
+    AgentSkillsService,
+    DbConnectionService,
+    CrontabService,
+    CrontabLogService,
+
+    CrontabTaskRegistryService,}
+import magic.app.services.crontab.SchedulerService
 
 /**
  * AutoRouteConfig - 自动路由配置
@@ -143,6 +157,68 @@ public class AutoRouteConfig {
             }
         ))
         // ==================== CRUD 路由配置 ====================
+        // CrontabTaskRegistry 路由
+        registry.add(RouteEntry(
+            "crontab_task_registry",
+            "/api/v1/uctoo/crontab_task_registry",
+            10,
+            true,
+            { router: Router =>
+                let service = CrontabTaskRegistryService()
+                let controller = CrontabTaskRegistryController(service)
+                let route = CrontabTaskRegistryRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // CrontabLog 路由
+        registry.add(RouteEntry(
+            "crontab_log",
+            "/api/v1/uctoo/crontab_log",
+            10,
+            true,
+            { router: Router =>
+                let service = CrontabLogService()
+                let controller = CrontabLogController(service)
+                let route = CrontabLogRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // Crontab 路由
+        registry.add(RouteEntry(
+            "crontab",
+            "/api/v1/uctoo/crontab",
+            10,
+            true,
+            { router: Router =>
+                let service = CrontabService()
+                let schedulerService = SchedulerService()
+                let logService = CrontabLogService()
+                let controller = CrontabController(service, schedulerService, logService)
+                let route = CrontabRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // DbConnection 路由
+        registry.add(RouteEntry(
+            "db_connection",
+            "/api/v1/uctoo/db_connection",
+            10,
+            true,
+            { router: Router =>
+                let service = DbConnectionService()
+                let controller = DbConnectionController(service)
+                let route = DbConnectionRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
         
         // 1. UctooUser 路由
         registry.add(RouteEntry(

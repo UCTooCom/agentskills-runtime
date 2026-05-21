@@ -8,6 +8,7 @@ package magic.app.dao.uctoo
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
     //#region AutoCreateCode
+
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -17,12 +18,10 @@ import magic.app.models.uctoo.UserHasGroupPO
 import magic.log.LogUtils
 
 /**
- * UserHasGroupDAO - 用户组关联数据访问接口
- * 
+ * UserHasGroupDAO - user_has_group数据访问接口
+ *
  * 提供user_has_group表的标准CRUD操作，遵循UCTOO V4 ORM规范
- * 
- * 注意: 此表使用复合主键 (groupable_id, group_id)
- * 
+ *
  * 设计原则：
  * 1. DAO层只负责数据访问，不包含业务逻辑
  * 2. 所有查询方法不过滤软删除数据，返回完整数据集
@@ -32,201 +31,310 @@ import magic.log.LogUtils
 @DAO
 public interface UserHasGroupDAO <: RootDAO {
     prop executor: SqlExecutor
-    
-    
+
     // ==================== 插入操作 ====================
-    
+
     /**
-     * 插入userHasGroup（复合主键由调用方提供）
-     * @param userHasGroup userHasGroup对象
-     * @return 插入成功返回true，失败返回false
+     * 插入user_has_group（id由数据库自动生成UUID）
+     * @param entity UserHasGroupPO对象
+     * @return 插入成功返回生成的ID，失败返回空字符串
      */
-    func insertUserHasGroup(userHasGroup: UserHasGroupPO): Bool {
+    func insertUserHasGroup(entity: UserHasGroupPO): String {
         executor.setSql('''
             insert into user_has_group(
-                groupable_id,
-                group_id,
                 groupable_type,
+                group_id,
                 status,
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                groupable_id
             ) values(
-                ${arg(userHasGroup.groupableIdProp)},
-                ${arg(userHasGroup.groupIdProp)},
-                ${arg(userHasGroup.groupableTypeProp)},
-                ${arg(userHasGroup.statusProp)},
-                ${arg(userHasGroup.creatorProp)},
-                ${arg(userHasGroup.createdAtProp)},
-                ${arg(userHasGroup.updatedAtProp)},
-                ${arg(userHasGroup.deletedAtProp)}
+${arg(entity.groupableType)},
+                ${arg(entity.groupId)},
+                ${arg(entity.status)},
+                ${arg(entity.creator)},
+                ${arg(entity.createdAt)},
+                ${arg(entity.updatedAt)},
+                ${arg(entity.deletedAt)},
+                ${arg(entity.groupableId)}
             )
-        ''').update > 0
+            returning id
+        ''').singleFirst<String>() ?? ""
     }
-    
+
     // ==================== 单条查询 ====================
-    
+
     /**
-     * 根据复合主键查询userHasGroup
-     * @param groupableId 可分组对象ID
-     * @param groupId 组ID
-     * @return userHasGroup对象（Option类型）
+     * 根据ID查询user_has_group
+     * @param id user_has_groupID
+     * @return user_has_group对象（Option类型）
      */
-    func findUserHasGroupById(groupableId: String, groupId: String): Option<UserHasGroupPO> {
+    func findUserHasGroupById(id: String): Option<UserHasGroupPO> {
         executor.setSql('''
-            select * from user_has_group 
-            where groupable_id = ${arg(groupableId)} 
-            and group_id = ${arg(groupId)}
+            select * from user_has_group where id = ${arg(id)}
         ''').first<UserHasGroupPO>()
     }
-    
-    /**
-     * 根据groupableId查询所有关联的组
-     * @param groupableId 可分组对象ID
-     * @return userHasGroup列表
-     */
-    func findUserHasGroupsByGroupableId(groupableId: String): ArrayList<UserHasGroupPO> {
-        executor.setSql('''
-            select * from user_has_group 
-            where groupable_id = ${arg(groupableId)}
-            order by created_at desc
-        ''').list<UserHasGroupPO>()
-    }
-    
-    /**
-     * 根据groupId查询所有关联的对象
-     * @param groupId 组ID
-     * @return userHasGroup列表
-     */
-    func findUserHasGroupsByGroupId(groupId: String): ArrayList<UserHasGroupPO> {
-        executor.setSql('''
-            select * from user_has_group 
-            where group_id = ${arg(groupId)}
-            order by created_at desc
-        ''').list<UserHasGroupPO>()
-    }
-    
+
     // ==================== 更新操作 ====================
-    
+
     /**
-     * 更新userHasGroup（根据复合主键）
-     * @param userHasGroup userHasGroup对象
-     * @return 更新成功返回true，失败返回false
+     * 更新user_has_group
+     * @param entity user_has_group对象
+     * @return 影响行数
      */
-    func updateUserHasGroup(userHasGroup: UserHasGroupPO): Bool {
+    func updateUserHasGroup(entity: UserHasGroupPO): Int64 {
         executor.setSql('''
             update user_has_group set
-                groupable_type = ${arg(userHasGroup.groupableTypeProp)},
-                status = ${arg(userHasGroup.statusProp)},
-                creator = ${arg(userHasGroup.creatorProp)},
-                updated_at = ${arg(DateTime.now())},
-                deleted_at = ${arg(userHasGroup.deletedAtProp)}
-            where groupable_id = ${arg(userHasGroup.groupableIdProp)}
-            and group_id = ${arg(userHasGroup.groupIdProp)}
-        ''').update > 0
-    }
-    
-    /**
-     * 更新状态
-     * @param groupableId 可分组对象ID
-     * @param groupId 组ID
-     * @param status 新状态
-     * @return 更新成功返回true，失败返回false
-     */
-    func updateUserHasGroupStatus(groupableId: String, groupId: String, status: Int32): Bool {
-        executor.setSql('''
-            update user_has_group set
-                status = ${arg(status)},
+                groupable_type = ${arg(entity.groupableType)},
+                group_id = ${arg(entity.groupId)},
+                status = ${arg(entity.status)},
+                creator = ${arg(entity.creator)},
+                deleted_at = ${arg(entity.deletedAt)},
+                groupable_id = ${arg(entity.groupableId)},
                 updated_at = ${arg(DateTime.now())}
-            where groupable_id = ${arg(groupableId)}
-            and group_id = ${arg(groupId)}
-        ''').update > 0
+            where id = ${arg(entity.id)}
+        ''').update
     }
-    
+
     // ==================== 删除操作 ====================
-    
+
     /**
-     * 删除userHasGroup（根据复合主键）
-     * @param groupableId 可分组对象ID
-     * @param groupId 组ID
-     * @return 删除成功返回true，失败返回false
+     * 软删除user_has_group
+     * @param id user_has_groupID
+     * @return 影响行数
      */
-    func deleteUserHasGroup(groupableId: String, groupId: String): Bool {
+    func softDeleteUserHasGroupById(id: String): Int64 {
         executor.setSql('''
-            delete from user_has_group 
-            where groupable_id = ${arg(groupableId)} 
-            and group_id = ${arg(groupId)}
-        ''').update > 0
+            update user_has_group set deleted_at = ${arg(DateTime.now())} where id = ${arg(id)}
+        ''').update
     }
-    
+
     /**
-     * 软删除userHasGroup（根据复合主键）
-     * @param groupableId 可分组对象ID
-     * @param groupId 组ID
-     * @return 软删除成功返回true，失败返回false
+     * 恢复软删除的user_has_group
+     * @param id user_has_groupID
+     * @return 影响行数
      */
-    func softDeleteUserHasGroup(groupableId: String, groupId: String): Bool {
+    func restoreUserHasGroupById(id: String): Int64 {
         executor.setSql('''
-            update user_has_group set
-                deleted_at = ${arg(DateTime.now())}
-            where groupable_id = ${arg(groupableId)}
-            and group_id = ${arg(groupId)}
-        ''').update > 0
+            update user_has_group set deleted_at = null where id = ${arg(id)}
+        ''').update
     }
-    
+
     /**
-     * 删除用户的所有组关联
-     * @param groupableId 可分组对象ID
-     * @return 删除成功返回true，失败返回false
+     * 硬删除user_has_group
+     * @param id user_has_groupID
+     * @return 影响行数
      */
-    func deleteUserHasGroupsByGroupableId(groupableId: String): Bool {
+    func deleteUserHasGroupById(id: String): Int64 {
         executor.setSql('''
-            delete from user_has_group 
-            where groupable_id = ${arg(groupableId)}
-        ''').update > 0
+            delete from user_has_group where id = ${arg(id)}
+        ''').delete
     }
-    
+
+    // ==================== 列表查询 ====================
+
+    /**
+     * 分页查询所有user_has_group
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findAllUserHasGroupPage(page: Int64, size: Int64): Pagination<UserHasGroupPO> {
+        executor.page<UserHasGroupPO>('''
+            select * from user_has_group order by created_at desc
+        ''', size, page: page)
+    }
+
+    /**
+     * 分页查询user_has_group列表（按创建者）
+     * @param creator 创建者ID
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findUserHasGroupByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<UserHasGroupPO> {
+        executor.page<UserHasGroupPO>('''
+            select * from user_has_group where creator = ${arg(creator)} order by created_at desc
+        ''', size, page: page)
+    }
+
+    /**
+     * 查询所有user_has_group（不分页）
+     * @return user_has_group列表
+     */
+    func listAllUserHasGroup(): ArrayList<UserHasGroupPO> {
+        executor.setSql('''
+            select * from user_has_group order by created_at desc
+        ''').list<UserHasGroupPO>()
+    }
+
+    /**
+     * 批量查询user_has_group
+     * @param ids ID列表
+     * @return user_has_group列表
+     */
+    func findUserHasGroupByIds(ids: ArrayList<String>): ArrayList<UserHasGroupPO> {
+        executor.setSql('''
+            select * from user_has_group where id ${IN(ids)}
+        ''').list<UserHasGroupPO>()
+    }
+
     // ==================== 统计操作 ====================
-    
+
     /**
-     * 统计用户所属组数量
-     * @param groupableId 可分组对象ID
-     * @return 组数量
+     * 统计创建者的user_has_group数量
+     * @param creator 创建者ID
+     * @return 数量
      */
-    func countUserHasGroupsByGroupableId(groupableId: String): Int64 {
+    func countUserHasGroupByCreator(creator: String): Int64 {
         executor.setSql('''
-            select count(*) from user_has_group 
-            where groupable_id = ${arg(groupableId)}
+            select count(*) from user_has_group where creator = ${arg(creator)}
         ''').first<Int64>() ?? 0
     }
-    
+
     /**
-     * 统计组内成员数量
-     * @param groupId 组ID
-     * @return 成员数量
+     * 统计所有user_has_group数量
+     * @return 数量
      */
-    func countUserHasGroupsByGroupId(groupId: String): Int64 {
+    func countAllUserHasGroup(): Int64 {
         executor.setSql('''
-            select count(*) from user_has_group 
-            where group_id = ${arg(groupId)}
+            select count(*) from user_has_group
         ''').first<Int64>() ?? 0
     }
-    
+
+
     /**
-     * 检查用户是否在组中
-     * @param groupableId 可分组对象ID
-     * @param groupId 组ID
-     * @return 存在返回true，不存在返回false
+     * 分页查询user_has_group列表（带过滤条件）
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
      */
-    func existsUserHasGroup(groupableId: String, groupId: String): Bool {
-        let count = executor.setSql('''
-            select count(*) from user_has_group 
-            where groupable_id = ${arg(groupableId)} 
-            and group_id = ${arg(groupId)}
-        ''').first<Int64>() ?? 0
-        count > 0
+    func findUserHasGroupByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<UserHasGroupPO> {
+        let sql = StringBuilder()
+        sql.append("select * from user_has_group where 1=1")
+
+        if (let Some(linkVal) <- link) {
+            if (linkVal != "") {
+                sql.append(" and link like ${arg('%' + linkVal + '%')}")
+            }
+        }
+
+        if (let Some(descVal) <- description) {
+            if (descVal != "") {
+                sql.append(" and description like ${arg('%' + descVal + '%')}")
+            }
+        }
+
+        // 处理 deleted_at 筛选
+        if (let Some(deletedAtVal) <- deletedAt) {
+            if (deletedAtVal == "null") {
+                // 未删除的数据
+                sql.append(" and deleted_at is null")
+            } else if (deletedAtVal == "not_null") {
+                // 已删除的数据（回收站）
+                sql.append(" and deleted_at is not null")
+            }
+        }
+
+        sql.append(" order by created_at desc")
+
+        executor.page<UserHasGroupPO>(sql.toString(), size, page: page)
     }
-    
-    //#endregion AutoCreateCode
+
+    /**
+     * 批量软删除user_has_group
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchSoftDeleteUserHasGroup(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            update user_has_group set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
+        ''').update
+    }
+
+    /**
+     * 批量硬删除user_has_group
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchDeleteUserHasGroup(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            delete from user_has_group where id ${IN(ids)}
+        ''').delete
+    }
+
+    /**
+     * 动态条件查询user_has_group（支持完整查询操作符）
+     *
+     * @param whereClause WHERE 子句字符串（不包含 WHERE 关键字）
+     * @param orderByClause ORDER BY 子句字符串（不包含 ORDER BY 关键字）
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     *
+     * 使用示例：
+     * - whereClause: "name LIKE '%test%' AND status = 'active'"
+     * - orderByClause: "created_at DESC, name ASC"
+     */
+    func findUserHasGroupByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<UserHasGroupPO> {
+        let sql = StringBuilder()
+        sql.append("select * from user_has_group")
+
+        if (!whereClause.isEmpty()) {
+            sql.append(" where ${whereClause}")
+        }
+
+        if (!orderByClause.isEmpty()) {
+            sql.append(" order by ${orderByClause}")
+        } else {
+            sql.append(" order by created_at desc")
+        }
+
+        executor.page<UserHasGroupPO>(sql.toString(), size, page: page)
+    }
+
+    /**
+     * 使用 f_orm Condition API 查询user_has_group
+     *
+     * @param whereClause WHERE 子句字符串
+     * @param orderByClause ORDER BY 子句字符串
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findUserHasGroupByCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<UserHasGroupPO> {
+        let fromClause = executor.FROM<UserHasGroupPO>()
+
+        // 应用 WHERE 条件
+        if (!whereClause.isEmpty()) {
+            fromClause.WHERE(whereClause)
+        }
+
+        // 应用 ORDER BY
+        if (!orderByClause.isEmpty()) {
+            fromClause.ORDER_BY { => orderByClause }
+        } else {
+            fromClause.ORDER_BY { => "created_at DESC" }
+        }
+
+        // 执行分页查询
+        fromClause.page<UserHasGroupPO>(size, page: page)
+    }
+
+    /**
+     * 清空回收站（硬删除所有已软删除的user_has_group）
+     * @return 影响行数
+     */
+    func emptyRecycleBinUserHasGroup(): Int64 {
+        executor.setSql('''
+            delete from user_has_group where deleted_at is not null
+        ''').delete
+    }
+
+//#endregion AutoCreateCode
 }

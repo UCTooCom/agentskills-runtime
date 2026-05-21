@@ -100,7 +100,7 @@ ${arg(entity.user)},
                 creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
                 provider = ${arg(entity.provider)},
-                type = ${arg(entity.typeVal)}
+                type = ${arg(entity.typeVal)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -344,7 +344,7 @@ ${arg(entity.user)},
         ''').delete
     }
 
-    //#endregion AutoCreateCode
+//#endregion AutoCreateCode
 
     // ========== 定制开发方法（在此区域添加自定义方法）==========
 

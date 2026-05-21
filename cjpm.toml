@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.4"
   compile-option = "-Woff all --dy-std --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=cj\""
   description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
   link-option = ""
@@ -7,7 +7,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "0.0.20"
+  version = "0.0.21"
 
 [dependencies]
   yaml4cj = { path = "./libs/yaml4cj" }
@@ -16,6 +16,7 @@
   f_data = { path = "./libs/fountain/f_data" }
   f_config = { path = "./libs/fountain/f_config" }
   f_util = { path = "./libs/fountain/f_util" }
+  f_ticktock = { path = "./libs/fountain/f_ticktock" }
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", compile-option = "-Woff unused" }
   jwt4cj = { git = "https://gitcode.com/Cangjie-TPC/jwt4cj.git", branch = "develop", compile-option = "-Woff unused" }
   logcj = { git = "https://gitcode.com/Cangjie-TPC/log-cj.git", branch = "develop", compile-option = "-Woff unused" }

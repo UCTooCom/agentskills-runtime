@@ -18,6 +18,9 @@ public class DbConnectionRoute {
     }
 
     public func register(): Router {
+        // 先注册自定义路由，避免被动态路由 :id 匹配
+        registerCustomRoutes()
+
         // 按照 uctoo v4 规范，路由路径带 /v1 前缀
         router.post("/api/v1/uctoo/db_connection/add", controller.add)
         router.post("/api/v1/uctoo/db_connection/edit", controller.edit)

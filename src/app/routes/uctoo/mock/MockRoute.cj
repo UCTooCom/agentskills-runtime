@@ -6,6 +6,8 @@ package magic.app.routes.uctoo.mock
 import magic.app.controllers.uctoo.mock.MockController
 import magic.app.core.router.Router
 
+//#region AutoCreateCode
+
 /**
  * MockRoute - Mock数据路由配置
  *
@@ -24,6 +26,9 @@ public class MockRoute {
      * 注册路由
      */
     public func register(): Router {
+        // 先注册自定义路由，避免被动态路由 :id 匹配
+        registerCustomRoutes()
+
         // GET /api/user/getdata - 获取用户数据选项
         router.get("/api/user/getdata", controller.getUserData)
         
@@ -35,6 +40,17 @@ public class MockRoute {
         
         // POST /api/user/getselect - 切换数据源
         router.post("/api/user/getselect", controller.getUserChange)
+        
+        return router
+    }
+
+//#endregion AutoCreateCode
+    
+    /**
+     * 注册自定义路由
+     * 在此方法中添加定制开发的路由
+     */
+    public func registerCustomRoutes(): Router {
         
         return router
     }

@@ -76,7 +76,7 @@ public class HttpRequest {
     public var pathParams: HashMap<String, String> = HashMap<String, String>()
     public var queryParams: HashMap<String, String> = HashMap<String, String>()
     public var locals: HashMap<String, Any> = HashMap<String, Any>()
-    
+
     private var bodyCache: ?String = None<String>
     
     public init() {}

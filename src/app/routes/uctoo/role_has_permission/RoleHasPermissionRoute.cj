@@ -5,10 +5,11 @@ package magic.app.routes.uctoo.role_has_permission
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+    //#region AutoCreateCode
 import magic.app.controllers.uctoo.role_has_permission.RoleHasPermissionController
 import magic.app.core.router.Router
 
-// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
 /**
  * RoleHasPermissionRoute - 角色权限关联路由
@@ -26,9 +27,11 @@ public class RoleHasPermissionRoute {
         this.controller = controller
     }
     
-    //#region AutoCreateCode
     
     public func register(): Router {
+        // 先注册自定义路由，避免被动态路由 :id 匹配
+        registerCustomRoutes()
+
         // 按照 uctoo v4 规范，路由路径带 /v1 前缀
         
         // 添加权限到角色
@@ -52,4 +55,13 @@ public class RoleHasPermissionRoute {
     //#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义路由）==========
+    
+    /**
+     * 注册自定义路由
+     * 在此方法中添加定制开发的路由
+     */
+    public func registerCustomRoutes(): Router {
+        
+        return router
+    }
 }

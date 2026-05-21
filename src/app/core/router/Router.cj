@@ -10,11 +10,11 @@ public class Route {
     public var path: String = ""
     public var handler: (HttpRequest, HttpResponse) -> Unit
     public var middlewares: ArrayList<Middleware> = ArrayList<Middleware>()
-    
+
     public init() {
         handler = { req, res => res.status(404).send("Not Found") }
     }
-    
+
     public init(
         method: HttpMethod,
         path: String,
@@ -24,7 +24,7 @@ public class Route {
         this.path = path
         this.handler = handler
     }
-    
+
     public func use(middleware: Middleware): Route {
         middlewares.add(middleware)
         return this
@@ -55,17 +55,17 @@ public class Router {
         routes.add(Route(HttpMethod.GET, path, handler))
         return this
     }
-    
+
     public func post(path: String, handler: (HttpRequest, HttpResponse) -> Unit): Router {
         routes.add(Route(HttpMethod.POST, path, handler))
         return this
     }
-    
+
     public func put(path: String, handler: (HttpRequest, HttpResponse) -> Unit): Router {
         routes.add(Route(HttpMethod.PUT, path, handler))
         return this
     }
-    
+
     public func delete(path: String, handler: (HttpRequest, HttpResponse) -> Unit): Router {
         routes.add(Route(HttpMethod.DELETE, path, handler))
         return this

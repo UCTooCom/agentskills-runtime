@@ -31,7 +31,7 @@ public class RoleHasPermissionPO {
     private var permissionName: String = ""
 
         @ORMField['status']
-    private var status: ?Int32 = None<Int32>
+    private var status: Int32 = 0
 
         @ORMField['creator']
     private var creator: ?String = None<String>
@@ -50,7 +50,7 @@ public class RoleHasPermissionPO {
     public init(
                 roleId: String,
         permissionName: String,
-        status: ?Int32,
+        status: Int32,
         creator: ?String,
         createdAt: DateTime,
         updatedAt: DateTime,

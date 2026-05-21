@@ -8,11 +8,14 @@ package magic.app.models.uctoo
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 
 //#region AutoCreateCode
+
 import std.time.DateTime
 import f_orm.macros.{QueryMappersGenerator, ORMField}
 import f_data.macros.DataAssist
 import f_data.{ObjectData, Data, DataConversionFlag, ObjectFields, MutableField, DataObject, f_data_tryFromData}
 import f_orm.*
+import json4cj.JsonValueSerializable
+import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 
 /**
  * UctooRolePO - uctoo_role表持久化对象
@@ -23,69 +26,67 @@ import f_orm.*
 @DataAssist[fields]
 @QueryMappersGenerator["uctoo_role"]
 public class UctooRolePO {
-        @ORMField[true 'id']
-    private var id: String = ""
+        @ORMField['id']
+    public var id: String = ""
 
         @ORMField['name']
-    private var name: String = ""
+    public var name: String = ""
 
         @ORMField['created_at']
-    private var createdAt: ?DateTime = None<DateTime>
+    public var createdAt: Option<DateTime> = None<DateTime>
 
         @ORMField['creator']
-    private var creator: ?String = None<String>
+    public var creator: Option<String> = None<String>
 
         @ORMField['deleted_at']
-    private var deletedAt: ?DateTime = None<DateTime>
+    public var deletedAt: Option<DateTime> = None<DateTime>
 
         @ORMField['updated_at']
-    private var updatedAt: ?DateTime = None<DateTime>
-    
+    public var updatedAt: Option<DateTime> = None<DateTime>
+
     public init() {}
-    
+
     public init(
                 id: String,
-        name: String,
-        createdAt: ?DateTime,
-        creator: ?String,
-        deletedAt: ?DateTime,
-        updatedAt: ?DateTime
+                name: String,
+                createdAt: Option<DateTime>,
+                creator: Option<String>,
+                deletedAt: Option<DateTime>,
+                updatedAt: Option<DateTime>
     ) {
                 this.id = id
-        this.name = name
-        this.createdAt = createdAt
-        this.creator = creator
-        this.deletedAt = deletedAt
-        this.updatedAt = updatedAt
+                this.name = name
+                this.createdAt = createdAt
+                this.creator = creator
+                this.deletedAt = deletedAt
+                this.updatedAt = updatedAt
     }
-    
+
+    /// 序列化为 JsonValue
+    public func toJsonValue(): JsonValue {
+        var map = HashMap<String, JsonValue>()
+        map.add("id", this.id.toJsonValue())
+        map.add("name", this.name.toJsonValue())
+        map.add("created_at", optionToJsonValue(this.createdAt))
+        map.add("creator", optionToJsonValue(this.creator))
+        map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("updated_at", optionToJsonValue(this.updatedAt))
+        return JsonObject(map)
+    }
+
+    /// 辅助方法：将 Option<T> 转换为 JsonValue
+    private static func optionToJsonValue<T>(opt: Option<T>): JsonValue where T <: JsonValueSerializable<T> {
+        if (let Some(v) <- opt) {
+            return v.toJsonValue()
+        } else {
+            return JsonNull()
+        }
+    }
+
+    /// 序列化为 JSON 字符串
     public func toJson(): String {
-        let sb = StringBuilder()
-        sb.append("{")
-                sb.append("\"id\":\"${id}\",")
-        sb.append("\"name\":\"${name}\",")
-        if (let Some(v) <- createdAt) {
-            sb.append("\"created_at\":\"${v}\",")
-        } else {
-            sb.append("\"created_at\":\"\",")
-        }
-        if (let Some(v) <- creator) {
-            sb.append("\"creator\":\"${v}\",")
-        } else {
-            sb.append("\"creator\":\"\",")
-        }
-        if (let Some(v) <- deletedAt) {
-            sb.append("\"deleted_at\":\"${v}\",")
-        } else {
-            sb.append("\"deleted_at\":\"\",")
-        }
-        if (let Some(v) <- updatedAt) {
-            sb.append("\"updated_at\":\"${v}\"")
-        } else {
-            sb.append("\"updated_at\":\"\"")
-        }
-        sb.append("}")
-        return sb.toString()
+        return this.toJsonValue().toString()
     }
-   //#endregion AutoCreateCode    
+
+//#endregion AutoCreateCode    
 }

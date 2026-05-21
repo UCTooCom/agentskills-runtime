@@ -432,9 +432,15 @@ cp .env.example bin/.env
 
 1. 更新 `cjpm.toml` 中的版本号
 2. 更新 `CHANGELOG.md` 记录变更
-3. 运行 `cjpm build` 构建项目
-4. 运行 `cjpm run --name magic.scripts.package_release` 打包
-5. 上传发布包到 GitHub Releases 或 AtomGit Releases
+3. 运行 `cjpm build` 构建项目（自动执行打包）
+4. 上传发布包到 GitHub Releases 或 AtomGit Releases
+
+> **注意**: 从 v0.0.21 版本开始，`cjpm build` 完成后会自动执行打包脚本，生成的发布包位于 `target/release` 目录。
+> 
+> 手动打包命令仍然可用（可选）：
+> ```bash
+> cjpm run --name magic.scripts.package_release
+> ```
 
 ### API 端点
 启动 API 服务后，以下端点将可用（所有 API 使用 `/api/v1/uctoo` 前缀）：

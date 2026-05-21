@@ -38,6 +38,21 @@ private func isKeyword(name: String): Bool {
     CJ_KEYWORDS.contains(name)
 }
 
+// ==================== 需要手动维护的表列表 ====================
+// 这些表是中间表或特殊表，不通过crudgen生成代码
+// 例如：role_has_permission 是中间表，没有自增id字段
+private let MANUAL_TABLES = HashSet<String>([
+    "role_has_permission",
+    "uctoo_user"
+])
+
+/**
+ * 检查表是否需要手动维护
+ */
+private func isManualTable(tableName: String): Bool {
+    MANUAL_TABLES.contains(tableName)
+}
+
 /**
  * 处理关键字（为关键字添加后缀）
  */
@@ -414,12 +429,18 @@ public class CrudGenerator {
      * 生成所有层的代码
      */
     public func generateAllLayers(tableInfo: TableInfo): Unit {
+        // 跳过手动维护的表（如中间表）
+        if (isManualTable(tableInfo.tableName)) {
+            println("跳过手动维护的表: ${tableInfo.tableName}")
+            return
+        }
         generateModel(tableInfo)
         generateDAO(tableInfo)
         generateService(tableInfo)
         generateController(tableInfo)
         generateRoute(tableInfo)
         updateAutoRouteConfig(tableInfo)
+        updateRowLevelPermissionConfig(tableInfo)
     }
     
     /**
@@ -497,6 +518,11 @@ public class CrudGenerator {
     /// @param updateIfExists 如果节点已存在是否更新（true=更新，false=跳过）
     /// @return 生成成功返回true，失败返回false
     public func generatePermissionNodesWithOption(dbName: String, tableName: String, updateIfExists: Bool): Bool {
+        // 跳过手动维护的表（如中间表）
+        if (isManualTable(tableName)) {
+            println("跳过手动维护表的权限节点: ${tableName}")
+            return true
+        }
         try {
             let executor = ORM.executor()
             let tablePermissionName = "database.${dbName}.${tableName}"
@@ -908,6 +934,7 @@ public class CrudGenerator {
         variables.add("insertColumns", buildInsertColumns(tableInfo))
         variables.add("insertValues", buildInsertValues(tableInfo))
         variables.add("updateSets", buildUpdateSets(tableInfo))
+        variables.add("selectColumns", buildSelectColumns(tableInfo))
 
         let templatePath = "./src/app/tools/crudgen/templates/DAO.cj.tpl"
         let template = loadTemplateContent(templatePath)
@@ -928,10 +955,95 @@ public class CrudGenerator {
             if (!first) {
                 sb.append(",\n")
             }
-            sb.append("                ${field.columnName}")
+            sb.append("                ${escapeColumnName(field.columnName)}")
             first = false
         }
         sb.toString()
+    }
+
+    /**
+     * 构建查询列（包含关键字转义和NULL值处理）
+     */
+    private func buildSelectColumns(tableInfo: TableInfo): String {
+        let sb = StringBuilder()
+        var first = true
+        for (field in tableInfo.fields) {
+            if (!first) {
+                sb.append(", ")
+            }
+            let escapedName = escapeColumnName(field.columnName)
+            // 对可能为NULL的字段使用COALESCE处理，特别是关键字字段
+            if (isPostgresKeyword(field.columnName)) {
+                sb.append("coalesce(${escapedName}, '') as ${escapedName}")
+            } else {
+                sb.append("${escapedName}")
+            }
+            first = false
+        }
+        sb.toString()
+    }
+
+    /**
+     * 转义PostgreSQL列名（对关键字添加双引号）
+     */
+    private func escapeColumnName(columnName: String): String {
+        if (isPostgresKeyword(columnName)) {
+            "\"${columnName}\""
+        } else {
+            columnName
+        }
+    }
+
+    /**
+     * 检查是否为PostgreSQL关键字
+     */
+    private func isPostgresKeyword(name: String): Bool {
+        let postgresKeywords = HashSet<String>([
+            'group', 'order', 'by', 'select', 'from', 'where', 'and', 'or',
+            'not', 'null', 'true', 'false', 'default', 'primary', 'foreign',
+            'key', 'unique', 'check', 'constraint', 'references', 'on',
+            'delete', 'update', 'set', 'insert', 'into', 'values', 'returning',
+            'create', 'table', 'alter', 'drop', 'add', 'column', 'index',
+            'if', 'exists', 'case', 'when', 'then', 'else', 'end', 'cast',
+            'as', 'distinct', 'limit', 'offset', 'fetch', 'first', 'next',
+            'rows', 'only', 'for', 'of', 'no', 'key', 'with', 'recursive',
+            'union', 'intersect', 'except', 'all', 'some', 'any', 'in',
+            'like', 'ilike', 'between', 'is', 'nullif', 'coalesce', 'greatest',
+            'least', 'min', 'max', 'sum', 'avg', 'count', 'having', 'window',
+            'partition', 'over', 'order', 'asc', 'desc', 'nulls', 'first',
+            'last', 'rank', 'dense_rank', 'row_number', 'percent_rank',
+            'cume_dist', 'ntile', 'lag', 'lead', 'first_value', 'last_value',
+            'nth_value', 'sum', 'avg', 'min', 'max', 'count', 'stddev',
+            'variance', 'corr', 'covar_samp', 'covar_pop', 'regr_slope',
+            'regr_intercept', 'regr_r2', 'regr_avgx', 'regr_avgy',
+            'regr_count', 'regr_sxx', 'regr_syy', 'regr_sxy', 'every',
+            'bool_and', 'bool_or', 'array_agg', 'json_agg', 'string_agg',
+            'xmlagg', 'range_agg', 'unnest', 'generate_series', 'now',
+            'current_date', 'current_time', 'current_timestamp', 'localtime',
+            'localtimestamp', 'interval', 'date_trunc', 'extract', 'date_part',
+            'age', 'now', 'clock_timestamp', 'timeofday', 'statement_timestamp',
+            'transaction_timestamp', 'make_date', 'make_time', 'make_timestamp',
+            'make_timestamptz', 'make_interval', 'to_timestamp', 'to_date',
+            'to_char', 'to_number', 'upper', 'lower', 'initcap', 'length',
+            'substring', 'trim', 'ltrim', 'rtrim', 'btrim', 'concat',
+            'concat_ws', 'replace', 'regexp_replace', 'regexp_match',
+            'regexp_matches', 'regexp_split_to_array', 'regexp_split_to_table',
+            'position', 'strpos', 'overlay', 'md5', 'sha256', 'encode',
+            'decode', 'convert_from', 'convert_to', 'bit_length', 'octet_length',
+            'char_length', 'ascii', 'chr', 'pg_client_encoding', 'quote_literal',
+            'quote_nullable', 'format', 'left', 'right', 'repeat', 'reverse',
+            'split_part', 'initcap', 'pg_typeof', 'pg_size_pretty', 'pg_column_size',
+            'pg_total_relation_size', 'pg_relation_size', 'pg_indexes_size',
+            'pg_stat_user_tables', 'pg_stat_user_indexes', 'pg_stat_activity',
+            'pg_locks', 'pg_prepared_statements', 'pg_stat_statements', 'pg_replication_slots',
+            'pg_stat_replication', 'pg_stat_bgwriter', 'pg_stat_database', 'pg_stat_user_functions',
+            'pg_stat_all_tables', 'pg_stat_all_indexes', 'pg_stat_sys_tables', 'pg_stat_sys_indexes',
+            'pg_stat_user_tables', 'pg_stat_user_indexes', 'pg_statio_all_tables', 'pg_statio_sys_tables',
+            'pg_statio_user_tables', 'pg_statio_all_indexes', 'pg_statio_sys_indexes', 'pg_statio_user_indexes',
+            'pg_stat_user_mappings', 'pg_stat_xact_user_tables', 'pg_stat_xact_sys_tables', 'pg_stat_xact_all_tables',
+            'pg_stat_progress_vacuum', 'pg_stat_progress_analyze', 'pg_stat_progress_create_index', 'pg_stat_progress_copy'
+        ])
+        postgresKeywords.contains(name.toAsciiLower())
     }
 
     /**
@@ -1351,7 +1463,7 @@ public class CrudGenerator {
                 } else if (innerType == "DateTime") {
                     sb.append("                sb.append(if (let Some(v) <- entity." + fieldName + ") { \"\\\"\" + v.toString() + \"\\\",\" } else { \"\" })")
                     sb.append("\n")
-                } else if (innerType == "Float64" || innerType == "Float32" || innerType == "Int32" || innerType == "Int64") {
+                } else if (innerType == "Float64" || innerType == "Float32" || innerType == "Int32" || innerType == "Int64" || innerType == "Bool") {
                     sb.append("                sb.append(if (let Some(v) <- entity." + fieldName + ") { \"\\\"\" + v.toString() + \"\\\",\" } else { \"\" })")
                     sb.append("\n")
                 } else {
@@ -1561,7 +1673,7 @@ public class CrudGenerator {
      * 更新 AutoRouteConfig.cj 文件，注册新生成的路由
      */
     private func updateAutoRouteConfig(tableInfo: TableInfo): Unit {
-        let autoRouteConfigPath = "${outputDir}/../registry/AutoRouteConfig.cj"
+        let autoRouteConfigPath = "${outputDir}/registry/AutoRouteConfig.cj"
         
         // 检查文件是否存在
         if (!fileExists(autoRouteConfigPath)) {
@@ -1614,32 +1726,46 @@ public class CrudGenerator {
         // 更新导入语句
         var updatedContent = content
         
-        // 添加 Route 导入
+        // 添加 Route 和 Controller 导入（必须在 services 块之前插入）
+        // 找到 "import magic.app.services." 的位置作为插入锚点，在其前面插入
+        let servicesBlockAnchor = "import magic.app.services.${dbName}.{"
+        let servicesBlockIndex = updatedContent.indexOf(servicesBlockAnchor)
+        
         if (!updatedContent.contains(routeImport)) {
-            // 找到最后一个 import 语句的位置
-            let lastImportIndex = updatedContent.lastIndexOf("import ")
-            if (lastImportIndex.isSome()) {
-                let idx = lastImportIndex.getOrThrow()
-                let nextLineIndex = updatedContent.indexOf("\n", idx)
-                if (nextLineIndex.isSome()) {
-                    let lineIdx = nextLineIndex.getOrThrow()
-                    let insertPosition = lineIdx + 1
-                    updatedContent = updatedContent[0..insertPosition] + "${routeImport}\n" + updatedContent[insertPosition..updatedContent.size]
+            if (servicesBlockIndex.isSome()) {
+                let insertPosition = servicesBlockIndex.getOrThrow()
+                updatedContent = updatedContent[0..insertPosition] + "${routeImport}\n" + updatedContent[insertPosition..updatedContent.size]
+            } else {
+                let lastImportIndex = updatedContent.lastIndexOf("import ")
+                if (lastImportIndex.isSome()) {
+                    let idx = lastImportIndex.getOrThrow()
+                    let nextLineIndex = updatedContent.indexOf("\n", idx)
+                    if (nextLineIndex.isSome()) {
+                        let lineIdx = nextLineIndex.getOrThrow()
+                        let insertPosition = lineIdx + 1
+                        updatedContent = updatedContent[0..insertPosition] + "${routeImport}\n" + updatedContent[insertPosition..updatedContent.size]
+                    }
                 }
             }
         }
         
-        // 添加 Controller 导入
+        // 重新查找 services 块位置（上面的插入可能改变了偏移）
+        let servicesBlockIndex2 = updatedContent.indexOf(servicesBlockAnchor)
+        
         if (!updatedContent.contains(controllerImport)) {
-            // 找到最后一个 import 语句的位置
-            let lastImportIndex = updatedContent.lastIndexOf("import ")
-            if (lastImportIndex.isSome()) {
-                let idx = lastImportIndex.getOrThrow()
-                let nextLineIndex = updatedContent.indexOf("\n", idx)
-                if (nextLineIndex.isSome()) {
-                    let lineIdx = nextLineIndex.getOrThrow()
-                    let insertPosition = lineIdx + 1
-                    updatedContent = updatedContent[0..insertPosition] + "${controllerImport}\n" + updatedContent[insertPosition..updatedContent.size]
+            if (servicesBlockIndex2.isSome()) {
+                let insertPosition = servicesBlockIndex2.getOrThrow()
+                updatedContent = updatedContent[0..insertPosition] + "${controllerImport}\n" + updatedContent[insertPosition..updatedContent.size]
+            } else {
+                let lastImportIndex = updatedContent.lastIndexOf("import ")
+                if (lastImportIndex.isSome()) {
+                    let idx = lastImportIndex.getOrThrow()
+                    let nextLineIndex = updatedContent.indexOf("\n", idx)
+                    if (nextLineIndex.isSome()) {
+                        let lineIdx = nextLineIndex.getOrThrow()
+                        let insertPosition = lineIdx + 1
+                        updatedContent = updatedContent[0..insertPosition] + "${controllerImport}\n" + updatedContent[insertPosition..updatedContent.size]
+                    }
                 }
             }
         }
@@ -1647,14 +1773,47 @@ public class CrudGenerator {
         // 添加 Service 导入
         if (!updatedContent.contains(serviceImport)) {
             // 找到 services 导入块
-            let servicesImportStart = updatedContent.indexOf("import magic.app.services.${dbName}.{")
+            let servicesImportStart = updatedContent.indexOf(servicesBlockAnchor)
             if (servicesImportStart.isSome()) {
                 let startIdx = servicesImportStart.getOrThrow()
                 let servicesImportEnd = updatedContent.indexOf("}", startIdx)
                 if (servicesImportEnd.isSome()) {
                     let endIdx = servicesImportEnd.getOrThrow()
-                    let insertPosition = endIdx
-                    updatedContent = updatedContent[0..insertPosition] + "\n    ${serviceImport}" + updatedContent[insertPosition..updatedContent.size]
+                    // 检查 "}" 前的最后一个非空白字符是否为逗号，如果不是则补逗号
+                    var beforeCloseBrace = endIdx - 1
+                    while (beforeCloseBrace > startIdx && (updatedContent[beforeCloseBrace] == 32 || updatedContent[beforeCloseBrace] == 10 || updatedContent[beforeCloseBrace] == 13 || updatedContent[beforeCloseBrace] == 9)) {
+                        beforeCloseBrace--
+                    }
+                    // 检查 "}" 前是否已有换行（即最后一个Service名在独立行上）
+                    // 从 beforeCloseBrace 往前找到换行符，确定当前行的缩进
+                    var indentStr = "    " // 默认4空格缩进
+                    var lineStartIdx = beforeCloseBrace
+                    while (lineStartIdx > startIdx && updatedContent[lineStartIdx] != 10 && updatedContent[lineStartIdx] != 13) {
+                        lineStartIdx--
+                    }
+                    if (lineStartIdx > startIdx) {
+                        // 提取当前行的缩进（从换行后到第一个非空格字符）
+                        var indentEnd = lineStartIdx + 1
+                        while (indentEnd < beforeCloseBrace && updatedContent[indentEnd] == 32) {
+                            indentEnd++
+                        }
+                        if (indentEnd > lineStartIdx + 1) {
+                            indentStr = updatedContent[(lineStartIdx + 1)..indentEnd]
+                        }
+                    }
+                    if (beforeCloseBrace > startIdx && updatedContent[beforeCloseBrace] != 44) {
+                        // 在最后一个Service名后补逗号
+                        updatedContent = updatedContent[0..(beforeCloseBrace + 1)] + "," + updatedContent[(beforeCloseBrace + 1)..updatedContent.size]
+                        // 重新查找 "}" 位置
+                        let newEndIdx = updatedContent.indexOf("}", startIdx)
+                        if (newEndIdx.isSome()) {
+                            let insertPosition = newEndIdx.getOrThrow()
+                            updatedContent = updatedContent[0..insertPosition] + "\n${indentStr}${className}Service," + updatedContent[insertPosition..updatedContent.size]
+                        }
+                    } else {
+                        let insertPosition = endIdx
+                        updatedContent = updatedContent[0..insertPosition] + "\n${indentStr}${className}Service," + updatedContent[insertPosition..updatedContent.size]
+                    }
                 }
             }
         }
@@ -1679,6 +1838,53 @@ public class CrudGenerator {
             println("已更新 AutoRouteConfig.cj，注册路由: ${tableName}")
         } catch (e: Exception) {
             println("写入 AutoRouteConfig.cj 文件失败: ${e.message}")
+        }
+    }
+    
+    /**
+     * 更新 .env 文件，添加表的行级权限配置
+     * 如果.env中已有此表的配置则跳过
+     */
+    private func updateRowLevelPermissionConfig(tableInfo: TableInfo): Unit {
+        let envFilePath = "./.env"
+        
+        // 检查文件是否存在
+        if (!fileExists(envFilePath)) {
+            println(".env 文件不存在，跳过行级权限配置")
+            return
+        }
+        
+        // 读取.env文件内容
+        let content = try {
+            let bytes = File.readFrom(envFilePath)
+            String.fromUtf8(bytes)
+        } catch (e: Exception) {
+            println("读取 .env 文件失败: ${e.message}")
+            return
+        }
+        
+        let tableName = tableInfo.tableName
+        let configKey = "ROW_LEVEL_PERMISSION_${tableName}"
+        let configValue = "${configKey}=true"
+        
+        // 检查是否已存在该配置
+        if (content.contains(configKey)) {
+            println("行级权限配置已存在: ${configKey}")
+            return
+        }
+        
+        // 在结束标记之前添加配置
+        let endMarker = "# ========== End Row Level Permission Config =========="
+        if (content.contains(endMarker)) {
+            let updatedContent = content.replace(endMarker, "${configValue}\n${endMarker}")
+            try {
+                File.writeTo(envFilePath, updatedContent.toArray())
+                println("已更新 .env，添加行级权限配置: ${configKey}")
+            } catch (e: Exception) {
+                println("写入 .env 文件失败: ${e.message}")
+            }
+        } else {
+            println(".env 文件中未找到行级权限配置区域标记，跳过配置")
         }
     }
     

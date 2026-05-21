@@ -12,7 +12,8 @@ import magic.app.models.uctoo.OperateLogPO
 import magic.app.dao.uctoo.OperateLogDAO
 import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
-import magic.log.LogUtils
+import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
+import magic.app.utils.PermissionUtils
 
 /**
  * OperateLogService - operate_log服务类
@@ -59,7 +60,7 @@ public class OperateLogService {
     }
 
     /**
-     * 更新operate_log
+     * 更新operate_log（无权限检查）
      * @param entityId ID
      * @param entity OperateLogPO对象
      * @return 更新结果
@@ -146,7 +147,7 @@ public class OperateLogService {
     }
 
     /**
-     * 删除operate_log
+     * 删除operate_log（无权限检查）
      * @param entityId ID
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
@@ -248,7 +249,7 @@ public class OperateLogService {
     }
 
     /**
-     * 根据ID获取operate_log
+     * 根据ID获取operate_log（无权限检查）
      * @param entityId ID
      * @return operate_log对象
      */
@@ -277,13 +278,12 @@ public class OperateLogService {
             let pagination = getExecutor().findAllOperateLogPage(page, pageSize)
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("OperateLogService", "getList error: ${e.message}")
             return (ArrayList<OperateLogPO>(), 0)
         }
     }
 
     /**
-     * 获取operate_log列表（分页，支持排序和过滤）
+     * 获取operate_log列表（分页，支持排序和过滤，无权限过滤）
      *
      * 支持完整的 Prisma 风格查询：
      * - 排序：sort="-created_at,id"
@@ -325,7 +325,6 @@ public class OperateLogService {
 
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("OperateLogService", "Failed to get list: ${e.message}")
             return (ArrayList<OperateLogPO>(), 0)
         }
     }
@@ -608,7 +607,68 @@ public class OperateLogService {
     }
 
     /**
-     * 获取operate_log列表（带跳过参数）
+     * 获取operate_log列表（带跳过参数，带权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
+     * @param page 页码（从0开始）
+     * @param pageSize 每页大小
+     * @param skip 跳过条数
+     * @param sort 排序参数
+     * @param filter 过滤条件
+     * @param userId 用户ID
+     * @return operate_log列表和总数
+     */
+    public func getListWithSkipWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        skip: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<OperateLogPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "operate_log")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pageNum = if (pageSize > 0) { (skip / pageSize) + 1 } else { Int32(1) }
+            let pagination = getExecutor().findOperateLogByCondition(
+                whereClause,
+                orderByClause,
+                Int64(pageNum),
+                Int64(pageSize)
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<OperateLogPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取operate_log列表（带跳过参数，无权限过滤）
      *
      * 支持完整的 Prisma 风格查询
      *
@@ -742,5 +802,183 @@ public class OperateLogService {
         }
     }
 
+    // ==================== 行级权限集成方法（每个表都需要的标准化代码） ====================
+
+    public func createWithPermission(entity: OperateLogPO, creatorId: String): APIResult<OperateLogPO> {
+        let result = create(entity, creatorId)
+        if (result.success) {
+            if (result.data.isSome()) {
+                let data = result.data.getOrThrow()
+                if (!data.id.isEmpty()) {
+                    PermissionUtils.autoGrantCreatorPermission(creatorId, data.id, "operate_log")
+                }
+            }
+        }
+        return result
+    }
+
+    public func getByIdWithPermission(entityId: String, userId: String): APIResult<OperateLogPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkReadPermission(userId, entityId, "operate_log")
+            if (!hasPermission) {
+                return APIResult<OperateLogPO>(false, reason)
+            }
+            return getById(entityId)
+        } catch (e: Exception) {
+            return APIResult<OperateLogPO>(false, e.message)
+        }
+    }
+
+    public func getListWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<OperateLogPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "operate_log")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pagination = getExecutor().findOperateLogByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<OperateLogPO>(), 0)
+        }
+    }
+
+    public func updateWithPermission(entityId: String, entity: OperateLogPO, userId: String): APIResult<OperateLogPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "operate_log")
+            if (!hasPermission) {
+                return APIResult<OperateLogPO>(false, reason)
+            }
+            return update(entityId, entity)
+        } catch (e: Exception) {
+            return APIResult<OperateLogPO>(false, e.message)
+        }
+    }
+
+    public func deleteWithPermission(entityId: String, force: Bool, userId: String): APIResult<Bool> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "operate_log")
+            if (!hasPermission) {
+                return APIResult<Bool>(false, reason)
+            }
+            return delete(entityId, force)
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
 //#endregion AutoCreateCode
+
+    // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    /**
+     * 记录操作日志（静态方法，用于工具类调用）
+     * 
+     * @param module 模块名称 (如: api, tool, cli)
+     * @param operate 操作名称 (如: create, read, update, delete)
+     * @param route 路由路径
+     * @param params 参数(JSON格式字符串)
+     * @param ip IP地址
+     * @param method 请求方法 (如: GET, POST, PUT, DELETE)
+     * @param creator 创建人ID
+     */
+    public static func recordLog(
+        module: String,
+        operate: String,
+        route: String,
+        params: String,
+        ip: String,
+        method: String,
+        creator: ?String
+    ): Unit {
+        try {
+            let operateLog = OperateLogPO()
+            operateLog.module = module
+            operateLog.operate = operate
+            operateLog.route = route
+            operateLog.params = params
+            operateLog.ip = ip
+            operateLog.method = method
+            operateLog.creator = creator
+            operateLog.createdAt = DateTime.now()
+            operateLog.updatedAt = DateTime.now()
+            
+            let service = OperateLogService()
+            let creatorId = if (creator.isSome()) { creator.getOrThrow() } else { "" }
+            let _ = service.create(operateLog, creatorId)
+        } catch (e: Exception) {
+            // 日志记录失败不影响主流程
+        }
+    }
+    
+    /**
+     * 记录API操作日志
+     */
+    public static func recordApiLog(
+        operate: String,
+        route: String,
+        params: String,
+        ip: String,
+        method: String,
+        creator: ?String
+    ): Unit {
+        recordLog("api", operate, route, params, ip, method, creator)
+    }
+    
+    /**
+     * 记录工具调用日志
+     */
+    public static func recordToolLog(
+        operate: String,
+        route: String,
+        params: String,
+        ip: String,
+        creator: ?String
+    ): Unit {
+        recordLog("tool", operate, route, params, ip, "tool", creator)
+    }
+    
+    /**
+     * 记录CLI操作日志
+     */
+    public static func recordCliLog(
+        operate: String,
+        route: String,
+        params: String,
+        creator: ?String
+    ): Unit {
+        recordLog("cli", operate, route, params, "127.0.0.1", "cli", creator)
+    }
 }

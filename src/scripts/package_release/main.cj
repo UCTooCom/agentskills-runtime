@@ -121,6 +121,16 @@ func shouldExcludeDirectory(dirName: String): Bool {
     return false
 }
 
+func safeCopy(from: String, to: String, overwrite: Bool): Bool {
+    try {
+        copy(from, to: to, overwrite: overwrite)
+        return true
+    } catch (e: Exception) {
+        println("  [WARN] Failed to copy ${from} -> ${to}: ${e.message}")
+        return false
+    }
+}
+
 main(args: Array<String>): Unit {
     println("========================================")
     println("AgentSkills Runtime Package Script")
@@ -182,11 +192,9 @@ main(args: Array<String>): Unit {
                     }
                     
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -213,11 +221,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -245,11 +251,9 @@ main(args: Array<String>): Unit {
                         return true
                     }
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -273,11 +277,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -301,11 +303,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -329,11 +329,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -357,11 +355,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -385,11 +381,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -413,11 +407,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -441,11 +433,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -469,11 +459,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -497,11 +485,9 @@ main(args: Array<String>): Unit {
                 
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        dllCount.add(name)
-                        totalDlls.add(name)
-                    }
+                    safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                    dllCount.add(name)
+                    totalDlls.add(name)
                 }
             }
             true
@@ -517,7 +503,7 @@ main(args: Array<String>): Unit {
         "f_aspect", "f_base", "f_bean", "f_cache", "f_cmd", 
         "f_collection", "f_concurrent", "f_exception", "f_io", 
         "f_log", "f_macros", "f_mockdb", "f_pool", 
-        "f_random", "f_regex", "f_time", "f_util", "f_version"
+        "f_random", "f_regex", "f_ticktock", "f_time", "f_util", "f_version"
     ]
     
     for (moduleName in fountainModules) {
@@ -534,11 +520,9 @@ main(args: Array<String>): Unit {
                     
                     if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                         let destPath = Path("${binDir}/${name}")
-                        if (!exists(destPath)) {
-                            copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                            dllCount.add(name)
-                            totalDlls.add(name)
-                        }
+                        safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                        dllCount.add(name)
+                        totalDlls.add(name)
                     }
                 }
                 true
@@ -553,7 +537,13 @@ main(args: Array<String>): Unit {
     println("")
     println("[STEP] Copying cangjie-stdx libraries to bin...")
     
-    let stdxDir = Path("${rootPath}/libs/cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx")
+    let stdxDynamicPath = getVariable("CANGJIE_STDX_DYNAMIC_PATH")
+    let stdxDir = if (stdxDynamicPath.isSome()) {
+        let p = stdxDynamicPath.getOrThrow()
+        Path("${p}/windows_x86_64_llvm/dynamic/stdx")
+    } else {
+        Path("${rootPath}/libs/cangjie-stdx-windows-x64-1.0.4.1/windows_x86_64_llvm/dynamic/stdx")
+    }
     if (exists(stdxDir) && exists(binDir)) {
         let stdxCount = ArrayList<String>()
         
@@ -564,9 +554,10 @@ main(args: Array<String>): Unit {
                 if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                     let destPath = Path("${binDir}/${name}")
                     if (!exists(destPath)) {
-                        copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                        stdxCount.add(name)
-                        totalDlls.add(name)
+                        if (safeCopy(fileInfo.path.toString(), destPath.toString(), true)) {
+                            stdxCount.add(name)
+                            totalDlls.add(name)
+                        }
                     }
                 }
             }
@@ -580,6 +571,7 @@ main(args: Array<String>): Unit {
     
     println("")
     println("[STEP] Copying cangjie runtime libraries to bin...")
+    println("  [INFO] Only copying DLLs not already in bin/ (build outputs are authoritative)")
     
     let cangjieHome = getVariable("CANGJIE_HOME")
     if (cangjieHome.isSome()) {
@@ -587,6 +579,7 @@ main(args: Array<String>): Unit {
         let runtimeDir = Path("${home}/runtime/lib/windows_x86_64_llvm")
         if (exists(runtimeDir) && exists(binDir)) {
             let runtimeCount = ArrayList<String>()
+            let runtimeSkipped = ArrayList<String>()
             
             Directory.walk(runtimeDir.toString()) { fileInfo =>
                 if (!fileInfo.isDirectory()) {
@@ -595,22 +588,69 @@ main(args: Array<String>): Unit {
                     if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
                         let destPath = Path("${binDir}/${name}")
                         if (!exists(destPath)) {
-                            copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                            runtimeCount.add(name)
-                            totalDlls.add(name)
+                            if (safeCopy(fileInfo.path.toString(), destPath.toString(), true)) {
+                                runtimeCount.add(name)
+                                totalDlls.add(name)
+                            }
+                        } else {
+                            runtimeSkipped.add(name)
                         }
                     }
                 }
                 true
             }
             
-            println("  [OK] Copied ${runtimeCount.size.toString()} runtime DLLs to bin/")
+            println("  [OK] Copied ${runtimeCount.size.toString()} new runtime DLLs to bin/")
+            if (runtimeSkipped.size > 0) {
+                println("  [INFO] Skipped ${runtimeSkipped.size.toString()} existing runtime DLLs (already in bin/)")
+            }
         } else {
             println("  [WARN] runtime directory not found: ${runtimeDir}")
         }
     } else {
         println("  [WARN] CANGJIE_HOME environment variable not set")
         println("  [INFO] Please ensure CANGJIE runtime DLLs are available in PATH")
+    }
+    
+    println("")
+    println("[STEP] Copying LLVM/MinGW runtime DLLs to bin and release root...")
+    
+    if (cangjieHome.isSome()) {
+        let home = cangjieHome.getOrThrow()
+        let llvmRtDirs = [
+            Path("${home}/third_party/llvm/bin"),
+            Path("${home}/third_party/mingw/bin"),
+            Path("${home}/tools/bin")
+        ]
+        let rtCount = ArrayList<String>()
+        
+        for (rtDir in llvmRtDirs) {
+            if (exists(rtDir)) {
+                Directory.walk(rtDir.toString()) { fileInfo =>
+                    if (!fileInfo.isDirectory()) {
+                        let name = fileInfo.path.fileName
+                        
+                        if (name.endsWith(".dll")) {
+                            let destBin = Path("${binDir}/${name}")
+                            if (!exists(destBin)) {
+                                if (safeCopy(fileInfo.path.toString(), destBin.toString(), true)) {
+                                    rtCount.add(name)
+                                    totalDlls.add(name)
+                                }
+                            }
+                            safeCopy(fileInfo.path.toString(), Path("${targetDir}/${name}").toString(), true)
+                        }
+                    }
+                    true
+                }
+            }
+        }
+        
+        if (rtCount.size > 0) {
+            println("  [OK] Copied ${rtCount.size.toString()} LLVM/MinGW runtime DLLs to bin/ and release root")
+        } else {
+            println("  [WARN] No LLVM/MinGW runtime DLLs found")
+        }
     }
     
     println("")
@@ -715,10 +755,8 @@ Then copy the certificates to this directory:
             
             if (name.endsWith(".cjo")) {
                 let destPath = Path("${binDir}/${name}")
-                if (!exists(destPath)) {
-                    copy(fileInfo.path.toString(), to: destPath.toString(), overwrite: false)
-                    cjoCount.add(name)
-                }
+                safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                cjoCount.add(name)
             }
         }
         true
@@ -732,7 +770,7 @@ Then copy the certificates to this directory:
     let entryExe = Path("${binDir}/agentskills-runtime.exe")
     let appExe = Path("${binDir}/magic.app.exe")
     if (exists(appExe)) {
-        copy(appExe.toString(), to: entryExe.toString(), overwrite: true)
+        safeCopy(appExe.toString(), entryExe.toString(), true)
         println("  [OK] Created agentskills-runtime.exe from magic.app.exe")
     } else if (exists(entryExe)) {
         println("  [OK] agentskills-runtime.exe already exists")
@@ -747,12 +785,12 @@ Then copy the certificates to this directory:
     let envExampleSrc = Path("${rootPath}/.env.example")
     let envExampleDest = Path("${targetDir}/.env.example")
     if (exists(envExampleSrc)) {
-        copy(envExampleSrc.toString(), to: envExampleDest.toString(), overwrite: true)
+        safeCopy(envExampleSrc.toString(), envExampleDest.toString(), true)
         println("  [OK] Copied .env.example to release package")
         
         // Also copy to bin directory for convenience
         let envExampleBinDest = Path("${binDir}/.env.example")
-        copy(envExampleSrc.toString(), to: envExampleBinDest.toString(), overwrite: true)
+        safeCopy(envExampleSrc.toString(), envExampleBinDest.toString(), true)
         println("  [OK] Copied .env.example to bin directory")
     } else {
         println("  [WARN] .env.example not found at ${envExampleSrc}, skipping")

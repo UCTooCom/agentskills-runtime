@@ -7,6 +7,7 @@ package magic.app.dao.uctoo
 
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 //#region AutoCreateCode
+
 import std.collection.*
 import std.time.DateTime
 import f_orm.*
@@ -15,57 +16,11 @@ import f_orm.sql.{Pagination, SqlPartial}
 import magic.app.models.uctoo.ApplicationPO
 import magic.log.LogUtils
 
-
-
-
-/**
- * 将 Any 类型转换为 SQL 字符串
- * 
- * @param value Any 类型的值
- * @return SQL 字符串表示
- */
-public func convertToSqlString(value: Any): String {
-    // 尝试转换为字符串类型
-    let strValue = value as String
-    if (let Some(s) <- strValue) {
-        // 字符串类型需要加引号并转义单引号
-        let escaped = s.replace("'", "''")
-        return "'${escaped}'"
-    }
-    
-    // 尝试转换为Int64类型
-    let intValue = value as Int64
-    if (let Some(i) <- intValue) {
-        return "${i}"
-    }
-    
-    // 尝试转换为Int32类型
-    let int32Value = value as Int32
-    if (let Some(i) <- int32Value) {
-        return "${i}"
-    }
-    
-    // 尝试转换为Float64类型
-    let floatValue = value as Float64
-    if (let Some(f) <- floatValue) {
-        return "${f}"
-    }
-    
-    // 尝试转换为Bool类型
-    let boolValue = value as Bool
-    if (let Some(b) <- boolValue) {
-        return if (b) { "1" } else { "0" }
-    }
-    
-    // 默认返回空字符串
-    ""
-}
-
 /**
  * ApplicationDAO - application数据访问接口
- * 
- * 提供标准CRUD操作，遵循UCTOO V4 ORM规范
- * 
+ *
+ * 提供application表的标准CRUD操作，遵循UCTOO V4 ORM规范
+ *
  * 设计原则：
  * 1. DAO层只负责数据访问，不包含业务逻辑
  * 2. 所有查询方法不过滤软删除数据，返回完整数据集
@@ -75,14 +30,12 @@ public func convertToSqlString(value: Any): String {
 @DAO
 public interface ApplicationDAO <: RootDAO {
     prop executor: SqlExecutor
-    
-    
-    
+
     // ==================== 插入操作 ====================
-    
+
     /**
      * 插入application（id由数据库自动生成UUID）
-     * @param entity application对象
+     * @param entity ApplicationPO对象
      * @return 插入成功返回生成的ID，失败返回空字符串
      */
     func insertApplication(entity: ApplicationPO): String {
@@ -98,7 +51,7 @@ public interface ApplicationDAO <: RootDAO {
                 updated_at,
                 deleted_at
             ) values(
-                ${arg(entity.name)},
+${arg(entity.name)},
                 ${arg(entity.description)},
                 ${arg(entity.icon)},
                 ${arg(entity.tag)},
@@ -111,9 +64,9 @@ public interface ApplicationDAO <: RootDAO {
             returning id
         ''').singleFirst<String>() ?? ""
     }
-    
+
     // ==================== 单条查询 ====================
-    
+
     /**
      * 根据ID查询application
      * @param id applicationID
@@ -124,9 +77,9 @@ public interface ApplicationDAO <: RootDAO {
             select * from application where id = ${arg(id)}
         ''').first<ApplicationPO>()
     }
-    
+
     // ==================== 更新操作 ====================
-    
+
     /**
      * 更新application
      * @param entity application对象
@@ -140,14 +93,15 @@ public interface ApplicationDAO <: RootDAO {
                 icon = ${arg(entity.icon)},
                 tag = ${arg(entity.tag)},
                 classify = ${arg(entity.classify)},
+                creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
     }
-    
+
     // ==================== 删除操作 ====================
-    
+
     /**
      * 软删除application
      * @param id applicationID
@@ -158,7 +112,7 @@ public interface ApplicationDAO <: RootDAO {
             update application set deleted_at = ${arg(DateTime.now())} where id = ${arg(id)}
         ''').update
     }
-    
+
     /**
      * 恢复软删除的application
      * @param id applicationID
@@ -169,7 +123,7 @@ public interface ApplicationDAO <: RootDAO {
             update application set deleted_at = null where id = ${arg(id)}
         ''').update
     }
-    
+
     /**
      * 硬删除application
      * @param id applicationID
@@ -180,9 +134,9 @@ public interface ApplicationDAO <: RootDAO {
             delete from application where id = ${arg(id)}
         ''').delete
     }
-    
+
     // ==================== 列表查询 ====================
-    
+
     /**
      * 分页查询所有application
      * @param page 页码（从1开始）
@@ -194,77 +148,7 @@ public interface ApplicationDAO <: RootDAO {
             select * from application order by created_at desc
         ''', size, page: page)
     }
-    
-    /**
-     * 条件查询 application（支持动态 WHERE 和 ORDER BY）
-     * 
-     * @param whereClause WHERE 子句（不包含 WHERE 关键字）
-     * @param orderByClause ORDER BY 子句（不包含 ORDER BY 关键字）
-     * @param args SQL 参数列表
-     * @param page 页码（从1开始）
-     * @param size 每页大小
-     * @return 分页结果
-     * 
-     * 示例：
-     * whereClause: "name like ? and classify = ?"
-     * orderByClause: "created_at desc"
-     * args: ["%管理%", "dev"]
-     * 
-     * 生成的 SQL: SELECT * FROM application WHERE name like ? and classify = ? ORDER BY created_at desc
-     */
-    func findApplicationByCondition(
-        whereClause: String,
-        orderByClause: String,
-        args: ArrayList<Any>,
-        page: Int64,
-        size: Int64
-    ): Pagination<ApplicationPO> {
-        // 构建 SQL 字符串
-        let whereSql = if (whereClause.isEmpty()) {
-            ""
-        } else {
-            " where ${whereClause}"
-        }
-        
-        let baseSql = "select * from application${whereSql} order by ${orderByClause}"
-        let countSql = if (whereSql.isEmpty()) {
-            "select count(*) from application"
-        } else {
-            "select count(*) from application${whereSql}"
-        }
-        
-        LogUtils.info("ApplicationDAO", "Executing SQL: ${baseSql}")
-        LogUtils.info("ApplicationDAO", "With args: ${args.size} parameters")
-        
-        // 手动实现分页查询，这样我们可以完全控制参数绑定
-        // 1. 首先添加所有查询参数
-        for (argValue in args) {
-            executor.add(argValue)
-        }
-        
-        // 2. 执行计数查询，设置 clearArgsAfterExec: false 以保留参数
-        let total = executor.setSql(countSql, clearArgsAfterExec: false).first<Int64>() ?? 0
-        
-        if (total == 0) {
-            // 没有数据，返回空结果
-            return Pagination<ApplicationPO>(page: page, size: size, rows: total, list: ArrayList<ApplicationPO>())
-        }
-        
-        // 3. 计算 offset 并添加分页参数
-        let offset = (page - 1) * size
-        executor.add(size)
-        executor.add(offset)
-        
-        // 4. 构建最终的带分页的 SQL
-        let finalSql = baseSql + " limit ? offset ?"
-        
-        // 5. 执行数据查询，设置 clearArgsAfterExec: true 以清空参数
-        let list = executor.setSql(finalSql, clearArgsAfterExec: true).list<ApplicationPO>()
-        
-        // 6. 返回分页结果
-        Pagination<ApplicationPO>(page: page, size: size, rows: total, list: list)
-    }
-    
+
     /**
      * 分页查询application列表（按创建者）
      * @param creator 创建者ID
@@ -277,7 +161,7 @@ public interface ApplicationDAO <: RootDAO {
             select * from application where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
-    
+
     /**
      * 查询所有application（不分页）
      * @return application列表
@@ -287,7 +171,7 @@ public interface ApplicationDAO <: RootDAO {
             select * from application order by created_at desc
         ''').list<ApplicationPO>()
     }
-    
+
     /**
      * 批量查询application
      * @param ids ID列表
@@ -298,9 +182,9 @@ public interface ApplicationDAO <: RootDAO {
             select * from application where id ${IN(ids)}
         ''').list<ApplicationPO>()
     }
-    
+
     // ==================== 统计操作 ====================
-    
+
     /**
      * 统计创建者的application数量
      * @param creator 创建者ID
@@ -311,7 +195,7 @@ public interface ApplicationDAO <: RootDAO {
             select count(*) from application where creator = ${arg(creator)}
         ''').first<Int64>() ?? 0
     }
-    
+
     /**
      * 统计所有application数量
      * @return 数量
@@ -321,8 +205,140 @@ public interface ApplicationDAO <: RootDAO {
             select count(*) from application
         ''').first<Int64>() ?? 0
     }
-    
-    //#endregion AutoCreateCode
+
+
+    /**
+     * 分页查询application列表（带过滤条件）
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findApplicationByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<ApplicationPO> {
+        let sql = StringBuilder()
+        sql.append("select * from application where 1=1")
+
+        if (let Some(linkVal) <- link) {
+            if (linkVal != "") {
+                sql.append(" and link like ${arg('%' + linkVal + '%')}")
+            }
+        }
+
+        if (let Some(descVal) <- description) {
+            if (descVal != "") {
+                sql.append(" and description like ${arg('%' + descVal + '%')}")
+            }
+        }
+
+        // 处理 deleted_at 筛选
+        if (let Some(deletedAtVal) <- deletedAt) {
+            if (deletedAtVal == "null") {
+                // 未删除的数据
+                sql.append(" and deleted_at is null")
+            } else if (deletedAtVal == "not_null") {
+                // 已删除的数据（回收站）
+                sql.append(" and deleted_at is not null")
+            }
+        }
+
+        sql.append(" order by created_at desc")
+
+        executor.page<ApplicationPO>(sql.toString(), size, page: page)
+    }
+
+    /**
+     * 批量软删除application
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchSoftDeleteApplication(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            update application set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
+        ''').update
+    }
+
+    /**
+     * 批量硬删除application
+     * @param ids ID列表
+     * @return 影响行数
+     */
+    func batchDeleteApplication(ids: ArrayList<String>): Int64 {
+        executor.setSql('''
+            delete from application where id ${IN(ids)}
+        ''').delete
+    }
+
+    /**
+     * 动态条件查询application（支持完整查询操作符）
+     *
+     * @param whereClause WHERE 子句字符串（不包含 WHERE 关键字）
+     * @param orderByClause ORDER BY 子句字符串（不包含 ORDER BY 关键字）
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     *
+     * 使用示例：
+     * - whereClause: "name LIKE '%test%' AND status = 'active'"
+     * - orderByClause: "created_at DESC, name ASC"
+     */
+    func findApplicationByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<ApplicationPO> {
+        let sql = StringBuilder()
+        sql.append("select * from application")
+
+        if (!whereClause.isEmpty()) {
+            sql.append(" where ${whereClause}")
+        }
+
+        if (!orderByClause.isEmpty()) {
+            sql.append(" order by ${orderByClause}")
+        } else {
+            sql.append(" order by created_at desc")
+        }
+
+        executor.page<ApplicationPO>(sql.toString(), size, page: page)
+    }
+
+    /**
+     * 使用 f_orm Condition API 查询application
+     *
+     * @param whereClause WHERE 子句字符串
+     * @param orderByClause ORDER BY 子句字符串
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    func findApplicationByCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<ApplicationPO> {
+        let fromClause = executor.FROM<ApplicationPO>()
+
+        // 应用 WHERE 条件
+        if (!whereClause.isEmpty()) {
+            fromClause.WHERE(whereClause)
+        }
+
+        // 应用 ORDER BY
+        if (!orderByClause.isEmpty()) {
+            fromClause.ORDER_BY { => orderByClause }
+        } else {
+            fromClause.ORDER_BY { => "created_at DESC" }
+        }
+
+        // 执行分页查询
+        fromClause.page<ApplicationPO>(size, page: page)
+    }
+
+    /**
+     * 清空回收站（硬删除所有已软删除的application）
+     * @return 影响行数
+     */
+    func emptyRecycleBinApplication(): Int64 {
+        executor.setSql('''
+            delete from application where deleted_at is not null
+        ''').delete
+    }
+
+//#endregion AutoCreateCode
     
     // ========== 定制开发方法==========
 }

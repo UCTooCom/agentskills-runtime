@@ -14,11 +14,14 @@ import f_orm.*
 import magic.app.models.uctoo.UctooSessionPO
 import magic.app.dao.uctoo.UctooSessionDAO
 import magic.app.core.response.APIResult
+import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
+import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
+import magic.app.utils.PermissionUtils
 import magic.log.LogUtils
 
 /**
  * UctooSessionService - uctoo_session服务类
- * 
+ *
  * 提供uctoo_session相关的业务逻辑处理，遵循UCTOO V4 ORM规范
  * 使用DAO层进行数据访问
  */
@@ -26,21 +29,27 @@ public class UctooSessionService {
     private func getExecutor(): SqlExecutor {
         ORM.executor()
     }
-    
+
+    // 查询参数解析服务
+    private let requestParser = RequestParserService()
+
     public init() {}
-    
-    
+
     /**
-     * 创建uctooSession
-     * @param entity uctooSession对象
+     * 创建uctoo_session
+     * @param entity UctooSessionPO对象
+     * @param creatorId 创建者ID
      * @return 创建结果
      */
-    public func create(entity: UctooSessionPO): APIResult<UctooSessionPO> {
+    public func create(entity: UctooSessionPO, creatorId: String): APIResult<UctooSessionPO> {
         try {
             entity.createdAt = DateTime.now()
             entity.updatedAt = DateTime.now()
             
-            // id 由数据库自动生成 UUID
+            if (entity.creator.isNone()) {
+                entity.creator = Some(creatorId)
+            }
+            
             let id = getExecutor().insertUctooSession(entity)
             
             if (!id.isEmpty()) {
@@ -53,11 +62,11 @@ public class UctooSessionService {
             return APIResult<UctooSessionPO>(false, e.message)
         }
     }
-    
+
     /**
-     * 更新uctooSession
-     * @param entityId uctooSessionID
-     * @param entity uctooSession对象（只包含要更新的字段）
+     * 更新uctoo_session（无权限检查）
+     * @param entityId ID
+     * @param entity UctooSessionPO对象
      * @return 更新结果
      */
     public func update(entityId: String, entity: UctooSessionPO): APIResult<UctooSessionPO> {
@@ -65,7 +74,7 @@ public class UctooSessionService {
             let existing = getExecutor().findUctooSessionById(entityId)
             
             if (existing.isNone()) {
-                return APIResult<UctooSessionPO>(false, "uctooSession不存在")
+                return APIResult<UctooSessionPO>(false, "uctoo_session不存在")
             }
             
             let existingEntity = existing.getOrThrow()
@@ -74,21 +83,21 @@ public class UctooSessionService {
                         if (entity.userId.size > 0) {
                 existingEntity.userId = entity.userId
             }
+            existingEntity.valid = entity.valid
             if (entity.userAgent.isSome()) {
                 existingEntity.userAgent = entity.userAgent
             }
             if (entity.ip.size > 0) {
                 existingEntity.ip = entity.ip
             }
-            if (entity.authProvider.isSome()) {
-                existingEntity.authProvider = entity.authProvider
-            }
+            existingEntity.authProvider = entity.authProvider
             if (entity.deletedAt.isSome()) {
                 existingEntity.deletedAt = entity.deletedAt
             }
             if (entity.creator.isSome()) {
                 existingEntity.creator = entity.creator
             }
+
             
             // 设置更新时间和ID
             existingEntity.updatedAt = DateTime.now()
@@ -105,25 +114,25 @@ public class UctooSessionService {
             return APIResult<UctooSessionPO>(false, e.message)
         }
     }
-    
+
     /**
-     * 批量更新uctooSession
-     * @param entities uctooSession列表
+     * 批量更新uctoo_session
+     * @param entities uctoo_session列表
      * @return 更新结果
      */
     public func updateMultiple(entities: ArrayList<UctooSessionPO>): APIResult<ArrayList<UctooSessionPO>> {
         try {
             let updatedEntities = ArrayList<UctooSessionPO>()
-            
+
             for (entity in entities) {
                 entity.updatedAt = DateTime.now()
                 let rows = getExecutor().updateUctooSession(entity)
-                
+
                 if (rows > 0) {
                     updatedEntities.add(entity)
                 }
             }
-            
+
             if (updatedEntities.size > 0) {
                 return APIResult<ArrayList<UctooSessionPO>>(updatedEntities)
             } else {
@@ -133,10 +142,10 @@ public class UctooSessionService {
             return APIResult<ArrayList<UctooSessionPO>>(false, e.message)
         }
     }
-    
+
     /**
-     * 删除uctooSession
-     * @param entityId uctooSessionID
+     * 删除uctoo_session（无权限检查）
+     * @param entityId ID
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
      */
@@ -145,7 +154,7 @@ public class UctooSessionService {
             let existing = getExecutor().findUctooSessionById(entityId)
             
             if (existing.isNone()) {
-                return APIResult<Bool>(false, "uctooSession不存在")
+                return APIResult<Bool>(false, "uctoo_session不存在")
             }
             
             let rows: Int64
@@ -164,27 +173,22 @@ public class UctooSessionService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
-     * 批量删除uctooSession
-     * @param ids uctooSessionID列表
+     * 批量删除uctoo_session
+     * @param ids uctoo_sessionID列表
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
      */
     public func deleteMultiple(ids: ArrayList<String>, force: Bool): APIResult<Bool> {
         try {
-            var rows: Int64 = 0
-            for (id in ids) {
-                let existing = getExecutor().findUctooSessionById(id)
-                if (existing.isSome()) {
-                    if (force) {
-                        rows = rows + getExecutor().deleteUctooSessionById(id)
-                    } else {
-                        rows = rows + getExecutor().softDeleteUctooSessionById(id)
-                    }
-                }
+            let rows: Int64
+            if (force) {
+                rows = getExecutor().batchDeleteUctooSession(ids)
+            } else {
+                rows = getExecutor().batchSoftDeleteUctooSession(ids)
             }
-            
+
             if (rows > 0) {
                 return APIResult<Bool>(true)
             } else {
@@ -194,16 +198,16 @@ public class UctooSessionService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
-     * 恢复软删除的uctooSession
-     * @param entityId uctooSessionID
+     * 恢复软删除的uctoo_session
+     * @param entityId uctoo_sessionID
      * @return 恢复结果
      */
     public func restore(entityId: String): APIResult<UctooSessionPO> {
         try {
             let rows = getExecutor().restoreUctooSessionById(entityId)
-            
+
             if (rows > 0) {
                 let result = getExecutor().findUctooSessionById(entityId)
                 if (let Some(entity) <- result) {
@@ -218,10 +222,10 @@ public class UctooSessionService {
             return APIResult<UctooSessionPO>(false, e.message)
         }
     }
-    
+
     /**
-     * 批量恢复软删除的uctooSession
-     * @param ids uctooSessionID列表
+     * 批量恢复软删除的uctoo_session
+     * @param ids uctoo_sessionID列表
      * @return 恢复结果
      */
     public func restoreMultiple(ids: ArrayList<String>): APIResult<Bool> {
@@ -230,7 +234,7 @@ public class UctooSessionService {
             for (id in ids) {
                 rows = rows + getExecutor().restoreUctooSessionById(id)
             }
-            
+
             if (rows > 0) {
                 return APIResult<Bool>(true)
             } else {
@@ -240,69 +244,437 @@ public class UctooSessionService {
             return APIResult<Bool>(false, e.message)
         }
     }
-    
+
     /**
-     * 根据ID获取uctooSession
-     * 
-     * 设计说明：
-     * - 通过ID获取uctooSession时，返回该ID对应的数据，无论是否被软删除
-     * - 这样API使用方可以实现回收站功能，恢复软删除的数据
-     * - 软删除数据是否显示由API使用方根据业务需求决定
-     * 
-     * @param entityId uctooSessionID
-     * @return uctooSession对象
+     * 根据ID获取uctoo_session（无权限检查）
+     * @param entityId ID
+     * @return uctoo_session对象
      */
     public func getById(entityId: String): APIResult<UctooSessionPO> {
         try {
-            LogUtils.info("UctooSessionService", "=== UctooSessionService.getById() called with id: ${entityId} ===")
             let result = getExecutor().findUctooSessionById(entityId)
-            LogUtils.info("UctooSessionService", "=== findUctooSessionById result: ${result.isSome()} ===")
             
             if (let Some(entity) <- result) {
-                LogUtils.info("UctooSessionService", "=== UctooSession found, id: ${entity.id} ===")
                 return APIResult<UctooSessionPO>(entity)
             } else {
-                LogUtils.info("UctooSessionService", "=== UctooSession not found for id: ${entityId} ===")
-                return APIResult<UctooSessionPO>(false, "未找到该uctooSession")
+                return APIResult<UctooSessionPO>(false, "未找到该uctoo_session")
             }
         } catch (e: Exception) {
-            LogUtils.error("UctooSessionService", "=== UctooSessionService.getById() exception: ${e.message} ===")
             return APIResult<UctooSessionPO>(false, e.message)
         }
     }
-    
+
     /**
-     * 获取uctooSession列表（分页）
-     * @param page 页码（从0开始）
+     * 获取uctoo_session列表（分页）
+     * @param page 页码
+     * @param pageSize 每页大小
+     * @return uctoo_session列表和总数
+     */
+    public func getList(page: Int64, pageSize: Int64): (ArrayList<UctooSessionPO>, Int64) {
+        try {
+            let pagination = getExecutor().findAllUctooSessionPage(page, pageSize)
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<UctooSessionPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取uctoo_session列表（分页，支持排序和过滤，无权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询：
+     * - 排序：sort="-created_at,id"
+     * - 过滤：filter={"name":{"contains":"test"},"status":{"equals":"active"}}
+     * - 条件组合：filter={"AND":[{"name":{"contains":"test"}},{"status":{"equals":"active"}}]}
+     *
+     * @param page 页码（从1开始）
      * @param pageSize 每页大小
      * @param sort 排序参数（如 "-created_at,id"）
      * @param filter 过滤条件（JSON字符串）
-     * @return uctooSession列表和总数
+     * @return uctoo_session列表和总数
      */
-    public func getList(
+    public func getListWithFilter(
         page: Int32,
         pageSize: Int32,
         sort: String,
         filter: String
     ): (ArrayList<UctooSessionPO>, Int64) {
-        // TODO: filter参数需要实现JSON解析和动态WHERE条件构建
-        // 当前版本暂不支持filter，只支持基本的分页查询
-        let pagination = getExecutor().findAllUctooSessionPage(
-            Int64(page + 1),
-            Int64(pageSize)
-        )
-        
-        return (pagination.list, pagination.rows)
+        try {
+            // 1. 解析查询参数
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            // 2. 构建 WHERE 条件
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            // 3. 构建 ORDER BY 子句
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            // 4. 执行查询
+            let pagination = getExecutor().findUctooSessionByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<UctooSessionPO>(), 0)
+        }
     }
-    
+
     /**
-     * 获取uctooSession列表（带跳过参数）
+     * 构建WHERE子句字符串
+     *
+     * 将组合条件转换为SQL WHERE子句
+     */
+    private func buildWhereClause(composite: CompositeCondition): String {
+        let sb = StringBuilder()
+
+        // 处理字段条件
+        let fieldConditions = composite.fieldConditions
+        for (fieldCondition in fieldConditions) {
+            if (sb.size > 0) {
+                match (composite.logic) {
+                    case LogicOperator.And => sb.append(" AND ")
+                    case LogicOperator.Or => sb.append(" OR ")
+                    case LogicOperator.Not => sb.append(" AND ")
+                }
+            }
+            sb.append(buildFieldClause(fieldCondition))
+        }
+
+        // 处理嵌套组合条件
+        let compositeConditions = composite.compositeConditions
+        for (nestedComposite in compositeConditions) {
+            if (sb.size > 0) {
+                match (composite.logic) {
+                    case LogicOperator.And => sb.append(" AND ")
+                    case LogicOperator.Or => sb.append(" OR ")
+                    case LogicOperator.Not => sb.append(" AND ")
+                }
+            }
+            let nestedClause = buildWhereClause(nestedComposite)
+            if (!nestedClause.isEmpty()) {
+                sb.append("(${nestedClause})")
+            }
+        }
+
+        // 处理 NOT 逻辑操作符
+        match (composite.logic) {
+            case LogicOperator.Not =>
+                if (sb.size > 0) {
+                    return "NOT(${sb.toString()})"
+                } else {
+                    return sb.toString()
+                }
+            case _ =>
+                return sb.toString()
+        }
+    }
+
+    /**
+     * 构建单个字段条件的SQL子句
+     */
+    private func buildFieldClause(fieldCondition: FieldCondition): String {
+        let field = fieldCondition.field
+        let op = fieldCondition.op
+        let value = fieldCondition.value
+
+        match (op) {
+            case QueryOperator.Equals => buildEqualsClause(field, value)
+            case QueryOperator.Not => buildNotClause(field, value)
+            case QueryOperator.Lt => buildLtClause(field, value)
+            case QueryOperator.Lte => buildLteClause(field, value)
+            case QueryOperator.Gt => buildGtClause(field, value)
+            case QueryOperator.Gte => buildGteClause(field, value)
+            case QueryOperator.Contains => buildContainsClause(field, value)
+            case QueryOperator.StartsWith => buildStartsWithClause(field, value)
+            case QueryOperator.EndsWith => buildEndsWithClause(field, value)
+            case QueryOperator.In => buildInClauseWrapper(field, value, true)
+            case QueryOperator.NotIn => buildInClauseWrapper(field, value, false)
+            case QueryOperator.IsSet => buildIsSetClause(field, value)
+            case QueryOperator.Between => buildBetweenClauseWrapper(field, value, true)
+            case QueryOperator.NotBetween => buildBetweenClauseWrapper(field, value, false)
+        }
+    }
+
+    private func buildEqualsClause(field: String, value: QueryValue): String {
+        if (value.isNull()) {
+            return "${field} IS NULL"
+        }
+
+        if (let Some(v) <- value.stringValue) {
+            return "${field} = '${v}'"
+        } else if (let Some(v) <- value.intValue) {
+            return "${field} = ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} = ${v}"
+        } else if (let Some(v) <- value.boolValue) {
+            return "${field} = ${v}"
+        }
+        return ""
+    }
+
+    private func buildNotClause(field: String, value: QueryValue): String {
+        if (value.isNull()) {
+            return "${field} IS NOT NULL"
+        }
+
+        if (let Some(v) <- value.stringValue) {
+            return "${field} != '${v}'"
+        } else if (let Some(v) <- value.intValue) {
+            return "${field} != ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} != ${v}"
+        } else if (let Some(v) <- value.boolValue) {
+            return "${field} != ${v}"
+        }
+        return ""
+    }
+
+    private func buildLtClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} < ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} < ${v}"
+        }
+        return ""
+    }
+
+    private func buildLteClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} <= ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} <= ${v}"
+        }
+        return ""
+    }
+
+    private func buildGtClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} > ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} > ${v}"
+        }
+        return ""
+    }
+
+    private func buildGteClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} >= ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} >= ${v}"
+        }
+        return ""
+    }
+
+    private func buildContainsClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '%${v}%'"
+        }
+        return ""
+    }
+
+    private func buildStartsWithClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '${v}%'"
+        }
+        return ""
+    }
+
+    private func buildEndsWithClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '%${v}'"
+        }
+        return ""
+    }
+
+    private func buildInClauseWrapper(field: String, value: QueryValue, isIn: Bool): String {
+        if (let Some(arr) <- value.arrayValue) {
+            return buildInClause(field, arr, isIn)
+        }
+        return ""
+    }
+
+    private func buildIsSetClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.boolValue) {
+            if (v) {
+                return "${field} IS NOT NULL"
+            } else {
+                return "${field} IS NULL"
+            }
+        }
+        return ""
+    }
+
+    private func buildBetweenClauseWrapper(field: String, value: QueryValue, isBetween: Bool): String {
+        if (let Some(arr) <- value.arrayValue) {
+            if (arr.size >= 2) {
+                return buildBetweenClause(field, arr[0], arr[1], isBetween)
+            }
+        }
+        return ""
+    }
+
+    private func buildInClause(field: String, values: ArrayList<QueryValue>, isIn: Bool): String {
+        let sb = StringBuilder()
+        sb.append("${field} ")
+        if (!isIn) {
+            sb.append("NOT ")
+        }
+        sb.append("IN (")
+
+        let size = values.size
+        for (i in 0..size) {
+            if (i > 0) {
+                sb.append(", ")
+            }
+            let v = values[i]
+            if (let Some(s) <- v.stringValue) {
+                sb.append("'${s}'")
+            } else if (let Some(n) <- v.intValue) {
+                sb.append("${n}")
+            } else if (let Some(f) <- v.floatValue) {
+                sb.append("${f}")
+            }
+        }
+
+        sb.append(")")
+        return sb.toString()
+    }
+
+
+    /**
+     * 构建BETWEEN子句
+     */
+    private func buildBetweenClause(field: String, v1: QueryValue, v2: QueryValue, isBetween: Bool): String {
+        let sb = StringBuilder()
+        sb.append("${field} ")
+
+        if (!isBetween) {
+            sb.append("NOT ")
+        }
+        sb.append("BETWEEN ")
+
+        if (let Some(s) <- v1.stringValue) {
+            sb.append("'${s}'")
+        } else if (let Some(n) <- v1.intValue) {
+            sb.append("${n}")
+        } else if (let Some(f) <- v1.floatValue) {
+            sb.append("${f}")
+        }
+
+        sb.append(" AND ")
+
+        if (let Some(s) <- v2.stringValue) {
+            sb.append("'${s}'")
+        } else if (let Some(n) <- v2.intValue) {
+            sb.append("${n}")
+        } else if (let Some(f) <- v2.floatValue) {
+            sb.append("${f}")
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 构建ORDER BY子句
+     */
+    private func buildOrderByClause(sort: ArrayList<SortCondition>): String {
+        if (sort.isEmpty()) {
+            return "created_at DESC"
+        }
+
+        let sb = StringBuilder()
+        let size = sort.size
+
+        for (i in 0..size) {
+            let condition = sort[i]
+            if (sb.size > 0) {
+                sb.append(", ")
+            }
+            sb.append("${condition.field} ${if (condition.ascending) { "ASC" } else { "DESC" }}")
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 获取uctoo_session列表（带跳过参数，带权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
      * @param page 页码（从0开始）
      * @param pageSize 每页大小
      * @param skip 跳过条数
      * @param sort 排序参数
      * @param filter 过滤条件
-     * @return uctooSession列表和总数
+     * @param userId 用户ID
+     * @return uctoo_session列表和总数
+     */
+    public func getListWithSkipWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        skip: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<UctooSessionPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "uctoo_session")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pageNum = if (pageSize > 0) { (skip / pageSize) + 1 } else { Int32(1) }
+            let pagination = getExecutor().findUctooSessionByCondition(
+                whereClause,
+                orderByClause,
+                Int64(pageNum),
+                Int64(pageSize)
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<UctooSessionPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取uctoo_session列表（带跳过参数，无权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
+     * @param page 页码（从0开始）
+     * @param pageSize 每页大小
+     * @param skip 跳过条数
+     * @param sort 排序参数
+     * @param filter 过滤条件
+     * @return uctoo_session列表和总数
      */
     public func getListWithSkip(
         page: Int32,
@@ -311,21 +683,38 @@ public class UctooSessionService {
         sort: String,
         filter: String
     ): (ArrayList<UctooSessionPO>, Int64) {
-        // TODO: filter参数需要实现JSON解析和动态WHERE条件构建
-        // 当前版本暂不支持filter，只支持基本的分页查询
-        let pagination = getExecutor().findAllUctooSessionPage(
-            Int64(page + 1),
-            Int64(pageSize)
-        )
-        
-        return (pagination.list, pagination.rows)
+        try {
+            // 1. 解析查询参数
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page + 1), Int64(pageSize))
+
+            // 2. 构建 WHERE 条件
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            // 3. 构建 ORDER BY 子句
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            // 4. 执行查询（带跳过参数）
+            let pagination = getExecutor().findUctooSessionByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<UctooSessionPO>(), 0)
+        }
     }
-    
+
     /**
-     * 获取所有uctooSession列表（分页）
+     * 获取所有uctoo_session列表（分页）
      * @param page 页码
      * @param pageSize 每页大小
-     * @return uctooSession列表和总数
+     * @return uctoo_session列表和总数
      */
     public func getAllList(
         page: Int32,
@@ -335,37 +724,179 @@ public class UctooSessionService {
             Int64(page + 1),
             Int64(pageSize)
         )
-        
+
         return (pagination.list, pagination.rows)
     }
-    
+
     /**
-     * 批量获取uctooSession
+     * 批量获取uctoo_session
      * @param ids ID列表
-     * @return uctooSession列表
+     * @return uctoo_session列表
      */
     public func getByIds(ids: ArrayList<String>): ArrayList<UctooSessionPO> {
         getExecutor().findUctooSessionByIds(ids)
     }
-    
+
     /**
-     * 统计用户的uctooSession数量
+     * 统计用户的uctoo_session数量
      * @param userId 用户ID
-     * @return uctooSession数量
+     * @return uctoo_session数量
      */
     public func countByUser(userId: String): Int64 {
         getExecutor().countUctooSessionByCreator(userId)
     }
-    
+
     /**
-     * 统计所有uctooSession数量
-     * @return uctooSession数量
+     * 统计所有uctoo_session数量
+     * @return uctoo_session数量
      */
     public func countAll(): Int64 {
         getExecutor().countAllUctooSession()
     }
-    
-    //#endregion AutoCreateCode
+
+    /**
+     * 获取uctoo_session列表（带过滤条件）
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
+     * @return uctoo_session列表和总数
+     */
+    public func getFilteredList(
+        page: Int64,
+        pageSize: Int64,
+        link: ?String,
+        description: ?String,
+        deletedAt: ?String
+    ): (ArrayList<UctooSessionPO>, Int64) {
+        let pagination = getExecutor().findUctooSessionByFilterPage(
+            link,
+            description,
+            deletedAt,
+            page,
+            pageSize
+        )
+
+        return (pagination.list, pagination.rows)
+    }
+
+    /**
+     * 清空回收站（硬删除所有已软删除的uctoo_session）
+     * @return 删除结果
+     */
+    public func emptyRecycleBinUctooSession(): APIResult<Bool> {
+        try {
+            let rows = getExecutor().emptyRecycleBinUctooSession()
+
+            if (rows > 0) {
+                return APIResult<Bool>(true)
+            } else {
+                return APIResult<Bool>(false, "回收站为空")
+            }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    // ==================== 行级权限集成方法（每个表都需要的标准化代码） ====================
+
+    public func createWithPermission(entity: UctooSessionPO, creatorId: String): APIResult<UctooSessionPO> {
+        let result = create(entity, creatorId)
+        if (result.success) {
+            if (result.data.isSome()) {
+                let data = result.data.getOrThrow()
+                if (!data.id.isEmpty()) {
+                    PermissionUtils.autoGrantCreatorPermission(creatorId, data.id, "uctoo_session")
+                }
+            }
+        }
+        return result
+    }
+
+    public func getByIdWithPermission(entityId: String, userId: String): APIResult<UctooSessionPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkReadPermission(userId, entityId, "uctoo_session")
+            if (!hasPermission) {
+                return APIResult<UctooSessionPO>(false, reason)
+            }
+            return getById(entityId)
+        } catch (e: Exception) {
+            return APIResult<UctooSessionPO>(false, e.message)
+        }
+    }
+
+    public func getListWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<UctooSessionPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "uctoo_session")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pagination = getExecutor().findUctooSessionByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<UctooSessionPO>(), 0)
+        }
+    }
+
+    public func updateWithPermission(entityId: String, entity: UctooSessionPO, userId: String): APIResult<UctooSessionPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "uctoo_session")
+            if (!hasPermission) {
+                return APIResult<UctooSessionPO>(false, reason)
+            }
+            return update(entityId, entity)
+        } catch (e: Exception) {
+            return APIResult<UctooSessionPO>(false, e.message)
+        }
+    }
+
+    public func deleteWithPermission(entityId: String, force: Bool, userId: String): APIResult<Bool> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "uctoo_session")
+            if (!hasPermission) {
+                return APIResult<Bool>(false, reason)
+            }
+            return delete(entityId, force)
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+//#endregion AutoCreateCode
     
     // ========== 定制开发方法（在此区域添加自定义方法）==========
     
@@ -387,9 +918,9 @@ public class UctooSessionService {
             session.valid = true
             session.userAgent = Some<String>(userAgent)
             session.ip = ip
-            session.authProvider = Some<Int32>(authProvider)
+            session.authProvider = authProvider
             session.createdAt = now
-            session.updatedAt = Some<DateTime>(now)  // 设置updatedAt字段,避免not-null约束错误
+            session.updatedAt = now  // 设置updatedAt字段,避免not-null约束错误
             
             LogUtils.info("Session object created, attempting to insert")
             let id = getExecutor().insertUctooSession(session)
@@ -434,7 +965,7 @@ public class UctooSessionService {
             let existing = getExecutor().findUctooSessionById(sessionId)
             if (let Some(session) <- existing) {
                 session.valid = valid
-                session.updatedAt = Some<DateTime>(DateTime.now())
+                session.updatedAt = DateTime.now()
                 let rows = getExecutor().updateUctooSession(session)
                 return rows > 0
             }

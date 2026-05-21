@@ -9,10 +9,11 @@ import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.core.response.{APIError, APIResult}
 import magic.app.models.uctoo.DbConnectionPO
 import magic.app.services.uctoo.DbConnectionService
-import magic.log.LogUtils
 import std.collection.{HashMap, Map, ArrayList}
 import std.convert
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool, JsonArray}
+import magic.app.core.PermissionLevel
+import magic.app.utils.PermissionUtils
 
 public class DbConnectionController {
     private var service: DbConnectionService
@@ -39,7 +40,7 @@ public class DbConnectionController {
                 let body = parseBody(req)
                 if (let Some(b) <- body) {
                     let entity = mapToEntity(b)
-                    let result = service.create(entity, str)
+                    let result = service.createWithPermission(entity, str)
                     if (result.success) {
                         if (result.data.isSome()) {
                             let data = result.data.getOrThrow()
@@ -146,7 +147,17 @@ public class DbConnectionController {
                                 }
                             } else {
                                 let entity = mapToEntity(b)
-                                let result = service.update(idStr, entity)
+                                let editUserId = req.getLocals("userId")
+                                var editUserIdStr = ""
+                                if (let Some(u) <- editUserId) {
+                                    let sOpt = u as String
+                                    if (let Some(s) <- sOpt) { editUserIdStr = s }
+                                }
+                                let result = if (editUserIdStr.isEmpty()) {
+                                    service.update(idStr, entity)
+                                } else {
+                                    service.updateWithPermission(idStr, entity, editUserIdStr)
+                                }
                                 if (result.success) {
                                     if (let Some(data) <- result.data) {
                                         res.status(200).json(data.toJson())
@@ -155,7 +166,7 @@ public class DbConnectionController {
                                     }
                                 } else {
                                     let reason = result.reason ?? "更新失败"
-                                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                                    res.status(403).json("{\"errno\":\"40301\",\"errmsg\":\"${reason}\"}")
                                 }
                             }
                         } else {
@@ -199,12 +210,22 @@ public class DbConnectionController {
                 } else if (let Some(idVal) <- id) {
                     let idStrOpt = idVal as String
                     if (let Some(idStr) <- idStrOpt) {
-                        let result = service.delete(idStr, force)
+                        let delUserId = req.getLocals("userId")
+                        var delUserIdStr = ""
+                        if (let Some(u) <- delUserId) {
+                            let sOpt = u as String
+                            if (let Some(s) <- sOpt) { delUserIdStr = s }
+                        }
+                        let result = if (delUserIdStr.isEmpty()) {
+                            service.delete(idStr, force)
+                        } else {
+                            service.deleteWithPermission(idStr, force, delUserIdStr)
+                        }
                         if (result.success) {
                             res.status(200).json("{\"desc\":\"删除成功\"}")
                         } else {
                             let reason = result.reason ?? "删除失败"
-                            res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                            res.status(403).json("{\"errno\":\"40301\",\"errmsg\":\"${reason}\"}")
                         }
                     } else {
                         res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"ID参数格式错误\"}")
@@ -225,16 +246,26 @@ public class DbConnectionController {
             let id = req.pathParam("id")
 
             if (let Some(idVal) <- id) {
-                let result = service.getById(idVal)
+                let userId = req.getLocals("userId")
+                var userIdStr = ""
+                if (let Some(u) <- userId) {
+                    let sOpt = u as String
+                    if (let Some(s) <- sOpt) { userIdStr = s }
+                }
+                let result = if (userIdStr.isEmpty()) {
+                    service.getById(idVal)
+                } else {
+                    service.getByIdWithPermission(idVal, userIdStr)
+                }
 
                 if (result.success) {
                     if (let Some(data) <- result.data) {
                         res.status(200).json(data.toJson())
                     } else {
-                        res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该db_connection或您没有权限访问\"}")
+                        res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该db_connection\"}")
                     }
                 } else {
-                    res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到该db_connection\"}")
+                    res.status(403).json("{\"errno\":\"40301\",\"errmsg\":\"您没有权限访问该db_connection\"}")
                 }
             } else {
                 res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少ID参数\"}")
@@ -288,12 +319,29 @@ public class DbConnectionController {
                 filterStr = decodedFilter
             }
 
-            let (entities, total) = service.getListWithFilter(
-                currentPage,
-                pageSize,
-                sortStr,
-                filterStr
-            )
+            let userId = req.getLocals("userId")
+            var userIdStr = ""
+            if (let Some(u) <- userId) {
+                let sOpt = u as String
+                if (let Some(s) <- sOpt) { userIdStr = s }
+            }
+
+            let (entities, total) = if (userIdStr.isEmpty()) {
+                service.getListWithFilter(
+                    currentPage,
+                    pageSize,
+                    sortStr,
+                    filterStr
+                )
+            } else {
+                service.getListWithPermission(
+                    currentPage,
+                    pageSize,
+                    sortStr,
+                    filterStr,
+                    userIdStr
+                )
+            }
 
             let totalPage = if (pageSize > 0) {
                 Int32((total + Int64(pageSize) - 1) / Int64(pageSize))
@@ -350,7 +398,18 @@ public class DbConnectionController {
             let sortStr = if (let Some(s) <- sortParam) { s } else { "" }
             let filterStr = if (let Some(f) <- filterParam) { f } else { "" }
 
-            let (entities, total) = service.getListWithSkip(pageNum - 1, limitNum, skipNum, sortStr, filterStr)
+            let userId = req.getLocals("userId")
+            var userIdStr = ""
+            if (let Some(u) <- userId) {
+                let sOpt = u as String
+                if (let Some(s) <- sOpt) { userIdStr = s }
+            }
+
+            let (entities, total) = if (userIdStr.isEmpty()) {
+                service.getListWithSkip(pageNum - 1, limitNum, skipNum, sortStr, filterStr)
+            } else {
+                service.getListWithSkipWithPermission(pageNum - 1, limitNum, skipNum, sortStr, filterStr, userIdStr)
+            }
 
             let totalPage = if (limitNum > 0) {
                 Int32((total + Int64(limitNum) - 1) / Int64(limitNum))
@@ -480,7 +539,7 @@ public class DbConnectionController {
         if (let Some(creator) <- map.get("creator")) {
             let creatorStr = creator as String
             if (let Some(s) <- creatorStr) {
-                entity.creator = Some<String>(s)
+                entity.creator = s
             }
         }
         if (let Some(createdAt) <- map.get("created_at")) {
@@ -582,20 +641,20 @@ public class DbConnectionController {
 
             // 写入数据行
             for (entity in entities) {
-                sb.append("\"${entity.id}\",")
-                sb.append("\"${entity.user}\",")
-                sb.append("\"${entity.password}\",")
-                sb.append("\"${entity.host}\",")
-                sb.append("\"${entity.port}\",")
-                sb.append("\"${entity.databaseName}\",")
+                sb.append("\"" + "${entity.id}" + ",")
+                sb.append("\"" + "${entity.user}" + ",")
+                sb.append("\"" + "${entity.password}" + ",")
+                sb.append("\"" + "${entity.host}" + ",")
+                sb.append("\"" + "${entity.port}" + ",")
+                sb.append("\"" + "${entity.databaseName}" + ",")
                 sb.append("${entity.ssl}")
                 sb.append(",")
-                sb.append(if (let Some(v) <- entity.creator) { "\"${v}\"," } else { "" })
-                sb.append("\"${entity.createdAt.toString()}\",")
-                sb.append("\"${entity.updatedAt.toString()}\",")
-                sb.append(if (let Some(v) <- entity.deletedAt) { "\"${v.toString()}\"," } else { "" })
-                sb.append("\"${entity.provider}\",")
-                sb.append(if (let Some(v) <- entity.typeVal) { "\"${v}\"" } else { "" })
+                sb.append("\"" + "${entity.creator}" + ",")
+                sb.append("\"" + "${entity.createdAt.toString()}" + ",")
+                sb.append("\"" + "${entity.updatedAt.toString()}" + ",")
+                sb.append(if (let Some(v) <- entity.deletedAt) { "\"" + v.toString() + "\"," } else { "" })
+                sb.append("\"" + "${entity.provider}" + ",")
+                sb.append(if (let Some(v) <- entity.typeVal) { "\"" + v + "\"," } else { "" })
                 sb.append("\n")
             }
 
@@ -604,9 +663,10 @@ public class DbConnectionController {
             res.header("Content-Disposition", "attachment; filename=db_connection_export.csv")
             res.status(200).send(sb.toString())
         } catch (e: Exception) {
-            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"" + e.message + "\"}")
         }
     }
+
 
 //#endregion AutoCreateCode
 }

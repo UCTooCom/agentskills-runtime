@@ -5,7 +5,7 @@ package magic.app.controllers.uctoo.uctoo_user
 
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.models.uctoo.UctooUserPO
-import magic.app.services.uctoo.UctooUserService
+import magic.app.services.uctoo.{UctooUserService, LoginLogService}
 import magic.app.utils.auth.{BcryptUtil, AuthorizeUtil, JWTUtil, AuthProvider}
 import magic.log.LogUtils
 import std.time.DateTime
@@ -45,6 +45,11 @@ public class UctooUserAuthController {
      */
     public func signin(req: HttpRequest, res: HttpResponse): Unit {
         try {
+            // 获取客户端信息用于记录登录日志
+            let clientIp = getClientIp(req)
+            let userAgent = req.header("User-Agent") ?? ""
+            let (browser, os) = parseUserAgent(userAgent)
+            
             let body = req.body
             let jsonValue = JsonValue.fromStr(body)
             
@@ -64,6 +69,8 @@ public class UctooUserAuthController {
             let loginAccount = if (username.isEmpty()) { email } else { username }
             
             if (loginAccount.isEmpty() || password.isEmpty()) {
+                // 记录登录失败日志
+                LoginLogService.recordLoginFailed(loginAccount, clientIp, browser, os)
                 res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"用户名/邮箱和密码不能为空\"}")
                 return
             }
@@ -76,6 +83,8 @@ public class UctooUserAuthController {
             }
             
             if (user.isNone()) {
+                // 记录登录失败日志
+                LoginLogService.recordLoginFailed(loginAccount, clientIp, browser, os)
                 res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"用户不存在\"}")
                 return
             }
@@ -84,15 +93,22 @@ public class UctooUserAuthController {
             
             // 验证密码
             if (!bcryptUtil.comparePassword(password, u.password)) {
+                // 记录登录失败日志
+                LoginLogService.recordLoginFailed(loginAccount, clientIp, browser, os)
                 res.status(400).json("{\"errno\":\"42007\",\"errmsg\":\"登录失败，用户名或密码错误\"}")
                 return
             }
             
             // 检查用户状态
             if (u.status == 0) {
+                // 记录登录失败日志
+                LoginLogService.recordLoginFailed(loginAccount, clientIp, browser, os)
                 res.status(403).json("{\"errno\":\"40302\",\"errmsg\":\"用户已被禁用\"}")
                 return
             }
+            
+            // 记录登录成功日志
+            LoginLogService.recordLoginSuccess(loginAccount, clientIp, browser, os, Some<String>(u.id))
             
             // 授权登录
             authorizeUtil.authorizeAndEnd(u, req, res, AuthProvider.Local, true)
@@ -341,6 +357,75 @@ public class UctooUserAuthController {
     }
     
     // ==================== 辅助方法 ====================
+    
+    /**
+     * 获取客户端IP地址
+     */
+    private func getClientIp(req: HttpRequest): String {
+        // 优先从 X-Forwarded-For 获取（经过代理）
+        let xForwardedFor = req.header("X-Forwarded-For") ?? ""
+        if (!xForwardedFor.isEmpty()) {
+            // X-Forwarded-For 可能包含多个IP，取第一个
+            let parts = xForwardedFor.split(",")
+            if (parts.size > 0) {
+                return parts[0].trimAscii()
+            }
+        }
+        
+        // 其次从 X-Real-IP 获取
+        let xRealIp = req.header("X-Real-IP") ?? ""
+        if (!xRealIp.isEmpty()) {
+            return xRealIp.trimAscii()
+        }
+        
+        // 最后从 Remote-Addr 获取
+        let remoteAddr = req.header("Remote-Addr") ?? ""
+        if (!remoteAddr.isEmpty()) {
+            return remoteAddr.trimAscii()
+        }
+        
+        return "127.0.0.1"
+    }
+    
+    /**
+     * 解析User-Agent，提取浏览器和操作系统信息
+     */
+    private func parseUserAgent(userAgent: String): (String, String) {
+        let browser: String
+        let os: String
+        
+        // 解析浏览器
+        if (userAgent.contains("Edg")) {
+            browser = "Edge"
+        } else if (userAgent.contains("Chrome") && !userAgent.contains("Edg")) {
+            browser = "Chrome"
+        } else if (userAgent.contains("Firefox")) {
+            browser = "Firefox"
+        } else if (userAgent.contains("Safari") && !userAgent.contains("Chrome")) {
+            browser = "Safari"
+        } else if (userAgent.contains("Opera") || userAgent.contains("OPR")) {
+            browser = "Opera"
+        } else {
+            browser = "Unknown"
+        }
+        
+        // 解析操作系统
+        if (userAgent.contains("Windows")) {
+            os = "Windows"
+        } else if (userAgent.contains("Mac OS X")) {
+            os = "MacOS"
+        } else if (userAgent.contains("Linux") && !userAgent.contains("Android")) {
+            os = "Linux"
+        } else if (userAgent.contains("Android")) {
+            os = "Android"
+        } else if (userAgent.contains("iPhone") || userAgent.contains("iPad") || userAgent.contains("iOS")) {
+            os = "iOS"
+        } else {
+            os = "Unknown"
+        }
+        
+        return (browser, os)
+    }
     
     private func getStringFromJson(obj: JsonObject, key: String): String {
         let valueOpt = obj.get(key)

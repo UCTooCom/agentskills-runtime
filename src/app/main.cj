@@ -3,7 +3,7 @@ package magic.app
 import magic.app.core.server.HTTPServer
 import magic.app.core.router.Router
 import magic.app.registry.AutoRouteRegistry
-import magic.app.core.middleware.Middleware
+import magic.app.core.middleware.{Middleware, OperateLogMiddleware}
 import magic.app.core.log.{LoggerFactory, Logger}
 import magic.app.core.cache.{CacheManager, CacheConfig}
 import magic.app.core.database.{DatabaseConnection, DatabaseConfig, DatabaseConnectionPool}
@@ -28,6 +28,9 @@ import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
 import magic.log.LogUtils
 import magic.model.ModelManager
 import magic.core.model.ChatModel
+import magic.app.services.crontab.SchedulerEngine
+import magic.app.services.crontab.model.SchedulerStatus
+import magic.app.dao.uctoo.{CrontabDAO, CrontabLogDAO, CrontabTaskRegistryDAO}
 import std.convert.*
 import std.env.{getWorkingDirectory, getVariable}
 import std.fs.Path
@@ -47,6 +50,7 @@ public class Application {
     private let _progressiveSkillLoader: ProgressiveSkillLoader
     private let _skillInstallPath: String
     private let _chatModel: ChatModel
+    private var schedulerEngineInitialized: Bool = false
 
     public init(port: Int32, host: String) {
         eprintln("=== Application.init() called ===")
@@ -346,7 +350,11 @@ public class Application {
         let rowLevelPermissionMiddleware = RowLevelPermissionMiddleware("entity")
         server.use(rowLevelPermissionMiddleware)
 
-        logger.info("Middlewares configured: CORS -> DeserializeUser -> RequirePermission (V4 RBAC) -> RowLevelPermission")
+        // 4. 操作日志中间件 - 记录所有API请求
+        let operateLogMiddleware = OperateLogMiddleware()
+        server.use(operateLogMiddleware)
+
+        logger.info("Middlewares configured: CORS -> DeserializeUser -> RequirePermission (V4 RBAC) -> RowLevelPermission -> OperateLog")
     }
 
     private func setupRoutes(): Unit {
@@ -399,12 +407,37 @@ public class Application {
         
         // 注册健康检查和应用信息接口,todo:从cjpm.toml配置文件读取version版本号
         router.get("/api/v1/health", { req, res =>
-            res.status(200).json("{\"status\":\"ok\",\"version\":\"0.0.20\"}")
+            var schedulerJson = "\"scheduler\":{\"running\":false}"
+            match (SchedulerEngine.instance) {
+                case Some(engine) =>
+                    let status = engine.getStatus()
+                    schedulerJson = "\"scheduler\":{\"running\":${status.isRunning},\"totalTasks\":${status.totalTasks},\"activeTasks\":${status.activeTasks},\"runningTasks\":${status.runningTasks}}"
+                case None =>
+                    schedulerJson = "\"scheduler\":{\"running\":false,\"error\":\"not initialized\"}"
+            }
+            res.status(200).json("{\"status\":\"ok\",\"version\":\"0.0.20\",${schedulerJson}}")
         })
         // todo:从cjpm.toml配置文件读取系统信息
         router.get("/api/v1/info", { req, res =>
             res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"0.0.20\",\"language\":\"cangjie\"}")
         })
+        
+        // 初始化调度引擎
+        try {
+            let sqlExecutor = ORM.executor()
+            let crontabDAO = sqlExecutor as CrontabDAO
+            let crontabLogDAO = sqlExecutor as CrontabLogDAO
+            let crontabTaskRegistryDAO = sqlExecutor as CrontabTaskRegistryDAO
+            if (crontabDAO.isSome() && crontabLogDAO.isSome() && crontabTaskRegistryDAO.isSome()) {
+                SchedulerEngine.initialize(crontabDAO.getOrThrow(), crontabLogDAO.getOrThrow(), crontabTaskRegistryDAO.getOrThrow())
+                schedulerEngineInitialized = true
+                LogUtils.info("SchedulerEngine initialized successfully")
+            } else {
+                LogUtils.error("Failed to cast SqlExecutor to DAO interfaces")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("Failed to initialize SchedulerEngine: ${e.message}")
+        }
         
         server.setRouter(router)
         logger.info("All routes configured successfully")
@@ -417,6 +450,22 @@ public class Application {
 
     public func stop(): Unit {
         logger.info("Stopping uctoo-backend-v4")
+        
+        // 优雅关闭调度引擎
+        if (schedulerEngineInitialized) {
+            match (SchedulerEngine.instance) {
+                case Some(engine) =>
+                    try {
+                        engine.gracefulShutdown()
+                        LogUtils.info("SchedulerEngine shutdown completed")
+                    } catch (e: Exception) {
+                        LogUtils.error("SchedulerEngine shutdown error: ${e.message}")
+                    }
+                case None =>
+                    LogUtils.info("SchedulerEngine not initialized, skip shutdown")
+            }
+        }
+        
         server.stop()
         dbPool.closeAll()
         cacheManager.close()

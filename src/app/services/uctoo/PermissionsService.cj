@@ -13,14 +13,12 @@ import std.collection.*
 import std.time.DateTime
 import f_orm.*
 import magic.app.models.uctoo.PermissionsPO
-
 import magic.app.dao.uctoo.PermissionsDAO
-
 import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
-import magic.log.LogUtils
 import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
 import magic.app.utils.PermissionUtils
+import magic.log.LogUtils
 
 /**
  * PermissionsService - permissions服务类
@@ -67,7 +65,7 @@ public class PermissionsService {
     }
 
     /**
-     * 更新permissions
+     * 更新permissions（无权限检查）
      * @param entityId ID
      * @param entity PermissionsPO对象
      * @return 更新结果
@@ -179,7 +177,7 @@ public class PermissionsService {
     }
 
     /**
-     * 删除permissions
+     * 删除permissions（无权限检查）
      * @param entityId ID
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
@@ -281,7 +279,7 @@ public class PermissionsService {
     }
 
     /**
-     * 根据ID获取permissions
+     * 根据ID获取permissions（无权限检查）
      * @param entityId ID
      * @return permissions对象
      */
@@ -310,13 +308,12 @@ public class PermissionsService {
             let pagination = getExecutor().findAllPermissionsPage(page, pageSize)
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("PermissionsService", "getList error: ${e.message}")
             return (ArrayList<PermissionsPO>(), 0)
         }
     }
 
     /**
-     * 获取permissions列表（分页，支持排序和过滤）
+     * 获取permissions列表（分页，支持排序和过滤，无权限过滤）
      *
      * 支持完整的 Prisma 风格查询：
      * - 排序：sort="-created_at,id"
@@ -358,7 +355,6 @@ public class PermissionsService {
 
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("PermissionsService", "Failed to get list: ${e.message}")
             return (ArrayList<PermissionsPO>(), 0)
         }
     }
@@ -641,7 +637,68 @@ public class PermissionsService {
     }
 
     /**
-     * 获取permissions列表（带跳过参数）
+     * 获取permissions列表（带跳过参数，带权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
+     * @param page 页码（从0开始）
+     * @param pageSize 每页大小
+     * @param skip 跳过条数
+     * @param sort 排序参数
+     * @param filter 过滤条件
+     * @param userId 用户ID
+     * @return permissions列表和总数
+     */
+    public func getListWithSkipWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        skip: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<PermissionsPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "permissions")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pageNum = if (pageSize > 0) { (skip / pageSize) + 1 } else { Int32(1) }
+            let pagination = getExecutor().findPermissionsByCondition(
+                whereClause,
+                orderByClause,
+                Int64(pageNum),
+                Int64(pageSize)
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<PermissionsPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取permissions列表（带跳过参数，无权限过滤）
      *
      * 支持完整的 Prisma 风格查询
      *
@@ -770,6 +827,103 @@ public class PermissionsService {
             } else {
                 return APIResult<Bool>(false, "回收站为空")
             }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    // ==================== 行级权限集成方法（每个表都需要的标准化代码） ====================
+
+    public func createWithPermission(entity: PermissionsPO, creatorId: String): APIResult<PermissionsPO> {
+        let result = create(entity, creatorId)
+        if (result.success) {
+            if (result.data.isSome()) {
+                let data = result.data.getOrThrow()
+                if (!data.id.isEmpty()) {
+                    PermissionUtils.autoGrantCreatorPermission(creatorId, data.id, "permissions")
+                }
+            }
+        }
+        return result
+    }
+
+    public func getByIdWithPermission(entityId: String, userId: String): APIResult<PermissionsPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkReadPermission(userId, entityId, "permissions")
+            if (!hasPermission) {
+                return APIResult<PermissionsPO>(false, reason)
+            }
+            return getById(entityId)
+        } catch (e: Exception) {
+            return APIResult<PermissionsPO>(false, e.message)
+        }
+    }
+
+    public func getListWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<PermissionsPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "permissions")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pagination = getExecutor().findPermissionsByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<PermissionsPO>(), 0)
+        }
+    }
+
+    public func updateWithPermission(entityId: String, entity: PermissionsPO, userId: String): APIResult<PermissionsPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "permissions")
+            if (!hasPermission) {
+                return APIResult<PermissionsPO>(false, reason)
+            }
+            return update(entityId, entity)
+        } catch (e: Exception) {
+            return APIResult<PermissionsPO>(false, e.message)
+        }
+    }
+
+    public func deleteWithPermission(entityId: String, force: Bool, userId: String): APIResult<Bool> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "permissions")
+            if (!hasPermission) {
+                return APIResult<Bool>(false, reason)
+            }
+            return delete(entityId, force)
         } catch (e: Exception) {
             return APIResult<Bool>(false, e.message)
         }
@@ -1211,7 +1365,7 @@ public class PermissionsService {
                     let entity = RoleHasPermissionPO()
                     entity.roleId = roleId
                     entity.permissionName = permName
-                    entity.status = Some<Int32>(1)
+                    entity.status = 1
                     entity.creator = Some(creator)
                     entity.createdAt = now
                     entity.updatedAt = now

@@ -15,9 +15,9 @@ import magic.app.models.uctoo.UctooUserPO
 import magic.app.dao.uctoo.UctooUserDAO
 import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
-import magic.log.LogUtils
 import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
 import magic.app.utils.PermissionUtils
+import magic.log.LogUtils
 
 /**
  * UctooUserService - uctoo_user服务类
@@ -64,7 +64,7 @@ public class UctooUserService {
     }
 
     /**
-     * 更新uctoo_user
+     * 更新uctoo_user（无权限检查）
      * @param entityId ID
      * @param entity UctooUserPO对象
      * @return 更新结果
@@ -164,7 +164,7 @@ public class UctooUserService {
     }
 
     /**
-     * 删除uctoo_user
+     * 删除uctoo_user（无权限检查）
      * @param entityId ID
      * @param force 是否强制删除（true: 硬删除，false: 软删除）
      * @return 删除结果
@@ -266,7 +266,7 @@ public class UctooUserService {
     }
 
     /**
-     * 根据ID获取uctoo_user
+     * 根据ID获取uctoo_user（无权限检查）
      * @param entityId ID
      * @return uctoo_user对象
      */
@@ -295,13 +295,12 @@ public class UctooUserService {
             let pagination = getExecutor().findAllUctooUserPage(page, pageSize)
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("UctooUserService", "getList error: ${e.message}")
             return (ArrayList<UctooUserPO>(), 0)
         }
     }
 
     /**
-     * 获取uctoo_user列表（分页，支持排序和过滤）
+     * 获取uctoo_user列表（分页，支持排序和过滤，无权限过滤）
      *
      * 支持完整的 Prisma 风格查询：
      * - 排序：sort="-created_at,id"
@@ -343,7 +342,6 @@ public class UctooUserService {
 
             return (pagination.list, pagination.rows)
         } catch (e: Exception) {
-            LogUtils.error("UctooUserService", "Failed to get list: ${e.message}")
             return (ArrayList<UctooUserPO>(), 0)
         }
     }
@@ -626,7 +624,68 @@ public class UctooUserService {
     }
 
     /**
-     * 获取uctoo_user列表（带跳过参数）
+     * 获取uctoo_user列表（带跳过参数，带权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
+     * @param page 页码（从0开始）
+     * @param pageSize 每页大小
+     * @param skip 跳过条数
+     * @param sort 排序参数
+     * @param filter 过滤条件
+     * @param userId 用户ID
+     * @return uctoo_user列表和总数
+     */
+    public func getListWithSkipWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        skip: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<UctooUserPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "uctoo_user")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pageNum = if (pageSize > 0) { (skip / pageSize) + 1 } else { Int32(1) }
+            let pagination = getExecutor().findUctooUserByCondition(
+                whereClause,
+                orderByClause,
+                Int64(pageNum),
+                Int64(pageSize)
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<UctooUserPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取uctoo_user列表（带跳过参数，无权限过滤）
      *
      * 支持完整的 Prisma 风格查询
      *
@@ -755,6 +814,103 @@ public class UctooUserService {
             } else {
                 return APIResult<Bool>(false, "回收站为空")
             }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    // ==================== 行级权限集成方法（每个表都需要的标准化代码） ====================
+
+    public func createWithPermission(entity: UctooUserPO, creatorId: String): APIResult<UctooUserPO> {
+        let result = create(entity, creatorId)
+        if (result.success) {
+            if (result.data.isSome()) {
+                let data = result.data.getOrThrow()
+                if (!data.id.isEmpty()) {
+                    PermissionUtils.autoGrantCreatorPermission(creatorId, data.id, "uctoo_user")
+                }
+            }
+        }
+        return result
+    }
+
+    public func getByIdWithPermission(entityId: String, userId: String): APIResult<UctooUserPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkReadPermission(userId, entityId, "uctoo_user")
+            if (!hasPermission) {
+                return APIResult<UctooUserPO>(false, reason)
+            }
+            return getById(entityId)
+        } catch (e: Exception) {
+            return APIResult<UctooUserPO>(false, e.message)
+        }
+    }
+
+    public func getListWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<UctooUserPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "uctoo_user")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pagination = getExecutor().findUctooUserByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<UctooUserPO>(), 0)
+        }
+    }
+
+    public func updateWithPermission(entityId: String, entity: UctooUserPO, userId: String): APIResult<UctooUserPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "uctoo_user")
+            if (!hasPermission) {
+                return APIResult<UctooUserPO>(false, reason)
+            }
+            return update(entityId, entity)
+        } catch (e: Exception) {
+            return APIResult<UctooUserPO>(false, e.message)
+        }
+    }
+
+    public func deleteWithPermission(entityId: String, force: Bool, userId: String): APIResult<Bool> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "uctoo_user")
+            if (!hasPermission) {
+                return APIResult<Bool>(false, reason)
+            }
+            return delete(entityId, force)
         } catch (e: Exception) {
             return APIResult<Bool>(false, e.message)
         }

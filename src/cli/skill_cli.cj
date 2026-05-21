@@ -66,6 +66,7 @@ public class SkillCLI {
             case "auth" => executeAuthCommand(subArgs)
             case "web" => executeWebCommand(subArgs)
             case "search" => executeSearchCommand(subArgs)
+            case "crontab" => executeCrontabCommand(subArgs)
             case "help" => printUsage()
             case "--help" => printUsage()
             case "-h" => printUsage()
@@ -435,5 +436,10 @@ public class SkillCLI {
         let query = String.join(args, delimiter: " ")
         getStdOut().writeln("Performing advanced semantic search for: ${query}")
         // In a real implementation, this would perform advanced semantic search
+    }
+
+    private func executeCrontabCommand(args: Array<String>): Unit {
+        let cli = CrontabCLI()
+        cli.execute(args)
     }
 }

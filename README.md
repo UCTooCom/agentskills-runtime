@@ -444,10 +444,16 @@ cp .env.example bin/.env
 
 1. Update version number in `cjpm.toml`
 2. Update `CHANGELOG.md` with changes
-3. Run `cjpm build` to build the project
-4. Run `cjpm run --name magic.scripts.package_release` to package
-5. Create release notes in `release/release-notes-<version>.md`
-6. Upload release packages to GitHub Releases or AtomGit Releases
+3. Run `cjpm build` to build the project (packaging is automatic)
+4. Create release notes in `release/release-notes-<version>.md`
+5. Upload release packages to GitHub Releases or AtomGit Releases
+
+> **Note**: Starting from v0.0.21, `cjpm build` automatically executes the packaging script after completion. The generated release packages are located in the `target/release` directory.
+>
+> Manual packaging command is still available (optional):
+> ```bash
+> cjpm run --name magic.scripts.package_release
+> ```
 
 ### API Endpoints
 After starting the API service, the following endpoints will be available:

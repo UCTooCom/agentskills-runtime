@@ -1005,6 +1005,7 @@ Thanks for the support from the following open source projects and communities:
 ### Open Source Tools
 - [UCToo](https://gitee.com/uctoo/uctoo)
 - [CangjieMagic](https://gitcode.com/Cangjie-TPC/CangjieMagic)
+- [Fountain](https://gitcode.com/Cangjie-SIG/fountain)
 - Various excellent open source libraries and tools
 
 ### References

@@ -995,6 +995,7 @@ git push origin feature/your-feature
 ### 开源工具
 - [UCToo](https://gitee.com/uctoo/uctoo)
 - [CangjieMagic](https://gitcode.com/Cangjie-TPC/CangjieMagic)
+- [Fountain](https://gitcode.com/Cangjie-SIG/fountain)
 - 各种优秀的开源库和工具
 
 ### 参考资料

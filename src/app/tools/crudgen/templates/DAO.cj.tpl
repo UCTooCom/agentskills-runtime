@@ -156,6 +156,9 @@ public interface {{className}}DAO <: RootDAO {
      * @return {{tableName}}列表
      */
     func find{{className}}ByIds(ids: ArrayList<String>): ArrayList<{{className}}PO> {
+        if (ids.isEmpty()) {
+            return ArrayList<{{className}}PO>()
+        }
         executor.setSql('''
             select {{selectColumns}} from {{tableName}} where id ${IN(ids)}
         ''').list<{{className}}PO>()
@@ -232,6 +235,9 @@ public interface {{className}}DAO <: RootDAO {
      * @return 影响行数
      */
     func batchSoftDelete{{className}}(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update {{tableName}} set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -243,6 +249,9 @@ public interface {{className}}DAO <: RootDAO {
      * @return 影响行数
      */
     func batchDelete{{className}}(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from {{tableName}} where id ${IN(ids)}
         ''').delete

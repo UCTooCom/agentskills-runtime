@@ -52,10 +52,12 @@ public class CrontabService {
                 entity.creator = Some(creatorId)
             }
             
-            // group字段特殊处理：确保不为空，默认值为"1"
-            if (entity.group.isEmpty()) {
-                entity.group = "1"
+            // groupName字段处理：确保不为空，默认值为"1"
+            if (entity.groupName.isEmpty()) {
+                entity.groupName = "1"
             }
+            
+            LogUtils.info("CrontabService", "create: creatorId=${creatorId}, entity.creator=${entity.creator}, entity.groupName=${entity.groupName}")
             
             let id = getExecutor().insertCrontab(entity)
             
@@ -90,11 +92,11 @@ public class CrontabService {
             if (entity.name.size > 0) {
                 existingEntity.name = entity.name
             }
-            // group字段特殊处理：确保不为空，默认值为"1"
-            if (entity.group.size > 0) {
-                existingEntity.group = entity.group
-            } else if (existingEntity.group.isEmpty()) {
-                existingEntity.group = "1"
+            // groupName字段处理：确保不为空，默认值为"1"
+            if (entity.groupName.size > 0) {
+                existingEntity.groupName = entity.groupName
+            } else if (existingEntity.groupName.isEmpty()) {
+                existingEntity.groupName = "1"
             }
             if (entity.task.size > 0) {
                 existingEntity.task = entity.task
@@ -981,11 +983,11 @@ public class CrontabService {
     public func deleteAndUnschedule(entityId: String, force: Bool): APIResult<Bool> {
         let existing = getExecutor().findCrontabById(entityId)
         if (let Some(entity) <- existing) {
-            // 确保group字段不为空，默认为"1"
-            if (entity.group.isEmpty()) {
-                entity.group = "1"
+            // 确保groupName字段不为空，默认为"1"
+            if (entity.groupName.isEmpty()) {
+                entity.groupName = "1"
             }
-            if (entity.group == "2") {
+            if (entity.groupName == "2") {
                 return APIResult<Bool>(false, "系统任务不允许删除")
             }
         }
@@ -1008,11 +1010,11 @@ public class CrontabService {
             return APIResult<CrontabPO>(false, "任务不存在")
         }
         let entity = existing.getOrThrow()
-        // 确保group字段不为空，默认为"1"
-        if (entity.group.isEmpty()) {
-            entity.group = "1"
+        // 确保groupName字段不为空，默认为"1"
+        if (entity.groupName.isEmpty()) {
+            entity.groupName = "1"
         }
-        if (entity.group == "2") {
+        if (entity.groupName == "2") {
             return APIResult<CrontabPO>(false, "系统任务不允许暂停")
         }
         if (entity.status != 1) {
@@ -1092,11 +1094,11 @@ public class CrontabService {
     public func isSystemTask(entityId: String): Bool {
         match (getExecutor().findCrontabById(entityId)) {
             case Some(entity) => 
-                // 确保group字段不为空，默认为"1"
-                if (entity.group.isEmpty()) {
+                // 确保groupName字段不为空，默认为"1"
+                if (entity.groupName.isEmpty()) {
                     false
                 } else {
-                    entity.group == "2"
+                    entity.groupName == "2"
                 }
             case None => false
         }

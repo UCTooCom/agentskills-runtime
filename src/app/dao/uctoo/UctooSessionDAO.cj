@@ -255,6 +255,9 @@ ${arg(entity.userId)},
      * @return 影响行数
      */
     func batchSoftDeleteUctooSession(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update uctoo_session set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -266,6 +269,9 @@ ${arg(entity.userId)},
      * @return 影响行数
      */
     func batchDeleteUctooSession(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from uctoo_session where id ${IN(ids)}
         ''').delete

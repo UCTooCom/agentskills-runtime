@@ -249,6 +249,9 @@ ${arg(entity.entityId)},
      * @return 影响行数
      */
     func batchSoftDeleteDataAccessAuthorization(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update data_access_authorization set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -260,6 +263,9 @@ ${arg(entity.entityId)},
      * @return 影响行数
      */
     func batchDeleteDataAccessAuthorization(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from data_access_authorization where id ${IN(ids)}
         ''').delete

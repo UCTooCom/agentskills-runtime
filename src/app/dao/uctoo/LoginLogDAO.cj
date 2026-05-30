@@ -257,6 +257,9 @@ ${arg(entity.loginName)},
      * @return 影响行数
      */
     func batchSoftDeleteLoginLog(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update login_log set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -268,6 +271,9 @@ ${arg(entity.loginName)},
      * @return 影响行数
      */
     func batchDeleteLoginLog(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from login_log where id ${IN(ids)}
         ''').delete

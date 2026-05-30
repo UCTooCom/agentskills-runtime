@@ -523,10 +523,10 @@ public class CrontabController {
                 entity.name = s
             }
         }
-        if (let Some(group) <- map.get("group")) {
-            let groupStr = group as String
-            if (let Some(s) <- groupStr) {
-                entity.group = s
+        if (let Some(group_name) <- map.get("group_name")) {
+            let groupNameStr = group_name as String
+            if (let Some(s) <- groupNameStr) {
+                entity.groupName = s
             }
         }
         if (let Some(task) <- map.get("task")) {
@@ -661,6 +661,9 @@ public class CrontabController {
 
     private func parseIdsArray(idsStr: String): ArrayList<String> {
         let idArray = ArrayList<String>()
+        if (idsStr.isEmpty()) {
+            return idArray
+        }
         try {
             let jsonValue = JsonValue.fromStr(idsStr)
             if (jsonValue is JsonArray) {
@@ -668,7 +671,54 @@ public class CrontabController {
                 for (item in arr.getItems()) {
                     if (item is JsonString) {
                         let jsonStr = item.asString()
-                        idArray.add(jsonStr.getValue())
+                        let val = jsonStr.getValue()
+                        if (!val.isEmpty()) {
+                            idArray.add(val)
+                        }
+                    } else if (item is JsonObject) {
+                        let obj = item.asObject()
+                        if (let Some(idsObj) <- obj.get("ids")) {
+                            if (idsObj is JsonArray) {
+                                let idsArr = idsObj.asArray()
+                                for (subItem in idsArr.getItems()) {
+                                    if (subItem is JsonString) {
+                                        let jsonStr = subItem.asString()
+                                        let val = jsonStr.getValue()
+                                        if (!val.isEmpty()) {
+                                            idArray.add(val)
+                                        }
+                                    }
+                                }
+                            } else if (idsObj is JsonString) {
+                                let jsonStr = idsObj.asString()
+                                let val = jsonStr.getValue()
+                                if (!val.isEmpty()) {
+                                    idArray.add(val)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (jsonValue is JsonObject) {
+                let obj = jsonValue.asObject()
+                if (let Some(idsVal) <- obj.get("ids")) {
+                    if (idsVal is JsonArray) {
+                        let idsArr = idsVal.asArray()
+                        for (item in idsArr.getItems()) {
+                            if (item is JsonString) {
+                                let jsonStr = item.asString()
+                                let val = jsonStr.getValue()
+                                if (!val.isEmpty()) {
+                                    idArray.add(val)
+                                }
+                            }
+                        }
+                    } else if (idsVal is JsonString) {
+                        let jsonStr = idsVal.asString()
+                        let val = jsonStr.getValue()
+                        if (!val.isEmpty()) {
+                            idArray.add(val)
+                        }
                     }
                 }
             }
@@ -676,7 +726,7 @@ public class CrontabController {
             let parts = idsStr.split(",")
             for (part in parts) {
                 let trimmed = part.trimAscii()
-                if (!trimmed.isEmpty()) {
+                if (!trimmed.isEmpty() && trimmed != "[" && trimmed != "]" && trimmed != "{" && trimmed != "}") {
                     idArray.add(trimmed)
                 }
             }
@@ -708,13 +758,13 @@ public class CrontabController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,name,group,task,cron,tactics,remark,creator,created_at,updated_at,deleted_at,status,timeout,max_retries,retry_count,concurrentable,once,priority,parameters,misfire_threshold,last_executed_at,next_executed_at,exec_count\n")
+            sb.append("id,name,group_name,task,cron,tactics,remark,creator,created_at,updated_at,deleted_at,status,timeout,max_retries,retry_count,concurrentable,once,priority,parameters,misfire_threshold,last_executed_at,next_executed_at,exec_count\n")
 
             // 写入数据行
             for (entity in entities) {
                 sb.append("\"" + "${entity.id}" + ",")
                 sb.append("\"" + "${entity.name}" + ",")
-                sb.append("\"" + "${entity.group}" + ",")
+                sb.append("\"" + "${entity.groupName}" + ",")
                 sb.append("\"" + "${entity.task}" + ",")
                 sb.append("\"" + "${entity.cron}" + ",")
                 sb.append("\"" + "${entity.tactics}" + ",")

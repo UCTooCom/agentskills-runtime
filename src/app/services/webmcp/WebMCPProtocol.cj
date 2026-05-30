@@ -24,8 +24,6 @@ public class WebMCPProtocol {
     private var _agent: ?SkillAwareAgent
     private var _sessionId: String = ""
     private var _clientId: String = ""
-    // 会话级别的前端工具存储（页面注册的工具）
-    private var _frontendTools = HashMap<String, JsonObject>()
 
     /**
      * 构造函数，接受可空类型的 SkillManager 和 ChatModel
@@ -92,10 +90,6 @@ public class WebMCPProtocol {
         
         if (method == "initialize") {
             return handleInitialize(obj)
-        } else if (method == "registerTool") {
-            return handleRegisterTool(obj)
-        } else if (method == "unregisterTool") {
-            return handleUnregisterTool(obj)
         } else if (method == "getTools" || method == "listTools" || method == "tools/list") {
             // 支持 MCP 协议标准方法名 listTools、tools/list 和向后兼容的 getTools
             return handleGetTools(obj)
@@ -180,112 +174,12 @@ public class WebMCPProtocol {
         // 使用 JSON-RPC 格式包装结果（符合 WebMCP SDK 期望）
         return createSuccessResponse(result, requestId)
     }
-
-    /**
-     * 处理工具注册请求
-     * 前端通过 navigator.modelContext.registerTool() 注册的工具会通过此方法发送到服务端
-     */
-    private func handleRegisterTool(obj: JsonObject): String {
-        let requestId = obj.get("id")
-        let params = obj.get("params")
-        
-        if (params.isNone()) {
-            return createErrorResponse("Missing 'params' field", requestId)
-        }
-        
-        let paramsVal = params.getOrThrow()
-        if (!(paramsVal is JsonObject)) {
-            return createErrorResponse("Invalid 'params' field type", requestId)
-        }
-        
-        let paramsObj = paramsVal.asObject()
-        let tool = paramsObj.get("tool")
-        
-        if (tool.isNone()) {
-            return createErrorResponse("Missing 'tool' field", requestId)
-        }
-        
-        let toolVal = tool.getOrThrow()
-        if (!(toolVal is JsonObject)) {
-            return createErrorResponse("Invalid 'tool' field type", requestId)
-        }
-        
-        let toolObj = toolVal.asObject()
-        let toolName = toolObj.get("name")
-        
-        if (toolName.isNone()) {
-            return createErrorResponse("Missing 'tool.name' field", requestId)
-        }
-        
-        let toolNameVal = toolName.getOrThrow()
-        if (!(toolNameVal is JsonString)) {
-            return createErrorResponse("Invalid 'tool.name' field type", requestId)
-        }
-        
-        let toolNameStr = toolNameVal.asString().getValue()
-        
-        // 存储前端工具
-        _frontendTools.add(toolNameStr, toolObj)
-        LogUtils.info("Frontend tool registered: ${toolNameStr}")
-        
-        let result = JsonObject()
-        result.put("success", JsonBool(true))
-        result.put("toolName", JsonString(toolNameStr))
-        
-        return createSuccessResponse(result, requestId)
-    }
-    
-    /**
-     * 处理工具取消注册请求
-     */
-    private func handleUnregisterTool(obj: JsonObject): String {
-        let requestId = obj.get("id")
-        let params = obj.get("params")
-        
-        if (params.isNone()) {
-            return createErrorResponse("Missing 'params' field", requestId)
-        }
-        
-        let paramsVal = params.getOrThrow()
-        if (!(paramsVal is JsonObject)) {
-            return createErrorResponse("Invalid 'params' field type", requestId)
-        }
-        
-        let paramsObj = paramsVal.asObject()
-        let toolName = paramsObj.get("toolName")
-        
-        if (toolName.isNone()) {
-            return createErrorResponse("Missing 'toolName' field", requestId)
-        }
-        
-        let toolNameVal = toolName.getOrThrow()
-        if (!(toolNameVal is JsonString)) {
-            return createErrorResponse("Invalid 'toolName' field type", requestId)
-        }
-        
-        let toolNameStr = toolNameVal.asString().getValue()
-        
-        // 移除前端工具
-        _frontendTools.remove(toolNameStr)
-        LogUtils.info("Frontend tool unregistered: ${toolNameStr}")
-        
-        let result = JsonObject()
-        result.put("success", JsonBool(true))
-        result.put("toolName", JsonString(toolNameStr))
-        
-        return createSuccessResponse(result, requestId)
-    }
     
     /**
      * 获取所有工具（供外部调用）
      */
     public func getTools(): JsonArray {
         let toolArray = JsonArray()
-        
-        // 添加前端注册的工具
-        for ((key, value) in _frontendTools) {
-            toolArray.add(value)
-        }
         
         // 添加后端技能作为工具
         if (let Some(sm) <- _skillManager) {
@@ -310,12 +204,7 @@ public class WebMCPProtocol {
         
         let toolArray = JsonArray()
         
-        // 1. 添加前端注册的工具
-        for ((key, value) in _frontendTools) {
-            toolArray.add(value)
-        }
-        
-        // 2. 添加后端技能作为工具
+        // 添加后端技能作为工具
         if (let Some(sm) <- _skillManager) {
             let skills = sm.availableSkills
             let keys = skills.keys()
@@ -337,7 +226,7 @@ public class WebMCPProtocol {
 
     /**
      * 处理工具调用请求
-     * 优先调用前端工具（需要通知前端执行），其次调用后端技能
+     * 仅调用后端技能
      */
     private func handleInvokeTool(obj: JsonObject): String {
         let requestId = obj.get("id")
@@ -365,24 +254,6 @@ public class WebMCPProtocol {
         }
         
         let toolNameStr = toolNameVal.asString().getValue()
-        
-        // 检查是否是前端工具
-        if (_frontendTools.get(toolNameStr).isSome()) {
-            LogUtils.info("WebMCP frontend tool invoke requested: ${toolNameStr}")
-            // 前端工具需要通过事件通知前端执行
-            // 返回符合 MCP 协议标准格式的响应
-            let content = JsonArray()
-            let textBlock = JsonObject()
-            textBlock.put("type", JsonString("text"))
-            textBlock.put("text", JsonString("Frontend tool invocation pending"))
-            content.add(textBlock)
-            
-            let result = JsonObject()
-            result.put("content", content)
-            result.put("isError", JsonBool(false))
-            
-            return createSuccessResponse(result, requestId)
-        }
         
         // 查找后端技能
         if (let Some(sm) <- _skillManager) {
@@ -663,74 +534,14 @@ public class WebMCPProtocol {
         skillInfoBuilder.append("   - body: JSON 字符串格式的请求体（可选，POST/PUT 需要）\n")
         skillInfoBuilder.append("3. 当用户需要调用后端 API 时，请直接使用 http_request 工具。\n\n")
 
-        // 添加前端页面工具信息
-        if (!_frontendTools.isEmpty()) {
-            skillInfoBuilder.append("【前端页面工具】\n")
-            skillInfoBuilder.append("以下工具对应前端页面的操作功能，调用时会自动跳转到对应页面执行：\n\n")
-
-            for ((key, toolObj) in _frontendTools) {
-                let nameOpt = toolObj.get("name")
-                let titleOpt = toolObj.get("title")
-                let descriptionOpt = toolObj.get("description")
-                let routeOpt = toolObj.get("route")
-
-                if (nameOpt.isSome()) {
-                    let nameVal = nameOpt.getOrThrow()
-                    if (nameVal is JsonString) {
-                        let name = nameVal.asString().getValue()
-                        var title = ""
-                        if (titleOpt.isSome()) {
-                            let titleVal = titleOpt.getOrThrow()
-                            if (titleVal is JsonString) {
-                                title = titleVal.asString().getValue()
-                            }
-                        }
-                        let description = if (descriptionOpt.isSome()) {
-                            let descVal = descriptionOpt.getOrThrow()
-                            if (descVal is JsonString) {
-                                descVal.asString().getValue()
-                            } else {
-                                ""
-                            }
-                        } else {
-                            ""
-                        }
-                        let route = if (routeOpt.isSome()) {
-                            let routeVal = routeOpt.getOrThrow()
-                            if (routeVal is JsonString) {
-                                routeVal.asString().getValue()
-                            } else {
-                                ""
-                            }
-                        } else {
-                            ""
-                        }
-
-                        skillInfoBuilder.append("### ${name}")
-                        if (!title.isEmpty() && title != name) {
-                            skillInfoBuilder.append(" (${title})")
-                        }
-                        skillInfoBuilder.append("\n")
-                        if (!description.isEmpty()) {
-                            skillInfoBuilder.append("${description}\n")
-                        }
-                        if (!route.isEmpty()) {
-                            skillInfoBuilder.append("对应页面: ${route}\n")
-                        }
-                        skillInfoBuilder.append("\n")
-                    }
-                }
-            }
-        }
-
         // 添加后端技能信息
         if (let Some(sm) <- _skillManager) {
             let skills = sm.availableSkills.values().toArray()
             if (!skills.isEmpty()) {
                 skillInfoBuilder.append("【已安装的技能知识库】\n")
                 for (skill in skills) {
-                    skillInfoBuilder.append("### ${skill.name}\n")
-                    skillInfoBuilder.append("${skill.description}\n\n")
+                    skillInfoBuilder.append("### " + skill.name + "\n")
+                    skillInfoBuilder.append(skill.description + "\n\n")
                 }
             }
         }

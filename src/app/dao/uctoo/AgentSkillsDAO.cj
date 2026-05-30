@@ -370,6 +370,9 @@ ${arg(entity.name)},
      * @return 影响行数
      */
     func batchSoftDeleteAgentSkills(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update agent_skills set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -381,6 +384,9 @@ ${arg(entity.name)},
      * @return 影响行数
      */
     func batchDeleteAgentSkills(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from agent_skills where id ${IN(ids)}
         ''').delete

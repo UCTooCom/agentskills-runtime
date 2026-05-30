@@ -248,6 +248,9 @@ ${arg(entity.key)},
      * @return 影响行数
      */
     func batchSoftDeleteI18(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update i18 set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -259,6 +262,9 @@ ${arg(entity.key)},
      * @return 影响行数
      */
     func batchDeleteI18(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from i18 where id ${IN(ids)}
         ''').delete

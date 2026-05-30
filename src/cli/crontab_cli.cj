@@ -54,7 +54,7 @@ public class CrontabCLI {
         getStdOut().writeln("  ------------------------------------------------------------------------------------------------------------------------")
         for (task in tasks) {
             let statusStr = if (task.status == 1) { "Active" } else { "Disabled" }
-            getStdOut().writeln("  ${task.id} | ${task.name} | ${task.group}     | ${statusStr}  | ${task.cron} | ${task.task}")
+            getStdOut().writeln("  ${task.id} | ${task.name} | ${task.groupName}     | ${statusStr}  | ${task.cron} | ${task.task}")
         }
     }
 
@@ -70,7 +70,7 @@ public class CrontabCLI {
                 getStdOut().writeln("Task Detail:")
                 getStdOut().writeln("  ID:        ${task.id}")
                 getStdOut().writeln("  Name:      ${task.name}")
-                getStdOut().writeln("  Group:     ${task.group}")
+                getStdOut().writeln("  Group:     ${task.groupName}")
                 getStdOut().writeln("  Status:    ${if (task.status == 1) {"Active"} else {"Disabled"}}")
                 getStdOut().writeln("  Cron:      ${task.cron}")
                 getStdOut().writeln("  Task:      ${task.task}")

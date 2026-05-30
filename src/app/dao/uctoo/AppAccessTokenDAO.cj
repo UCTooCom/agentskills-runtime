@@ -246,6 +246,9 @@ ${arg(entity.accessToken)},
      * @return 影响行数
      */
     func batchSoftDeleteAppAccessToken(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update app_access_token set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -257,6 +260,9 @@ ${arg(entity.accessToken)},
      * @return 影响行数
      */
     func batchDeleteAppAccessToken(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from app_access_token where id ${IN(ids)}
         ''').delete

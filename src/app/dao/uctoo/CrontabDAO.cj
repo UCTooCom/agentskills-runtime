@@ -42,7 +42,7 @@ public interface CrontabDAO <: RootDAO {
         executor.setSql('''
             insert into crontab(
                 name,
-                "group",
+                group_name,
                 task,
                 cron,
                 tactics,
@@ -64,8 +64,8 @@ public interface CrontabDAO <: RootDAO {
                 next_executed_at,
                 exec_count
             ) values(
-${arg(entity.name)},
-                ${arg(entity.group)},
+                ${arg(entity.name)},
+                ${arg(entity.groupName)},
                 ${arg(entity.task)},
                 ${arg(entity.cron)},
                 ${arg(entity.tactics)},
@@ -100,7 +100,7 @@ ${arg(entity.name)},
      */
     func findCrontabById(id: String): Option<CrontabPO> {
         executor.setSql('''
-            select id, name, coalesce("group", '1') as "group", task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where id = ${arg(id)}
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where id = ${arg(id)}
         ''').first<CrontabPO>()
     }
 
@@ -115,7 +115,7 @@ ${arg(entity.name)},
         executor.setSql('''
             update crontab set
                 name = ${arg(entity.name)},
-                "group" = ${arg(entity.group)},
+                group_name = ${arg(entity.groupName)},
                 task = ${arg(entity.task)},
                 cron = ${arg(entity.cron)},
                 tactics = ${arg(entity.tactics)},
@@ -184,7 +184,7 @@ ${arg(entity.name)},
      */
     func findAllCrontabPage(page: Int64, size: Int64): Pagination<CrontabPO> {
         executor.page<CrontabPO>('''
-            select id, name, coalesce("group", '1') as "group", task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab order by created_at desc
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab order by created_at desc
         ''', size, page: page)
     }
 
@@ -197,7 +197,7 @@ ${arg(entity.name)},
      */
     func findCrontabByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<CrontabPO> {
         executor.page<CrontabPO>('''
-            select id, name, coalesce("group", '1') as "group", task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where creator = ${arg(creator)} order by created_at desc
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -207,7 +207,7 @@ ${arg(entity.name)},
      */
     func listAllCrontab(): ArrayList<CrontabPO> {
         executor.setSql('''
-            select id, name, coalesce("group", '1') as "group", task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab order by created_at desc
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab order by created_at desc
         ''').list<CrontabPO>()
     }
 
@@ -217,8 +217,11 @@ ${arg(entity.name)},
      * @return crontab列表
      */
     func findCrontabByIds(ids: ArrayList<String>): ArrayList<CrontabPO> {
+        if (ids.isEmpty()) {
+            return ArrayList<CrontabPO>()
+        }
         executor.setSql('''
-            select id, name, coalesce("group", '1') as "group", task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where id ${IN(ids)}
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where id ${IN(ids)}
         ''').list<CrontabPO>()
     }
 
@@ -257,7 +260,7 @@ ${arg(entity.name)},
      */
     func findCrontabByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<CrontabPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, coalesce(\"group\", '1') as \"group\", task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where 1=1")
+        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -293,6 +296,9 @@ ${arg(entity.name)},
      * @return 影响行数
      */
     func batchSoftDeleteCrontab(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update crontab set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -304,6 +310,9 @@ ${arg(entity.name)},
      * @return 影响行数
      */
     func batchDeleteCrontab(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from crontab where id ${IN(ids)}
         ''').delete
@@ -324,8 +333,7 @@ ${arg(entity.name)},
      */
     func findCrontabByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<CrontabPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, coalesce(\"group\", '1') as \"group\", task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab")
-
+        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab")
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")
         }
@@ -350,7 +358,7 @@ ${arg(entity.name)},
      */
     func findCrontabByCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<CrontabPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, coalesce(\"group\", '1') as \"group\", task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab")
+        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

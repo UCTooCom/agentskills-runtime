@@ -284,6 +284,9 @@ ${arg(entity.link)},
      * @return 影响行数
      */
     func batchSoftDeleteEntity(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update entity set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -295,6 +298,9 @@ ${arg(entity.link)},
      * @return 影响行数
      */
     func batchDeleteEntity(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from entity where id ${IN(ids)}
         ''').delete

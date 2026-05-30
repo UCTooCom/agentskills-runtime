@@ -110,6 +110,19 @@ public struct LogUtils {
 
     //------------------------------------------------------------
 
+    public static func warn(msg: String): Unit {
+        LogUtilsImpl.warn(msg)
+    }
+
+    public static func warn(name: String, msg: String): Unit {
+        warn("[${name}] ${msg}")
+        if (Config.enableAgentLog) {
+            LogUtilsImpl.agentWarn(name, msg)
+        }
+    }
+
+    //------------------------------------------------------------
+
     public static func error(msg: String): Unit {
         LogUtilsImpl.error(msg)
     }

@@ -59,6 +59,15 @@ import magic.app.routes.uctoo.crontab_log.CrontabLogRoute
 import magic.app.controllers.uctoo.crontab_log.CrontabLogController
 import magic.app.routes.uctoo.crontab_task_registry.CrontabTaskRegistryRoute
 import magic.app.controllers.uctoo.crontab_task_registry.CrontabTaskRegistryController
+
+import magic.app.routes.uctoo.agents.AgentsRoute
+import magic.app.controllers.uctoo.agents.AgentsController
+import magic.app.routes.uctoo.agent_contexts.AgentContextsRoute
+import magic.app.controllers.uctoo.agent_contexts.AgentContextsController
+import magic.app.routes.uctoo.agent_messages.AgentMessagesRoute
+import magic.app.controllers.uctoo.agent_messages.AgentMessagesController
+import magic.app.routes.uctoo.agent_tasks.AgentTasksRoute
+import magic.app.controllers.uctoo.agent_tasks.AgentTasksController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -84,8 +93,14 @@ import magic.app.services.uctoo.{
     CrontabService,
     CrontabLogService,
 
-    CrontabTaskRegistryService,}
+    CrontabTaskRegistryService,
+
+    AgentsService,
+    AgentContextsService,
+    AgentMessagesService,
+    AgentTasksService,}
 import magic.app.services.crontab.SchedulerService
+
 
 /**
  * AutoRouteConfig - 自动路由配置
@@ -156,7 +171,7 @@ public class AutoRouteConfig {
                 route.register()
             }
         ))
-        // ==================== CRUD 路由配置 ====================
+
         // CrontabTaskRegistry 路由
         registry.add(RouteEntry(
             "crontab_task_registry",
@@ -444,6 +459,64 @@ public class AutoRouteConfig {
                 let service = AgentSkillsService()
                 let controller = AgentSkillsController(service)
                 let route = AgentSkillsRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // ==================== CRUD 路由配置 ====================
+        
+        // Agents 路由 (Agent管理)
+        registry.add(RouteEntry(
+            "agents",
+            "/api/v1/uctoo/agents",
+            210,
+            true,
+            { router: Router =>
+                let service = AgentsService()
+                let controller = AgentsController(service)
+                let route = AgentsRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // AgentContexts 路由 (Agent上下文)
+        registry.add(RouteEntry(
+            "agent_contexts",
+            "/api/v1/uctoo/agent_contexts",
+            220,
+            true,
+            { router: Router =>
+                let service = AgentContextsService()
+                let controller = AgentContextsController(service)
+                let route = AgentContextsRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // AgentMessages 路由 (Agent消息)
+        registry.add(RouteEntry(
+            "agent_messages",
+            "/api/v1/uctoo/agent_messages",
+            230,
+            true,
+            { router: Router =>
+                let service = AgentMessagesService()
+                let controller = AgentMessagesController(service)
+                let route = AgentMessagesRoute(router, controller)
+                route.register()
+            }
+        ))
+        
+        // AgentTasks 路由 (Agent任务)
+        registry.add(RouteEntry(
+            "agent_tasks",
+            "/api/v1/uctoo/agent_tasks",
+            240,
+            true,
+            { router: Router =>
+                let service = AgentTasksService()
+                let controller = AgentTasksController(service)
+                let route = AgentTasksRoute(router, controller)
                 route.register()
             }
         ))

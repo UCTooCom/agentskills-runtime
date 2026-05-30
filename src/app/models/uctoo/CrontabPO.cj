@@ -28,8 +28,8 @@ public class CrontabPO {
         @ORMField['name']
     public var name: String = ""
 
-        @ORMField['"group"']
-    public var group: String = "1"
+        @ORMField['group_name']
+    public var groupName: String = "1"
 
         @ORMField['task']
     public var task: String = ""
@@ -96,7 +96,7 @@ public class CrontabPO {
     public init(
                 id: String,
                 name: String,
-                group: String,
+                groupName: String,
                 task: String,
                 cron: String,
                 tactics: String,
@@ -120,7 +120,7 @@ public class CrontabPO {
     ) {
                 this.id = id
                 this.name = name
-                this.group = group
+                this.groupName = groupName
                 this.task = task
                 this.cron = cron
                 this.tactics = tactics
@@ -148,7 +148,7 @@ public class CrontabPO {
         var map = HashMap<String, JsonValue>()
         map.add("id", this.id.toJsonValue())
         map.add("name", this.name.toJsonValue())
-        map.add("group", this.group.toJsonValue())
+        map.add("group_name", this.groupName.toJsonValue())
         map.add("task", this.task.toJsonValue())
         map.add("cron", this.cron.toJsonValue())
         map.add("tactics", this.tactics.toJsonValue())

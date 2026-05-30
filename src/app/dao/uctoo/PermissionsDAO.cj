@@ -283,6 +283,9 @@ ${arg(entity.permissionName)},
      * @return 影响行数
      */
     func batchSoftDeletePermissions(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update permissions set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -294,6 +297,9 @@ ${arg(entity.permissionName)},
      * @return 影响行数
      */
     func batchDeletePermissions(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from permissions where id ${IN(ids)}
         ''').delete

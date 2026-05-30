@@ -651,6 +651,9 @@ public class EntityController {
 
     private func parseIdsArray(idsStr: String): ArrayList<String> {
         let idArray = ArrayList<String>()
+        if (idsStr.isEmpty()) {
+            return idArray
+        }
         try {
             let jsonValue = JsonValue.fromStr(idsStr)
             if (jsonValue is JsonArray) {
@@ -658,7 +661,54 @@ public class EntityController {
                 for (item in arr.getItems()) {
                     if (item is JsonString) {
                         let jsonStr = item.asString()
-                        idArray.add(jsonStr.getValue())
+                        let val = jsonStr.getValue()
+                        if (!val.isEmpty()) {
+                            idArray.add(val)
+                        }
+                    } else if (item is JsonObject) {
+                        let obj = item.asObject()
+                        if (let Some(idsObj) <- obj.get("ids")) {
+                            if (idsObj is JsonArray) {
+                                let idsArr = idsObj.asArray()
+                                for (subItem in idsArr.getItems()) {
+                                    if (subItem is JsonString) {
+                                        let jsonStr = subItem.asString()
+                                        let val = jsonStr.getValue()
+                                        if (!val.isEmpty()) {
+                                            idArray.add(val)
+                                        }
+                                    }
+                                }
+                            } else if (idsObj is JsonString) {
+                                let jsonStr = idsObj.asString()
+                                let val = jsonStr.getValue()
+                                if (!val.isEmpty()) {
+                                    idArray.add(val)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (jsonValue is JsonObject) {
+                let obj = jsonValue.asObject()
+                if (let Some(idsVal) <- obj.get("ids")) {
+                    if (idsVal is JsonArray) {
+                        let idsArr = idsVal.asArray()
+                        for (item in idsArr.getItems()) {
+                            if (item is JsonString) {
+                                let jsonStr = item.asString()
+                                let val = jsonStr.getValue()
+                                if (!val.isEmpty()) {
+                                    idArray.add(val)
+                                }
+                            }
+                        }
+                    } else if (idsVal is JsonString) {
+                        let jsonStr = idsVal.asString()
+                        let val = jsonStr.getValue()
+                        if (!val.isEmpty()) {
+                            idArray.add(val)
+                        }
                     }
                 }
             }
@@ -666,7 +716,7 @@ public class EntityController {
             let parts = idsStr.split(",")
             for (part in parts) {
                 let trimmed = part.trimAscii()
-                if (!trimmed.isEmpty()) {
+                if (!trimmed.isEmpty() && trimmed != "[" && trimmed != "]" && trimmed != "{" && trimmed != "}") {
                     idArray.add(trimmed)
                 }
             }

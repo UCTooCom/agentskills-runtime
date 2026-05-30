@@ -252,6 +252,9 @@ ${arg(entity.groupableType)},
      * @return 影响行数
      */
     func batchSoftDeleteUserHasGroup(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update user_has_group set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -263,6 +266,9 @@ ${arg(entity.groupableType)},
      * @return 影响行数
      */
     func batchDeleteUserHasGroup(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from user_has_group where id ${IN(ids)}
         ''').delete

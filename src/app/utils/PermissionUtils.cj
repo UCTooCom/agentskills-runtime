@@ -74,17 +74,17 @@ public class PermissionUtils {
             if (hasPermission(userLevel, requiredPermission)) {
                 return (true, "")
             }
-            if (perm == Int32(0)) {
-                return (false, "您没有访问此数据的权限")
-            }
+            return (false, "您没有访问此数据的权限")
         }
 
         try {
             let executor = ORM.executor()
 
             let creatorCheck = executor.setSql('''
-                SELECT COUNT(*) FROM ${entityType} WHERE id = '${entityId}' AND creator = '${userId}' AND deleted_at IS NULL
+                SELECT COUNT(*) FROM ${entityType} WHERE id = '${entityId}' AND creator = '${userId}'::uuid AND deleted_at IS NULL
             ''').first<Int64>() ?? 0
+
+            LogUtils.info(logger, "checkUserHasPermission: userId=${userId}, entityType=${entityType}, entityId=${entityId}, creatorCheck=${creatorCheck}")
 
             if (creatorCheck > 0) {
                 PermissionCache.put(userId, entityType, entityId, PermissionLevel.AUTHORIZE.value())
@@ -144,7 +144,7 @@ public class PermissionUtils {
                     }
                 }
                 if (ids.isEmpty()) {
-                    return ("creator = '${userId}'", ArrayList<String>())
+                    return ("creator = '${userId}'::uuid", ArrayList<String>())
                 }
                 return (buildFilterCondition(ids, userId), ArrayList<String>())
             }
@@ -166,13 +166,13 @@ public class PermissionUtils {
             PermissionCache.putFilterCache(userId, entityType, authorizedIds)
 
             if (authorizedIds.isEmpty()) {
-                return ("creator = '${userId}'", ArrayList<String>())
+                return ("creator = '${userId}'::uuid", ArrayList<String>())
             }
 
             return (buildFilterCondition(authorizedIds, userId), ArrayList<String>())
         } catch (e: Exception) {
             LogUtils.error(logger, "Failed to generate permission filter: ${e.message}")
-            return ("creator = '${userId}'", ArrayList<String>())
+            return ("creator = '${userId}'::uuid", ArrayList<String>())
         }
     }
 
@@ -413,10 +413,10 @@ public class PermissionUtils {
 
     private static func buildFilterCondition(authorizedIds: ArrayList<String>, userId: String): String {
         if (authorizedIds.isEmpty()) {
-            return "creator = '${userId}'"
+            return "creator = '${userId}'::uuid"
         }
         let sb = StringBuilder()
-        sb.append("(creator = '${userId}' OR id IN (")
+        sb.append("(creator = '${userId}'::uuid OR id IN (")
         var first = true
         for (id in authorizedIds) {
             if (id.isEmpty()) {

@@ -434,6 +434,8 @@ public class CrudGenerator {
             println("跳过手动维护的表: ${tableInfo.tableName}")
             return
         }
+        // 确保数据库目录有正确的 pkg.cj 文件
+        ensureDatabasePkgFiles(tableInfo.dbName)
         generateModel(tableInfo)
         generateDAO(tableInfo)
         generateService(tableInfo)
@@ -441,6 +443,66 @@ public class CrudGenerator {
         generateRoute(tableInfo)
         updateAutoRouteConfig(tableInfo)
         updateRowLevelPermissionConfig(tableInfo)
+    }
+    
+    /**
+     * 确保数据库目录有正确的 pkg.cj 文件
+     * 
+     * 这个方法会检查并生成控制器、路由等目录的 pkg.cj 文件，
+     * 防止仓颉编译器因为子目录没有 pkg.cj 文件而无法识别。
+     */
+    private func ensureDatabasePkgFiles(dbName: String): Unit {
+        // 生成 controllers/<dbName>/pkg.cj
+        let controllerPkgPath = "${outputDir}/controllers/${dbName}/pkg.cj"
+        let controllerPkgContent = buildControllerPkgContent(dbName)
+        ensurePkgFile(controllerPkgPath, controllerPkgContent)
+        
+        // 生成 routes/<dbName>/pkg.cj
+        let routePkgPath = "${outputDir}/routes/${dbName}/pkg.cj"
+        let routePkgContent = buildRoutePkgContent(dbName)
+        ensurePkgFile(routePkgPath, routePkgContent)
+        
+        // models 目录通常没有 pkg.cj，这里不需要处理
+        // dao 目录通常没有 pkg.cj，这里不需要处理
+        // services 目录通常没有 pkg.cj，这里不需要处理
+    }
+    
+    /**
+     * 确保 pkg.cj 文件存在，如果不存在则创建
+     */
+    private func ensurePkgFile(filePath: String, content: String): Unit {
+        if (!templateEngine.fileExists(filePath)) {
+            templateEngine.writeFile(filePath, content)
+            println("已创建 pkg.cj 文件: ${filePath}")
+        } else {
+            println("pkg.cj 文件已存在: ${filePath}")
+        }
+    }
+    
+    /**
+     * 构建 controllers/<dbName>/pkg.cj 文件内容
+     */
+    private func buildControllerPkgContent(dbName: String): String {
+        let sb = StringBuilder()
+        sb.append("/*\n")
+        sb.append(" * Copyright (c) UCToo Co., Ltd. 2026. All rights reserved.\n")
+        sb.append(" */\n")
+        sb.append("package magic.app.controllers.${dbName}\n\n")
+        sb.append("// pkg.cj for controllers/${dbName} directory\n")
+        return sb.toString()
+    }
+    
+    /**
+     * 构建 routes/<dbName>/pkg.cj 文件内容
+     */
+    private func buildRoutePkgContent(dbName: String): String {
+        let sb = StringBuilder()
+        sb.append("/*\n")
+        sb.append(" * Copyright (c) UCToo Co., Ltd. 2026. All rights reserved.\n")
+        sb.append(" */\n")
+        sb.append("package magic.app.routes.${dbName}\n\n")
+        sb.append("// pkg.cj for routes/${dbName} directory\n")
+        return sb.toString()
     }
     
     /**
@@ -1829,6 +1891,37 @@ public class CrudGenerator {
                 let lineIdx = nextLineIndex.getOrThrow()
                 let insertPosition = lineIdx + 1
                 updatedContent = updatedContent[0..insertPosition] + "${routeRegistration}\n" + updatedContent[insertPosition..updatedContent.size]
+            }
+        } else {
+            // 如果找不到锚点注释，在 initRegistry 方法的最后一个 } 之前插入
+            // 找到 "public static func initRegistry" 方法的结束位置
+            let methodStart = updatedContent.indexOf("public static func initRegistry")
+            if (methodStart.isSome()) {
+                let startIdx = methodStart.getOrThrow()
+                // 从方法开始位置往后找，找到方法结束的 }
+                // 需要匹配花括号
+                // '{' 的 ASCII 值是 123，'}' 的 ASCII 值是 125
+                var braceCount = 0
+                var foundMethodStart = false
+                var insertPosition = -1
+                for (i in startIdx..updatedContent.size) {
+                    let ch = updatedContent[i]
+                    if (ch == 123) { // '{' 的 ASCII 值
+                        braceCount++
+                        foundMethodStart = true
+                    } else if (ch == 125) { // '}' 的 ASCII 值
+                        braceCount--
+                        if (foundMethodStart && braceCount == 0) {
+                            // 找到方法结束的 }
+                            insertPosition = i
+                            break
+                        }
+                    }
+                }
+                if (insertPosition > 0) {
+                    // 在方法结束的 } 之前插入路由注册代码
+                    updatedContent = updatedContent[0..insertPosition] + "\n${routeRegistration}\n        " + updatedContent[insertPosition..updatedContent.size]
+                }
             }
         }
         

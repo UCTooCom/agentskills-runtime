@@ -253,6 +253,9 @@ ${arg(entity.module)},
      * @return 影响行数
      */
     func batchSoftDeleteOperateLog(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update operate_log set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -264,6 +267,9 @@ ${arg(entity.module)},
      * @return 影响行数
      */
     func batchDeleteOperateLog(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from operate_log where id ${IN(ids)}
         ''').delete

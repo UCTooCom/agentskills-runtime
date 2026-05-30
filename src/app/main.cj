@@ -415,11 +415,11 @@ public class Application {
                 case None =>
                     schedulerJson = "\"scheduler\":{\"running\":false,\"error\":\"not initialized\"}"
             }
-            res.status(200).json("{\"status\":\"ok\",\"version\":\"0.0.20\",${schedulerJson}}")
+            res.status(200).json("{\"status\":\"ok\",\"version\":\"0.0.21\",${schedulerJson}}")
         })
         // todo:从cjpm.toml配置文件读取系统信息
         router.get("/api/v1/info", { req, res =>
-            res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"0.0.20\",\"language\":\"cangjie\"}")
+            res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"0.0.21\",\"language\":\"cangjie\"}")
         })
         
         // 初始化调度引擎
@@ -485,18 +485,23 @@ main() {
     // 将 .env 中的 ORM 配置同步到 fountain 的 Config 中
     eprintln("=== Syncing ORM config to fountain Config ===")
     
-    // 强制使用 opengauss 驱动（因为 PGDriver 的 name 属性是 "opengauss"）
+    // 从 .env 读取 ORM 配置
+    let ormDrivers = AppConfig.env["orm_drivers"].getOrDefault({ => "opengauss" })
+    let ormDefaultDriver = AppConfig.env["orm_defaultDriver"].getOrDefault({ => "opengauss" })
+    let ormConnectionUrl = AppConfig.env["orm_connectionUrl"].getOrDefault({ => "postgresql://postgres:uctoo123@127.0.0.1:5432/nuanshou" })
+    let opengaussOrmConnectionUrl = AppConfig.env["opengauss_orm_connectionUrl"].getOrDefault({ => ormConnectionUrl })
+    
     let ormConfigs: Array<(String, String)> = [
-        ("orm_drivers", "opengauss"),
-        ("orm_defaultDriver", "opengauss"),
-        ("orm_connectionUrl", "postgresql://postgres:uctoo123@127.0.0.1:5432/uctoo"),
-        ("opengauss_orm_connectionUrl", "postgresql://postgres:uctoo123@127.0.0.1:5432/uctoo")
+        ("orm_drivers", ormDrivers),
+        ("orm_defaultDriver", ormDefaultDriver),
+        ("orm_connectionUrl", ormConnectionUrl),
+        ("opengauss_orm_connectionUrl", opengaussOrmConnectionUrl)
     ]
     
-    eprintln("=== orm_drivers: opengauss ===")
-    eprintln("=== orm_defaultDriver: opengauss ===")
-    eprintln("=== orm_connectionUrl: postgresql://postgres:uctoo123@127.0.0.1:5432/uctoo ===")
-    eprintln("=== opengauss_orm_connectionUrl: postgresql://postgres:uctoo123@127.0.0.1:5432/uctoo ===")
+    eprintln("=== orm_drivers: ${ormDrivers} ===")
+    eprintln("=== orm_defaultDriver: ${ormDefaultDriver} ===")
+    eprintln("=== orm_connectionUrl: ${ormConnectionUrl} ===")
+    eprintln("=== opengauss_orm_connectionUrl: ${opengaussOrmConnectionUrl} ===")
     
     // 设置到 fountain 的 Config 中
     Config.set(ormConfigs)

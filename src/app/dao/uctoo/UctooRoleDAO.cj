@@ -244,6 +244,9 @@ ${arg(entity.name)},
      * @return 影响行数
      */
     func batchSoftDeleteUctooRole(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update uctoo_role set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -255,6 +258,9 @@ ${arg(entity.name)},
      * @return 影响行数
      */
     func batchDeleteUctooRole(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from uctoo_role where id ${IN(ids)}
         ''').delete

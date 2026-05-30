@@ -298,6 +298,9 @@ ${arg(entity.tableCatalog)},
      * @return 影响行数
      */
     func batchSoftDeleteDbInfo(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update db_info set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -309,6 +312,9 @@ ${arg(entity.tableCatalog)},
      * @return 影响行数
      */
     func batchDeleteDbInfo(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from db_info where id ${IN(ids)}
         ''').delete

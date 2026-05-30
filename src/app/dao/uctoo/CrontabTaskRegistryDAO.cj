@@ -257,6 +257,9 @@ ${arg(entity.typeVal)},
      * @return 影响行数
      */
     func batchSoftDeleteCrontabTaskRegistry(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update crontab_task_registry set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -268,6 +271,9 @@ ${arg(entity.typeVal)},
      * @return 影响行数
      */
     func batchDeleteCrontabTaskRegistry(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from crontab_task_registry where id ${IN(ids)}
         ''').delete

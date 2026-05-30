@@ -269,6 +269,9 @@ ${arg(entity.crontabId)},
      * @return 影响行数
      */
     func batchSoftDeleteCrontabLog(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update crontab_log set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -280,6 +283,9 @@ ${arg(entity.crontabId)},
      * @return 影响行数
      */
     func batchDeleteCrontabLog(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from crontab_log where id ${IN(ids)}
         ''').delete

@@ -160,7 +160,7 @@ public class TemplateEngine {
     /**
      * 检查文件是否存在
      */
-    private func fileExists(path: String): Bool {
+    public func fileExists(path: String): Bool {
         try {
             let content = File.readFrom(path)
             true
@@ -172,7 +172,7 @@ public class TemplateEngine {
     /**
      * 写入文件
      */
-    private func writeFile(path: String, content: String): Unit {
+    public func writeFile(path: String, content: String): Unit {
         // 确保目录存在
         let p = Path(path)
         let parentPath = p.parent

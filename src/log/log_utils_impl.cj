@@ -128,6 +128,17 @@ struct LogUtilsImpl {
 
     //------------------------------------------------------------
 
+    public static func warn(msg: String): Unit {
+        LOGGER.warn(msg)
+    }
+
+    public static func agentWarn(name: String, msg: String): Unit {
+        let logger = getNamedLogger(name)
+        logger.warn("[${name}] ${msg}")
+    }
+
+    //------------------------------------------------------------
+
     public static func error(msg: String): Unit {
         LOGGER.error(msg)
     }

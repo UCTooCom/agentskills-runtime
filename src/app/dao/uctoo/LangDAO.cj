@@ -249,6 +249,9 @@ ${arg(entity.name)},
      * @return 影响行数
      */
     func batchSoftDeleteLang(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             update lang set deleted_at = ${arg(DateTime.now())} where id ${IN(ids)}
         ''').update
@@ -260,6 +263,9 @@ ${arg(entity.name)},
      * @return 影响行数
      */
     func batchDeleteLang(ids: ArrayList<String>): Int64 {
+        if (ids.isEmpty()) {
+            return 0
+        }
         executor.setSql('''
             delete from lang where id ${IN(ids)}
         ''').delete

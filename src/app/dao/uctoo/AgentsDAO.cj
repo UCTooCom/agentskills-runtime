@@ -42,7 +42,7 @@ public interface AgentsDAO <: RootDAO {
         executor.setSql('''
             insert into agents(
                 name,
-                type,
+                agent_type,
                 description,
                 status,
                 config,
@@ -60,10 +60,16 @@ public interface AgentsDAO <: RootDAO {
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                version,
+                author,
+                permissions,
+                source_path,
+                sync_status,
+                last_sync_at
             ) values(
 ${arg(entity.name)},
-                ${arg(entity.typeVal)},
+                ${arg(entity.agentType)},
                 ${arg(entity.description)},
                 ${arg(entity.status)},
                 ${arg(entity.config)},
@@ -81,7 +87,13 @@ ${arg(entity.name)},
                 ${arg(entity.creator)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.version)},
+                ${arg(entity.author)},
+                ${arg(entity.permissions)},
+                ${arg(entity.sourcePath)},
+                ${arg(entity.syncStatus)},
+                ${arg(entity.lastSyncAt)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -96,7 +108,7 @@ ${arg(entity.name)},
      */
     func findAgentsById(id: String): Option<AgentsPO> {
         executor.setSql('''
-            select id, name, type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at from agents where id = ${arg(id)}
+            select id, name, agent_type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at, version, author, permissions, source_path, sync_status, last_sync_at from agents where id = ${arg(id)}
         ''').first<AgentsPO>()
     }
 
@@ -111,7 +123,7 @@ ${arg(entity.name)},
         executor.setSql('''
             update agents set
                 name = ${arg(entity.name)},
-                type = ${arg(entity.typeVal)},
+                agent_type = ${arg(entity.agentType)},
                 description = ${arg(entity.description)},
                 status = ${arg(entity.status)},
                 config = ${arg(entity.config)},
@@ -128,6 +140,12 @@ ${arg(entity.name)},
                 initial_prompt = ${arg(entity.initialPrompt)},
                 creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
+                version = ${arg(entity.version)},
+                author = ${arg(entity.author)},
+                permissions = ${arg(entity.permissions)},
+                source_path = ${arg(entity.sourcePath)},
+                sync_status = ${arg(entity.syncStatus)},
+                last_sync_at = ${arg(entity.lastSyncAt)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -178,7 +196,7 @@ ${arg(entity.name)},
      */
     func findAllAgentsPage(page: Int64, size: Int64): Pagination<AgentsPO> {
         executor.page<AgentsPO>('''
-            select id, name, type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at from agents order by created_at desc
+            select id, name, agent_type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at, version, author, permissions, source_path, sync_status, last_sync_at from agents order by created_at desc
         ''', size, page: page)
     }
 
@@ -191,7 +209,7 @@ ${arg(entity.name)},
      */
     func findAgentsByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<AgentsPO> {
         executor.page<AgentsPO>('''
-            select id, name, type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at from agents where creator = ${arg(creator)} order by created_at desc
+            select id, name, agent_type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at, version, author, permissions, source_path, sync_status, last_sync_at from agents where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -201,7 +219,7 @@ ${arg(entity.name)},
      */
     func listAllAgents(): ArrayList<AgentsPO> {
         executor.setSql('''
-            select id, name, type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at from agents order by created_at desc
+            select id, name, agent_type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at, version, author, permissions, source_path, sync_status, last_sync_at from agents order by created_at desc
         ''').list<AgentsPO>()
     }
 
@@ -215,7 +233,7 @@ ${arg(entity.name)},
             return ArrayList<AgentsPO>()
         }
         executor.setSql('''
-            select id, name, type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at from agents where id ${IN(ids)}
+            select id, name, agent_type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at, version, author, permissions, source_path, sync_status, last_sync_at from agents where id ${IN(ids)}
         ''').list<AgentsPO>()
     }
 
@@ -254,7 +272,7 @@ ${arg(entity.name)},
      */
     func findAgentsByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentsPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at from agents where 1=1")
+        sql.append("select id, name, agent_type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at, version, author, permissions, source_path, sync_status, last_sync_at from agents where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -327,7 +345,7 @@ ${arg(entity.name)},
      */
     func findAgentsByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentsPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at from agents")
+        sql.append("select id, name, agent_type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at, version, author, permissions, source_path, sync_status, last_sync_at from agents")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

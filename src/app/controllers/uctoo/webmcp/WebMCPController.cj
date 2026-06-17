@@ -7,9 +7,10 @@ import magic.app.services.webmcp.WebMCPProtocol
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.core.skill.SkillManager
 import magic.core.model.ChatModel
+import magic.core.agent.{AgentDefinition, AgentLoadManager}
 import magic.log.LogUtils
 import stdx.net.http.{HttpContext, WebSocket, WebSocketFrameType, HttpHeaders}
-import stdx.encoding.json.{JsonObject, JsonString, JsonBool}
+import stdx.encoding.json.{JsonObject, JsonString, JsonBool, JsonValue, JsonArray}
 import std.time.DateTime
 import f_util.UUID
 import std.collection.{HashMap, ArrayList}
@@ -22,11 +23,17 @@ import std.collection.{HashMap, ArrayList}
 public class WebMCPController {
     private let _skillManager: SkillManager
     private let _chatModel: ChatModel
+    private let _agentLoadManager: AgentLoadManager
     private var _sessions = HashMap<String, WebMCPProtocol>()
 
-    public init(skillManager: SkillManager, chatModel: ChatModel) {
+    public init(skillManager: SkillManager, chatModel: ChatModel, agentLoadManager: AgentLoadManager) {
         this._skillManager = skillManager
         this._chatModel = chatModel
+        this._agentLoadManager = agentLoadManager
+    }
+
+    private func getMainAgentDef(): ?AgentDefinition {
+        _agentLoadManager.getMainAgent()
     }
 
     /**
@@ -83,27 +90,86 @@ public class WebMCPController {
         res.header("Access-Control-Allow-Origin", "*")
            .header("Access-Control-Allow-Methods", "POST, OPTIONS")
            .header("Access-Control-Allow-Headers", "*")
-           .header("Content-Type", "application/json")
         
         try {
-            // 创建临时协议处理器
-            let protocol = WebMCPProtocol(_skillManager, _chatModel)
-            protocol.setSessionInfo(UUID.random().toString(), "")
+            // 复用或创建协议处理器（基于 session 保持 Agent 会话状态连续性）
+            let sessionId = "webmcp-default"
+            let protocol = if (_sessions.contains(sessionId)) {
+                _sessions.get(sessionId).getOrThrow()
+            } else {
+                let p = WebMCPProtocol(_skillManager, _chatModel, getMainAgentDef())
+                p.setSessionInfo(sessionId, "")
+                _sessions.add(sessionId, p)
+                p
+            }
             
-            // 处理消息
-            let response = protocol.handleMessage(body)
-            LogUtils.debug("WebMCP streamable HTTP response: ${response}")
+            // 解析请求中的 stream 参数
+            let isStream = parseStreamFlag(body)
             
-            // 设置状态码并发送 JSON 响应
-            res.status(200)
-               .header("Content-Type", "application/json")
-               .json(response)
+            if (isStream) {
+                // 流式响应：使用分块传输编码
+                LogUtils.info("WebMCP streaming response requested")
+                res.status(200)
+                   .header("Content-Type", "application/json")
+                   .header("Transfer-Encoding", "chunked")
+                   .header("Connection", "keep-alive")
+                
+                // 使用异步方式处理流式响应
+                spawn {
+                    let response = protocol.handleMessage(body)
+                    LogUtils.debug("WebMCP streamable HTTP response: ${response}")
+                    res.send(response)
+                }
+            } else {
+                // 非流式响应：同步处理
+                let response = protocol.handleMessage(body)
+                LogUtils.debug("WebMCP streamable HTTP response: ${response}")
+                
+                // 设置状态码并发送 JSON 响应
+                res.status(200)
+                   .header("Content-Type", "application/json")
+                
+                // 处理空响应（JSON-RPC 通知不需要响应）
+                if (response.isEmpty()) {
+                    // 对于真正的通知（无 id），返回 204 No Content
+                    res.status(204).send("")
+                } else {
+                    res.json(response)
+                }
+            }
         } catch (e: Exception) {
             LogUtils.error("WebMCP streamable HTTP error: ${e.message}")
             res.status(500)
                .header("Content-Type", "application/json")
                .json("{\"error\": \"${e.message}\"}")
         }
+    }
+    
+    /**
+     * 解析请求体中的 stream 标志
+     */
+    private func parseStreamFlag(body: String): Bool {
+        try {
+            let jsonValue = JsonValue.fromStr(body)
+            if (jsonValue is JsonArray) {
+                let arr = jsonValue.asArray()
+                if (arr.size() > 0) {
+                    let item = arr.get(0)
+                    if (item.isSome() && item.getOrThrow() is JsonObject) {
+                        let obj = item.getOrThrow().asObject()
+                        let params = obj.get("params")
+                        if (params.isSome() && params.getOrThrow() is JsonObject) {
+                            let paramsObj = params.getOrThrow().asObject()
+                            let stream = paramsObj.get("stream")
+                            if (stream.isSome() && stream.getOrThrow() is JsonBool) {
+                                return stream.getOrThrow().asBool().getValue()
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return false
     }
     
     /**
@@ -127,8 +193,8 @@ public class WebMCPController {
         
         LogUtils.info("WebMCP WebSocket connection established, sessionId: ${sessionId}")
         
-        // 创建协议处理器
-        let protocol = WebMCPProtocol(_skillManager, _chatModel)
+        // 创建协议处理器（使用从AGENTS.md加载的动态Agent）
+        let protocol = WebMCPProtocol(_skillManager, _chatModel, getMainAgentDef())
         protocol.setSessionInfo(sessionId, "")
         _sessions.add(sessionId, protocol)
         
@@ -212,8 +278,12 @@ public class WebMCPController {
         try {
             let response = protocol.handleMessage(message)
             LogUtils.debug("WebMCP sending response: ${response}")
-            let responseBytes = ("${response}\n").toArray()
-            websocket.write(WebSocketFrameType.TextWebFrame, responseBytes)
+            
+            // 对于真正的通知（无 id），不发送响应（JSON-RPC 规范）
+            if (!response.isEmpty()) {
+                let responseBytes = ("${response}\n").toArray()
+                websocket.write(WebSocketFrameType.TextWebFrame, responseBytes)
+            }
         } catch (e: Exception) {
             LogUtils.error("WebMCP message processing error: ${e.message}")
             let errorResponse = "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32603,\"message\":\"${e.message}\"}}\n"

@@ -83,8 +83,8 @@ public class AgentsService {
                         if (entity.name.size > 0) {
                 existingEntity.name = entity.name
             }
-            if (entity.typeVal.size > 0) {
-                existingEntity.typeVal = entity.typeVal
+            if (entity.agentType.size > 0) {
+                existingEntity.agentType = entity.agentType
             }
             if (entity.description.isSome()) {
                 existingEntity.description = entity.description
@@ -133,6 +133,24 @@ public class AgentsService {
             }
             if (entity.deletedAt.isSome()) {
                 existingEntity.deletedAt = entity.deletedAt
+            }
+            if (entity.version.isSome()) {
+                existingEntity.version = entity.version
+            }
+            if (entity.author.isSome()) {
+                existingEntity.author = entity.author
+            }
+            if (entity.permissions.isSome()) {
+                existingEntity.permissions = entity.permissions
+            }
+            if (entity.sourcePath.isSome()) {
+                existingEntity.sourcePath = entity.sourcePath
+            }
+            if (entity.syncStatus.isSome()) {
+                existingEntity.syncStatus = entity.syncStatus
+            }
+            if (entity.lastSyncAt.isSome()) {
+                existingEntity.lastSyncAt = entity.lastSyncAt
             }
 
             

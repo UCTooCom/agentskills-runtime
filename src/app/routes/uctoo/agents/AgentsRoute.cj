@@ -50,6 +50,11 @@ public class AgentsRoute {
      * 在此方法中添加定制开发的路由
      */
     public func registerCustomRoutes(): Router {
+        // 获取主 Agent 信息 API
+        router.get("/api/v1/uctoo/agents/main", controller.getMainAgent)
+        
+        // 获取 Agent 可用的技能列表
+        router.get("/api/v1/uctoo/agents/:id/skills", controller.getAgentSkills)
 
         return router
     }

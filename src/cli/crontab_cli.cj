@@ -7,7 +7,7 @@ import std.env.getStdOut
 import std.convert.*
 import std.collection.ArrayList
 import magic.app.services.uctoo.{CrontabService, CrontabLogService}
-import magic.app.services.crontab.{SchedulerEngine, SchedulerService}
+import magic.app.services.crontab.{SchedulerEngine, SchedulerService, CrontabSchedulerService}
 import magic.app.services.crontab.model.TriggerType
 import magic.app.models.uctoo.CrontabPO
 import magic.log.LogUtils
@@ -15,11 +15,13 @@ import f_orm.*
 
 public class CrontabCLI {
     private let crontabService: CrontabService
+    private let crontabSchedulerService: CrontabSchedulerService
     private let logService: CrontabLogService
     private let schedulerService: SchedulerService
 
     public init() {
         crontabService = CrontabService()
+        crontabSchedulerService = CrontabSchedulerService()
         logService = CrontabLogService()
         schedulerService = SchedulerService()
     }
@@ -88,7 +90,7 @@ public class CrontabCLI {
             return
         }
         let id = args[1]
-        let result = crontabService.triggerTask(id)
+        let result = crontabSchedulerService.triggerTask(id)
         if (result.success) {
             getStdOut().writeln("Task triggered: ${id}")
         } else {
@@ -103,7 +105,7 @@ public class CrontabCLI {
             return
         }
         let id = args[1]
-        let result = crontabService.pauseTask(id)
+        let result = crontabSchedulerService.pauseTask(id)
         if (result.success) {
             getStdOut().writeln("Task paused: ${id}")
         } else {
@@ -118,7 +120,7 @@ public class CrontabCLI {
             return
         }
         let id = args[1]
-        let result = crontabService.resumeTask(id)
+        let result = crontabSchedulerService.resumeTask(id)
         if (result.success) {
             getStdOut().writeln("Task resumed: ${id}")
         } else {

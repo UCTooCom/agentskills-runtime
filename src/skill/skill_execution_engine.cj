@@ -8,7 +8,7 @@ import std.collection.HashMap
 import stdx.encoding.json.JsonValue
 import magic.log.LogUtils
 @When[cjc_version < "1.0.0"]
-import std.time.Duration
+import std.core.Duration
 import std.collection.ArrayList
 import magic.skill.domain.models.Capability
 import std.time.DateTime

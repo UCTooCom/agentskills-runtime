@@ -115,7 +115,7 @@ public class AgentDefinition {
     public let name: String
     
     /** Agent 类型 */
-    public let `type`: AgentType
+    public let agentType: AgentType
     
     /** Agent 描述 */
     public let description: String
@@ -161,7 +161,7 @@ public class AgentDefinition {
     
     public init(
         name: String,
-        `type`: AgentType,
+        agentType: AgentType,
         description: String,
         version: String,
         author: Option<String>,
@@ -178,7 +178,7 @@ public class AgentDefinition {
         baseDir: Path
     ) {
         this.name = name
-        this.`type` = `type`
+        this.agentType = agentType
         this.description = description
         this.version = version
         this.author = author
@@ -209,7 +209,7 @@ public class AgentDefinition {
         let items = ArrayList<(String, JsonValue)>()
         
         items.add(("name", JsonString(name)))
-        items.add(("type", JsonString(`type`.toString())))
+        items.add(("agent_type", JsonString(agentType.toString())))
         items.add(("description", JsonString(description)))
         items.add(("version", JsonString(version)))
         
@@ -249,7 +249,7 @@ public class AgentDefinition {
  */
 public class AgentDefinitionBuilder {
     private var name: Option<String> = None
-    private var `type`: Option<AgentType> = None
+    private var agentType: Option<AgentType> = None
     private var description: Option<String> = None
     private var version: String = "1.0.0"
     private var author: Option<String> = None
@@ -270,13 +270,13 @@ public class AgentDefinitionBuilder {
         return this
     }
     
-    public func setType(`type`: AgentType): AgentDefinitionBuilder {
-        this.`type` = Some(`type`)
+    public func setAgentType(agentType: AgentType): AgentDefinitionBuilder {
+        this.agentType = Some(agentType)
         return this
     }
     
-    public func setType(`type`: String): AgentDefinitionBuilder {
-        this.`type` = Some(parseAgentType(`type`))
+    public func setAgentType(agentType: String): AgentDefinitionBuilder {
+        this.agentType = Some(parseAgentType(agentType))
         return this
     }
     
@@ -356,13 +356,13 @@ public class AgentDefinitionBuilder {
     }
     
     public func build(): Option<AgentDefinition> {
-        if (name.isNone() || `type`.isNone() || description.isNone() || systemPrompt.isNone()) {
+        if (name.isNone() || agentType.isNone() || description.isNone() || systemPrompt.isNone()) {
             return None
         }
         
         return Some(AgentDefinition(
             name.getOrThrow(),
-            `type`.getOrThrow(),
+            agentType.getOrThrow(),
             description.getOrThrow(),
             version,
             author,

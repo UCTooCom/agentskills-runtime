@@ -4,8 +4,7 @@
 package magic.tool
 
 import magic.core.tool.{Tool, ToolManager, ToolException, ToolResponse}
-import magic.app.services.tool.ToolAuditService
-import magic.app.services.uctoo.{UserHasRolesService, RoleHasPermissionService}
+
 import magic.log.LogUtils
 import std.collection.{HashMap, ArrayList}
 import std.time.DateTime
@@ -21,16 +20,15 @@ import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonBool, JsonInt,
 public class ToolDispatcher {
     private let toolManager: ToolManager
     private let permissionChecker: PermissionChecker
-    private let auditService: ToolAuditService
+    private let auditService: AuditProvider
     
     public init(
         toolManager: ToolManager,
-        userHasRolesService: UserHasRolesService,
-        roleHasPermissionService: RoleHasPermissionService,
-        auditService: ToolAuditService
+        permissionProvider: PermissionProvider,
+        auditService: AuditProvider
     ) {
         this.toolManager = toolManager
-        this.permissionChecker = PermissionChecker(userHasRolesService, roleHasPermissionService)
+        this.permissionChecker = PermissionChecker(permissionProvider)
         this.auditService = auditService
     }
     
@@ -352,10 +350,9 @@ public class ToolDispatcherSingleton {
      */
     public static func `init`(
         toolManager: ToolManager,
-        userHasRolesService: UserHasRolesService,
-        roleHasPermissionService: RoleHasPermissionService,
-        auditService: ToolAuditService
+        permissionProvider: PermissionProvider,
+        auditService: AuditProvider
     ): Unit {
-        _instance = Some(ToolDispatcher(toolManager, userHasRolesService, roleHasPermissionService, auditService))
+        _instance = Some(ToolDispatcher(toolManager, permissionProvider, auditService))
     }
 }

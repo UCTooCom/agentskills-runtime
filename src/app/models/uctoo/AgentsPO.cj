@@ -28,8 +28,8 @@ public class AgentsPO {
         @ORMField['name']
     public var name: String = ""
 
-        @ORMField['type']
-    public var typeVal: String = ""
+        @ORMField['agent_type']
+    public var agentType: String = ""
 
         @ORMField['description']
     public var description: Option<String> = None<String>
@@ -85,12 +85,30 @@ public class AgentsPO {
         @ORMField['deleted_at']
     public var deletedAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['version']
+    public var version: Option<String> = None<String>
+
+        @ORMField['author']
+    public var author: Option<String> = None<String>
+
+        @ORMField['permissions']
+    public var permissions: Option<String> = None<String>
+
+        @ORMField['source_path']
+    public var sourcePath: Option<String> = None<String>
+
+        @ORMField['sync_status']
+    public var syncStatus: Option<String> = None<String>
+
+        @ORMField['last_sync_at']
+    public var lastSyncAt: Option<DateTime> = None<DateTime>
+
     public init() {}
 
     public init(
                 id: String,
                 name: String,
-                typeVal: String,
+                agentType: String,
                 description: Option<String>,
                 status: Option<Int32>,
                 config: Option<String>,
@@ -108,11 +126,17 @@ public class AgentsPO {
                 creator: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
-                deletedAt: Option<DateTime>
+                deletedAt: Option<DateTime>,
+                version: Option<String>,
+                author: Option<String>,
+                permissions: Option<String>,
+                sourcePath: Option<String>,
+                syncStatus: Option<String>,
+                lastSyncAt: Option<DateTime>
     ) {
                 this.id = id
                 this.name = name
-                this.typeVal = typeVal
+                this.agentType = agentType
                 this.description = description
                 this.status = status
                 this.config = config
@@ -131,6 +155,12 @@ public class AgentsPO {
                 this.createdAt = createdAt
                 this.updatedAt = updatedAt
                 this.deletedAt = deletedAt
+                this.version = version
+                this.author = author
+                this.permissions = permissions
+                this.sourcePath = sourcePath
+                this.syncStatus = syncStatus
+                this.lastSyncAt = lastSyncAt
     }
 
     /// 序列化为 JsonValue
@@ -138,7 +168,7 @@ public class AgentsPO {
         var map = HashMap<String, JsonValue>()
         map.add("id", this.id.toJsonValue())
         map.add("name", this.name.toJsonValue())
-        map.add("type", this.typeVal.toJsonValue())
+        map.add("agent_type", this.agentType.toJsonValue())
         map.add("description", optionToJsonValue(this.description))
         map.add("status", optionToJsonValue(this.status))
         map.add("config", optionToJsonValue(this.config))
@@ -157,6 +187,12 @@ public class AgentsPO {
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("version", optionToJsonValue(this.version))
+        map.add("author", optionToJsonValue(this.author))
+        map.add("permissions", optionToJsonValue(this.permissions))
+        map.add("source_path", optionToJsonValue(this.sourcePath))
+        map.add("sync_status", optionToJsonValue(this.syncStatus))
+        map.add("last_sync_at", optionToJsonValue(this.lastSyncAt))
         return JsonObject(map)
     }
 

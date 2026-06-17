@@ -18,7 +18,7 @@ import std.collection.HashMap
 import std.time.DateTime
 
 @When[cjc_version < "1.0.0"]
-import std.time.Duration
+import std.core.Duration
 
 // Reuse OpenAI-compatible structures since StepFun API is OpenAI-compatible
 @jsonable

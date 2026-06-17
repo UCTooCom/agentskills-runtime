@@ -7,19 +7,16 @@ import magic.app.core.router.Router
 import magic.app.controllers.uctoo.webmcp.WebMCPController
 import magic.core.skill.SkillManager
 import magic.core.model.ChatModel
+import magic.core.agent.AgentLoadManager
 import magic.log.LogUtils
 
-/**
- * WebMCP 路由配置
- * 注册 WebSocket 和 HTTP 端点
- */
 public class WebMCPRoutes {
     private let _router: Router
     private let _controller: WebMCPController
 
-    public init(router: Router, skillManager: SkillManager, chatModel: ChatModel) {
+    public init(router: Router, skillManager: SkillManager, chatModel: ChatModel, agentLoadManager: AgentLoadManager) {
         this._router = router
-        this._controller = WebMCPController(skillManager, chatModel)
+        this._controller = WebMCPController(skillManager, chatModel, agentLoadManager)
     }
 
     /**

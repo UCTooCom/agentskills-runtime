@@ -4,8 +4,7 @@
 package magic.app.services.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
-import magic.app.services.crontab.SchedulerEngine
-import magic.app.services.crontab.model.TriggerType
+
 
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 //#region AutoCreateCode
@@ -952,130 +951,6 @@ public class CrontabService {
 //#endregion AutoCreateCode
 // ========== 定制开发方法（在此区域添加自定义方法）==========
 
-    public func createAndSchedule(entity: CrontabPO, creatorId: String): APIResult<CrontabPO> {
-        let result = create(entity, creatorId)
-        if (result.success) {
-            if (let Some(data) <- result.data) {
-                match (SchedulerEngine.instance) {
-                    case Some(engine) =>
-                        engine.reloadTask(data.id)
-                    case None =>
-                        LogUtils.error("CrontabService", "调度引擎未初始化, 任务已创建但未注册到调度器")
-                }
-            }
-        }
-        result
-    }
-
-    public func updateAndReschedule(entityId: String, entity: CrontabPO): APIResult<CrontabPO> {
-        let result = update(entityId, entity)
-        if (result.success) {
-            match (SchedulerEngine.instance) {
-                case Some(engine) =>
-                    engine.reloadTask(entityId)
-                case None =>
-                    LogUtils.error("CrontabService", "调度引擎未初始化, 任务已更新但未重新加载到调度器")
-            }
-        }
-        result
-    }
-
-    public func deleteAndUnschedule(entityId: String, force: Bool): APIResult<Bool> {
-        let existing = getExecutor().findCrontabById(entityId)
-        if (let Some(entity) <- existing) {
-            // 确保groupName字段不为空，默认为"1"
-            if (entity.groupName.isEmpty()) {
-                entity.groupName = "1"
-            }
-            if (entity.groupName == "2") {
-                return APIResult<Bool>(false, "系统任务不允许删除")
-            }
-        }
-
-        let result = delete(entityId, force)
-        if (result.success) {
-            match (SchedulerEngine.instance) {
-                case Some(engine) =>
-                    engine.removeTask(entityId)
-                case None =>
-                    LogUtils.error("CrontabService", "调度引擎未初始化")
-            }
-        }
-        result
-    }
-
-    public func pauseTask(entityId: String): APIResult<CrontabPO> {
-        let existing = getExecutor().findCrontabById(entityId)
-        if (existing.isNone()) {
-            return APIResult<CrontabPO>(false, "任务不存在")
-        }
-        let entity = existing.getOrThrow()
-        // 确保groupName字段不为空，默认为"1"
-        if (entity.groupName.isEmpty()) {
-            entity.groupName = "1"
-        }
-        if (entity.groupName == "2") {
-            return APIResult<CrontabPO>(false, "系统任务不允许暂停")
-        }
-        if (entity.status != 1) {
-            return APIResult<CrontabPO>(false, "任务已处于禁用状态")
-        }
-
-        entity.status = 2
-        entity.updatedAt = DateTime.now()
-        let rows = getExecutor().updateCrontab(entity)
-        if (rows > 0) {
-            match (SchedulerEngine.instance) {
-                case Some(engine) =>
-                    engine.removeTask(entityId)
-                case None =>
-                    LogUtils.error("CrontabService", "调度引擎未初始化")
-            }
-            return APIResult<CrontabPO>(entity)
-        }
-        APIResult<CrontabPO>(false, "暂停失败")
-    }
-
-    public func resumeTask(entityId: String): APIResult<CrontabPO> {
-        let existing = getExecutor().findCrontabById(entityId)
-        if (existing.isNone()) {
-            return APIResult<CrontabPO>(false, "任务不存在")
-        }
-        let entity = existing.getOrThrow()
-        if (entity.status == 1) {
-            return APIResult<CrontabPO>(false, "任务已处于启用状态")
-        }
-
-        entity.status = 1
-        entity.updatedAt = DateTime.now()
-        let rows = getExecutor().updateCrontab(entity)
-        if (rows > 0) {
-            match (SchedulerEngine.instance) {
-                case Some(engine) =>
-                    engine.reloadTask(entityId)
-                case None =>
-                    LogUtils.error("CrontabService", "调度引擎未初始化")
-            }
-            return APIResult<CrontabPO>(entity)
-        }
-        APIResult<CrontabPO>(false, "恢复失败")
-    }
-
-    public func triggerTask(entityId: String): APIResult<Bool> {
-        let existing = getExecutor().findCrontabById(entityId)
-        if (existing.isNone()) {
-            return APIResult<Bool>(false, "任务不存在")
-        }
-
-        match (SchedulerEngine.instance) {
-            case Some(engine) =>
-                engine.triggerTask(entityId, TriggerType.Manual)
-                return APIResult<Bool>(true)
-            case None =>
-                return APIResult<Bool>(false, "调度引擎未初始化")
-        }
-    }
-
     public func getActiveTasks(): ArrayList<CrontabPO> {
         try {
             let allTasks = getExecutor().listAllCrontab()
@@ -1094,7 +969,6 @@ public class CrontabService {
     public func isSystemTask(entityId: String): Bool {
         match (getExecutor().findCrontabById(entityId)) {
             case Some(entity) => 
-                // 确保groupName字段不为空，默认为"1"
                 if (entity.groupName.isEmpty()) {
                     false
                 } else {

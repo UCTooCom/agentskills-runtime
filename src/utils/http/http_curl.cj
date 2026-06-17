@@ -17,7 +17,7 @@ import std.convert.Parsable
 import stdx.encoding.json.*
 import stdx.net.http.HttpHeaders
 @When[cjc_version < "1.0.0"]
-import std.time.Duration
+import std.core.Duration
 
 @When[os == "Windows"]
 private const IS_WINDOWS = true

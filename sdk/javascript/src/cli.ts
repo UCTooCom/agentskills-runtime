@@ -822,19 +822,23 @@ program
   .description('Stop the AgentSkills runtime server')
   .action(async () => {
     const runtime = new RuntimeManager();
-    
+
     const status = await runtime.status();
     if (!status.running) {
-      console.log(chalk.yellow('Runtime is not running'));
-      return;
+      // Even if status check fails (e.g., wrong port/protocol), try to stop by PID/process
+      console.log(chalk.yellow('Runtime status check failed, attempting to stop by PID/process...'));
     }
-    
+
     const success = runtime.stop();
     if (success) {
       console.log(chalk.green('✓ Runtime stopped'));
     } else {
-      printError('Failed to stop runtime');
-      process.exit(1);
+      if (!status.running) {
+        console.log(chalk.yellow('Runtime is not running or could not be found'));
+      } else {
+        printError('Failed to stop runtime');
+        process.exit(1);
+      }
     }
   });
 

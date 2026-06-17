@@ -6,7 +6,13 @@ import magic.core.model.ChatModel
 import magic.skill.SkillAwareAgent
 import magic.agent_executor.react.ReactExecutor
 import magic.core.agent.{AgentRequest, AgentResponse}
+import magic.agent.memory.tiered.TieredMemory
+import magic.interaction.EventHandlerManager
+import magic.app.services.bridge.AgentRuntimeBridge
+import magic.app.models.uctoo.AgentMessagesPO
+import magic.app.services.uctoo.AgentMessagesService
 import magic.tool.{TokenManager, SessionContext}
+import f_util.UUID
 import stdx.net.http.{HttpContext, WebSocket, WebSocketFrameType, HttpHeaders}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonArray}
 import std.time.DateTime
@@ -14,67 +20,14 @@ import std.sync.Mutex
 import std.collection.{HashMap, ArrayList}
 import magic.log.LogUtils
 import magic.jsonable.JsonUtils
+import magic.app.services.bridge.WebSocketSessionManager
+import magic.app.services.ws_support.{WebSocketSession, WebSocketMessage}
 
 // Helper function
 func _getJsonString(jsonObj: JsonObject, key: String, defaultValue: String): String {
     return JsonUtils.getString(jsonObj, key) ?? defaultValue
 }
 
-// WebSocket Message
-public class WebSocketMessage {
-    public let messageType: String
-    public let payload: JsonObject
-    public let timestamp: Int64
-
-    public init(messageType: String, payload: JsonObject, timestamp: Int64) {
-        this.messageType = messageType
-        this.payload = payload
-        this.timestamp = timestamp
-    }
-
-    public func toJsonString(): String {
-        let jo = JsonObject()
-        jo.put("type", JsonString(messageType))
-        jo.put("payload", payload)
-        jo.put("timestamp", JsonInt(timestamp))
-        return jo.toJsonString()
-    }
-}
-
-// WebSocket Session
-public class WebSocketSession {
-    public let sessionId: String
-    public let websocket: WebSocket
-    private let _connectedAt: Int64
-
-    public init(sessionId: String, websocket: WebSocket) {
-        this.sessionId = sessionId
-        this.websocket = websocket
-        this._connectedAt = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
-    }
-
-    public prop connectedAt: Int64 {
-        get() { _connectedAt }
-    }
-
-    public func sendMessage(message: WebSocketMessage): Unit {
-        try {
-            let jsonStr = message.toJsonString()
-            let bytes = jsonStr.toArray()
-            websocket.write(WebSocketFrameType.TextWebFrame, bytes)
-        } catch (ex: Exception) {
-            LogUtils.error("Failed to send message to session ${sessionId}: ${ex.message}")
-        }
-    }
-
-    public func close(): Unit {
-        try {
-            websocket.writeCloseFrame()
-        } catch (ex: Exception) {
-            LogUtils.error("Error closing WebSocket session ${sessionId}: ${ex.message}")
-        }
-    }
-}
 
 public class WsChatController {
     private let _skillManager: SkillManager
@@ -94,12 +47,15 @@ public class WsChatController {
         _sessionCounter = 0
 
         let executor = ReactExecutor()
+        let memory = TieredMemory(agentId: "ws-skill-assistant")
         _agent = SkillAwareAgent(
             skillManager: skillManager,
             model: chatModel,
             executor: executor,
             name: "Skill Assistant",
-            description: "An intelligent assistant that can use skills to help users"
+            description: "An intelligent assistant that can use skills to help users",
+            memory: Some(memory),
+            eventHandlerManager: Some(EventHandlerManager.global)
         )
     }
 
@@ -140,6 +96,8 @@ public class WsChatController {
         _sessions.add(sessionId, session)
         _sessionsMutex.unlock()
 
+        WebSocketSessionManager.instance.registerSession(session)
+
         LogUtils.info("WebSocket session established: ${sessionId}")
 
         _sendWelcomeMessage(session)
@@ -154,6 +112,8 @@ public class WsChatController {
         _sessionsMutex.lock()
         _sessions.remove(sessionId)
         _sessionsMutex.unlock()
+
+        WebSocketSessionManager.instance.unregisterSession(sessionId)
 
         LogUtils.info("WebSocket session closed: ${sessionId}")
     }
@@ -209,6 +169,7 @@ public class WsChatController {
                 case "list_skills" => _handleListSkills(session)
                 case "ping" => _handlePing(session)
                 case "register_tools" => _handleRegisterTools(session, jsonObj)
+                case "approval_response" => _handleApprovalResponse(session, jsonObj)
                 case _ => _handleUnknownMessage(session, messageType)
             }
         } catch (ex: Exception) {
@@ -237,6 +198,25 @@ public class WsChatController {
 
         _sendStatusMessage(session, "thinking", "Processing your request...")
 
+        // 持久化用户消息到 agent_messages
+        spawn {
+            try {
+                let messagesService = AgentMessagesService()
+                let msg = AgentMessagesPO()
+                msg.fromAgentId = None<String>
+                msg.messageType = "user"
+                msg.content = Some("\"${content.replace("\"", "\\\"")}\"")
+                msg.status = Some(1)
+                msg.creator = None<String>
+                let createResult = messagesService.create(msg, "user")
+                if (!createResult.success) {
+                    LogUtils.error("WsChatController: save user message FAILED, reason: ${match (createResult.reason) { case Some(s) => s; case None => "unknown" }}")
+                }
+            } catch (e: Exception) {
+                LogUtils.error("WsChatController: save user message error: ${e.message}")
+            }
+        }
+
         try {
             let systemPrompt = _buildAgentSystemPrompt()
             _agent.systemPrompt = systemPrompt
@@ -245,6 +225,13 @@ public class WsChatController {
             let agentResponse = _agent.chat(agentRequest)
 
             let responseContent = agentResponse.content
+
+            // 异步同步 Agent 状态到数据库
+            spawn {
+                try {
+                    AgentRuntimeBridge.instance.syncToDatabase(_agent.name, _agent)
+                } catch (_: Exception) {}
+            }
 
             let responsePayload = JsonObject()
             responsePayload.put("content", JsonString(responseContent))
@@ -548,6 +535,24 @@ public class WsChatController {
 
         let message = WebSocketMessage("status", payload, (DateTime.now() - DateTime.UnixEpoch).toMilliseconds())
         session.sendMessage(message)
+    }
+
+    private func _handleApprovalResponse(session: WebSocketSession, jsonObj: JsonObject): Unit {
+        let approvalId = _getJsonString(jsonObj, "approval_id", "")
+        let response = _getJsonString(jsonObj, "response", "")
+
+        if (approvalId.isEmpty()) {
+            _sendErrorMessage(session, "Missing 'approval_id' field in approval_response")
+            return
+        }
+
+        if (response.isEmpty()) {
+            _sendErrorMessage(session, "Missing 'response' field in approval_response")
+            return
+        }
+
+        WebSocketSessionManager.instance.resolveApproval(approvalId, response)
+        LogUtils.info("Approval response received: approvalId=${approvalId} from session: ${session.sessionId}")
     }
 
     private func _sendErrorMessage(session: WebSocketSession, errorMessage: String): Unit {

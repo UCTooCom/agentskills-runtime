@@ -5,6 +5,7 @@ package magic.app.controllers.uctoo.crontab
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 import magic.app.services.crontab.SchedulerService
+import magic.app.services.crontab.CrontabSchedulerService
 import magic.app.services.crontab.model.SchedulerStatus
 import magic.app.services.uctoo.CrontabLogService
 
@@ -25,17 +26,20 @@ import magic.log.LogUtils
 public class CrontabController {
     private var service: CrontabService
     private var schedulerService: SchedulerService
+    private var crontabSchedulerService: CrontabSchedulerService
     private var logService: CrontabLogService
 
     public init(service: CrontabService, schedulerService: SchedulerService, logService: CrontabLogService) {
         this.service = service
         this.schedulerService = schedulerService
+        this.crontabSchedulerService = CrontabSchedulerService()
         this.logService = logService
     }
 
     public init(service: CrontabService) {
         this.service = service
         this.schedulerService = SchedulerService()
+        this.crontabSchedulerService = CrontabSchedulerService()
         this.logService = CrontabLogService()
     }
 
@@ -809,7 +813,7 @@ public class CrontabController {
                 res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少任务ID\"}")
                 return
             }
-            let result = service.triggerTask(id)
+            let result = crontabSchedulerService.triggerTask(id)
             if (result.success) {
                 res.status(200).json("{\"desc\":\"任务触发成功\"}")
             } else {
@@ -829,7 +833,7 @@ public class CrontabController {
                 res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少任务ID\"}")
                 return
             }
-            let result = service.pauseTask(id)
+            let result = crontabSchedulerService.pauseTask(id)
             if (result.success) {
                 res.status(200).json("{\"desc\":\"任务已暂停\"}")
             } else {
@@ -849,7 +853,7 @@ public class CrontabController {
                 res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少任务ID\"}")
                 return
             }
-            let result = service.resumeTask(id)
+            let result = crontabSchedulerService.resumeTask(id)
             if (result.success) {
                 res.status(200).json("{\"desc\":\"任务已恢复\"}")
             } else {

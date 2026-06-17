@@ -10,7 +10,7 @@ import magic.app.core.database.{DatabaseConnection, DatabaseConfig, DatabaseConn
 import magic.app.middlewares.auth.{DeserializeUserMiddleware, RequirePermissionMiddleware}
 import magic.app.middlewares.permission.RowLevelPermissionMiddleware
 import magic.app.middlewares.CORSMiddleware
-import magic.app.services.uctoo.{PermissionsService, UserHasRolesService, RoleHasPermissionService, UctooSessionService}
+import magic.app.services.uctoo.{PermissionsService, UserHasRolesService, RoleHasPermissionService, UctooSessionService, UctooPermissionProvider}
 import magic.app.utils.auth.{JWTUtil, CookieUtil}
 import magic.app.controllers.uctoo.ws.WsChatController
 import magic.app.routes.skill.SkillRoutes
@@ -39,6 +39,14 @@ import f_orm.*
 import f_config.Config
 import f_orm.wrap.ORMConfig
 import opengauss.driver.PGDriver // 导入 PostgreSQL 驱动
+import magic.core.agent.{AgentLoadManager, AgentLoader} // 导入 Agent 加载模块
+import magic.app.services.sync.SyncManager // 导入同步管理器
+import magic.app.services.sync.model.TriggerSource // 导入同步触发源
+import magic.app.routes.uctoo.sync.SyncRoute // 导入同步路由
+import magic.app.services.billing.{BillingEventHandler, QuotaCheckHandler} // 导入计费事件处理器
+import magic.app.services.bridge.{WebSocketEventBridge, AgentRuntimeBridge} // 导入桥接层
+import magic.app.services.bridge.AgentPersistenceEventHandler // 导入持久化事件处理器
+import std.core.Duration
 
 public class Application {
     private var server: HTTPServer
@@ -51,11 +59,21 @@ public class Application {
     private let _skillInstallPath: String
     private let _chatModel: ChatModel
     private var schedulerEngineInitialized: Bool = false
-
+    private var _agentLoadManager: AgentLoadManager
+    private let _requestTimeout: Duration  // 请求超时时间
+    
+    // 默认超时时间：120秒（2分钟）
+    private static var DEFAULT_REQUEST_TIMEOUT: Duration = Duration.second * 120
+    
     public init(port: Int32, host: String) {
+        this(port, host, DEFAULT_REQUEST_TIMEOUT)
+    }
+    
+    public init(port: Int32, host: String, requestTimeout: Duration) {
         eprintln("=== Application.init() called ===")
         logger = LoggerFactory.getInstance().getLogger("uctoo.app")
         eprintln("=== Logger created ===")
+        this._requestTimeout = requestTimeout
 
         let dbConfig = DatabaseConfig.fromEnv()
         let databaseUrl = dbConfig.url
@@ -134,12 +152,17 @@ public class Application {
         } catch (e: Exception) {
             eprintln("=== ORM connection failed after initialization: ${e.message} ===")
         }
+        eprintln("=== Creating DatabaseConnectionPool ===")
         dbPool = DatabaseConnectionPool.getInstance(dbConfig)
+        eprintln("=== DatabaseConnectionPool created ===")
 
         let cacheConfig = CacheConfig.fromEnv()
         cacheManager = CacheManager.getInstance(cacheConfig)
+        eprintln("=== CacheManager created ===")
 
+        eprintln("=== Creating CompositeSkillToolManager ===")
         _skillManager = CompositeSkillToolManager()
+        eprintln("=== CompositeSkillToolManager created ===")
 
         let currentDir = getWorkingDirectory().toString()
         let skillInstallPath = if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
@@ -154,6 +177,7 @@ public class Application {
         }
         _skillInstallPath = skillInstallPath
 
+        eprintln("=== Creating ProgressiveSkillLoader ===")
         let skillDirs = [
             skillInstallPath,
             "${currentDir}/src/examples"
@@ -163,14 +187,19 @@ public class Application {
             defaultSecurityPolicy: SecurityPolicy.default(),
             defaultResourceLimits: ResourceLimits.default()
         )
+        eprintln("=== ProgressiveSkillLoader created ===")
 
+        eprintln("=== Loading skills ===")
         try {
             let loadedSkills = _progressiveSkillLoader.loadSkillsToManager(_skillManager)
+            eprintln("=== Loaded ${loadedSkills.size} skills ===")
             LogUtils.info("Successfully loaded ${loadedSkills.size} skills from directories")
         } catch (ex: Exception) {
+            eprintln("=== Failed to load skills: ${ex.message} ===")
             LogUtils.error("Failed to load skills: ${ex.message}")
         }
 
+        eprintln("=== Configuring ChatModel ===")
         let modelConfigOpt = getVariable("MODEL_CONFIG")
         let modelProviderOpt = getVariable("MODEL_PROVIDER")
         let modelNameOpt = getVariable("MODEL_NAME")
@@ -194,19 +223,77 @@ public class Application {
             "stepfun:step-3"
         }
         LogUtils.info("Using chat model: ${modelName}")
+        eprintln("=== Creating ChatModel: ${modelName} ===")
         _chatModel = ModelManager.createChatModel(modelName)
+        eprintln("=== ChatModel created ===")
 
-        server = HTTPServer(port, host)
+        // 初始化并加载 Agent
+        eprintln("=== Initializing AgentLoadManager ===")
+        let agentsDirs = [
+            "${currentDir}/agents",
+            "${currentDir}/src/agents",
+            "${currentDir}/AGENTS.md"
+        ]
+        _agentLoadManager = AgentLoadManager("${currentDir}")
+        _agentLoadManager.loadFromDirs(agentsDirs)
+        LogUtils.info("Agent definitions loaded from agents.md")
         
+        // 打印加载的主 Agent 信息
+        match (_agentLoadManager.getMainAgent()) {
+            case Some(mainAgent) =>
+                eprintln("=== Main Agent loaded: ${mainAgent.name} ===")
+                LogUtils.info("Main Agent loaded: ${mainAgent.name}, type: ${mainAgent.agentType.toString()}")
+            case None =>
+                eprintln("=== No main agent found in agents.md ===")
+                LogUtils.warn("No main agent found in agents.md")
+        }
+
+        eprintln("=== Creating HTTPServer ===")
+        server = HTTPServer(port, host, _requestTimeout)
+        eprintln("=== HTTPServer created with timeout=${_requestTimeout.toSeconds()}s ===")
+        
+        eprintln("=== Setting up middlewares ===")
         setupMiddlewares()
+        eprintln("=== Setting up routes ===")
         setupRoutes()
+        
+        // 初始化同步管理器
+        eprintln("=== Initializing SyncManager ===")
+        let agentBasePath = getVariable("SYNC_AGENT_BASE_PATH").getOrDefault({ => "./" })
+        let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./.codeartsdoer/skills" })
+        SyncManager.initialize(agentBasePath, skillBasePath)
+        LogUtils.info("SyncManager initialized with agentBasePath: ${agentBasePath}, skillBasePath: ${skillBasePath}")
+        
+        // 异步执行启动全量同步（不阻塞启动）
+        spawn {
+            eprintln("=== Starting async initial sync ===")
+            try {
+                let result = SyncManager.instance?.syncAll(TriggerSource.Startup)
+                match (result) {
+                    case Some(batchResult) =>
+                        LogUtils.info("Initial sync completed - total:${batchResult.totalCount}, success:${batchResult.successCount}, failed:${batchResult.failedCount}")
+                    case None =>
+                        LogUtils.warn("SyncManager not initialized, skipping initial sync")
+                }
+            } catch (e: Exception) {
+                LogUtils.error("Initial sync failed: ${e.message}")
+            }
+            eprintln("=== Async initial sync finished ===")
+        }
+        
+        eprintln("=== Application init complete ===")
     }
     
     /// HTTPS构造函数
     public init(port: Int32, host: String, certPath: String, keyPath: String) {
+        this(port, host, certPath, keyPath, DEFAULT_REQUEST_TIMEOUT)
+    }
+    
+    public init(port: Int32, host: String, certPath: String, keyPath: String, requestTimeout: Duration) {
         eprintln("=== Application.init() with HTTPS called ===")
         logger = LoggerFactory.getInstance().getLogger("uctoo.app")
         eprintln("=== Logger created ===")
+        this._requestTimeout = requestTimeout
 
         let dbConfig = DatabaseConfig.fromEnv()
         let databaseUrl = dbConfig.url
@@ -308,11 +395,59 @@ public class Application {
         LogUtils.info("Using chat model: ${modelName}")
         _chatModel = ModelManager.createChatModel(modelName)
 
+        // 初始化并加载 Agent
+        eprintln("=== Initializing AgentLoadManager ===")
+        let agentsDirs = [
+            "${currentDir}/agents",
+            "${currentDir}/src/agents",
+            "${currentDir}/AGENTS.md"
+        ]
+        _agentLoadManager = AgentLoadManager("${currentDir}")
+        _agentLoadManager.loadFromDirs(agentsDirs)
+        LogUtils.info("Agent definitions loaded from agents.md")
+        
+        // 打印加载的主 Agent 信息
+        match (_agentLoadManager.getMainAgent()) {
+            case Some(mainAgent) =>
+                eprintln("=== Main Agent loaded: ${mainAgent.name} ===")
+                LogUtils.info("Main Agent loaded: ${mainAgent.name}, type: ${mainAgent.agentType.toString()}")
+            case None =>
+                eprintln("=== No main agent found in agents.md ===")
+                LogUtils.warn("No main agent found in agents.md")
+        }
+
         // 使用HTTPS服务器
-        server = HTTPServer(port, host, certPath, keyPath)
+        server = HTTPServer(port, host, certPath, keyPath, _requestTimeout)
+        eprintln("=== HTTPServer created with timeout=${_requestTimeout.toSeconds()}s ===")
         
         setupMiddlewares()
         setupRoutes()
+        
+        // 初始化同步管理器
+        eprintln("=== Initializing SyncManager ===")
+        let agentBasePath = getVariable("SYNC_AGENT_BASE_PATH").getOrDefault({ => "./" })
+        let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./.codeartsdoer/skills" })
+        SyncManager.initialize(agentBasePath, skillBasePath)
+        LogUtils.info("SyncManager initialized with agentBasePath: ${agentBasePath}, skillBasePath: ${skillBasePath}")
+        
+        // 异步执行启动全量同步（不阻塞启动）
+        spawn {
+            eprintln("=== Starting async initial sync ===")
+            try {
+                let result = SyncManager.instance?.syncAll(TriggerSource.Startup)
+                match (result) {
+                    case Some(batchResult) =>
+                        LogUtils.info("Initial sync completed - total:${batchResult.totalCount}, success:${batchResult.successCount}, failed:${batchResult.failedCount}")
+                    case None =>
+                        LogUtils.warn("SyncManager not initialized, skipping initial sync")
+                }
+            } catch (e: Exception) {
+                LogUtils.error("Initial sync failed: ${e.message}")
+            }
+            eprintln("=== Async initial sync finished ===")
+        }
+        
+        eprintln("=== Application init complete ===")
     }
 
     private func setupMiddlewares(): Unit {
@@ -378,13 +513,14 @@ public class Application {
         // 注册工具管理路由
         let userHasRolesService = UserHasRolesService()
         let roleHasPermissionService = RoleHasPermissionService()
+        let permissionProvider = UctooPermissionProvider(userHasRolesService, roleHasPermissionService)
         let operateLogService = OperateLogService()
         let toolAuditService = ToolAuditService(operateLogService)
         let toolManager = SimpleToolManager()
+        BuiltinToolsRegistry.registerAll(toolManager)
         let toolDispatcher = ToolDispatcher(
             toolManager,
-            userHasRolesService,
-            roleHasPermissionService,
+            permissionProvider,
             toolAuditService
         )
         let toolRoutes = ToolRoutes(router, toolDispatcher)
@@ -396,7 +532,7 @@ public class Application {
         server.registerWebSocketRoute("/api/v1/uctoo/ws/chat", wsChatController.handleChat)
         
         // 注册 WebMCP 路由（支持前端 webmcp-sdk 通信）
-        let webmcpRoutes = WebMCPRoutes(router, _skillManager, _chatModel)
+        let webmcpRoutes = WebMCPRoutes(router, _skillManager, _chatModel, _agentLoadManager)
         webmcpRoutes.register()
         LogUtils.info("WebMCP routes registered successfully")
         
@@ -404,6 +540,11 @@ public class Application {
         let aiRoutes = AIRoutes(router, _skillManager, _chatModel)
         aiRoutes.register()
         LogUtils.info("AI routes registered successfully")
+        
+        // 注册同步管理路由
+        let syncRoute = SyncRoute(router)
+        syncRoute.register()
+        LogUtils.info("Sync routes registered successfully")
         
         // 注册健康检查和应用信息接口,todo:从cjpm.toml配置文件读取version版本号
         router.get("/api/v1/health", { req, res =>
@@ -437,6 +578,46 @@ public class Application {
             }
         } catch (e: Exception) {
             LogUtils.error("Failed to initialize SchedulerEngine: ${e.message}")
+        }
+        
+        // 注册全局事件处理器（数据流闭环关键步骤）
+        try {
+            let billingHandler = BillingEventHandler()
+            billingHandler.registerGlobalHandlers()
+            LogUtils.info("BillingEventHandler registered to EventHandlerManager.global")
+        } catch (e: Exception) {
+            LogUtils.error("Failed to register BillingEventHandler: ${e.message}")
+        }
+        
+        try {
+            let quotaHandler = QuotaCheckHandler()
+            quotaHandler.registerGlobalHandlers()
+            LogUtils.info("QuotaCheckHandler registered to EventHandlerManager.global")
+        } catch (e: Exception) {
+            LogUtils.error("Failed to register QuotaCheckHandler: ${e.message}")
+        }
+        
+        try {
+            WebSocketEventBridge.instance.registerGlobalHandlers()
+            LogUtils.info("WebSocketEventBridge registered to EventHandlerManager.global")
+        } catch (e: Exception) {
+            LogUtils.error("Failed to register WebSocketEventBridge: ${e.message}")
+        }
+        
+        try {
+            let persistenceHandler = AgentPersistenceEventHandler()
+            persistenceHandler.registerGlobalHandlers()
+            LogUtils.info("AgentPersistenceEventHandler registered to EventHandlerManager.global")
+        } catch (e: Exception) {
+            LogUtils.error("Failed to register AgentPersistenceEventHandler: ${e.message}")
+        }
+        
+        // 预加载数据库中的 Agent 到运行时
+        try {
+            let agents = AgentRuntimeBridge.instance.loadAllFromDatabase()
+            LogUtils.info("Loaded ${agents.size.toString()} agents from database into runtime")
+        } catch (e: Exception) {
+            LogUtils.error("Failed to load agents from database: ${e.message}")
         }
         
         server.setRouter(router)
@@ -546,6 +727,16 @@ main() {
         "0.0.0.0"
     }
     
+    // 读取请求超时配置（秒）
+    let timeoutStr = AppConfig.env["WEBMCP_REQUEST_TIMEOUT"]
+    let requestTimeout = if (let Some(t) <- timeoutStr) {
+        let seconds = Int64.parse(t)
+        Duration.second * seconds
+    } else {
+        Duration.second * 300  // 默认300秒（5分钟），Agent执行技能需要更长时间
+    }
+    eprintln("=== WEBMCP_REQUEST_TIMEOUT: ${requestTimeout.toSeconds()}s ===")
+    
     // 检查是否启用HTTPS
     let backendUrlOpt = AppConfig.env["BACKEND_URL"]
     let useHttps = if (let Some(url) <- backendUrlOpt) {
@@ -575,12 +766,12 @@ main() {
         eprintln("=== Starting HTTPS server on ${host}:${port} ===")
         eprintln("=== SSL Certificate: ${certPath} ===")
         eprintln("=== SSL Private Key: ${keyPath} ===")
-        let app = Application(port, host, certPath, keyPath)
+        let app = Application(port, host, certPath, keyPath, requestTimeout)
         app.start()
     } else {
         // HTTP模式
         eprintln("=== Starting HTTP server on ${host}:${port} ===")
-        let app = Application(port, host)
+        let app = Application(port, host, requestTimeout)
         app.start()
     }
 }

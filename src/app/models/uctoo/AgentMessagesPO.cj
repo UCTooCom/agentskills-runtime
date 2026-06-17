@@ -34,8 +34,8 @@ public class AgentMessagesPO {
         @ORMField['task_id']
     public var taskId: Option<String> = None<String>
 
-        @ORMField['type']
-    public var typeVal: String = ""
+        @ORMField['message_type']
+    public var messageType: String = ""
 
         @ORMField['content']
     public var content: Option<String> = None<String>
@@ -62,7 +62,7 @@ public class AgentMessagesPO {
                 fromAgentId: Option<String>,
                 toAgentId: Option<String>,
                 taskId: Option<String>,
-                typeVal: String,
+                messageType: String,
                 content: Option<String>,
                 status: Option<Int32>,
                 creator: Option<String>,
@@ -74,7 +74,7 @@ public class AgentMessagesPO {
                 this.fromAgentId = fromAgentId
                 this.toAgentId = toAgentId
                 this.taskId = taskId
-                this.typeVal = typeVal
+                this.messageType = messageType
                 this.content = content
                 this.status = status
                 this.creator = creator
@@ -90,7 +90,7 @@ public class AgentMessagesPO {
         map.add("from_agent_id", optionToJsonValue(this.fromAgentId))
         map.add("to_agent_id", optionToJsonValue(this.toAgentId))
         map.add("task_id", optionToJsonValue(this.taskId))
-        map.add("type", this.typeVal.toJsonValue())
+        map.add("message_type", this.messageType.toJsonValue())
         map.add("content", optionToJsonValue(this.content))
         map.add("status", optionToJsonValue(this.status))
         map.add("creator", optionToJsonValue(this.creator))

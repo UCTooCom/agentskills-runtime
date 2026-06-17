@@ -14,6 +14,7 @@ import magic.app.core.response.APIResult
 import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
 import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
 import magic.app.utils.PermissionUtils
+import magic.log.LogUtils
 
 /**
  * AgentSkillsService - agent_skills服务类
@@ -196,6 +197,15 @@ public class AgentSkillsService {
             }
             if (entity.validationStatus.isSome()) {
                 existingEntity.validationStatus = entity.validationStatus
+            }
+            if (entity.sourcePath.isSome()) {
+                existingEntity.sourcePath = entity.sourcePath
+            }
+            if (entity.syncStatus.isSome()) {
+                existingEntity.syncStatus = entity.syncStatus
+            }
+            if (entity.lastSyncAt.isSome()) {
+                existingEntity.lastSyncAt = entity.lastSyncAt
             }
 
             

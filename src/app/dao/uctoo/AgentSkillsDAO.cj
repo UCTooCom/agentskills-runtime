@@ -11,6 +11,7 @@ import f_orm.*
 import f_orm.macros.*
 import f_orm.sql.{Pagination, SqlPartial}
 import magic.app.models.uctoo.AgentSkillsPO
+import magic.log.LogUtils
 
 /**
  * AgentSkillsDAO - agent_skills数据访问接口
@@ -85,7 +86,10 @@ public interface AgentSkillsDAO <: RootDAO {
                 tags,
                 timeout,
                 validation_errors,
-                validation_status
+                validation_status,
+                source_path,
+                sync_status,
+                last_sync_at
             ) values(
 ${arg(entity.name)},
                 ${arg(entity.description)},
@@ -135,7 +139,10 @@ ${arg(entity.name)},
                 ${arg(entity.tags)},
                 ${arg(entity.timeout)},
                 ${arg(entity.validationErrors)},
-                ${arg(entity.validationStatus)}
+                ${arg(entity.validationStatus)},
+                ${arg(entity.sourcePath)},
+                ${arg(entity.syncStatus)},
+                ${arg(entity.lastSyncAt)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -150,7 +157,7 @@ ${arg(entity.name)},
      */
     func findAgentSkillsById(id: String): Option<AgentSkillsPO> {
         executor.setSql('''
-            select * from agent_skills where id = ${arg(id)}
+            select id, name, description, source, source_url, source_type, branch, tag, commit, version, author, homepage, license, keywords, install_path, status, runtime_status, last_run_at, run_count, config, creator, created_at, updated_at, deleted_at, allowed_tools, assets_dir_exists, avg_execution_time, categories, compatibility, dependencies, env_vars, error_count, extra_metadata, generation_model, generation_prompt, generation_status, instructions, last_error, last_validated_at, parameters, parent_skill_id, permissions, references_dir_exists, retry_count, scripts_dir_exists, success_count, tags, timeout, validation_errors, validation_status, source_path, sync_status, last_sync_at from agent_skills where id = ${arg(id)}
         ''').first<AgentSkillsPO>()
     }
 
@@ -211,6 +218,9 @@ ${arg(entity.name)},
                 timeout = ${arg(entity.timeout)},
                 validation_errors = ${arg(entity.validationErrors)},
                 validation_status = ${arg(entity.validationStatus)},
+                source_path = ${arg(entity.sourcePath)},
+                sync_status = ${arg(entity.syncStatus)},
+                last_sync_at = ${arg(entity.lastSyncAt)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -261,7 +271,7 @@ ${arg(entity.name)},
      */
     func findAllAgentSkillsPage(page: Int64, size: Int64): Pagination<AgentSkillsPO> {
         executor.page<AgentSkillsPO>('''
-            select * from agent_skills order by created_at desc
+            select id, name, description, source, source_url, source_type, branch, tag, commit, version, author, homepage, license, keywords, install_path, status, runtime_status, last_run_at, run_count, config, creator, created_at, updated_at, deleted_at, allowed_tools, assets_dir_exists, avg_execution_time, categories, compatibility, dependencies, env_vars, error_count, extra_metadata, generation_model, generation_prompt, generation_status, instructions, last_error, last_validated_at, parameters, parent_skill_id, permissions, references_dir_exists, retry_count, scripts_dir_exists, success_count, tags, timeout, validation_errors, validation_status, source_path, sync_status, last_sync_at from agent_skills order by created_at desc
         ''', size, page: page)
     }
 
@@ -274,7 +284,7 @@ ${arg(entity.name)},
      */
     func findAgentSkillsByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<AgentSkillsPO> {
         executor.page<AgentSkillsPO>('''
-            select * from agent_skills where creator = ${arg(creator)} order by created_at desc
+            select id, name, description, source, source_url, source_type, branch, tag, commit, version, author, homepage, license, keywords, install_path, status, runtime_status, last_run_at, run_count, config, creator, created_at, updated_at, deleted_at, allowed_tools, assets_dir_exists, avg_execution_time, categories, compatibility, dependencies, env_vars, error_count, extra_metadata, generation_model, generation_prompt, generation_status, instructions, last_error, last_validated_at, parameters, parent_skill_id, permissions, references_dir_exists, retry_count, scripts_dir_exists, success_count, tags, timeout, validation_errors, validation_status, source_path, sync_status, last_sync_at from agent_skills where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -284,7 +294,7 @@ ${arg(entity.name)},
      */
     func listAllAgentSkills(): ArrayList<AgentSkillsPO> {
         executor.setSql('''
-            select * from agent_skills order by created_at desc
+            select id, name, description, source, source_url, source_type, branch, tag, commit, version, author, homepage, license, keywords, install_path, status, runtime_status, last_run_at, run_count, config, creator, created_at, updated_at, deleted_at, allowed_tools, assets_dir_exists, avg_execution_time, categories, compatibility, dependencies, env_vars, error_count, extra_metadata, generation_model, generation_prompt, generation_status, instructions, last_error, last_validated_at, parameters, parent_skill_id, permissions, references_dir_exists, retry_count, scripts_dir_exists, success_count, tags, timeout, validation_errors, validation_status, source_path, sync_status, last_sync_at from agent_skills order by created_at desc
         ''').list<AgentSkillsPO>()
     }
 
@@ -294,8 +304,11 @@ ${arg(entity.name)},
      * @return agent_skills列表
      */
     func findAgentSkillsByIds(ids: ArrayList<String>): ArrayList<AgentSkillsPO> {
+        if (ids.isEmpty()) {
+            return ArrayList<AgentSkillsPO>()
+        }
         executor.setSql('''
-            select * from agent_skills where id ${IN(ids)}
+            select id, name, description, source, source_url, source_type, branch, tag, commit, version, author, homepage, license, keywords, install_path, status, runtime_status, last_run_at, run_count, config, creator, created_at, updated_at, deleted_at, allowed_tools, assets_dir_exists, avg_execution_time, categories, compatibility, dependencies, env_vars, error_count, extra_metadata, generation_model, generation_prompt, generation_status, instructions, last_error, last_validated_at, parameters, parent_skill_id, permissions, references_dir_exists, retry_count, scripts_dir_exists, success_count, tags, timeout, validation_errors, validation_status, source_path, sync_status, last_sync_at from agent_skills where id ${IN(ids)}
         ''').list<AgentSkillsPO>()
     }
 
@@ -334,7 +347,7 @@ ${arg(entity.name)},
      */
     func findAgentSkillsByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentSkillsPO> {
         let sql = StringBuilder()
-        sql.append("select * from agent_skills where 1=1")
+        sql.append("select id, name, description, source, source_url, source_type, branch, tag, commit, version, author, homepage, license, keywords, install_path, status, runtime_status, last_run_at, run_count, config, creator, created_at, updated_at, deleted_at, allowed_tools, assets_dir_exists, avg_execution_time, categories, compatibility, dependencies, env_vars, error_count, extra_metadata, generation_model, generation_prompt, generation_status, instructions, last_error, last_validated_at, parameters, parent_skill_id, permissions, references_dir_exists, retry_count, scripts_dir_exists, success_count, tags, timeout, validation_errors, validation_status, source_path, sync_status, last_sync_at from agent_skills where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -407,7 +420,7 @@ ${arg(entity.name)},
      */
     func findAgentSkillsByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentSkillsPO> {
         let sql = StringBuilder()
-        sql.append("select * from agent_skills")
+        sql.append("select id, name, description, source, source_url, source_type, branch, tag, commit, version, author, homepage, license, keywords, install_path, status, runtime_status, last_run_at, run_count, config, creator, created_at, updated_at, deleted_at, allowed_tools, assets_dir_exists, avg_execution_time, categories, compatibility, dependencies, env_vars, error_count, extra_metadata, generation_model, generation_prompt, generation_status, instructions, last_error, last_validated_at, parameters, parent_skill_id, permissions, references_dir_exists, retry_count, scripts_dir_exists, success_count, tags, timeout, validation_errors, validation_status, source_path, sync_status, last_sync_at from agent_skills")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

@@ -25,15 +25,36 @@ public class AgentLoader {
     }
     
     /**
-     * 从目录加载所有 Agent 定义
+     * 从目录或文件加载所有 Agent 定义
+     * 支持两种路径类型：
+     * - 目录路径：遍历目录中的 .md 文件
+     * - 文件路径：直接加载单个 .md 文件
      */
     public func loadAgentsFromDir(dir: String): Array<AgentDefinition> {
-        let dirPath = Path(dir)
+        // 首先检查路径是否存在
         if (!exists(dir)) {
-            LogUtils.error("[AgentLoader] Directory not found: ${dir}")
+            LogUtils.error("[AgentLoader] Path not found: ${dir}")
             return []
         }
         
+        // 检查是文件还是目录（使用 try-catch 处理，因为 FileInfo.get 可能不适用于目录）
+        let dirPath = Path(dir)
+        try {
+            let testFile = File(dir, OpenMode.Read)
+            testFile.close()
+            // 如果能打开文件，说明是文件
+            LogUtils.info("[AgentLoader] Loading agent from file: ${dir}")
+            match (loadAgentFromFile(dirPath)) {
+                case Some(agent) => return [agent]
+                case None => 
+                    LogUtils.warn("[AgentLoader] Failed to load agent from file: ${dir}")
+                    return []
+            }
+        } catch (_: Exception) {
+            // 打开文件失败，可能是目录，继续按目录处理
+        }
+        
+        // 是目录，遍历加载所有 .md 文件
         let agents = ArrayList<AgentDefinition>()
         
         try {
@@ -152,7 +173,7 @@ public class AgentLoader {
         
         // 必填字段
         let name = yaml.get("name")
-        let agentType = yaml.get("type")
+        let agentType = yaml.get("agent_type")
         let description = yaml.get("description")
         
         if (name.isNone() || agentType.isNone() || description.isNone()) {
@@ -162,7 +183,7 @@ public class AgentLoader {
         
         builder
             .setName(name.getOrThrow())
-            .setType(agentType.getOrThrow())
+            .setAgentType(agentType.getOrThrow())
             .setDescription(description.getOrThrow())
             .setSystemPrompt(body)
             .setSourcePath(filePath)
@@ -276,7 +297,7 @@ public class AgentLoadManager {
             let dirAgents = loader.loadAgentsFromDir(dir)
             for (agent in dirAgents) {
                 agents.add(agent)
-                LogUtils.info("[AgentLoadManager] Loaded agent: ${agent.name} (${agent.`type`.toString()})")
+                LogUtils.info("[AgentLoadManager] Loaded agent: ${agent.name} (${agent.agentType.toString()})")
             }
         }
         
@@ -305,10 +326,10 @@ public class AgentLoadManager {
     /**
      * 根据类型获取 Agents
      */
-    public func getAgentsByType(`type`: AgentType): Array<AgentDefinition> {
+    public func getAgentsByType(agentType: AgentType): Array<AgentDefinition> {
         let result = ArrayList<AgentDefinition>()
         for (agent in agents) {
-            if (agent.`type` == `type`) {
+            if (agent.agentType == agentType) {
                 result.add(agent)
             }
         }

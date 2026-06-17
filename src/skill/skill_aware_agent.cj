@@ -7,6 +7,8 @@ import magic.agent.base.BaseAgent
 import magic.core.model.ChatModel
 import magic.core.agent.{AgentExecutor, AgentRequest, AgentResponse}
 import magic.core.tool.{ToolManager, ToolParameter}
+import magic.core.memory.Memory
+import magic.interaction.EventHandlerManager
 import magic.jsonable.TypeSchema
 import magic.tool.{SimpleToolManager, BuiltinToolsRegistry}
 import magic.core.skill.SkillManager
@@ -27,7 +29,9 @@ public class SkillAwareAgent <: BaseAgent {
         executor!: AgentExecutor,
         name!: String = "Skill Aware Agent",
         description!: String = "An agent that can automatically select and execute skills",
-        systemPrompt!: String = ""
+        systemPrompt!: String = "",
+        memory!: Option<Memory> = None<Memory>,
+        eventHandlerManager!: Option<EventHandlerManager> = None<EventHandlerManager>
     ) {
         super(
             model: model,
@@ -35,7 +39,9 @@ public class SkillAwareAgent <: BaseAgent {
             description: description,
             systemPrompt: systemPrompt,
             toolManager: SimpleToolManager(),
-            executor: Some(executor)
+            executor: Some(executor),
+            memory: memory,
+            eventHandlerManager: eventHandlerManager
         )
         
         this._skillManagerVar = skillManager

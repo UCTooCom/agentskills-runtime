@@ -10,7 +10,7 @@ import f_ticktock.{Ticktock, CronCompiler}
 import magic.app.models.uctoo.{CrontabPO, CrontabLogPO}
 import magic.app.dao.uctoo.{CrontabDAO, CrontabLogDAO, CrontabTaskRegistryDAO}
 import magic.app.services.crontab.model.{TriggerType, triggerTypeToString, CrontabExecutionContext, ExecutionResult, SchedulerStatus, durationMsBetween}
-import magic.app.services.crontab.executor.{ExecutorRegistry, CrontabExecutor, ScriptExecutor, HttpExecutor, BuiltinExecutor}
+import magic.app.services.crontab.executor.{ExecutorRegistry, CrontabExecutor, ScriptExecutor, HttpExecutor, BuiltinExecutor, AgentExecutionExecutor, QuotaResetExecutor}
 import magic.app.services.crontab.executor.builtin.{BuiltinTaskHandler, DatabaseCleanupHandler, CacheRefreshHandler, LogRotationHandler, HealthCheckHandler, MetricsReportHandler}
 import magic.app.services.crontab.misfire.{MisfireManager, MisfireAction}
 import magic.app.services.crontab.retry.RetryManager
@@ -76,6 +76,8 @@ public class SchedulerEngine {
         executorRegistry.register("script", scriptExecutor)
         executorRegistry.register("http", httpExecutor)
         executorRegistry.register("builtin", builtinExecutor)
+        executorRegistry.register("agent_execution", AgentExecutionExecutor())
+        executorRegistry.register("quota_reset", QuotaResetExecutor())
     }
 
     public func loadAllActiveTasks(): Unit {

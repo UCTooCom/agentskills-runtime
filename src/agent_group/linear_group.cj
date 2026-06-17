@@ -8,12 +8,12 @@ import std.collection.ArrayList
 public class LinearGroup <: AgentGroup {
     private let members = ArrayList<Agent>()
 
-    init(prev: Agent, next: Agent) {
+    public init(prev: Agent, next: Agent) {
         this.members.add(prev)
         this.members.add(next)
     }
 
-    func addNext(next: Agent): LinearGroup {
+    public func addNext(next: Agent): LinearGroup {
         this.members.add(next)
         return this
     }

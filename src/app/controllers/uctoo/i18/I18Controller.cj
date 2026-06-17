@@ -591,35 +591,15 @@ public class I18Controller {
             let lang = req.queryParam("lang") ?? ""
             let data = service.getFormat(lang)
             
-            // 构建JSON响应
-            let sb = StringBuilder()
-            sb.append("{")
-            
-            var langFirst = true
+            let rootObj = JsonObject()
             for ((langName, i18Map) in data) {
-                if (!langFirst) {
-                    sb.append(",")
-                }
-                langFirst = false
-                
-                sb.append("\"${langName}\":{")
-                
-                var i18First = true
+                let langObj = JsonObject()
                 for ((key, content) in i18Map) {
-                    if (!i18First) {
-                        sb.append(",")
-                    }
-                    i18First = false
-                    
-                    // 数据库中的数据已经符合规范，直接使用
-                    sb.append("\"${key}\":\"${content}\"")
+                    langObj.put(key, JsonString(content))
                 }
-                
-                sb.append("}")
+                rootObj.put(langName, langObj)
             }
-            
-            sb.append("}")
-            res.status(200).json(sb.toString())
+            res.status(200).json(rootObj.toString())
         } catch (e: Exception) {
             LogUtils.error("format failed: ${e.message}")
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")

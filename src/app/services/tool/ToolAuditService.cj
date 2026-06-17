@@ -5,6 +5,7 @@ package magic.app.services.tool
 
 import magic.app.services.uctoo.OperateLogService
 import magic.app.models.uctoo.OperateLogPO
+import magic.tool.AuditProvider
 import magic.log.LogUtils
 import std.collection.{HashMap, ArrayList}
 import std.time.DateTime
@@ -15,7 +16,7 @@ import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonBool, JsonInt}
  * 
  * 集成数据库审计，将工具调用记录到operate_log表
  */
-public class ToolAuditService {
+public class ToolAuditService <: AuditProvider {
     private let operateLogService: OperateLogService
     
     public init(operateLogService: OperateLogService) {

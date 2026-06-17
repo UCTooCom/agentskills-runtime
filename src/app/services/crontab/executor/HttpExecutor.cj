@@ -1,11 +1,11 @@
 package magic.app.services.crontab.executor
 
 import std.time.DateTime
-import std.core.Duration
-import std.io.StringReader
+import std.collection.HashMap
 import magic.log.LogUtils
+import magic.utils.http.{HttpUtils, HttpResult, HttpResultOption}
 import magic.app.services.crontab.model.{CrontabExecutionContext, ExecutionResult, durationMsBetween, triggerTypeToString}
-import stdx.net.http.*
+import stdx.encoding.json.{JsonValue, JsonObject}
 
 public class HttpExecutor <: CrontabExecutor {
     public prop scheme: String {
@@ -21,31 +21,28 @@ public class HttpExecutor <: CrontabExecutor {
         }
 
         try {
-            let clientBuilder = ClientBuilder()
-            let timeoutSec = if (context.timeout > 0) { Int64(context.timeout) } else { Int64(30) }
-            clientBuilder.readTimeout(Duration.second * timeoutSec)
-            let client = clientBuilder.build()
+            let header = HashMap<String, String>()
+            header.add("Content-Type", "application/json")
+            header.add("X-Crontab-Id", context.crontabId)
+            header.add("X-Crontab-Name", context.taskName)
+            header.add("X-Crontab-Trigger", triggerTypeToString(context.triggerType))
 
-            let requestBuilder = HttpRequestBuilder()
-            requestBuilder.url(url)
-            requestBuilder.post()
-            requestBuilder.header("Content-Type", "application/json")
-            requestBuilder.header("X-Crontab-Id", context.crontabId)
-            requestBuilder.header("X-Crontab-Name", context.taskName)
-            requestBuilder.header("X-Crontab-Trigger", triggerTypeToString(context.triggerType))
-            if (!context.parameters.isEmpty() && context.parameters != "{}") {
-                requestBuilder.body(context.parameters)
+            let bodyJson = if (!context.parameters.isEmpty() && context.parameters != "{}") {
+                (JsonValue.fromStr(context.parameters).asObject())
+            } else {
+                JsonObject()
             }
 
-            let request = requestBuilder.build()
-            let response = client.send(request)
+            let result = HttpUtils.hybridPost(url, header, bodyJson)
 
             let endTime = DateTime.now()
             let duration = durationMsBetween(startTime, endTime)
 
-            let statusCode = Int64(response.status)
-            let reader = StringReader(response.body)
-            let responseBody = reader.readToEnd()
+            let statusCode = result.status
+            let responseBody = match (result.value) {
+                case HttpResultOption.Json(s) => s
+                case HttpResultOption.Stream(_) => "stream response"
+            }
             let truncatedBody = if (responseBody.size > 2000) { responseBody[0..2000] } else { responseBody }
 
             if (statusCode >= 200 && statusCode < 300) {

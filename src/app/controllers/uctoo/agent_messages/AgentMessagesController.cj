@@ -522,10 +522,10 @@ public class AgentMessagesController {
                 entity.taskId = Some<String>(s)
             }
         }
-        if (let Some(typeVal) <- map.get("type")) {
-            let typeValStr = typeVal as String
-            if (let Some(s) <- typeValStr) {
-                entity.typeVal = s
+        if (let Some(messageType) <- map.get("message_type")) {
+            let messageTypeStr = messageType as String
+            if (let Some(s) <- messageTypeStr) {
+                entity.messageType = s
             }
         }
         if (let Some(content) <- map.get("content")) {
@@ -673,7 +673,7 @@ public class AgentMessagesController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,from_agent_id,to_agent_id,task_id,type,content,status,creator,created_at,updated_at,deleted_at\n")
+            sb.append("id,from_agent_id,to_agent_id,task_id,message_type,content,status,creator,created_at,updated_at,deleted_at\n")
 
             // 写入数据行
             for (entity in entities) {
@@ -681,7 +681,7 @@ public class AgentMessagesController {
                 sb.append(if (let Some(v) <- entity.fromAgentId) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.toAgentId) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.taskId) { "\"" + v + "\"," } else { "" })
-                sb.append("\"" + "${entity.typeVal}" + ",")
+                sb.append("\"" + "${entity.messageType}" + ",")
                 sb.append(if (let Some(v) <- entity.content) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.status) { "\"" + v.toString() + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.creator) { "\"" + v + "\"," } else { "" })

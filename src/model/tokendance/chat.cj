@@ -18,7 +18,7 @@ import std.time.DateTime
 import stdx.encoding.json.*
 
 @When[cjc_version < "1.0.0"]
-import std.time.Duration
+import std.core.Duration
 
 @jsonable
 private class TokendanceChatResponse {

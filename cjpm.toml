@@ -17,6 +17,8 @@
   f_config = { path = "./libs/fountain/f_config" }
   f_util = { path = "./libs/fountain/f_util" }
   f_ticktock = { path = "./libs/fountain/f_ticktock" }
+  f_aspect = { path = "./libs/fountain/f_aspect" }
+  f_bean = { path = "./libs/fountain/f_bean" }
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", compile-option = "-Woff unused" }
   jwt4cj = { git = "https://gitcode.com/Cangjie-TPC/jwt4cj.git", branch = "develop", compile-option = "-Woff unused" }
   logcj = { git = "https://gitcode.com/Cangjie-TPC/log-cj.git", branch = "develop", compile-option = "-Woff unused" }
@@ -80,6 +82,8 @@
 [package.package-configuration."magic.scripts.package_release"]
   output-type = "executable"
 [package.package-configuration."magic.app.tools.crudgen"]
+  output-type = "executable"
+[package.package-configuration."magic.app.tools.crudweb"]
   output-type = "executable"
 #[package.package-configuration."magic.app.test.integration"]
 #  output-type = "executable"

@@ -56,6 +56,10 @@ public class DbInfoRoute {
         
         router.post("/api/v1/uctoo/db_info/generate-all-crud", controller.generateAllCrud)
 
+        router.post("/api/v1/uctoo/db_info/generate-web", controller.generateWeb)
+
+        router.post("/api/v1/uctoo/db_info/generate-all-web", controller.generateAllWeb)
+
         return router
     }
 }

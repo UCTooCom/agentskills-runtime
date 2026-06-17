@@ -14,6 +14,7 @@ import std.convert
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool, JsonArray}
 import magic.app.core.PermissionLevel
 import magic.app.utils.PermissionUtils
+import magic.log.LogUtils
 
 public class AgentSkillsController {
     private var service: AgentSkillsService
@@ -777,6 +778,21 @@ public class AgentSkillsController {
                 entity.validationStatus = Some<String>(s)
             }
         }
+        if (let Some(sourcePath) <- map.get("source_path")) {
+            let sourcePathStr = sourcePath as String
+            if (let Some(s) <- sourcePathStr) {
+                entity.sourcePath = Some<String>(s)
+            }
+        }
+        if (let Some(syncStatus) <- map.get("sync_status")) {
+            let syncStatusStr = syncStatus as String
+            if (let Some(s) <- syncStatusStr) {
+                entity.syncStatus = Some<String>(s)
+            }
+        }
+        if (let Some(lastSyncAt) <- map.get("last_sync_at")) {
+            // DateTime类型, 由数据库处理
+        }
         return entity
     }
 
@@ -806,6 +822,9 @@ public class AgentSkillsController {
 
     private func parseIdsArray(idsStr: String): ArrayList<String> {
         let idArray = ArrayList<String>()
+        if (idsStr.isEmpty()) {
+            return idArray
+        }
         try {
             let jsonValue = JsonValue.fromStr(idsStr)
             if (jsonValue is JsonArray) {
@@ -813,7 +832,48 @@ public class AgentSkillsController {
                 for (item in arr.getItems()) {
                     if (item is JsonString) {
                         let jsonStr = item.asString()
-                        idArray.add(jsonStr.getValue())
+                        let val = jsonStr.getValue()
+                        if (!val.isEmpty()) {
+                            idArray.add(val)
+                        }
+                    } else if (item is JsonObject) {
+                        let obj = item.asObject()
+                        if (let Some(idsObj) <- obj.get("ids")) {
+                            if (idsObj is JsonArray) {
+                                let idsArr = idsObj.asArray()
+                                for (subItem in idsArr.getItems()) {
+                                    if (subItem is JsonString) {
+                                        let jsonStr = subItem.asString()
+                                        let val = jsonStr.getValue()
+                                        if (!val.isEmpty()) {
+                                            idArray.add(val)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (jsonValue is JsonObject) {
+                let obj = jsonValue.asObject()
+                if (let Some(idsVal) <- obj.get("ids")) {
+                    if (idsVal is JsonArray) {
+                        let idsArr = idsVal.asArray()
+                        for (item in idsArr.getItems()) {
+                            if (item is JsonString) {
+                                let jsonStr = item.asString()
+                                let val = jsonStr.getValue()
+                                if (!val.isEmpty()) {
+                                    idArray.add(val)
+                                }
+                            }
+                        }
+                    } else if (idsVal is JsonString) {
+                        let jsonStr = idsVal.asString()
+                        let val = jsonStr.getValue()
+                        if (!val.isEmpty()) {
+                            idArray.add(val)
+                        }
                     }
                 }
             }
@@ -821,7 +881,7 @@ public class AgentSkillsController {
             let parts = idsStr.split(",")
             for (part in parts) {
                 let trimmed = part.trimAscii()
-                if (!trimmed.isEmpty()) {
+                if (!trimmed.isEmpty() && trimmed != "[" && trimmed != "]" && trimmed != "{" && trimmed != "}") {
                     idArray.add(trimmed)
                 }
             }
@@ -853,7 +913,7 @@ public class AgentSkillsController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,name,description,source,source_url,source_type,branch,tag,commit,version,author,homepage,license,keywords,install_path,status,runtime_status,last_run_at,run_count,config,creator,created_at,updated_at,deleted_at,allowed_tools,assets_dir_exists,avg_execution_time,categories,compatibility,dependencies,env_vars,error_count,extra_metadata,generation_model,generation_prompt,generation_status,instructions,last_error,last_validated_at,parameters,parent_skill_id,permissions,references_dir_exists,retry_count,scripts_dir_exists,success_count,tags,timeout,validation_errors,validation_status\n")
+            sb.append("id,name,description,source,source_url,source_type,branch,tag,commit,version,author,homepage,license,keywords,install_path,status,runtime_status,last_run_at,run_count,config,creator,created_at,updated_at,deleted_at,allowed_tools,assets_dir_exists,avg_execution_time,categories,compatibility,dependencies,env_vars,error_count,extra_metadata,generation_model,generation_prompt,generation_status,instructions,last_error,last_validated_at,parameters,parent_skill_id,permissions,references_dir_exists,retry_count,scripts_dir_exists,success_count,tags,timeout,validation_errors,validation_status,source_path,sync_status,last_sync_at\n")
 
             // 写入数据行
             for (entity in entities) {
@@ -917,6 +977,9 @@ public class AgentSkillsController {
                 sb.append(",")
                 sb.append(if (let Some(v) <- entity.validationErrors) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.validationStatus) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.sourcePath) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.syncStatus) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.lastSyncAt) { "\"" + v.toString() + "\"," } else { "" })
                 sb.append("\n")
             }
 

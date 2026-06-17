@@ -292,101 +292,122 @@ public struct AgentOp {
     }
 
     static public func handle(event!: AgentStartEvent): EventResponse<AgentResponse> {
-        if (let Some(object) <- event.agentRequest.eventHandlerManager) {
-            match ((object as EventHandlerManager).getOrThrow().handle(event)) {
+        let agentManager = event.agent.eventHandlerManager
+
+        if (let Some(reqManager) <- event.agentRequest.eventHandlerManager) {
+            match ((reqManager as EventHandlerManager).getOrThrow().handle(event)) {
                 case Continue => ()
                 case Continue(v) => return Continue(v)
                 case Terminate(v) => return Terminate(v)
             }
         }
 
-        if (let Some(object) <- event.agent.eventHandlerManager) {
+        if (let Some(object) <- agentManager) {
             match ((object as EventHandlerManager).getOrThrow().handle(event)) {
                 case Continue => ()
                 case Continue(v) => return Continue(v)
                 case Terminate(v) => return Terminate(v)
             }
-        }
-
-        match (EventHandlerManager.global.handle(event)) {
-            case Continue => ()
-            case Continue(v) => return Continue(v)
-            case Terminate(v) => return Terminate(v)
+        } else {
+            match (EventHandlerManager.global.handle(event)) {
+                case Continue => ()
+                case Continue(v) => return Continue(v)
+                case Terminate(v) => return Terminate(v)
+            }
         }
         return Continue
     }
 
     static public func handle(event!: AgentEndEvent): Unit {
+        let agentManager = event.agent.eventHandlerManager
+
         if (let Some(object) <- event.agentRequest.eventHandlerManager) {
             (object as EventHandlerManager).getOrThrow().handle(event)
         }
-        if (let Some(object) <- event.agent.eventHandlerManager) {
+
+        if (let Some(object) <- agentManager) {
             (object as EventHandlerManager).getOrThrow().handle(event)
+        } else {
+            EventHandlerManager.global.handle(event)
         }
-        EventHandlerManager.global.handle(event)
     }
 
     static public func handle(event!: AgentStepEvent): Unit {
+        let agentManager = event.agent.eventHandlerManager
+
         if (let Some(object) <- event.agentRequest.eventHandlerManager) {
             (object as EventHandlerManager).getOrThrow().handle(event)
         }
-        if (let Some(object) <- event.agent.eventHandlerManager) {
+
+        if (let Some(object) <- agentManager) {
             (object as EventHandlerManager).getOrThrow().handle(event)
+        } else {
+            EventHandlerManager.global.handle(event)
         }
-        EventHandlerManager.global.handle(event)
     }
 
     static public func handle(event!: SubAgentStartEvent): EventResponse<AgentResponse> {
-        if (let Some(object) <- event.agentRequest.eventHandlerManager) {
-            match ((object as EventHandlerManager).getOrThrow().handle(event)) {
+        let agentManager = event.agent.eventHandlerManager
+
+        if (let Some(reqManager) <- event.agentRequest.eventHandlerManager) {
+            match ((reqManager as EventHandlerManager).getOrThrow().handle(event)) {
                 case Continue => ()
                 case Continue(v) => return Continue(v)
                 case Terminate(v) => return Terminate(v)
             }
         }
 
-        if (let Some(object) <- event.agent.eventHandlerManager) {
+        if (let Some(object) <- agentManager) {
             match ((object as EventHandlerManager).getOrThrow().handle(event)) {
                 case Continue => ()
                 case Continue(v) => return Continue(v)
                 case Terminate(v) => return Terminate(v)
             }
-        }
-
-        match (EventHandlerManager.global.handle(event)) {
-            case Continue => ()
-            case Continue(v) => return Continue(v)
-            case Terminate(v) => return Terminate(v)
+        } else {
+            match (EventHandlerManager.global.handle(event)) {
+                case Continue => ()
+                case Continue(v) => return Continue(v)
+                case Terminate(v) => return Terminate(v)
+            }
         }
         return Continue
     }
-
     static public func handle(event!: SubAgentEndEvent): Unit {
+        let agentManager = event.agent.eventHandlerManager
+
         if (let Some(object) <- event.agentRequest.eventHandlerManager) {
             (object as EventHandlerManager).getOrThrow().handle(event)
         }
-        if (let Some(object) <- event.agent.eventHandlerManager) {
+
+        if (let Some(object) <- agentManager) {
             (object as EventHandlerManager).getOrThrow().handle(event)
+        } else {
+            EventHandlerManager.global.handle(event)
         }
-        EventHandlerManager.global.handle(event)
     }
 
     static public func handle(event!: AgentTimeoutEvent, forRequest!: Option<AgentRequest> = None): Unit {
+        let agentManager = event.agent.eventHandlerManager
+
         if (let Some(request) <- forRequest) {
             if (let Some(object) <- request.eventHandlerManager) {
                 (object as EventHandlerManager).getOrThrow().handle(event)
             }
         }
-        if (let Some(object) <- event.agent.eventHandlerManager) {
+
+        if (let Some(object) <- agentManager) {
             (object as EventHandlerManager).getOrThrow().handle(event)
+        } else {
+            EventHandlerManager.global.handle(event)
         }
-        EventHandlerManager.global.handle(event)
     }
 
     static public func handle(event!: UserInputEvent, forRequest!: Option<AgentRequest> = None): EventResponse<String> {
+        let agentManager = event.agent.eventHandlerManager
+
         if (let Some(request) <- forRequest) {
-            if (let Some(object) <- request.eventHandlerManager) {
-                match ((object as EventHandlerManager).getOrThrow().handle(event)) {
+            if (let Some(reqManager) <- request.eventHandlerManager) {
+                match ((reqManager as EventHandlerManager).getOrThrow().handle(event)) {
                     case Continue => ()
                     case Continue(v) => return Continue(v)
                     case Terminate(v) => return Terminate(v)
@@ -394,32 +415,35 @@ public struct AgentOp {
             }
         }
 
-        if (let Some(object) <- event.agent.eventHandlerManager) {
+        if (let Some(object) <- agentManager) {
             match ((object as EventHandlerManager).getOrThrow().handle(event)) {
                 case Continue => ()
                 case Continue(v) => return Continue(v)
                 case Terminate(v) => return Terminate(v)
             }
-        }
-
-        match (EventHandlerManager.global.handle(event)) {
-            case Continue => ()
-            case Continue(v) => return Continue(v)
-            case Terminate(v) => return Terminate(v)
+        } else {
+            match (EventHandlerManager.global.handle(event)) {
+                case Continue => ()
+                case Continue(v) => return Continue(v)
+                case Terminate(v) => return Terminate(v)
+            }
         }
         return Continue
     }
-
     static public func handle(event!: NotifyEvent, forRequest!: Option<AgentRequest> = None): Unit {
+        let agentManager = event.agent.eventHandlerManager
+
         if (let Some(request) <- forRequest) {
             if (let Some(object) <- request.eventHandlerManager) {
                 (object as EventHandlerManager).getOrThrow().handle(event)
             }
         }
-        if (let Some(object) <- event.agent.eventHandlerManager) {
+
+        if (let Some(object) <- agentManager) {
             (object as EventHandlerManager).getOrThrow().handle(event)
+        } else {
+            EventHandlerManager.global.handle(event)
         }
-        EventHandlerManager.global.handle(event)
     }
     // end of event handlers. NEVER DELETE/MODIFY THIS LINE
 }

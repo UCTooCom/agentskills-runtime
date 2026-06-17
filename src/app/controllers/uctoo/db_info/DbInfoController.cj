@@ -7,6 +7,7 @@ import magic.app.services.uctoo.DbTableInfo
 import magic.app.services.tool.CrudGenService
 import magic.app.services.tool.CrudGenResult
 import magic.app.services.tool.CrudGenAllResult
+import magic.app.services.tool.WebCrudGenService
 //#region AutoCreateCode
 
 import magic.app.core.http.{HttpRequest, HttpResponse}
@@ -23,10 +24,12 @@ import magic.app.utils.PermissionUtils
 public class DbInfoController {
     private var service: DbInfoService
     private var crudGenService: CrudGenService
+    private var webCrudGenService: WebCrudGenService
 
     public init(service: DbInfoService) {
         this.service = service
         this.crudGenService = CrudGenService()
+        this.webCrudGenService = WebCrudGenService()
     }
 
     public func add(req: HttpRequest, res: HttpResponse): Unit {
@@ -902,6 +905,70 @@ public class DbInfoController {
             }
         } catch (e: Exception) {
             LogUtils.error("DbInfoController", "generateAllCrud exception: ${e.message}")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
+    /**
+     * 生成指定表的Web CRUD页面
+     * @param req 请求对象，包含 dbName 和 tableName 参数
+     * @param res 响应对象
+     */
+    public func generateWeb(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let dbName = req.queryParam("dbName")
+            let tableName = req.queryParam("tableName")
+
+            if (dbName.isNone()) {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少数据库名称参数 (dbName)\"}")
+                return
+            }
+
+            if (tableName.isNone()) {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少表名称参数 (tableName)\"}")
+                return
+            }
+
+            LogUtils.info("DbInfoController", "generateWeb called for ${dbName.getOrThrow()}.${tableName.getOrThrow()}")
+
+            let success = webCrudGenService.generateWeb(dbName.getOrThrow(), tableName.getOrThrow())
+
+            if (success) {
+                res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":{\"dbName\":\"${dbName.getOrThrow()}\",\"tableName\":\"${tableName.getOrThrow()}\"}}")
+            } else {
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"生成Web页面失败\"}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("DbInfoController", "generateWeb exception: ${e.message}")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
+    /**
+     * 批量生成所有表的Web CRUD页面
+     * @param req 请求对象，包含 dbName 参数
+     * @param res 响应对象
+     */
+    public func generateAllWeb(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let dbName = req.queryParam("dbName")
+
+            if (dbName.isNone()) {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少数据库名称参数 (dbName)\"}")
+                return
+            }
+
+            LogUtils.info("DbInfoController", "generateAllWeb called for ${dbName.getOrThrow()}")
+
+            let success = webCrudGenService.generateAllWeb(dbName.getOrThrow())
+
+            if (success) {
+                res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":{\"dbName\":\"${dbName.getOrThrow()}\"}}")
+            } else {
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"批量生成Web页面失败\"}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("DbInfoController", "generateAllWeb exception: ${e.message}")
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }

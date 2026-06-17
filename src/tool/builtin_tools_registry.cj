@@ -5,6 +5,7 @@ package magic.tool
 
 import magic.core.tool.ToolManager
 import magic.log.LogUtils
+import magic.tool.webmcp.{WebNavigateTool, WebNotifyTool, WebRequestApprovalTool}
 
 public class BuiltinToolsRegistry {
     public static let VERSION = "1.0.0"
@@ -18,6 +19,7 @@ public class BuiltinToolsRegistry {
         registerSkillTools(toolManager)
         registerCodeGenTools(toolManager)
         registerCliTools(toolManager)
+        registerWebMCPTools(toolManager)
         
         LogUtils.info("[BuiltinToolsRegistry] All builtin tools registered successfully")
     }
@@ -133,7 +135,21 @@ public class BuiltinToolsRegistry {
             CliTool.NAME,
             PythonExecutorTool.NAME,
             BrowserTool.NAME,
-            HttpServerTool.NAME
+            HttpServerTool.NAME,
+            WebNavigateTool.NAME,
+            WebNotifyTool.NAME,
+            WebRequestApprovalTool.NAME
         ]
+    }
+
+    public static func registerWebMCPTools(toolManager: ToolManager): Unit {
+        toolManager.addTool(WebNavigateTool())
+        LogUtils.info("[BuiltinToolsRegistry] Registered: WebNavigateTool")
+
+        toolManager.addTool(WebNotifyTool())
+        LogUtils.info("[BuiltinToolsRegistry] Registered: WebNotifyTool")
+
+        toolManager.addTool(WebRequestApprovalTool())
+        LogUtils.info("[BuiltinToolsRegistry] Registered: WebRequestApprovalTool")
     }
 }

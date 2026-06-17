@@ -4,7 +4,7 @@
 package magic.utils
 
 @When[cjc_version < "1.0.0"]
-import std.time.Duration
+import std.core.Duration
 @When[cjc_version < "1.0.0"]
 import std.sync.sleep
 

@@ -172,6 +172,15 @@ public class AgentSkillsPO {
         @ORMField['validation_status']
     public var validationStatus: Option<String> = None<String>
 
+        @ORMField['source_path']
+    public var sourcePath: Option<String> = None<String>
+
+        @ORMField['sync_status']
+    public var syncStatus: Option<String> = None<String>
+
+        @ORMField['last_sync_at']
+    public var lastSyncAt: Option<DateTime> = None<DateTime>
+
     public init() {}
 
     public init(
@@ -224,7 +233,10 @@ public class AgentSkillsPO {
                 tags: Option<String>,
                 timeout: Int32,
                 validationErrors: Option<String>,
-                validationStatus: Option<String>
+                validationStatus: Option<String>,
+                sourcePath: Option<String>,
+                syncStatus: Option<String>,
+                lastSyncAt: Option<DateTime>
     ) {
                 this.id = id
                 this.name = name
@@ -276,6 +288,9 @@ public class AgentSkillsPO {
                 this.timeout = timeout
                 this.validationErrors = validationErrors
                 this.validationStatus = validationStatus
+                this.sourcePath = sourcePath
+                this.syncStatus = syncStatus
+                this.lastSyncAt = lastSyncAt
     }
 
     /// 序列化为 JsonValue
@@ -331,6 +346,9 @@ public class AgentSkillsPO {
         map.add("timeout", this.timeout.toJsonValue())
         map.add("validation_errors", optionToJsonValue(this.validationErrors))
         map.add("validation_status", optionToJsonValue(this.validationStatus))
+        map.add("source_path", optionToJsonValue(this.sourcePath))
+        map.add("sync_status", optionToJsonValue(this.syncStatus))
+        map.add("last_sync_at", optionToJsonValue(this.lastSyncAt))
         return JsonObject(map)
     }
 

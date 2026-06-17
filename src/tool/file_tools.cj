@@ -72,13 +72,27 @@ public class FileReadTool <: NativeFuncTool {
         }
 
         let withLineNumber = FileReadTool.extractBool(args, "withLineNumber", false)
+        
         let startLine = FileReadTool.extractInt(args, "startLine", 1)
         let endLine = FileReadTool.extractInt(args, "endLine", Int64.Max)
+        
+        let offset = FileReadTool.extractInt(args, "offset", 0)
+        let limit = FileReadTool.extractInt(args, "limit", 0)
+        
+        var finalStartLine = startLine
+        var finalEndLine = endLine
+        
+        if (offset > 0) {
+            finalStartLine = offset + 1
+            if (limit > 0) {
+                finalEndLine = finalStartLine + limit - 1
+            }
+        }
 
-        LogUtils.info("[FileReadTool] Reading file: ${pathStr}, withLineNumber: ${withLineNumber}, startLine: ${startLine}, endLine: ${endLine}")
+        LogUtils.info("[FileReadTool] Reading file: ${pathStr}, withLineNumber: ${withLineNumber}, startLine: ${finalStartLine}, endLine: ${finalEndLine}")
 
         try {
-            let content = readFile(path, withLineNumber: withLineNumber, startLine: startLine, endLine: endLine)
+            let content = readFile(path, withLineNumber: withLineNumber, startLine: finalStartLine, endLine: finalEndLine)
             
             let result = JsonObject()
             result.put("success", JsonString("true"))
@@ -413,42 +427,72 @@ public class FileDeleteTool <: NativeFuncTool {
 
         LogUtils.info("[FileDeleteTool] Deleting: ${pathStr}, recursive: ${recursive}")
 
-        try {
-            if (!exists(path)) {
-                throw ToolException("Path does not exist: ${pathStr}")
-            }
+        if (!exists(path)) {
+            throw ToolException("Path does not exist: ${pathStr}")
+        }
 
-            let fileInfo = FileInfo(path)
-            var deleted = false
+        let fileInfo = FileInfo(path)
 
-            if (fileInfo.isDirectory()) {
-                if (!recursive) {
-                    let entries = Directory.readFrom(path)
-                    var hasEntries = false
-                    for (_ in entries) {
-                        hasEntries = true
-                        break
-                    }
-                    if (hasEntries) {
-                        throw ToolException("Directory is not empty: ${pathStr}. Use recursive=true to delete.")
-                    }
+        if (fileInfo.isDirectory()) {
+            if (!recursive) {
+                let entries = Directory.readFrom(path)
+                var hasEntries = false
+                for (_ in entries) {
+                    hasEntries = true
+                    break
                 }
-                removeIfExists(path)
-                deleted = true
+                if (hasEntries) {
+                    throw ToolException("Directory is not empty: ${pathStr}. Use recursive=true to delete.")
+                }
             } else {
-                removeIfExists(path)
-                deleted = true
+                FileDeleteTool.deleteDirectoryRecursive(path)
             }
+        } else {
+            FileDeleteTool.deleteFile(path)
+        }
 
+        let actuallyDeleted = !exists(path)
+
+        if (actuallyDeleted) {
             let result = JsonObject()
-            result.put("success", JsonString(if (deleted) { "true" } else { "false" }))
+            result.put("success", JsonString("true"))
             result.put("path", JsonString(pathStr))
             result.put("type", JsonString(if (fileInfo.isDirectory()) { "directory" } else { "file" }))
-
             return result.toJsonString()
+        } else {
+            throw ToolException("Failed to delete: ${pathStr}")
+        }
+    }
+
+    protected static func deleteDirectoryRecursive(dirPath: Path): Unit {
+        let entries = Directory.readFrom(dirPath)
+        for (entry in entries) {
+            if (entry.isDirectory()) {
+                FileDeleteTool.deleteDirectoryRecursive(entry.path)
+            } else {
+                FileDeleteTool.deleteFile(entry.path)
+            }
+        }
+        try {
+            removeIfExists(dirPath)
         } catch (ex: Exception) {
-            LogUtils.error("[FileDeleteTool] Failed to delete: ${ex.message}")
-            throw ToolException("Failed to delete: ${ex.message}")
+            LogUtils.warn("[FileDeleteTool] Failed to delete directory: ${ex.message}")
+        }
+    }
+
+    protected static func deleteFile(filePath: Path): Unit {
+        try {
+            removeIfExists(filePath)
+        } catch (ex: Exception) {
+            LogUtils.warn("[FileDeleteTool] removeIfExists failed, trying alternative method: ${ex.message}")
+            try {
+                let file = File(filePath, OpenMode.Write)
+                file.close()
+                removeIfExists(filePath)
+            } catch (ex2: Exception) {
+                LogUtils.error("[FileDeleteTool] Alternative delete method also failed: ${ex2.message}")
+                throw ToolException("Failed to delete file: ${filePath.toString()}")
+            }
         }
     }
 }
@@ -794,7 +838,7 @@ public class FileSearchTool <: NativeFuncTool {
             let lines = content.split("\n")
             let searchLines = searchContent.split("\n")
 
-            for (i in 0..lines.size) {
+            for (i in 0..lines.size-1) {
                 if (searchLines[i].contains(query)) {
                     let matchResult = JsonObject()
                     matchResult.put("file", JsonString(filePath.toString()))

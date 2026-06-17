@@ -6,10 +6,18 @@ package magic.app.services.webmcp
 import magic.log.LogUtils
 import magic.core.skill.{Skill, SkillManager}
 import magic.core.model.{ChatModel, ChatRequest}
-import magic.core.message.{Message, MessageRole}
+import magic.model.ModelManager
+import magic.core.message.{Message, MessageRole, Conversation}
 import magic.skill.SkillAwareAgent
 import magic.agent_executor.react.ReactExecutor
 import magic.core.agent.{AgentRequest, AgentResponse}
+import magic.core.agent.AgentDefinition
+import magic.agent.memory.tiered.TieredMemory
+import magic.interaction.EventHandlerManager
+import magic.app.services.bridge.{AgentRuntimeBridge, CheckpointManager}
+import magic.app.models.uctoo.AgentsPO
+import magic.app.services.uctoo.AgentsService
+import f_util.UUID
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 import std.collection.{HashMap, ArrayList}
 
@@ -22,6 +30,7 @@ public class WebMCPProtocol {
     private var _skillManager: ?SkillManager
     private var _chatModel: ?ChatModel
     private var _agent: ?SkillAwareAgent
+    private var _agentId: String = ""  // 存储 Agent 的真正 UUID（从数据库加载）
     private var _sessionId: String = ""
     private var _clientId: String = ""
 
@@ -32,16 +41,116 @@ public class WebMCPProtocol {
         this._skillManager = skillManager
         this._chatModel = chatModel
         
-        // 初始化 SkillAwareAgent
         if (skillManager.isSome() && chatModel.isSome()) {
             let executor = ReactExecutor()
+            
+            // 从数据库查询 MAIN agent
+            let agentsService = AgentsService()
+            let (agentList, _) = agentsService.getListWithFilter(1, 1, "", "{\"agent_type\":{\"equals\":\"MAIN\"}}")
+            var agentId = "webmcp-skill-assistant"
+            var agentName = "WebMCP Skill Assistant"
+            
+            if (agentList.size > 0) {
+                let dbAgent = agentList[0]
+                agentId = dbAgent.id
+                agentName = dbAgent.name
+                LogUtils.info("WebMCPProtocol: loaded MAIN agent from DB: ${agentName}, UUID=${agentId}")
+            }
+            
+            this._agentId = agentId
+            let memory = TieredMemory(agentId: agentId)
             this._agent = Some(SkillAwareAgent(
                 skillManager: skillManager.getOrThrow(),
                 model: chatModel.getOrThrow(),
                 executor: executor,
-                name: "WebMCP Skill Assistant",
-                description: "An intelligent assistant that can use skills to help users through WebMCP protocol"
+                name: agentName,
+                description: "An intelligent assistant that can use skills to help users through WebMCP protocol",
+                memory: Some(memory),
+                eventHandlerManager: Some(EventHandlerManager.global)
             ))
+        } else {
+            this._agent = None
+        }
+    }
+
+    public init(skillManager: ?SkillManager, chatModel: ?ChatModel, agentDef: ?AgentDefinition) {
+        this._skillManager = skillManager
+        this._chatModel = chatModel
+        
+        if (skillManager.isSome() && chatModel.isSome()) {
+            let executor = ReactExecutor()
+            if (let Some(def) <- agentDef) {
+                let systemPrompt = def.systemPrompt
+                let agentName = def.name
+                let modelName = if (let Some(m) <- def.model) { m } else { "tokendance:mimo-v2.5" }
+                let agentModel = if (modelName.contains(":")) {
+                    ModelManager.createChatModel(modelName)
+                } else {
+                    chatModel.getOrThrow()
+                }
+                
+                let agentsService = AgentsService()
+                let (agentList, _) = agentsService.getListWithFilter(1, 1, "", "{\"name\":{\"equals\":\"${def.name}\"}}")
+                if (agentList.size > 0) {
+                    this._agentId = agentList[0].id
+                    LogUtils.info("WebMCPProtocol: resolved agent UUID=${this._agentId} for ${def.name} from agents table (systemPrompt from AgentDefinition, length=${systemPrompt.size.toString()})")
+                } else {
+                    let bridge = AgentRuntimeBridge.instance
+                    let createResult = bridge.createRuntimeAgent(def)
+                    if (createResult.success) {
+                        let runtimeIds = bridge.getAllRuntimeAgentIds()
+                        for (id in runtimeIds) {
+                            if (let Some(agent) <- bridge.getRuntimeAgent(id)) {
+                                if (agent.name == def.name) {
+                                    this._agentId = id
+                                    break
+                                }
+                            }
+                        }
+                    }
+                    LogUtils.info("WebMCPProtocol: agent ${def.name} not found in DB, created via AgentRuntimeBridge, UUID=${this._agentId}")
+                }
+                
+                let memory = TieredMemory(agentId: this._agentId)
+                this._agent = Some(SkillAwareAgent(
+                    skillManager: skillManager.getOrThrow(),
+                    model: agentModel,
+                    executor: executor,
+                    name: agentName,
+                    description: def.description,
+                    systemPrompt: systemPrompt,
+                    memory: Some(memory),
+                    eventHandlerManager: Some(EventHandlerManager.global)
+                ))
+                LogUtils.info("WebMCPProtocol: created agent: name=${agentName}, UUID=${this._agentId}, systemPrompt length=${systemPrompt.size.toString()}")
+            } else {
+                LogUtils.warn("WebMCPProtocol: no AgentDefinition provided, querying agents table for MAIN agent")
+                let agentsService = AgentsService()
+                let (agentList, _) = agentsService.getListWithFilter(1, 1, "", "{\"agent_type\":{\"equals\":\"MAIN\"}}")
+                var fallbackName = "WebMCP Skill Assistant"
+                var fallbackPrompt = ""
+                if (agentList.size > 0) {
+                    let dbAgent = agentList[0]
+                    fallbackName = dbAgent.name
+                    this._agentId = dbAgent.id
+                    if (let Some(sp) <- dbAgent.systemPrompt) {
+                        fallbackPrompt = sp
+                    }
+                    LogUtils.info("WebMCPProtocol: found MAIN agent from database: ${fallbackName}, UUID=${this._agentId}")
+                }
+                
+                let memory = TieredMemory(agentId: this._agentId)
+                this._agent = Some(SkillAwareAgent(
+                    skillManager: skillManager.getOrThrow(),
+                    model: chatModel.getOrThrow(),
+                    executor: executor,
+                    name: fallbackName,
+                    description: "An intelligent assistant that can use skills to help users through WebMCP protocol",
+                    systemPrompt: fallbackPrompt,
+                    memory: Some(memory),
+                    eventHandlerManager: Some(EventHandlerManager.global)
+                ))
+            }
         } else {
             this._agent = None
         }
@@ -62,6 +171,36 @@ public class WebMCPProtocol {
         
         if (jsonValue is JsonObject) {
             return handleRequest(jsonValue.asObject())
+        } else if (jsonValue is JsonArray) {
+            let arr = jsonValue.asArray()
+            let size = arr.size()
+            if (size == 1) {
+                let item = arr.get(0)
+                if (item.isSome() && item.getOrThrow() is JsonObject) {
+                    return handleRequest(item.getOrThrow().asObject())
+                }
+            }
+            let results = ArrayList<String>()
+            var i = 0
+            while (i < size) {
+                let item = arr.get(i)
+                if (item.isSome() && item.getOrThrow() is JsonObject) {
+                    results.add(handleRequest(item.getOrThrow().asObject()))
+                } else {
+                    results.add(createErrorResponse("Invalid item in batch request"))
+                }
+                i++
+            }
+            let sb = StringBuilder()
+            sb.append("[")
+            var j = 0
+            while (j < results.size) {
+                if (j > 0) { sb.append(",") }
+                sb.append(results[j])
+                j++
+            }
+            sb.append("]")
+            return sb.toString()
         } else {
             LogUtils.error("Invalid JSON message format")
             return createErrorResponse("Invalid JSON message format")
@@ -104,9 +243,37 @@ public class WebMCPProtocol {
             return handleCloseSession(obj)
         } else if (method == "completion/complete") {
             return handleCompletionComplete(obj)
+        } else if (method == "notifications/cancelled" || method == "notifications/progress" || method == "notifications/message" || method == "notifications/initialized") {
+            // MCP 协议通知方法，不需要返回响应
+            // notifications/cancelled: 取消请求通知
+            // notifications/progress: 进度通知  
+            // notifications/message: 消息通知
+            // notifications/initialized: 初始化完成通知
+            LogUtils.info("WebMCP received notification: ${method}")
+            return handleNotification(method, obj)
         } else {
             return createErrorResponse("Unknown method: ${method}")
         }
+    }
+
+    /**
+     * 处理 MCP 通知方法
+     * 通知方法通常不需要返回响应，但如果请求有 id，需要返回有效的 JSON-RPC 响应
+     */
+    private func handleNotification(method: String, obj: JsonObject): String {
+        let requestId = obj.get("id")
+        
+        // 如果有 requestId，说明是一个带响应的请求，返回成功响应
+        if (requestId.isSome()) {
+            let result = JsonObject()
+            result.put("success", JsonBool(true))
+            result.put("message", JsonString("Notification received"))
+            return createSuccessResponse(result, requestId)
+        }
+        
+        // 真正的通知（无 id），返回空字符串表示不需要响应
+        // 注意：JSON-RPC 规范中，通知不应返回响应
+        return ""
     }
 
     /**
@@ -430,11 +597,22 @@ public class WebMCPProtocol {
         // 获取请求参数
         let params = obj.get("params")
         var userMessage = ""
+        var isStream = true  // 默认流式响应
         
         if (params.isSome()) {
             let paramsVal = params.getOrThrow()
             if (paramsVal is JsonObject) {
                 let paramsObj = paramsVal.asObject()
+                
+                // 检查 stream 参数
+                let streamParam = paramsObj.get("stream")
+                if (streamParam.isSome()) {
+                    let streamVal = streamParam.getOrThrow()
+                    if (streamVal is JsonBool) {
+                        isStream = streamVal.asBool().getValue()
+                    }
+                }
+                
                 let messagesJson = paramsObj.get("messages")
                 if (messagesJson.isSome()) {
                     let msgs = messagesJson.getOrThrow()
@@ -473,22 +651,52 @@ public class WebMCPProtocol {
         
         LogUtils.debug("WebMCP completion/complete user message: ${userMessage}")
         
-        // 调用大模型生成响应（使用 SkillAwareAgent）
+        // 同步处理请求，返回完整响应
         var responseContent = "WebMCP server received your message."
         
         if (!userMessage.isEmpty()) {
             try {
                 // 优先使用 SkillAwareAgent（支持技能调用）
                 if (let Some(agent) <- _agent) {
-                    // 设置系统提示词（包含技能信息）
-                    let systemPrompt = buildAgentSystemPrompt()
-                    agent.systemPrompt = systemPrompt
+                    LogUtils.info("WebMCPProtocol: agent name=${agent.name}, systemPrompt length=${agent.systemPrompt.size.toString()}")
+                    if (agent.systemPrompt.isEmpty()) {
+                        let systemPrompt = buildAgentSystemPrompt()
+                        agent.systemPrompt = systemPrompt
+                        LogUtils.info("WebMCPProtocol: set fallback systemPrompt, length=${systemPrompt.size.toString()}")
+                    }
+                    
+                    // 加载历史上下文（用于多轮对话）
+                    let checkpointManager = CheckpointManager()
+                    var conversation: ?Conversation = None
+                    if (!_agentId.isEmpty()) {
+                        if (let Some(historyMessages) <- checkpointManager.loadLatestCheckpoint(_agentId)) {
+                            LogUtils.info("WebMCPProtocol: loaded ${historyMessages.size} historical messages for agent ${_agentId}")
+                            if (historyMessages.size > 0) {
+                                // 创建对话历史
+                                conversation = Some(Conversation())
+                                var i = 0
+                                while (i < historyMessages.size - 1) {
+                                    if (i + 1 < historyMessages.size) {
+                                        conversation.getOrThrow().addChatRound(historyMessages[i], historyMessages[i + 1])
+                                    }
+                                    i = i + 2
+                                }
+                            }
+                        }
+                    }
                     
                     // 创建 Agent 请求并处理
-                    let agentRequest = AgentRequest(userMessage)
+                    let agentRequest = AgentRequest(userMessage, conversation: conversation)
                     let agentResponse = agent.chat(agentRequest)
                     responseContent = agentResponse.content
                     LogUtils.debug("WebMCP completion response (via SkillAwareAgent): ${responseContent}")
+
+                    // 异步同步 Agent 状态到数据库
+                    spawn {
+                        try {
+                            AgentRuntimeBridge.instance.syncToDatabase(agent.name, agent)
+                        } catch (_: Exception) {}
+                    }
                 } else if (let Some(cm) <- _chatModel) {
                     // 降级到直接调用 ChatModel（不支持技能）
                     let request = ChatRequest([Message(MessageRole.User, userMessage)], temperature: None, stop: None, tools: [])

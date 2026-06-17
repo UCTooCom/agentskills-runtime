@@ -5,11 +5,13 @@ package magic.skill
 
 import magic.core.skill.{Skill, SkillManager}
 import magic.core.tool.{Tool, ToolFilter, ToolManager}
-import magic.tool.SimpleToolManager
+import magic.tool.{SimpleToolManager, BuiltinToolsRegistry}
 import std.collection.{HashMap, ArrayList}
+import magic.log.LogUtils
 @When[cjc_version < "1.0.0"]
-import std.time.Duration
+import std.core.Duration
 import magic.skill.domain.models.Capability
+
 
 /**
  * A composite manager that implements both SkillManager and ToolManager interfaces
@@ -51,7 +53,15 @@ public class CompositeSkillToolManager <: SkillManager & ToolManager {
     }
 
     public init() {
-        this([])
+        let toolManager = SimpleToolManager()
+        BuiltinToolsRegistry.registerAll(toolManager)
+        _availableSkills = HashMap<String, Skill>()
+        _enabledSkills = ArrayList<String>()
+        _toolManager = toolManager
+        _skillSecurityPolicies = HashMap<String, SecurityPolicy>()
+        _skillResourceLimits = HashMap<String, ResourceLimits>()
+        _skillCapabilities = HashMap<String, ArrayList<Capability>>()
+        LogUtils.info("[CompositeSkillToolManager] Initialized with builtin tools registered")
     }
 
     // SkillManager interface implementation

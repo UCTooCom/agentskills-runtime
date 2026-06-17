@@ -7,6 +7,11 @@ import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.core.model.{ChatModel, ChatRequest, ChatResponse, AsyncChatResponse}
 import magic.core.message.{Message, MessageList, MessageRole}
 import magic.core.skill.SkillManager
+import magic.skill.SkillAwareAgent
+import magic.agent_executor.react.ReactExecutor
+import magic.core.agent.{AgentRequest, AgentResponse}
+import magic.agent.memory.tiered.TieredMemory
+import magic.interaction.EventHandlerManager
 import magic.log.LogUtils
 import stdx.net.http.HttpHeaders
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
@@ -22,10 +27,22 @@ import std.collection.{ArrayList, HashMap}
 public class AIController {
     private let _chatModel: ChatModel
     private let _skillManager: SkillManager
+    private let _agent: SkillAwareAgent
 
     public init(chatModel: ChatModel, skillManager: SkillManager) {
         this._chatModel = chatModel
         this._skillManager = skillManager
+        let executor = ReactExecutor()
+        let memory = TieredMemory(agentId: "ai-api-assistant")
+        this._agent = SkillAwareAgent(
+            skillManager: skillManager,
+            model: chatModel,
+            executor: executor,
+            name: "AI API Assistant",
+            description: "An intelligent assistant for OpenAI-compatible API",
+            memory: Some(memory),
+            eventHandlerManager: Some(EventHandlerManager.global)
+        )
     }
 
     /**
@@ -136,6 +153,30 @@ public class AIController {
      * 处理非流式聊天请求
      */
     private func handleNonStreamChat(req: HttpRequest, res: HttpResponse, messages: Array<Message>): Unit {
+        try {
+            var lastUserMessage = ""
+            for (msg in messages) {
+                if (msg.role == MessageRole.User) {
+                    lastUserMessage = msg.content
+                }
+            }
+            if (!lastUserMessage.isEmpty()) {
+                let agentRequest = AgentRequest(lastUserMessage)
+                let agentResponse = _agent.chat(agentRequest)
+                let chatResponse = ChatResponse(
+                    "agent",
+                    Message(MessageRole.Assistant, agentResponse.content),
+                    usage: None
+                )
+                let jsonResponse = buildResponse(chatResponse)
+                res.status(200)
+                   .header("Content-Type", "application/json")
+                   .json(jsonResponse)
+                return
+            }
+        } catch (e: Exception) {
+            LogUtils.error("AI chat via Agent failed, falling back to direct ChatModel: ${e.message}")
+        }
         let chatReq = ChatRequest(messages)
         let response = _chatModel.create(chatReq)
         let jsonResponse = buildResponse(response)

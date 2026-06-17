@@ -10,7 +10,10 @@ import magic.app.core.http.{HttpRequest as AppHttpRequest, HttpResponse as AppHt
 import magic.app.core.router.{Router, Route}
 import magic.app.core.middleware.{Middleware, MiddlewareChain}
 import magic.app.core.log.{LoggerFactory, Logger}
+import magic.config.Config
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString}
+import charset4cj.charset.{Charsets}
+import std.core.Duration
 
 private class DefaultHttpRequestDistributor <: HttpRequestDistributor {
     private let _routes: HashMap<String, HttpRequestHandler>
@@ -85,21 +88,37 @@ public class HTTPServer {
     private var running: Bool = false
     private let logger: Logger
     private let isHttps: Bool
+    private let _requestTimeout: Duration  // 请求超时时间
+    
+    // 默认超时时间：120秒（2分钟）
+    private static var DEFAULT_REQUEST_TIMEOUT: Duration = Duration.second * 120
+    
+    /**
+     * 配置服务器超时时间
+     */
+    private static func configureTimeout(builder: ServerBuilder, timeout: Duration): Unit {
+        // 设置读取超时时间
+        builder.readTimeout(timeout)
+        // 设置写入超时时间
+        builder.writeTimeout(timeout)
+    }
     
     public init(port: Int32, host: String) {
         logger = LoggerFactory.getInstance().getLogger("uctoo.http")
         this.port = port
         this.host = host
         this.isHttps = false
+        this._requestTimeout = DEFAULT_REQUEST_TIMEOUT
         _distributor = DefaultHttpRequestDistributor()
         
         let builder = ServerBuilder()
         builder.addr(host)
         builder.port(UInt16(port))
         builder.distributor(_distributor)
+        HTTPServer.configureTimeout(builder, _requestTimeout)
         _server = builder.build()
         
-        logger.info("HTTP Server initialized on ${host}:${port}")
+        logger.info("HTTP Server initialized on ${host}:${port} with timeout=${_requestTimeout.toSeconds()}s")
     }
     
     public init() {
@@ -107,15 +126,17 @@ public class HTTPServer {
         this.port = 8080
         this.host = "127.0.0.1"
         this.isHttps = false
+        this._requestTimeout = DEFAULT_REQUEST_TIMEOUT
         _distributor = DefaultHttpRequestDistributor()
         
         let builder = ServerBuilder()
         builder.addr(host)
         builder.port(UInt16(port))
         builder.distributor(_distributor)
+        HTTPServer.configureTimeout(builder, _requestTimeout)
         _server = builder.build()
         
-        logger.info("HTTP Server initialized on ${host}:${port}")
+        logger.info("HTTP Server initialized on ${host}:${port} with timeout=${_requestTimeout.toSeconds()}s")
     }
     
     /// HTTPS构造函数 - 使用证书文件路径
@@ -124,6 +145,7 @@ public class HTTPServer {
         this.port = port
         this.host = host
         this.isHttps = true
+        this._requestTimeout = DEFAULT_REQUEST_TIMEOUT
         _distributor = DefaultHttpRequestDistributor()
         
         try {
@@ -147,9 +169,69 @@ public class HTTPServer {
             builder.port(UInt16(port))
             builder.tlsConfig(tlsConfig)
             builder.distributor(_distributor)
+            HTTPServer.configureTimeout(builder, _requestTimeout)
             _server = builder.build()
             
-            logger.info("HTTPS Server initialized on ${host}:${port}")
+            logger.info("HTTPS Server initialized on ${host}:${port} with timeout=${_requestTimeout.toSeconds()}s")
+        } catch (e: Exception) {
+            logger.error("Failed to initialize HTTPS server: ${e.message}")
+            throw Exception("Failed to load SSL certificate: ${e.message}")
+        }
+    }
+    
+    /// 带超时配置的构造函数
+    public init(port: Int32, host: String, requestTimeout: Duration) {
+        logger = LoggerFactory.getInstance().getLogger("uctoo.http")
+        this.port = port
+        this.host = host
+        this.isHttps = false
+        this._requestTimeout = requestTimeout
+        _distributor = DefaultHttpRequestDistributor()
+        
+        let builder = ServerBuilder()
+        builder.addr(host)
+        builder.port(UInt16(port))
+        builder.distributor(_distributor)
+        HTTPServer.configureTimeout(builder, _requestTimeout)
+        _server = builder.build()
+        
+        logger.info("HTTP Server initialized on ${host}:${port} with timeout=${requestTimeout.toSeconds()}s")
+    }
+    
+    /// HTTPS构造函数 - 使用证书文件路径和超时配置
+    public init(port: Int32, host: String, certPath: String, keyPath: String, requestTimeout: Duration) {
+        logger = LoggerFactory.getInstance().getLogger("uctoo.http")
+        this.port = port
+        this.host = host
+        this.isHttps = true
+        this._requestTimeout = requestTimeout
+        _distributor = DefaultHttpRequestDistributor()
+        
+        try {
+            // 加载证书和私钥
+            let certFile = File(certPath, OpenMode.Read)
+            let certContent = readToEnd(certFile)
+            let certPem = String.fromUtf8(certContent)
+            
+            let keyFile = File(keyPath, OpenMode.Read)
+            let keyContent = readToEnd(keyFile)
+            let keyPem = String.fromUtf8(keyContent)
+            
+            // 配置TLS
+            let tlsConfig = TlsServerConfig(
+                X509Certificate.decodeFromPem(certPem),
+                PrivateKey.decodeFromPem(keyPem)
+            )
+            
+            let builder = ServerBuilder()
+            builder.addr(host)
+            builder.port(UInt16(port))
+            builder.tlsConfig(tlsConfig)
+            builder.distributor(_distributor)
+            HTTPServer.configureTimeout(builder, _requestTimeout)
+            _server = builder.build()
+            
+            logger.info("HTTPS Server initialized on ${host}:${port} with timeout=${requestTimeout.toSeconds()}s")
         } catch (e: Exception) {
             logger.error("Failed to initialize HTTPS server: ${e.message}")
             throw Exception("Failed to load SSL certificate: ${e.message}")
@@ -354,37 +436,122 @@ public class HTTPServer {
             let bodySize = bodySizeOpt.getOrThrow()
             eprintln("=== readRequestBody: bodySize=${bodySize} ===")
             
-            // 安全检查：限制请求体大小，防止内存耗尽攻击
-            // 最大允许 10MB 的请求体
             let maxBodySize = 10 * 1024 * 1024
             if (bodySize <= 0 || bodySize > maxBodySize) {
                 logger.warn("Invalid or too large body size: ${bodySize}, ignoring body")
                 return ""
             }
             
-            let buffer = Array<UInt8>(bodySize, repeat: 0)
-            let bytesRead = req.body.read(buffer)
-            eprintln("=== readRequestBody: bytesRead=${bytesRead}, expected=${bodySize} ===")
+            let buf = ByteBuffer()
+            let copied = copy(req.body, to: buf)
+            eprintln("=== readRequestBody: copied ${copied} bytes, expected=${bodySize} ===")
             
-            // 检查实际读取的字节数
-            if (bytesRead != bodySize) {
-                logger.warn("Incomplete body read: expected ${bodySize}, got ${bytesRead}")
-                // 只使用实际读取的字节
-                if (bytesRead > 0) {
-                    let actualBuffer = buffer[0..bytesRead]
-                    return String.fromUtf8(actualBuffer)
-                }
+            if (copied == 0) {
+                logger.warn("Empty body read despite bodySize=${bodySize}")
                 return ""
             }
             
-            let bodyStr = String.fromUtf8(buffer)
-            eprintln("=== readRequestBody: body content: [${bodyStr}] ===")
+            buf.seek(Begin(0))
+            let bodyBytes = readToEnd(buf)
+            eprintln("=== readRequestBody: readToEnd got ${bodyBytes.size} bytes ===")
+            
+            // 直接使用 ByteBuffer 的内容读取（避免多次转换）
+            buf.seek(Begin(0))
+            let reader = StringReader(req.body)
+            let bodyStr = reader.readToEnd()
+            
+            if (bodyStr.isEmpty() && bodyBytes.size > 0) {
+                // 备选方案：如果 reader 读取失败，使用字节数组转换
+                eprintln("=== readRequestBody: reader returned empty, using byte array conversion ===")
+                let decoded = tryDecodeBody(bodyBytes)
+                if (!decoded.isEmpty()) {
+                    eprintln("=== readRequestBody: decoded body (${decoded.size} chars): [${decoded[0..min(200, decoded.size)]}] ===")
+                    return decoded
+                }
+            }
+            
+            eprintln("=== readRequestBody: body (${bodyStr.size} chars): [${bodyStr[0..min(200, bodyStr.size)]}] ===")
             return bodyStr
         } catch (ex: Exception) {
             logger.error("Error reading request body: ${ex.message}")
             eprintln("=== readRequestBody exception: ${ex.message} ===")
+            ex.printStackTrace()
             return ""
         }
+    }
+    
+    // 安全地尝试解码请求体字节数组
+    private func tryDecodeBody(bytes: Array<Byte>): String {
+        // 方法1：使用 charset4cj 的健壮解码器
+        try {
+            let decoder = Charsets.forName("UTF-8").getOrThrow()
+            return decoder.newDecoder().decode(bytes)
+        } catch (ex1: Exception) {
+            eprintln("=== tryDecodeBody: charset4cj decode failed: ${ex1.message} ===")
+        }
+        
+        // 方法2：尝试检测并跳过 BOM
+        if (bytes.size >= 3 && 
+            (Int64(bytes[0]) & 0xFF) == 0xEF && 
+            (Int64(bytes[1]) & 0xFF) == 0xBB && 
+            (Int64(bytes[2]) & 0xFF) == 0xBF) {
+            try {
+                let withoutBom = bytes[3..bytes.size]
+                let decoder = Charsets.forName("UTF-8").getOrThrow()
+                return decoder.newDecoder().decode(withoutBom)
+            } catch (ex2: Exception) {
+                eprintln("=== tryDecodeBody: BOM removal + decode failed: ${ex2.message} ===")
+            }
+        }
+        
+        // 方法3：标准库宽松解码（替换无效字符）
+        return lossyDecode(bytes)
+    }
+    
+    // 宽松解码：将无效 UTF-8 字节替换为替换字符
+    private func lossyDecode(bytes: Array<Byte>): String {
+        var result = StringBuilder()
+        var i = 0
+        while (i < bytes.size) {
+            let b = Int64(bytes[i]) & 0xFF
+            if (b < 0x80) {
+                // ASCII 字符
+                result.append(Rune(b))
+                i += 1
+            } else if (b >= 0xC0 && b < 0xE0) {
+                // 2 字节 UTF-8 序列的首字节
+                if (i + 1 < bytes.size && (Int64(bytes[i + 1]) & 0xFF) >= 0x80 && (Int64(bytes[i + 1]) & 0xFF) < 0xC0) {
+                    result.append('\u{FFFD}')  // 替换字符
+                    i += 2
+                } else {
+                    result.append('\u{FFFD}')
+                    i += 1
+                }
+            } else if (b >= 0xE0 && b < 0xF0) {
+                // 3 字节 UTF-8 序列的首字节
+                if (i + 2 < bytes.size) {
+                    result.append('\u{FFFD}')
+                    i += 3
+                } else {
+                    result.append('\u{FFFD}')
+                    i += 1
+                }
+            } else if (b >= 0xF0 && b < 0xF8) {
+                // 4 字节 UTF-8 序列的首字节
+                if (i + 3 < bytes.size) {
+                    result.append('\u{FFFD}')
+                    i += 4
+                } else {
+                    result.append('\u{FFFD}')
+                    i += 1
+                }
+            } else {
+                // 无效字节
+                result.append('\u{FFFD}')
+                i += 1
+            }
+        }
+        return result.toString()
     }
     
     private func startWithServer(server: Server): Unit {

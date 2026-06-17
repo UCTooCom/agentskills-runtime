@@ -68,6 +68,31 @@ import magic.app.routes.uctoo.agent_messages.AgentMessagesRoute
 import magic.app.controllers.uctoo.agent_messages.AgentMessagesController
 import magic.app.routes.uctoo.agent_tasks.AgentTasksRoute
 import magic.app.controllers.uctoo.agent_tasks.AgentTasksController
+import magic.app.routes.uctoo.sync_log.SyncLogRoute
+import magic.app.controllers.uctoo.sync_log.SyncLogController
+import magic.app.routes.uctoo.agent_memories.AgentMemoriesRoute
+import magic.app.controllers.uctoo.agent_memories.AgentMemoriesController
+import magic.app.routes.uctoo.llm_usage_logs.LlmUsageLogsRoute
+import magic.app.controllers.uctoo.llm_usage_logs.LlmUsageLogsController
+import magic.app.routes.uctoo.model_pricing.ModelPricingRoute
+import magic.app.controllers.uctoo.model_pricing.ModelPricingController
+import magic.app.routes.uctoo.agent_groups.AgentGroupsRoute
+import magic.app.controllers.uctoo.agent_groups.AgentGroupsController
+import magic.app.routes.uctoo.agent_executors.AgentExecutorsRoute
+import magic.app.controllers.uctoo.agent_executors.AgentExecutorsController
+import magic.app.routes.uctoo.agent_approvals.AgentApprovalsRoute
+import magic.app.controllers.uctoo.agent_approvals.AgentApprovalsController
+import magic.app.routes.uctoo.retrievers.RetrieversRoute
+import magic.app.controllers.uctoo.retrievers.RetrieversController
+import magic.app.routes.uctoo.usage_quotas.UsageQuotasRoute
+import magic.app.controllers.uctoo.usage_quotas.UsageQuotasController
+import magic.app.routes.uctoo.event_handlers.EventHandlersRoute
+import magic.app.controllers.uctoo.dashboard.AgentDashboardController
+import magic.app.controllers.uctoo.llm_usage.{BillingReportController, LlmUsageStatsController}
+import magic.app.controllers.uctoo.event_handlers.EventHandlersManagementController
+import magic.app.controllers.uctoo.executor.ExecutorSwitchController
+import magic.app.controllers.uctoo.skill.SkillValidationController
+import magic.app.controllers.uctoo.event_handlers.EventHandlersController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -98,7 +123,17 @@ import magic.app.services.uctoo.{
     AgentsService,
     AgentContextsService,
     AgentMessagesService,
-    AgentTasksService,}
+    AgentTasksService,
+    SyncLogService,
+    AgentMemoriesService,
+    LlmUsageLogsService,
+    ModelPricingService,
+    AgentGroupsService,
+    AgentExecutorsService,
+    AgentApprovalsService,
+    RetrieversService,
+    UsageQuotasService,
+    EventHandlersService,}
 import magic.app.services.crontab.SchedulerService
 
 
@@ -464,6 +499,156 @@ public class AutoRouteConfig {
         ))
         
         // ==================== CRUD 路由配置 ====================
+        // EventHandlers 路由
+        registry.add(RouteEntry(
+            "event_handlers",
+            "/api/v1/uctoo/event_handlers",
+            10,
+            true,
+            { router: Router =>
+                let service = EventHandlersService()
+                let controller = EventHandlersController(service)
+                let route = EventHandlersRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // UsageQuotas 路由
+        registry.add(RouteEntry(
+            "usage_quotas",
+            "/api/v1/uctoo/usage_quotas",
+            10,
+            true,
+            { router: Router =>
+                let service = UsageQuotasService()
+                let controller = UsageQuotasController(service)
+                let route = UsageQuotasRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // Retrievers 路由
+        registry.add(RouteEntry(
+            "retrievers",
+            "/api/v1/uctoo/retrievers",
+            10,
+            true,
+            { router: Router =>
+                let service = RetrieversService()
+                let controller = RetrieversController(service)
+                let route = RetrieversRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AgentApprovals 路由
+        registry.add(RouteEntry(
+            "agent_approvals",
+            "/api/v1/uctoo/agent_approvals",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentApprovalsService()
+                let controller = AgentApprovalsController(service)
+                let route = AgentApprovalsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AgentExecutors 路由
+        registry.add(RouteEntry(
+            "agent_executors",
+            "/api/v1/uctoo/agent_executors",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentExecutorsService()
+                let controller = AgentExecutorsController(service)
+                let route = AgentExecutorsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AgentGroups 路由
+        registry.add(RouteEntry(
+            "agent_groups",
+            "/api/v1/uctoo/agent_groups",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentGroupsService()
+                let controller = AgentGroupsController(service)
+                let route = AgentGroupsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // ModelPricing 路由
+        registry.add(RouteEntry(
+            "model_pricing",
+            "/api/v1/uctoo/model_pricing",
+            10,
+            true,
+            { router: Router =>
+                let service = ModelPricingService()
+                let controller = ModelPricingController(service)
+                let route = ModelPricingRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // LlmUsageLogs 路由
+        registry.add(RouteEntry(
+            "llm_usage_logs",
+            "/api/v1/uctoo/llm_usage_logs",
+            10,
+            true,
+            { router: Router =>
+                let service = LlmUsageLogsService()
+                let controller = LlmUsageLogsController(service)
+                let route = LlmUsageLogsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AgentMemories 路由
+        registry.add(RouteEntry(
+            "agent_memories",
+            "/api/v1/uctoo/agent_memories",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentMemoriesService()
+                let controller = AgentMemoriesController(service)
+                let route = AgentMemoriesRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // SyncLog 路由
+        registry.add(RouteEntry(
+            "sync_log",
+            "/api/v1/uctoo/sync_log",
+            10,
+            true,
+            { router: Router =>
+                let service = SyncLogService()
+                let controller = SyncLogController(service)
+                let route = SyncLogRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
         
         // Agents 路由 (Agent管理)
         registry.add(RouteEntry(
@@ -518,6 +703,96 @@ public class AutoRouteConfig {
                 let controller = AgentTasksController(service)
                 let route = AgentTasksRoute(router, controller)
                 route.register()
+            }
+        ))
+
+        // AgentDashboard 路由 (Agent监控仪表板)
+        registry.add(RouteEntry(
+            "agent_dashboard",
+            "/api/v1/uctoo/agent-dashboard",
+            250,
+            true,
+            { router: Router =>
+                let controller = AgentDashboardController()
+                router.get("/api/v1/uctoo/agent-dashboard/overview", controller.overview)
+                router.get("/api/v1/uctoo/agent-dashboard/agent-type-distribution", controller.agentTypeDistribution)
+                router.get("/api/v1/uctoo/agent-dashboard/task-status-distribution", controller.taskStatusDistribution)
+                router.get("/api/v1/uctoo/agent-dashboard/memory-stats", controller.memoryStats)
+                router.get("/api/v1/uctoo/agent-dashboard/token-consumption", controller.tokenConsumption)
+                router.get("/api/v1/uctoo/agent-dashboard/collaboration-topology", controller.collaborationTopology)
+            }
+        ))
+
+        // BillingReport 路由 (计费报表)
+        registry.add(RouteEntry(
+            "billing_report",
+            "/api/v1/uctoo/billing-report",
+            260,
+            true,
+            { router: Router =>
+                let controller = BillingReportController()
+                router.get("/api/v1/uctoo/billing-report/daily", controller.dailyReport)
+                router.get("/api/v1/uctoo/billing-report/monthly", controller.monthlyReport)
+                router.get("/api/v1/uctoo/billing-report/export-csv", controller.exportCsv)
+            }
+        ))
+
+        // LlmUsageStats 路由 (Token 统计)
+        registry.add(RouteEntry(
+            "llm_usage_stats",
+            "/api/v1/uctoo/llm-usage-stats",
+            261,
+            true,
+            { router: Router =>
+                let controller = LlmUsageStatsController()
+                router.get("/api/v1/uctoo/llm-usage-stats/summary", controller.summary)
+                router.get("/api/v1/uctoo/llm-usage-stats/by-agent", controller.byAgent)
+                router.get("/api/v1/uctoo/llm-usage-stats/by-model", controller.byModel)
+            }
+        ))
+
+        // EventHandlersManagement 路由 (事件处理器管理)
+        registry.add(RouteEntry(
+            "event_handlers_management",
+            "/api/v1/uctoo/event-handlers-management",
+            270,
+            true,
+            { router: Router =>
+                let controller = EventHandlersManagementController()
+                router.get("/api/v1/uctoo/event-handlers/active", controller.listActive)
+                router.get("/api/v1/uctoo/event-handlers/history", controller.history)
+                router.post("/api/v1/uctoo/event-handlers/register", controller.registerHandler)
+                router.post("/api/v1/uctoo/event-handlers/unregister", controller.unregisterHandler)
+                router.post("/api/v1/uctoo/event-handlers/toggle", controller.toggleHandler)
+            }
+        ))
+
+        // ExecutorSwitch 路由 (执行策略运行时切换)
+        registry.add(RouteEntry(
+            "executor_switch",
+            "/api/v1/uctoo/executor-switch",
+            280,
+            true,
+            { router: Router =>
+                let controller = ExecutorSwitchController()
+                router.post("/api/v1/uctoo/executor/switch", controller.switchExecutor)
+                router.get("/api/v1/uctoo/executor/list", controller.listExecutors)
+                router.get("/api/v1/uctoo/executor/agent-executor", controller.getAgentExecutor)
+            }
+        ))
+
+        // SkillValidation 路由 (技能验证)
+        registry.add(RouteEntry(
+            "skill_validation",
+            "/api/v1/uctoo/skill-validation",
+            290,
+            true,
+            { router: Router =>
+                let controller = SkillValidationController()
+                router.post("/api/v1/uctoo/skill/validate", controller.validate)
+                router.post("/api/v1/uctoo/skill/validate-security", controller.validateSecurity)
+                router.post("/api/v1/uctoo/skill/execute-secure", controller.executeSecure)
+                router.get("/api/v1/uctoo/skill/validate-all", controller.validateAll)
             }
         ))
     }

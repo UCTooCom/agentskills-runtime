@@ -46,7 +46,9 @@ public class AgentMessagesService {
             entity.createdAt = DateTime.now()
             entity.updatedAt = DateTime.now()
             
-            if (entity.creator.isNone()) {
+            // 只在 creator 为空且 creatorId 是有效 UUID 时才设置
+            // 空字符串或非 UUID 格式的 creatorId 保持为 None（表示系统/匿名用户）
+            if (entity.creator.isNone() && !creatorId.isEmpty() && isValidUUID(creatorId)) {
                 entity.creator = Some(creatorId)
             }
             
@@ -61,6 +63,35 @@ public class AgentMessagesService {
         } catch (e: Exception) {
             return APIResult<AgentMessagesPO>(false, e.message)
         }
+    }
+
+    /**
+     * 验证字符串是否为有效的 UUID 格式
+     * UUID 格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+     */
+    private func isValidUUID(str: String): Bool {
+        // UUID 固定长度为 36
+        if (str.size != 36) {
+            return false
+        }
+        
+        // 检查分隔符位置：第9、14、19、24个字符应该是 '-'
+        // 使用 [start..end] 切片语法获取单字符字符串进行比较
+        if (str[8..9] != "-" || str[13..14] != "-" || str[18..19] != "-" || str[23..24] != "-") {
+            return false
+        }
+        
+        // 检查是否只包含有效字符（0-9, a-f, A-F, -）
+        let validChars = "0123456789abcdefABCDEF"
+        let chars = str.toArray()
+        for (c in chars) {
+            let charStr = c.toString()
+            if (!validChars.contains(charStr)) {
+                return false
+            }
+        }
+        
+        return true
     }
 
     /**
@@ -89,8 +120,8 @@ public class AgentMessagesService {
             if (entity.taskId.isSome()) {
                 existingEntity.taskId = entity.taskId
             }
-            if (entity.typeVal.size > 0) {
-                existingEntity.typeVal = entity.typeVal
+            if (entity.messageType.size > 0) {
+                existingEntity.messageType = entity.messageType
             }
             if (entity.content.isSome()) {
                 existingEntity.content = entity.content

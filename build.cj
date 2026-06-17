@@ -94,9 +94,22 @@ func stagePreBuild(): Int64 {
     return downloadAndExtract(os, arch)
 }
 
+func stagePostBuild(): Int64 {
+    println("post-build: running package_release script...")
+    let proc = launch("cjpm", ["run", "--skip-build", "--name", "magic.scripts.package_release"])
+    let result = proc.wait()
+    if (result != 0) {
+        println("post-build: package_release script failed with exit code ${result}")
+    } else {
+        println("post-build: package_release script completed successfully")
+    }
+    return result
+}
+
 main(): Int64 {
     match (Process.current.arguments[0]) {
         case "pre-build" => stagePreBuild()
+        case "post-build" => stagePostBuild()
         case _ => 0
     }
 }

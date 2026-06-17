@@ -510,10 +510,10 @@ public class AgentsController {
                 entity.name = s
             }
         }
-        if (let Some(typeVal) <- map.get("type")) {
-            let typeValStr = typeVal as String
-            if (let Some(s) <- typeValStr) {
-                entity.typeVal = s
+        if (let Some(agentType) <- map.get("agent_type")) {
+            let agentTypeStr = agentType as String
+            if (let Some(s) <- agentTypeStr) {
+                entity.agentType = s
             }
         }
         if (let Some(description) <- map.get("description")) {
@@ -611,6 +611,39 @@ public class AgentsController {
         if (let Some(updatedAt) <- map.get("updated_at")) {
         }
         if (let Some(deletedAt) <- map.get("deleted_at")) {
+            // DateTime类型, 由数据库处理
+        }
+        if (let Some(version) <- map.get("version")) {
+            let versionStr = version as String
+            if (let Some(s) <- versionStr) {
+                entity.version = Some<String>(s)
+            }
+        }
+        if (let Some(author) <- map.get("author")) {
+            let authorStr = author as String
+            if (let Some(s) <- authorStr) {
+                entity.author = Some<String>(s)
+            }
+        }
+        if (let Some(permissions) <- map.get("permissions")) {
+            let permissionsStr = permissions as String
+            if (let Some(s) <- permissionsStr) {
+                entity.permissions = Some<String>(s)
+            }
+        }
+        if (let Some(sourcePath) <- map.get("source_path")) {
+            let sourcePathStr = sourcePath as String
+            if (let Some(s) <- sourcePathStr) {
+                entity.sourcePath = Some<String>(s)
+            }
+        }
+        if (let Some(syncStatus) <- map.get("sync_status")) {
+            let syncStatusStr = syncStatus as String
+            if (let Some(s) <- syncStatusStr) {
+                entity.syncStatus = Some<String>(s)
+            }
+        }
+        if (let Some(lastSyncAt) <- map.get("last_sync_at")) {
             // DateTime类型, 由数据库处理
         }
         return entity
@@ -733,13 +766,13 @@ public class AgentsController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,name,type,description,status,config,system_prompt,tools,model,parent_id,user_id,color,background,memory_scope,isolation_mode,max_turns,initial_prompt,creator,created_at,updated_at,deleted_at\n")
+            sb.append("id,name,agent_type,description,status,config,system_prompt,tools,model,parent_id,user_id,color,background,memory_scope,isolation_mode,max_turns,initial_prompt,creator,created_at,updated_at,deleted_at,version,author,permissions,source_path,sync_status,last_sync_at\n")
 
             // 写入数据行
             for (entity in entities) {
                 sb.append("\"" + "${entity.id}" + ",")
                 sb.append("\"" + "${entity.name}" + ",")
-                sb.append("\"" + "${entity.typeVal}" + ",")
+                sb.append("\"" + "${entity.agentType}" + ",")
                 sb.append(if (let Some(v) <- entity.description) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.status) { "\"" + v.toString() + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.config) { "\"" + v + "\"," } else { "" })
@@ -758,6 +791,12 @@ public class AgentsController {
                 sb.append("\"" + "${entity.createdAt.toString()}" + ",")
                 sb.append("\"" + "${entity.updatedAt.toString()}" + ",")
                 sb.append(if (let Some(v) <- entity.deletedAt) { "\"" + v.toString() + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.version) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.author) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.permissions) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.sourcePath) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.syncStatus) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.lastSyncAt) { "\"" + v.toString() + "\"," } else { "" })
                 sb.append("\n")
             }
 
@@ -767,6 +806,163 @@ public class AgentsController {
             res.status(200).send(sb.toString())
         } catch (e: Exception) {
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"" + e.message + "\"}")
+        }
+    }
+
+    /**
+     * 获取主 Agent 信息
+     * GET /api/v1/uctoo/agents/main
+     * 返回主 Agent 的完整信息，包括 systemPrompt、tools、model 等
+     */
+    public func getMainAgent(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            // 查询 agent_type 为 MAIN 的 Agent
+            let (entities, _) = service.getListWithFilter(1, 1, "", "{\"agent_type\":{\"equals\":\"MAIN\"}}")
+            
+            if (entities.size == 0) {
+                res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"未找到主 Agent\"}")
+                return
+            }
+            
+            let mainAgent = entities[0]
+            
+            // 构建返回的 JSON 对象
+            let result = JsonObject()
+            result.put("id", JsonString(mainAgent.id))
+            result.put("name", JsonString(mainAgent.name))
+            result.put("agent_type", JsonString(mainAgent.agentType))
+            
+            if (let Some(desc) <- mainAgent.description) {
+                result.put("description", JsonString(desc))
+            }
+            
+            if (let Some(status) <- mainAgent.status) {
+                result.put("status", JsonInt(Int64(status)))
+            }
+            
+            if (let Some(config) <- mainAgent.config) {
+                result.put("config", JsonString(config))
+            }
+            
+            if (let Some(systemPrompt) <- mainAgent.systemPrompt) {
+                result.put("system_prompt", JsonString(systemPrompt))
+            }
+            
+            if (let Some(tools) <- mainAgent.tools) {
+                result.put("tools", JsonString(tools))
+            }
+            
+            if (let Some(model) <- mainAgent.model) {
+                result.put("model", JsonString(model))
+            }
+            
+            if (let Some(parentId) <- mainAgent.parentId) {
+                result.put("parent_id", JsonString(parentId))
+            }
+            
+            if (let Some(maxTurns) <- mainAgent.maxTurns) {
+                result.put("max_turns", JsonInt(Int64(maxTurns)))
+            }
+            
+            if (let Some(memoryScope) <- mainAgent.memoryScope) {
+                result.put("memory_scope", JsonString(memoryScope))
+            }
+            
+            if (let Some(version) <- mainAgent.version) {
+                result.put("version", JsonString(version))
+            }
+            
+            if (let Some(author) <- mainAgent.author) {
+                result.put("author", JsonString(author))
+            }
+            
+            if (let Some(permissions) <- mainAgent.permissions) {
+                result.put("permissions", JsonString(permissions))
+            }
+            
+            LogUtils.info("AgentsController: getMainAgent success, id=${mainAgent.id}, name=${mainAgent.name}")
+            res.status(200).json(result.toString())
+        } catch (e: Exception) {
+            LogUtils.error("AgentsController: getMainAgent error: ${e.message}")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
+    /**
+     * 获取 Agent 可用的技能列表
+     * GET /api/v1/uctoo/agents/:id/skills
+     */
+    public func getAgentSkills(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let agentIdOpt = req.pathParam("id")
+            
+            if (agentIdOpt.isNone()) {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少 agent id\"}")
+                return
+            }
+            
+            let idStr = agentIdOpt.getOrThrow()
+            
+            // 查询 Agent
+            let result = service.getById(idStr)
+            if (!result.success) {
+                res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"Agent 不存在\"}")
+                return
+            }
+            
+            let agentDataOpt = result.data
+            match (agentDataOpt) {
+                case Some(agentData) => 
+                    // 解析 tools 字段（JSON 数组格式）
+                    let skillsArray = JsonArray()
+                    
+                    match (agentData.tools) {
+                        case Some(tools) =>
+                            // tools 字段可能是 JSON 数组字符串，如 "[\"file_read\",\"file_write\"]"
+                            try {
+                                let toolsJson = JsonValue.fromStr(tools)
+                                if (toolsJson is JsonArray) {
+                                    let arr = toolsJson.asArray()
+                                    for (item in arr.getItems()) {
+                                        skillsArray.add(item)
+                                    }
+                                } else {
+                                    // 如果不是数组，尝试按逗号分隔的字符串处理
+                                    let toolList = tools.split(",")
+                                    for (tool in toolList) {
+                                        let trimmed = tool.trimAscii()
+                                        if (!trimmed.isEmpty()) {
+                                            skillsArray.add(JsonString(trimmed))
+                                        }
+                                    }
+                                }
+                            } catch (_: Exception) {
+                                // 如果解析失败，尝试按逗号分隔的字符串处理
+                                let toolList = tools.split(",")
+                                for (tool in toolList) {
+                                    let trimmed = tool.trimAscii()
+                                    if (!trimmed.isEmpty()) {
+                                        skillsArray.add(JsonString(trimmed))
+                                    }
+                                }
+                            }
+                        case None => ()
+                    }
+                    
+                    // 构建返回结果
+                    let respResult = JsonObject()
+                    respResult.put("agent_id", JsonString(idStr))
+                    respResult.put("agent_name", JsonString(agentData.name))
+                    respResult.put("skills", skillsArray)
+                    respResult.put("total", JsonInt(Int64(skillsArray.size())))
+                    
+                    res.status(200).json(respResult.toString())
+                case None =>
+                    res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"Agent 不存在\"}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("AgentsController: getAgentSkills error: ${e.message}")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
 

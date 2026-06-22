@@ -250,7 +250,7 @@ public class McpController {
         
         // 创建新的协议处理器
         let protocol = WebMCPProtocol(_skillManager, _chatModel)
-        protocol.setSessionInfo(sessionId, "")
+        protocol.setSessionInfo(sessionId, sessionId, "")
         _protocols.add(sessionId, protocol)
         
         LogUtils.info("Created new WebMCP protocol for session: ${sessionId}")

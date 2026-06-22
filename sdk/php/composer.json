@@ -87,7 +87,7 @@
     },
     "extra": {
         "runtime": {
-            "version": "0.0.22",
+            "version": "0.0.23",
             "downloadUrl": "https://atomgit.com/uctoo/agentskills-runtime/releases",
             "platforms": {
                 "win32-x64": "agentskills-runtime-win-x64.tar.gz",

@@ -18,6 +18,10 @@ public class WebNavigateTool <: Tool {
     Returns the navigation result from the frontend.
     """
 
+    /// 动态描述（可由 WebMCPController 注入菜单数据后更新）
+    /// 初始为默认描述，注入菜单后追加可用页面列表
+    private var _dynamicDescription: String = WebNavigateTool.DESC
+
     public init() {}
 
     public prop name: String {
@@ -25,7 +29,21 @@ public class WebNavigateTool <: Tool {
     }
 
     public prop description: String {
-        get() { WebNavigateTool.DESC }
+        get() { _dynamicDescription }
+    }
+
+    /**
+     * 更新工具的动态描述
+     * 由 WebMCPController 在会话建立时调用，注入当前用户可访问的页面菜单信息
+     * @param menuInfo 菜单信息字符串（已格式化的页面路径列表）
+     */
+    public func updateDynamicDescription(menuInfo: String): Unit {
+        if (menuInfo.isEmpty()) {
+            _dynamicDescription = WebNavigateTool.DESC
+        } else {
+            _dynamicDescription = "${WebNavigateTool.DESC}\n\n【当前用户可访问的页面】\n${menuInfo}"
+        }
+        LogUtils.info("[WebNavigateTool] Dynamic description updated, length=${_dynamicDescription.size.toString()}")
     }
 
     public prop parameters: Array<ToolParameter> {
@@ -68,7 +86,16 @@ public class WebNavigateTool <: Tool {
         }
         let title = WebNavigateTool.extractString(args, "title")
         LogUtils.info("[WebNavigateTool] Navigating to: ${url}")
-        ToolResponse("Navigated to: ${url}${if (title.size > 0) { " (${title})" } else { "" }}")
+
+        // 构建参数
+        let argsMap = HashMap<String, JsonValue>()
+        argsMap.add("url", JsonString(url))
+        if (!title.isEmpty()) {
+            argsMap.add("title", JsonString(title))
+        }
+
+        // 通过 WebMCPToolHelper 统一执行 SSE 推送 + 阻塞等待
+        WebMCPToolHelper.executeToolCall("web_navigate", argsMap, 30000, "")
     }
 
     public func toJsonValue(): JsonValue {

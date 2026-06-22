@@ -71,7 +71,15 @@ public class WebNotifyTool <: Tool {
         let notifyType = WebNotifyTool.extractString(args, "type")
         let duration = WebNotifyTool.extractInt(args, "duration", 3000)
         LogUtils.info("[WebNotifyTool] Sending notification: [${notifyType}] ${message}")
-        ToolResponse("Notification sent: [${notifyType}] ${message} (duration: ${duration}ms)")
+
+        // 构建参数
+        let argsMap = HashMap<String, JsonValue>()
+        argsMap.add("message", JsonString(message))
+        argsMap.add("type", JsonString(notifyType))
+        argsMap.add("duration", JsonString(duration.toString()))
+
+        // 通过 WebMCPToolHelper 统一执行 SSE 推送 + 阻塞等待
+        WebMCPToolHelper.executeToolCall("web_notify", argsMap, 30000, "")
     }
 
     public func toJsonValue(): JsonValue {

@@ -1,0 +1,102 @@
+---
+title: "什么是 Agent"
+description: "Agent 是一个开放的声明格式，用于定义 AI Agent 的身份、能力、协作关系和运行时行为。"
+---
+
+Agent 是包含 `AGENTS.md` 文件的目录，通过 YAML frontmatter 声明元数据，通过 Markdown 正文定义行为指令。Agent 声明可以与数据库双向同步，支持声明式管理和运行时查询。
+
+```directory
+my-agent/
+├── AGENTS.md          # 必需: 元数据 + 行为指令
+├── contexts/          # 可选: 对话上下文数据
+├── tasks/             # 可选: 任务数据
+└── messages/          # 可选: Agent 间消息
+```
+
+## Agent 的工作原理
+
+Agent 在加载时需要完整提供大模型全部信息，与 Skill 的渐进式披露不同：
+
+1. **发现**: 系统扫描配置的目录，发现包含 `AGENTS.md` 的 Agent 声明。
+
+2. **完整加载**: 系统启动或 Agent 被引用时，加载完整的 `AGENTS.md`（元数据 + 行为指令），确保大模型获得 Agent 的完整信息。
+
+3. **执行**: Agent 遵循指令执行任务，按需加载引用文件、访问工具和资源。
+
+4. **协作**: Agent 可以创建子 Agent、分配任务、传递消息，形成多 Agent 协作。
+
+5. **同步**: Agent 声明文件与数据库自动双向同步，保持声明式定义和运行时状态的一致性。
+
+## AGENTS.md 文件
+
+每个 Agent 以 `AGENTS.md` 文件开始，包含 YAML frontmatter 和 Markdown 指令：
+
+```mdx
+---
+name: main-agent
+agent_type: main
+description: 主 Agent，负责任务分解和协调
+version: 1.0.0
+tools:
+  - file_read
+  - file_write
+  - bash
+  - agent_create
+model: deepseek
+permissions:
+  - database.uctoo.agents:read
+  - database.uctoo.agents:write
+---
+
+# Main Agent
+
+你是系统的主 Agent，负责任务的接收、分解、协调和结果汇总。
+
+## 角色
+作为主 Agent，你是用户与系统交互的主要接口。
+
+## 处理流程
+1. 接收用户任务描述
+2. 分析任务复杂度和所需技能
+3. 分解为子任务并分配给子 Agent
+4. 监控执行进度并汇总结果
+```
+
+前置元数据中必需的字段：
+
+- `name`: Agent 标识符
+- `agent_type`: Agent 类型角色
+- `description`: Agent 的功能和职责
+
+Markdown 正文包含实际的行为指令，没有特定的结构或内容限制。
+
+## 核心优势
+
+- **自描述**: 任何人可以阅读 `AGENTS.md` 理解 Agent 的身份和行为，便于审计和改进。
+
+- **声明式管理**: Agent 的定义以文件形式存在，易于编辑、版本控制和共享。
+
+- **数据库同步**: Agent 声明文件与数据库自动双向同步，兼顾声明式管理和运行时查询的需求。
+
+- **多 Agent 协作**: 支持链式、并行、分层等协作模式，实现 Agent 集群的协同工作。
+
+- **权限集成**: 与 RBAC 权限体系深度集成，精细控制 Agent 的数据访问和操作权限。
+
+- **可移植**: Agent 声明只是文件，易于在不同系统和平台间迁移。
+
+## 与 Agent Skills 的关系
+
+Agent 开放标准与 Agent Skills 开放标准互补协作：
+
+| 标准 | 定义对象 | 核心问题 |
+|------|---------|---------|
+| Agent Skills | 技能（Skill） | Agent **可以做什么** |
+| Agent 开放标准 | Agent 本身 | Agent **是谁**、**如何组织**、**如何协作** |
+
+一个完整的 AI Agent 系统需要两者配合：Agent 声明定义身份和协作关系，Skill 声明定义具体能力。
+
+## 下一步
+
+- [查看规范](/specification) 了解完整的格式定义。
+- [集成 Agent](/integrate-agents) 了解如何构建兼容系统。
+- [文件系统-数据库同步](/filesystem-database-sync) 了解双向同步机制。

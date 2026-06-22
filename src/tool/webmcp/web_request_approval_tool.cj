@@ -71,7 +71,15 @@ public class WebRequestApprovalTool <: Tool {
         let details = WebRequestApprovalTool.extractString(args, "details")
         let timeout = WebRequestApprovalTool.extractInt(args, "timeout", 60)
         LogUtils.info("[WebRequestApprovalTool] Requesting approval for: ${action}")
-        ToolResponse("Approval requested for: ${action}${if (details.size > 0) { " - ${details}" } else { "" }} (timeout: ${timeout}s). Note: Auto-approved in current implementation - frontend integration pending.")
+
+        // 构建参数
+        let argsMap = HashMap<String, JsonValue>()
+        argsMap.add("action", JsonString(action))
+        argsMap.add("details", JsonString(details))
+        argsMap.add("timeout", JsonString(timeout.toString()))
+
+        // 通过 WebMCPToolHelper 统一执行 SSE 推送 + 阻塞等待（审批超时 120 秒）
+        WebMCPToolHelper.executeToolCall("web_request_approval", argsMap, 120000, "")
     }
 
     public func toJsonValue(): JsonValue {

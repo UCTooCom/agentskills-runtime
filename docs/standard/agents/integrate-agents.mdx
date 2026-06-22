@@ -1,0 +1,271 @@
+---
+title: "集成 Agent"
+sidebarTitle: "集成 Agent"
+description: "如何将 Agent 开放标准集成到你的系统或平台。"
+---
+
+本指南说明如何将 Agent 开放标准集成到 AI Agent 系统或开发平台中。
+
+## 集成架构
+
+一个兼容 Agent 开放标准的系统需要实现以下核心能力：
+
+1. **发现** Agent 声明文件
+2. **解析** YAML frontmatter 元数据
+3. **同步** 文件系统与数据库的双向数据流
+4. **管理** Agent 生命周期
+5. **协调** 多 Agent 协作
+6. **控制** 权限和安全
+
+## Agent 发现
+
+Agent 声明是包含 `AGENTS.md` 文件的目录。系统应扫描配置的目录以发现有效的 Agent。
+
+### 发现流程
+
+```
+function discoverAgents(agentsDir):
+    agents = []
+    for dir in listDirectories(agentsDir):
+        agentsMd = findFile(dir, "AGENTS.md")
+        if agentsMd exists:
+            agents.append(dir)
+    return agents
+```
+
+### 文件查找
+
+优先查找大写 `AGENTS.md`，兼容小写 `agents.md`：
+
+```
+function findAgentsMd(agentDir):
+    for name in ["AGENTS.md", "agents.md"]:
+        path = agentDir + "/" + name
+        if fileExists(path):
+            return path
+    return None
+```
+
+## 完整加载
+
+与 Skill 的渐进式披露不同，Agent 声明需要完整加载。系统在启动或 Agent 被引用时，应解析完整的 `AGENTS.md`（frontmatter 元数据 + Markdown 正文），确保大模型获得 Agent 的全部信息。
+
+### 解析完整声明
+
+```
+function parseAgent(agentPath):
+    content = readFile(agentPath + "/AGENTS.md")
+    frontmatter = extractYAMLFrontmatter(content)
+    body = extractMarkdownBody(content)
+
+    return {
+        name: frontmatter.name,
+        agent_type: frontmatter.agent_type,
+        description: frontmatter.description,
+        tools: frontmatter.tools,
+        model: frontmatter.model,
+        permissions: frontmatter.permissions,
+        instructions: body,
+        path: agentPath
+    }
+```
+
+### 注入上下文
+
+将 Agent 完整声明注入系统提示，使模型获得 Agent 的全部信息：
+
+```xml
+<available_agents>
+  <agent>
+    <name>main-agent</name>
+    <type>main</type>
+    <description>主 Agent，负责任务分解和协调</description>
+    <location>/path/to/agents/main-agent/AGENTS.md</location>
+  </agent>
+  <agent>
+    <name>code-reviewer</name>
+    <type>sub</type>
+    <description>代码审查 Agent，检查代码质量和规范</description>
+    <location>/path/to/agents/code-reviewer/AGENTS.md</location>
+  </agent>
+</available_agents>
+```
+
+保持元数据简洁。每个 Agent 应增加约 50-100 个标记到上下文。
+
+## 文件系统-数据库双向同步
+
+Agent 开放标准的核心创新是声明文件与数据库的双向同步机制，使 Agent 既能通过文件进行声明式管理，又能通过数据库进行运行时查询和持久化。
+
+### 同步架构
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│   文件系统       │ ◄─────► │    数据库        │
+│  (AGENTS.md)    │ 同步引擎 │  (agents 表)    │
+│  声明式定义      │         │  运行时状态      │
+└─────────────────┘         └─────────────────┘
+```
+
+### 同步方向
+
+| 方向 | 触发条件 | 机制 |
+|------|---------|------|
+| 文件 → 数据库 | 文件修改时间戳变更 | 定时扫描 + upsert |
+| 数据库 → 文件 | 数据库记录变更 | AOP 拦截 + 文件写入 |
+
+### 核心组件
+
+1. **SyncManager**: 核心同步控制器，协调所有同步操作
+2. **SyncHandler**: 实体同步处理器接口，定义同步行为
+3. **ChangeDetector**: 基于文件修改时间戳检测变更
+4. **SyncInterceptor**: AOP 同步拦截器，拦截数据库写操作
+5. **DataMapper**: Markdown frontmatter 与实体对象的双向转换
+6. **ConflictResolver**: 冲突解决器（默认 Last-Write-Wins）
+7. **SyncStatusManager**: 同步状态管理
+
+### 关键设计原则
+
+- **循环同步防护**: 通过 SyncContext（ThreadLocal）标记当前处于同步流程中，避免 AOP 拦截器触发循环同步
+- **幂等性保证**: 同一数据多次同步产生相同结果
+- **实体依赖拓扑排序**: 按依赖关系排序同步顺序（如 agent_skill 依赖 agent，先同步 agent）
+- **source_path 唯一标识**: 通过文件路径建立文件记录与数据库记录的唯一映射
+
+详细规范参见 [文件系统-数据库同步](/filesystem-database-sync)。
+
+## Agent 生命周期管理
+
+系统需要管理 Agent 的完整生命周期：
+
+```
+created → started → running → paused → stopped → destroyed
+```
+
+### 生命周期操作
+
+| 操作 | 说明 | 前置状态 |
+|------|------|---------|
+| `start` | 启动 Agent | created, stopped |
+| `stop` | 停止 Agent | running, paused |
+| `pause` | 暂停 Agent | running |
+| `resume` | 恢复 Agent | paused |
+
+### 上下文管理
+
+每个 Agent 拥有独立的对话上下文：
+- 上下文隔离：不同 Agent 的上下文互不干扰
+- 上下文持久化：上下文数据存储在 `agent_contexts` 表
+- 上下文恢复：Agent 重启后可恢复之前的上下文
+
+## 多 Agent 协作
+
+### 协作模式实现
+
+**链式协作**：按顺序执行，传递中间结果
+
+```
+function chainCollaboration(agents, task):
+    result = task
+    for agent in agents:
+        result = agent.execute(result)
+    return result
+```
+
+**并行协作**：同时执行独立子任务，合并结果
+
+```
+function parallelCollaboration(agents, task):
+    subtasks = decompose(task, agents.length)
+    results = parallelExecute(agents, subtasks)
+    return merge(results)
+```
+
+**分层协作**：主 Agent 创建和管理子 Agent
+
+```
+function hierarchicalCollaboration(mainAgent, task):
+    subtasks = mainAgent.decompose(task)
+    subAgents = mainAgent.createSubAgents(subtasks)
+    results = assignAndExecute(subAgents, subtasks)
+    return mainAgent.aggregate(results)
+```
+
+### 消息传递
+
+Agent 间通过消息传递进行通信：
+
+| 消息类型 | 说明 |
+|---------|------|
+| `task_assign` | 主 Agent 分配任务给子 Agent |
+| `task_result` | 子 Agent 返回任务结果 |
+| `query` | Agent 间查询请求 |
+| `response` | Agent 间查询响应 |
+
+## 权限集成
+
+Agent 的权限声明与 RBAC 体系集成：
+
+### 权限格式
+
+```
+resource:action
+```
+
+- `resource`: 数据资源标识（如 `database.uctoo.agents`）
+- `action`: 操作类型（`read`、`write`、`execute`）
+
+### 权限检查流程
+
+1. 解析 Agent 声明中的 `permissions` 字段
+2. 与当前用户的权限进行交集
+3. 仅允许 Agent 执行交集内的操作
+
+## HTTP API 设计
+
+兼容系统应提供以下 API 接口：
+
+### 标准 CRUD
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/{db}/agents` | 创建 Agent |
+| PUT | `/api/v1/{db}/agents/{id}` | 更新 Agent |
+| DELETE | `/api/v1/{db}/agents/{id}` | 删除 Agent |
+| GET | `/api/v1/{db}/agents/{id}` | 查询单个 Agent |
+| GET | `/api/v1/{db}/agents` | 查询 Agent 列表 |
+
+### 生命周期
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/{db}/agents/{id}/start` | 启动 Agent |
+| POST | `/api/v1/{db}/agents/{id}/stop` | 停止 Agent |
+| POST | `/api/v1/{db}/agents/{id}/pause` | 暂停 Agent |
+| POST | `/api/v1/{db}/agents/{id}/resume` | 恢复 Agent |
+
+### 协作
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/{db}/agents/{id}/tasks` | 分配任务 |
+| GET | `/api/v1/{db}/agents/{id}/tasks` | 查询任务列表 |
+| POST | `/api/v1/{db}/agents/collaborate` | 创建协作任务 |
+
+## 安全考虑
+
+- **权限控制**: 所有操作必须在 Agent 声明的权限范围内
+- **资源隔离**: 不同 Agent 的上下文和资源应隔离
+- **审计日志**: 记录所有关键操作（Agent 创建、任务分配、消息传递）
+- **沙箱执行**: Agent 执行的脚本应在隔离环境中运行
+- **确认机制**: 执行潜在危险操作前应请求用户确认
+
+## 参考实现
+
+[agentskills-runtime](https://github.com/uctoo/agentskills-runtime) 提供了仓颉语言的完整参考实现，包括：
+
+- AgentLoader: 从 AGENTS.md 加载 Agent 定义
+- AgentFactory: 根据定义创建 Agent 实例
+- AgentLifecycleManager: 管理 Agent 生命周期
+- AgentContextManager: 管理 Agent 对话上下文
+- CollaborationService: Agent 协作协调
+- SyncManager: 文件系统-数据库双向同步

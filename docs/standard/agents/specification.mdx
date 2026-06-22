@@ -1,0 +1,296 @@
+---
+title: "规范"
+description: "Agent 开放标准的完整格式规范。"
+---
+
+本文档定义了 Agent 开放标准的格式。
+
+## 目录结构
+
+一个 Agent 声明是一个至少包含 `AGENTS.md` 文件的目录：
+
+```
+agent-name/
+└── AGENTS.md          # 必需
+```
+
+<Tip>
+您可以选择性地包含 [附加目录](#可选目录) 如 `contexts/`、`tasks/` 和 `messages/` 来支持 Agent 的运行时数据。
+</Tip>
+
+## AGENTS.md 格式
+
+`AGENTS.md` 文件必须包含 YAML 前置元数据，后跟 Markdown 内容。
+
+### 前置元数据（必需字段）
+
+```yaml
+---
+name: main-agent
+agent_type: main
+description: 主 Agent，负责任务分解和协调
+---
+```
+
+### 前置元数据（完整字段）
+
+```yaml
+---
+name: main-agent
+agent_type: main
+description: 主 Agent，负责任务分解和协调
+version: 1.0.0
+author: system
+tools:
+  - file_read
+  - file_write
+  - bash
+  - agent_create
+  - agent_fork
+model: deepseek
+maxTurns: 500
+memory: user
+background: false
+permissions:
+  - database.uctoo.agents:read
+  - database.uctoo.agents:write
+  - database.uctoo.agents:execute
+---
+```
+
+### 字段定义
+
+| 字段 | 必需 | 类型 | 约束条件 |
+|-------|----------|------|-------------|
+| `name` | 是 | string | 最多 64 个字符。仅限小写字母、数字和连字符。不得以连字符开头或结尾。 |
+| `agent_type` | 是 | string | Agent 类型标识符。 |
+| `description` | 是 | string | 最多 1024 个字符。非空。描述 Agent 的功能和职责。 |
+| `version` | 否 | string | 语义化版本号（如 "1.0.0"）。 |
+| `author` | 否 | string | Agent 的作者或组织。 |
+| `tools` | 否 | string[] | Agent 可使用的工具列表。 |
+| `model` | 否 | string | Agent 使用的 AI 模型标识符。 |
+| `maxTurns` | 否 | integer | Agent 最大执行轮次。 |
+| `memory` | 否 | string | 内存作用域（如 `user`、`session`、`global`）。 |
+| `background` | 否 | boolean | 是否作为后台 Agent 运行。默认 `false`。 |
+| `permissions` | 否 | string[] | 权限声明列表，格式为 `resource:action`。 |
+| `parent_id` | 否 | string | 父 Agent 的标识符，用于建立 Agent 层级关系。 |
+| `color` | 否 | string | Agent 的显示颜色标识。 |
+| `isolation_mode` | 否 | string | 隔离模式（如 `none`、`context`、`process`）。 |
+| `initial_prompt` | 否 | string | Agent 启动时的初始提示词。 |
+| `metadata` | 否 | map | 用于附加元数据的任意键值映射。 |
+
+#### `name` 字段
+
+必需的 `name` 字段：
+- 必须是 1-64 个字符
+- 只能包含 Unicode 小写字母数字字符和连字符（`a-z` 和 `-`）
+- 不得以 `-` 开头或结尾
+- 不得包含连续的连字符（`--`）
+- 必须与父目录名称匹配（当以目录形式组织时）
+
+有效示例：
+```yaml
+name: main-agent
+```
+```yaml
+name: code-reviewer
+```
+```yaml
+name: data-analyzer
+```
+
+无效示例：
+```yaml
+name: MainAgent  # 不允许大写
+```
+```yaml
+name: -agent  # 不能以连字符开头
+```
+```yaml
+name: main--agent  # 不允许连续连字符
+```
+
+#### `agent_type` 字段
+
+必需的 `agent_type` 字段定义 Agent 的类型角色：
+
+| 类型 | 说明 |
+|------|------|
+| `main` | 主 Agent，负责任务接收、分解和协调 |
+| `sub` | 子 Agent，执行特定子任务 |
+| `worker` | 工作 Agent，执行具体操作 |
+| `supervisor` | 监督 Agent，负责质量控制和审核 |
+
+实现者可以定义自定义 `agent_type` 以适应特定领域需求。
+
+#### `description` 字段
+
+必需的 `description` 字段：
+- 必须是 1-1024 个字符
+- 应描述 Agent 的功能和职责
+- 应包含有助于系统识别和路由任务的具体关键词
+
+好示例：
+```yaml
+description: 主 Agent，负责任务的接收、分解、协调和结果汇总。处理用户交互、创建子 Agent、监控执行进度。
+```
+
+差示例：
+```yaml
+description: 主 Agent。
+```
+
+#### `tools` 字段
+
+可选的 `tools` 字段声明 Agent 可以使用的工具列表：
+- 每个工具以字符串形式列出
+- 工具名称应使用 snake_case 命名
+- 工具列表决定了 Agent 的能力边界
+
+示例：
+```yaml
+tools:
+  - file_read
+  - file_write
+  - bash
+  - agent_create
+  - agent_fork
+```
+
+#### `permissions` 字段
+
+可选的 `permissions` 字段声明 Agent 的数据访问权限：
+- 每个权限以 `resource:action` 格式声明
+- `resource` 标识数据资源（如 `database.uctoo.agents`）
+- `action` 标识操作类型（`read`、`write`、`execute`）
+- 权限声明与 RBAC 权限体系集成
+
+示例：
+```yaml
+permissions:
+  - database.uctoo.agents:read
+  - database.uctoo.agents:write
+  - database.uctoo.agents:execute
+```
+
+#### `metadata` 字段
+
+可选的 `metadata` 字段：
+- 从字符串键到字符串值的映射
+- 客户端可以使用它来存储 Agent 规范未定义的附加属性
+- 建议使键名合理唯一，以避免意外冲突
+
+示例：
+```yaml
+metadata:
+  author: my-org
+  version: "1.0"
+  runtime: agentskills-runtime
+```
+
+### 正文内容
+
+前置元数据之后的 Markdown 正文包含 Agent 的行为指令。没有格式限制。编写任何有助于 Agent 有效执行任务的内容。
+
+推荐部分：
+- **角色定义**: Agent 的角色和职责
+- **处理流程**: Agent 的执行步骤和决策逻辑
+- **协作模式**: 与其他 Agent 的协作方式
+- **输入/输出规范**: 接收和返回的数据格式
+- **异常处理**: 错误处理和恢复策略
+- **安全约束**: 操作的安全边界
+
+与 Skill 的渐进式披露不同，Agent 声明在加载时需要完整提供大模型全部信息。系统在启动或 Agent 被引用时，应加载完整的 `AGENTS.md`（包括 frontmatter 元数据和 Markdown 正文），确保大模型获得 Agent 的完整身份、能力、行为指令和协作关系。
+
+## 可选目录
+
+### contexts/
+
+包含 Agent 的对话上下文数据：
+- `context.json` - 当前对话上下文
+- `metadata.json` - 上下文元数据
+
+### tasks/
+
+包含 Agent 的任务数据：
+- `task-{id}.json` - 单个任务的定义和状态
+- 支持子任务的层级组织
+
+### messages/
+
+包含 Agent 间的消息数据：
+- `message-{id}.json` - 单条消息
+- 支持消息类型：`task_assign`、`task_result`、`query`、`response`
+
+## 完整加载
+
+与 Skill 的渐进式披露不同，Agent 声明需要完整加载。Agent 是系统的核心参与者，大模型需要获得 Agent 的全部信息才能正确理解身份、执行行为指令和参与协作。
+
+1. **完整加载**: 系统启动或 Agent 被引用时，加载完整的 `AGENTS.md`（frontmatter 元数据 + Markdown 正文）
+2. **运行时数据**（按需）: 上下文、任务、消息等运行时数据仅在需要时加载
+
+建议将 `AGENTS.md` 保持在 500 行以下，将详细的参考资料移到单独的文件中，但正文内容不应为了节省上下文而省略关键信息。
+
+## 文件引用
+
+在引用 Agent 中的其他文件时，请使用相对于 Agent 根目录的路径：
+
+```markdown
+详情请参阅 [协作规范](references/collaboration.md)。
+
+运行初始化脚本：
+scripts/init.sh
+```
+
+保持文件引用从 `AGENTS.md` 深入一级。避免深度嵌套的引用链。
+
+## Agent 协作模式
+
+### 链式协作
+
+Agent 按顺序依次执行，前一个 Agent 的输出作为后一个的输入：
+
+```
+MainAgent → AgentA → AgentB → AgentC → Result
+```
+
+### 并行协作
+
+多个 Agent 同时执行独立子任务，结果合并：
+
+```
+MainAgent → [AgentA, AgentB, AgentC] → Merge → Result
+```
+
+### 分层协作
+
+主 Agent 管理子 Agent，子 Agent 可以进一步创建更细粒度的 Agent：
+
+```
+MainAgent
+  ├── SubAgentA
+  │     ├── WorkerAgent1
+  │     └── WorkerAgent2
+  └── SubAgentB
+        └── WorkerAgent3
+```
+
+### 混合协作
+
+复杂任务可能需要混合多种协作模式：
+
+```
+MainAgent → [SubAgentA, SubAgentB] → SubAgentC → Result
+                    ↓                      ↑
+               [SubAgentD] ←───────────────┘
+```
+
+## 验证
+
+使用参考库验证您的 Agent 声明：
+
+```bash
+agents-ref validate ./my-agent
+```
+
+这会检查您的 `AGENTS.md` 前置元数据是否有效并遵循所有命名约定。

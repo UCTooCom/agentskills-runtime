@@ -50,6 +50,14 @@ src/app/
 
 ## 3. 开发步骤
 
+### 通用模块开发流程  
+
+1. 根据业务需求进行数据库建模，设计出表结构以及表变更的DDL文件。  
+2. 一般由人工执行数据库结构新增和变更。后续待f_orm和uctoo中的migration机制完善了，数据库变更也可以自动化。  
+3. 使用/api/v1/uctoo/db_info/load-db-info 接口刷新db_info表数据库信息。todo:有空了应该重构load-db-info 接口，分离出一个独立的CLI工具loadDbInfo，可以不依赖于runtime主应用启动，类似于crudgen可以独立运行的命令行工具。  
+4. 使用crudgen生成新增表或表更表的标准crud模块。使用crudweb生成web项目中的数据库表管理界面。可选使用crudapp生成移动端APP，todo:开发中。  
+5. 在生成的标准模块基础上进行迭代开发。  
+
 ### 3.1 步骤一：定义数据模型
 
 在 `src/app/models/{database}/` 目录下创建 `{Table}PO.cj` 文件：

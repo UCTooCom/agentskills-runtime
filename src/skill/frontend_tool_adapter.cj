@@ -5,6 +5,7 @@ package magic.skill
 
 import magic.core.tool.{Tool, ToolParameter, ToolResponse}
 import magic.jsonable.TypeSchema
+import magic.tool.webmcp.WebMCPToolHelper
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonNull}
 import std.collection.{HashMap, ArrayList}
 import magic.log.LogUtils
@@ -118,24 +119,10 @@ public class FrontendToolAdapter <: Tool {
     override public func invoke(args: HashMap<String, JsonValue>): ToolResponse {
         LogUtils.info("Frontend tool invoked: ${_name} with args: ${args}")
 
-        let resultBuilder = StringBuilder()
-        resultBuilder.append("前端工具调用请求已发送: ${_name}")
-        if (!_route.isEmpty()) {
-            resultBuilder.append("\n目标页面: ${_route}")
-        }
-        resultBuilder.append("\n参数: ")
-
-        var first = true
-        for ((key, value) in args) {
-            if (!first) {
-                resultBuilder.append(", ")
-            }
-            resultBuilder.append("${key}=${value.toString()}")
-            first = false
-        }
-
-        let responseContent = resultBuilder.toString()
-        return ToolResponse(responseContent, isError: false)
+        // 通过 WebMCPToolHelper 统一执行 SSE 推送 + 阻塞等待
+        // FrontendToolAdapter 在 magic.skill 包中，需要 import magic.tool.webmcp.WebMCPToolHelper
+        // 增加超时时间到 120 秒，支持复杂的前端操作（如数据库查询、文件上传等）
+        WebMCPToolHelper.executeToolCall(_name, args, 120000, _route)
     }
 
     public func toJsonValue(): JsonValue {

@@ -64,7 +64,12 @@ public class WebMCPRoutes {
         _router.get("/api/v1/uctoo/webmcp/remote", { req, res =>
             _controller.handleRemoteRequest(req, res)
         })
-        
+
+        // 客户端短码解析端点 - 前端 TinyRemoter 通过此端点解析识别码为完整的 sessionId
+        _router.get("/api/v1/uctoo/webmcp/client", { req, res =>
+            _controller.handleClientRequest(req, res)
+        })
+
         // streamableHttp 端点 - 支持前端通过 streamableHttp 类型连接
         _router.post("/api/v1/uctoo/webmcp/mcp", { req, res =>
             _controller.handleStreamableHttp(req, res)
@@ -73,6 +78,16 @@ public class WebMCPRoutes {
         // streamableHttp 备用端点 - 兼容标准 MCP 协议
         _router.post("/api/v1/webmcp/mcp", { req, res =>
             _controller.handleStreamableHttp(req, res)
+        })
+
+        // 工具调用结果回传端点 - 前端执行完工具后通过此端点回传结果
+        _router.post("/api/v1/uctoo/webmcp/tool-result", { req, res =>
+            _controller.handleToolResult(req, res)
+        })
+
+        // SSE 端点 - 前端通过 EventSource 连接，接收工具调用指令推送
+        _router.get("/api/v1/uctoo/webmcp/sse", { req, res =>
+            _controller.handleSSE(req, res)
         })
         
         LogUtils.debug("WebMCP HTTP routes registered")

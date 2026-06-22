@@ -428,50 +428,50 @@ public class HTTPServer {
     private func readRequestBody(req: HttpRequest): String {
         try {
             let bodySizeOpt = req.bodySize
-            if (bodySizeOpt.isNone()) {
-                eprintln("=== readRequestBody: bodySize is None, returning empty ===")
-                return ""
+            let bodySize = if (bodySizeOpt.isNone()) {
+                eprintln("=== readRequestBody: bodySize is None, will try to read anyway ===")
+                0
+            } else {
+                let size = bodySizeOpt.getOrThrow()
+                eprintln("=== readRequestBody: bodySize=${size} ===")
+                size
             }
-            
-            let bodySize = bodySizeOpt.getOrThrow()
-            eprintln("=== readRequestBody: bodySize=${bodySize} ===")
             
             let maxBodySize = 10 * 1024 * 1024
-            if (bodySize <= 0 || bodySize > maxBodySize) {
-                logger.warn("Invalid or too large body size: ${bodySize}, ignoring body")
+            if (bodySize > maxBodySize) {
+                logger.warn("Too large body size: ${bodySize}, ignoring body")
                 return ""
             }
             
+            // 尝试从请求体读取所有字节
             let buf = ByteBuffer()
             let copied = copy(req.body, to: buf)
-            eprintln("=== readRequestBody: copied ${copied} bytes, expected=${bodySize} ===")
+            eprintln("=== readRequestBody: copy returned ${copied} bytes ===")
             
             if (copied == 0) {
-                logger.warn("Empty body read despite bodySize=${bodySize}")
+                logger.warn("Empty body read, bodySize was: ${bodySize}")
                 return ""
             }
             
+            // 读取 ByteBuffer 中的所有字节
             buf.seek(Begin(0))
             let bodyBytes = readToEnd(buf)
-            eprintln("=== readRequestBody: readToEnd got ${bodyBytes.size} bytes ===")
+            eprintln("=== readRequestBody: got ${bodyBytes.size} bytes ===")
             
-            // 直接使用 ByteBuffer 的内容读取（避免多次转换）
-            buf.seek(Begin(0))
-            let reader = StringReader(req.body)
-            let bodyStr = reader.readToEnd()
-            
-            if (bodyStr.isEmpty() && bodyBytes.size > 0) {
-                // 备选方案：如果 reader 读取失败，使用字节数组转换
-                eprintln("=== readRequestBody: reader returned empty, using byte array conversion ===")
-                let decoded = tryDecodeBody(bodyBytes)
-                if (!decoded.isEmpty()) {
-                    eprintln("=== readRequestBody: decoded body (${decoded.size} chars): [${decoded[0..min(200, decoded.size)]}] ===")
-                    return decoded
-                }
+            if (bodyBytes.isEmpty()) {
+                logger.warn("Empty body byte array despite ${copied} bytes copied")
+                return ""
             }
             
-            eprintln("=== readRequestBody: body (${bodyStr.size} chars): [${bodyStr[0..min(200, bodyStr.size)]}] ===")
-            return bodyStr
+            // 使用字节数组转换为字符串
+            let decoded = tryDecodeBody(bodyBytes)
+            if (!decoded.isEmpty()) {
+                let previewLength = if (decoded.size > 200) { 200 } else { decoded.size }
+                eprintln("=== readRequestBody: decoded body (${decoded.size} chars): [${decoded[0..previewLength]}] ===")
+                return decoded
+            }
+            
+            return ""
         } catch (ex: Exception) {
             logger.error("Error reading request body: ${ex.message}")
             eprintln("=== readRequestBody exception: ${ex.message} ===")

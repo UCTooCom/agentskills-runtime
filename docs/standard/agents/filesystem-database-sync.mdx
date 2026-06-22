@@ -1,0 +1,235 @@
+---
+title: "文件系统-数据库双向同步"
+sidebarTitle: "双向同步"
+description: "Agent 声明文件与数据库的双向同步规范，实现声明式管理与运行时查询的统一。"
+---
+
+本文档定义了 Agent 声明文件与数据库的双向同步规范，这是 Agent 开放标准的核心创新特性。
+
+## 设计动机
+
+传统的 Agent 管理面临两难选择：
+
+- **纯文件方式**: 声明式、可版本控制、易共享，但难以运行时查询和持久化状态
+- **纯数据库方式**: 易查询、易持久化、支持事务，但失去声明式管理的优势
+
+**双向同步**统一了两种方式的优势：Agent 以文件形式声明和管理，同时自动同步到数据库供运行时使用。
+
+## 核心原理
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    同步引擎                           │
+│                                                      │
+│  ┌──────────┐    ┌──────────┐    ┌──────────────┐  │
+│  │ 文件系统  │ ◄─►│ SyncMgr  │ ◄─►│   数据库     │  │
+│  │ AGENTS.md│    │          │    │ agents 表    │  │
+│  └──────────┘    └──────────┘    └──────────────┘  │
+│       ▲               ▲  ▲               ▲          │
+│       │               │  │               │          │
+│  ChangeDetector  SyncInterceptor  ConflictResolver  │
+│       │               │  │               │          │
+│  定时扫描         AOP拦截         Last-Write-Wins    │
+└──────────────────────────────────────────────────────┘
+```
+
+## 同步方向
+
+### 文件 → 数据库
+
+当 AGENTS.md 文件被修改时，变更自动同步到数据库。
+
+**触发方式**: 定时扫描（Crontab Job）检测文件修改时间戳
+
+**同步流程**:
+1. ChangeDetector 扫描 Agent 目录，检测修改时间戳变更的文件
+2. DataMapper 解析 AGENTS.md 的 YAML frontmatter 为实体对象
+3. SyncManager 执行 upsert 操作（存在则更新，不存在则插入）
+4. SyncStatusManager 更新同步状态为 `synced`
+
+### 数据库 → 文件
+
+当数据库中的 Agent 记录被修改时，变更自动同步到文件系统。
+
+**触发方式**: AOP 切面拦截数据库写操作
+
+**同步流程**:
+1. SyncInterceptor 拦截 Service 层的数据库写操作
+2. DataMapper 将实体对象序列化为 YAML frontmatter + Markdown 格式
+3. SyncManager 写入对应的 AGENTS.md 文件
+4. SyncStatusManager 更新同步状态为 `synced`
+
+## 关键设计
+
+### 循环同步防护
+
+双向同步最大的挑战是避免循环触发：文件变更 → 写数据库 → AOP 拦截 → 写文件 → 写数据库 → ...
+
+**解决方案**: SyncContext（ThreadLocal 同步上下文）
+
+```
+syncFromFileSystem():
+    SyncContext.enter()  // 标记进入同步流程
+    try:
+        upsertToDatabase(...)
+    finally:
+        SyncContext.exit()  // 清除标记
+
+SyncInterceptor.beforeRoute():
+    if SyncContext.isPresent():
+        return  // 在同步流程中，跳过拦截
+    syncToFileSystem(...)
+```
+
+### 幂等性保证
+
+同一数据多次同步产生相同结果：
+
+- 文件 → 数据库: upsert 操作天然幂等
+- 数据库 → 文件: 覆盖写入，内容相同则结果相同
+- source_path 字段建立文件与数据库记录的唯一映射
+
+### 实体依赖拓扑排序
+
+不同实体类型之间存在依赖关系，同步必须按依赖顺序执行：
+
+```
+agent_skill 依赖 agent
+→ 先同步 agent，再同步 agent_skill
+```
+
+TopologySorter 基于依赖关系执行拓扑排序，确保同步顺序正确。
+
+### 冲突解决
+
+默认采用 **Last-Write-Wins** 策略：最后修改的一方胜出。
+
+ConflictResolver 比较文件修改时间戳和数据库 `updated_at` 字段，较新的一方覆盖较旧的一方。
+
+## 数据模型
+
+### agents 表（同步相关字段）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `source_path` | varchar(500) | 源文件路径，唯一标识文件与数据库的映射 |
+| `sync_status` | varchar(20) | 同步状态：pending / synced / error / dependency_missing |
+| `last_sync_at` | timestamp | 最后同步时间 |
+
+### agent_skills 表（同步相关字段）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `source_path` | varchar(500) | 源文件路径 |
+| `sync_status` | varchar(20) | 同步状态 |
+| `last_sync_at` | timestamp | 最后同步时间 |
+
+### sync_log 表
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | bigint | 主键 |
+| `entity_type` | varchar(50) | 实体类型（agent / agent_skill） |
+| `entity_id` | bigint | 实体 ID |
+| `direction` | varchar(20) | 同步方向（file_to_db / db_to_file） |
+| `status` | varchar(20) | 同步状态 |
+| `source_path` | varchar(500) | 源文件路径 |
+| `error_message` | text | 错误信息 |
+| `duration_ms` | integer | 耗时（毫秒） |
+| `created_at` | timestamp | 创建时间 |
+
+## DataMapper 字段映射
+
+DataMapper 负责 YAML frontmatter 与实体对象的双向转换：
+
+| Frontmatter 字段 | 数据库字段 | 转换规则 |
+|-----------------|-----------|---------|
+| `name` | `name` | 直接映射 |
+| `agent_type` | `type` | 直接映射 |
+| `description` | `description` | 直接映射 |
+| `version` | `config.version` | 嵌入 config JSON |
+| `tools` | `tools` | YAML 数组 → JSON 数组 |
+| `model` | `model` | 直接映射 |
+| `maxTurns` | `max_turns` | 驼峰 → 下划线 |
+| `memory` | `memory_scope` | 字段名映射 |
+| `background` | `background` | 直接映射 |
+| `permissions` | - | 权限系统独立管理 |
+| `parent_id` | `parent_id` | 直接映射 |
+
+## 同步状态
+
+| 状态 | 说明 |
+|------|------|
+| `pending` | 待同步（文件已变更但尚未同步到数据库） |
+| `synced` | 已同步（文件与数据库一致） |
+| `error` | 同步失败（记录错误信息到 sync_log） |
+| `dependency_missing` | 依赖缺失（如 agent_skill 引用的 agent 尚未同步） |
+
+## API 接口
+
+### 手动同步
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/{db}/sync/entities/{type}/{id}` | 同步单个实体 |
+| POST | `/api/v1/{db}/sync/batch` | 批量同步 |
+
+### 同步状态查询
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/{db}/sync/status` | 查询同步总体状态 |
+| GET | `/api/v1/{db}/sync/entities` | 查询所有实体的同步状态 |
+| GET | `/api/v1/{db}/sync/entities/{type}` | 查询指定类型实体的同步状态 |
+| GET | `/api/v1/{db}/sync/entities/{type}/{id}` | 查询指定实体的同步状态 |
+| GET | `/api/v1/{db}/sync/logs` | 查询同步日志 |
+| GET | `/api/v1/{db}/sync/health` | 同步健康检查 |
+
+## 配置项
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `SYNC_ENABLED` | `true` | 是否启用同步 |
+| `SYNC_SCAN_INTERVAL` | `300000` | 扫描间隔（毫秒） |
+| `SYNC_MAX_RETRIES` | `3` | 最大重试次数 |
+| `SYNC_RETRY_BASE_DELAY` | `1000` | 重试基础延迟（毫秒） |
+| `SYNC_CONFLICT_STRATEGY` | `last_write_wins` | 冲突解决策略 |
+
+## 性能要求
+
+| 指标 | 要求 |
+|------|------|
+| 单条同步延迟 | ≤ 200ms (P99) |
+| 批量同步（100条） | ≤ 10s (P99) |
+| 同步扫描间隔 | 可配置，默认 5 分钟 |
+
+## 可靠性保证
+
+- **重试机制**: 同步失败时指数退避重试（1s, 2s, 4s），最多 3 次
+- **幂等性**: 同一数据多次同步产生相同结果
+- **循环防护**: SyncContext 防止循环同步
+- **审计日志**: 所有同步操作记录到 sync_log 表
+- **健康检查**: 提供 `/sync/health` 端点监控同步状态
+
+## 与 Agent Skills 同步的关系
+
+当系统中同时存在 Agent 声明和 Skill 声明时，同步引擎需要处理实体间的依赖关系：
+
+```
+agent (无依赖)
+  └── agent_skill (依赖 agent)
+```
+
+同步顺序：先同步 `agent`，再同步 `agent_skill`。这确保了 `agent_skill` 引用的 `agent` 在数据库中已存在。
+
+## MVP 与完整版本差异
+
+| 能力 | MVP | v2.0.0 |
+|------|-----|--------|
+| 同步方向 | 双向 | 双向 + 事件溯源 |
+| 冲突解决 | Last-Write-Wins | 可插拔策略 |
+| 变更检测 | 时间戳 | 时间戳 + 内容哈希 |
+| 重试 | 指数退避 | 指数退避 + 熔断 |
+| 可观测性 | sync_log 表 | + 指标采集 + 链路追踪 |
+| 限流 | 无 | 令牌桶限流 |
+| 批量同步 | 顺序执行 | 并行执行 + 背压控制 |

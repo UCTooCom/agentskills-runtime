@@ -293,15 +293,15 @@ If you want to quickly experience AgentSkills Runtime's capabilities, **you don'
 
 1. **Clone UCToo Project**
    ```bash
-   git clone https://gitee.com/uctoo/uctoo.git
-   cd uctoo
+   git clone https://atomgit.com/UCToo/web-admin.git
+   cd web-admin
    ```
 
 2. **Run Installation Assistant**
-   - Double-click to run `apps/web-admin/start-installer.bat` (Windows system)
+   - Double-click to run `web-admin/start-installer.bat` (Windows system)
    - Or execute in command line:
      ```bash
-     cd apps/web-admin
+     cd web-admin
      start-installer.bat
      ```
 

@@ -66,7 +66,14 @@ public interface AgentsDAO <: RootDAO {
                 permissions,
                 source_path,
                 sync_status,
-                last_sync_at
+                last_sync_at,
+                aic,
+                identity_status,
+                aip_registered_at,
+                capabilities,
+                default_input_types,
+                default_output_types,
+                discoverable
             ) values(
 ${arg(entity.name)},
                 ${arg(entity.agentType)},
@@ -93,7 +100,14 @@ ${arg(entity.name)},
                 ${arg(entity.permissions)},
                 ${arg(entity.sourcePath)},
                 ${arg(entity.syncStatus)},
-                ${arg(entity.lastSyncAt)}
+                ${arg(entity.lastSyncAt)},
+                ${arg(entity.aic)},
+                ${arg(entity.identityStatus)},
+                ${arg(entity.aipRegisteredAt)},
+                ${arg(entity.capabilities)},
+                ${arg(entity.defaultInputTypes)},
+                ${arg(entity.defaultOutputTypes)},
+                ${arg(entity.discoverable)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -108,7 +122,7 @@ ${arg(entity.name)},
      */
     func findAgentsById(id: String): Option<AgentsPO> {
         executor.setSql('''
-            select id, name, agent_type, description, status, config, system_prompt, tools, model, parent_id, user_id, color, background, memory_scope, isolation_mode, max_turns, initial_prompt, creator, created_at, updated_at, deleted_at, version, author, permissions, source_path, sync_status, last_sync_at from agents where id = ${arg(id)}
+            select * from agents where id = ${arg(id)}
         ''').first<AgentsPO>()
     }
 
@@ -146,6 +160,13 @@ ${arg(entity.name)},
                 source_path = ${arg(entity.sourcePath)},
                 sync_status = ${arg(entity.syncStatus)},
                 last_sync_at = ${arg(entity.lastSyncAt)},
+                aic = ${arg(entity.aic)},
+                identity_status = ${arg(entity.identityStatus)},
+                aip_registered_at = ${arg(entity.aipRegisteredAt)},
+                capabilities = ${arg(entity.capabilities)},
+                default_input_types = ${arg(entity.defaultInputTypes)},
+                default_output_types = ${arg(entity.defaultOutputTypes)},
+                discoverable = ${arg(entity.discoverable)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -400,4 +421,43 @@ ${arg(entity.name)},
 
 //#endregion AutoCreateCode
 // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    func findAgentsByAic(aic: String): Option<AgentsPO> {
+        executor.setSql('''
+            select * from agents where aic = ${arg(aic)} and deleted_at is null
+        ''').first<AgentsPO>()
+    }
+
+    func findDiscoverableAgentsPage(page: Int64, size: Int64): Pagination<AgentsPO> {
+        executor.page<AgentsPO>('''
+            select * from agents where discoverable = true and deleted_at is null order by created_at desc
+        ''', size, page: page)
+    }
+
+    func searchAgentsByNameOrDescription(keyword: String, page: Int64, size: Int64): Pagination<AgentsPO> {
+        executor.page<AgentsPO>('''
+            select * from agents where (name ilike ${arg('%' + keyword + '%')} or description ilike ${arg('%' + keyword + '%')}) and deleted_at is null order by created_at desc
+        ''', size, page: page)
+    }
+
+    func searchAgentsBySkillKeyword(skillKeyword: String, page: Int64, size: Int64): Pagination<AgentsPO> {
+        executor.page<AgentsPO>('''
+            select a.* from agents a inner join agent_skills s on a.id = s.agent_id
+            where (s.name ilike ${arg('%' + skillKeyword + '%')} or s.description ilike ${arg('%' + skillKeyword + '%')} or s.tags ilike ${arg('%' + skillKeyword + '%')})
+            and a.deleted_at is null and s.deleted_at is null
+            order by a.created_at desc
+        ''', size, page: page)
+    }
+
+    func updateAgentsAic(agentId: String, aic: String, identityStatus: String): Int64 {
+        executor.setSql('''
+            update agents set aic = ${arg(aic)}, identity_status = ${arg(identityStatus)}, aip_registered_at = ${arg(DateTime.now())}, updated_at = ${arg(DateTime.now())} where id = ${arg(agentId)}
+        ''').update
+    }
+
+    func updateAgentsAcsFields(agentId: String, capabilities: Option<String>, inputTypes: Option<String>, outputTypes: Option<String>, discoverable: Bool): Int64 {
+        executor.setSql('''
+            update agents set capabilities = ${arg(capabilities)}, default_input_types = ${arg(inputTypes)}, default_output_types = ${arg(outputTypes)}, discoverable = ${arg(discoverable)}, updated_at = ${arg(DateTime.now())} where id = ${arg(agentId)}
+        ''').update
+    }
 }

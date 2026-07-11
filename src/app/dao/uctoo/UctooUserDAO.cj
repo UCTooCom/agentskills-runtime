@@ -40,6 +40,11 @@ public interface UctooUserDAO <: RootDAO {
      * @return 插入成功返回生成的ID，失败返回空字符串
      */
     func insertUctooUser(entity: UctooUserPO): String {
+        let creatorValue = match (entity.creator) {
+            case Some(c) => "'${c}'"
+            case None => "NULL"
+        }
+        
         executor.setSql('''
             insert into uctoo_user(
                 name,
@@ -58,7 +63,9 @@ public interface UctooUserDAO <: RootDAO {
                 status,
                 updated_at,
                 access_token,
-                refresh_token
+                refresh_token,
+                user_type,
+                agent_id
             ) values(
 ${arg(entity.name)},
                 ${arg(entity.username)},
@@ -68,7 +75,7 @@ ${arg(entity.name)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.lastLogin)},
                 ${arg(entity.authProvider)},
-                ${arg(entity.creator)},
+                ${creatorValue},
                 ${arg(entity.deletedAt)},
                 ${arg(entity.lastLoginIp)},
                 ${arg(entity.lastLoginTime)},
@@ -76,7 +83,9 @@ ${arg(entity.name)},
                 ${arg(entity.status)},
                 ${arg(entity.updatedAt)},
                 ${arg(entity.accessToken)},
-                ${arg(entity.refreshToken)}
+                ${arg(entity.refreshToken)},
+                ${arg(entity.userType)},
+                ${arg(entity.agentId)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -120,6 +129,8 @@ ${arg(entity.name)},
                 status = ${arg(entity.status)},
                 access_token = ${arg(entity.accessToken)},
                 refresh_token = ${arg(entity.refreshToken)},
+                user_type = ${arg(entity.userType)},
+                agent_id = ${arg(entity.agentId)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -392,6 +403,18 @@ ${arg(entity.name)},
     func findUctooUserByEmail(email: String): Option<UctooUserPO> {
         executor.setSql('''
             select * from uctoo_user where email = ${arg(email)}
+        ''').first<UctooUserPO>()
+    }
+
+    func findUctooUserByUserType(userType: String, page: Int64, size: Int64): Pagination<UctooUserPO> {
+        executor.page<UctooUserPO>('''
+            select * from uctoo_user where user_type = ${arg(userType)} order by created_at desc
+        ''', size, page: page)
+    }
+
+    func findUctooUserByAgentId(agentId: String): Option<UctooUserPO> {
+        executor.setSql('''
+            select * from uctoo_user where agent_id = ${arg(agentId)} and user_type = 'agent'
         ''').first<UctooUserPO>()
     }
 }

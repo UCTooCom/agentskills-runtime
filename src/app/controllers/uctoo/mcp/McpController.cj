@@ -33,6 +33,23 @@ public class McpController {
     }
 
     /**
+     * 设置 CORS 响应头
+     * 注意：当使用 credentials 时，不能使用通配符 *，需要回显请求的 Origin
+     */
+    private func setCorsHeaders(req: HttpRequest, res: HttpResponse): HttpResponse {
+        let origin = req.header("Origin")
+        // 在 credentials 模式下，必须回显具体 origin 而不是使用 *
+        let allowOrigin = if (let Some(o) <- origin) {
+            o
+        } else {
+            "*"
+        }
+        res.header("Access-Control-Allow-Origin", allowOrigin)
+           .header("Access-Control-Allow-Credentials", "true")
+        return res
+    }
+
+    /**
      * 处理 MCP 流式接口
      * POST /api/v1/uctoo/mcp/stream
      * 支持 MCP SSE 协议，处理工具注册、工具调用、消息发送等请求
@@ -40,9 +57,9 @@ public class McpController {
     public func handleStream(req: HttpRequest, res: HttpResponse): Unit {
         try {
             LogUtils.info("MCP stream request received")
-            
+
             // 设置 CORS 头部
-            res.header("Access-Control-Allow-Origin", "*")
+            setCorsHeaders(req, res)
                .header("Access-Control-Allow-Methods", "POST, OPTIONS")
                .header("Access-Control-Allow-Headers", "*")
             

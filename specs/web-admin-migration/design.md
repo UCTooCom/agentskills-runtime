@@ -66,18 +66,20 @@
 │  └───────────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │                    Business Layer                      │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │  │
-│  │  │   Stores    │  │   Hooks     │  │    APIs     │   │  │
-│  │  │(Pinia+ORM)  │  │ (Composable)│  │  (Axios)    │   │  │
-│  │  │  (UMI迁移)  │  │             │  │             │   │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘   │  │
-│  └───────────────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                      UMI Layer                         │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │  │
-│  │  │   Models    │  │  LocalStore │  │  AutoSave   │   │  │
-│  │  │  (pinia-orm)│  │(localStorage)│  │  (Callback) │   │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘   │  │
+│  │  ┌─────────────────────────────────────────────────┐ │  │
+│  │  │         Stores (Pinia + pinia-orm)              │ │  │
+│  │  │  ┌──────────────┐  ┌──────────────────────────┐ │ │  │
+│  │  │  │   Models     │  │   API Actions            │ │ │  │
+│  │  │  │(pinia-orm)   │  │(useAxiosRepo)            │ │ │  │
+│  │  │  │- 字段定义    │  │- CRUD操作                │ │ │  │
+│  │  │  │- 关系定义    │  │- 自动保存到LocalStorage │ │ │  │
+│  │  │  │- 类型安全    │  │- 响应式更新              │ │ │  │
+│  │  │  └──────────────┘  └──────────────────────────┘ │ │  │
+│  │  └─────────────────────────────────────────────────┘ │  │
+│  │  ┌─────────────┐  ┌─────────────┐                   │  │
+│  │  │   Hooks     │  │  Utilities  │                   │  │
+│  │  │ (Composable)│  │  (Helpers)  │                   │  │
+│  │  └─────────────┘  └─────────────┘                   │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -125,19 +127,29 @@ web-admin/uctoo-admin/web/
 │   ├── layout/           # 布局组件（已就绪）
 │   ├── locale/           # 国际化资源（已就绪）
 │   ├── router/           # 路由配置（已就绪）
-│   ├── store/            # 状态管理（需迁移UMI特性）
+│   ├── store/            # 状态管理（Pinia + pinia-orm）
 │   │   ├── index.ts
 │   │   └── modules/
 │   │       ├── user/         # 用户状态（已就绪）
 │   │       ├── locales.ts    # 国际化状态（已就绪）
 │   │       ├── router.ts     # 路由状态（已就绪）
 │   │       ├── tabs.ts       # 标签页状态（已就绪）
-│   │       └── uctoo/        # uctoo模型（需新增）
+│   │       └── uctoo/        # uctoo模型（pinia-orm Model定义）
+│   │           ├── uctoo_uctoo_user.ts
+│   │           ├── uctoo_permissions.ts
+│   │           └── ... (其他模型)
 │   ├── types/            # TypeScript类型定义
 │   ├── utils/            # 工具函数（已就绪）
 │   └── views/            # 页面组件（已就绪）
 └── config/               # 构建配置（已就绪）
 ```
+
+**pinia-orm Model 特性**：
+- **字段定义**：使用装饰器定义字段类型（@Uid, @Str, @Num 等）
+- **关系定义**：使用装饰器定义模型关系（@HasOne, @HasMany 等）
+- **API 操作**：内置 CRUD 操作（api().get(), api().post() 等）
+- **自动保存**：支持自动保存到 localStorage
+- **响应式更新**：数据变化自动更新视图
 
 #### 2.2.2 agentskills-runtime后端模块
 ```
@@ -162,20 +174,25 @@ agentskills-runtime/
 
 ### 2.3 组件交互
 
-#### 2.3.1 UMI数据流
+#### 2.3.1 pinia-orm 数据流
 ```
-用户操作 → View组件 → Store Action → API调用
-                                    ↓
-                              agentskills-runtime
-                                    ↓
-                              API响应
-                                    ↓
-                        UMI自动保存（pinia-orm）
-                                    ↓
-                          LocalStorage
-                                    ↓
-                          View自动更新（响应式）
+用户操作 → View组件 → Model.api().get/post() → agentskills-runtime
+                                              ↓
+                                        API响应
+                                              ↓
+                              pinia-orm 自动处理：
+                              1. 更新 Model 数据
+                              2. 自动保存到 localStorage（可选）
+                              3. 触发响应式更新
+                                              ↓
+                              View自动更新（Vue响应式）
 ```
+
+**pinia-orm 核心机制**：
+1. **Model 定义**：使用装饰器定义字段和关系
+2. **API 集成**：通过 `useAxiosRepo` 自动集成 API 调用
+3. **数据持久化**：支持自动保存到 localStorage
+4. **响应式更新**：数据变化自动触发视图更新
 
 ## 3. 详细设计
 
@@ -519,3 +536,141 @@ skills/crud-web-generator/
 |------|------|------|----------|
 | 1.0  | 2025-01-18 | SDD Agent | 初始版本 |
 | 2.0  | 2025-03-28 | SDD Agent | 基于实际开发评估更新设计 |
+| 3.0  | 2026-03-30 | SDD Agent | 修正 UMI 架构描述，明确 pinia-orm 的正确使用方式 |
+
+### 9.3 UMI 架构说明
+
+#### 9.3.1 UMI 的正确理解
+**UMI (Uniform Model Interface)** 是一种全栈模型同构规范，其核心思想是：
+- 前端 Model 定义与后端数据库 Schema 保持一致
+- 使用 pinia-orm 实现 Model 的定义和管理
+- Model 内置 API 操作，无需单独的 API 层
+
+**关键点**：
+1. **不存在独立的 "UMI Layer"**：pinia-orm 的 Model 定义在 Business Layer
+2. **Model 包含一切**：字段定义、关系定义、API 操作、自动保存都在 Model 内部
+3. **直接复用**：uctoo v3 的 store/uctoo 目录下的 Model 文件可以直接复制到 v4 使用
+
+#### 9.3.2 uctoo v3 到 v4 的迁移策略
+**迁移原则**：
+- **直接复制**：uctoo v3 的 `store/uctoo/*.ts` 文件可以直接复制到 v4
+- **最小调整**：只需调整与 v3 特定组件相关的部分
+- **保持结构**：保持 pinia-orm Model 的定义结构不变
+
+**需要调整的部分**：
+1. **导入路径**：调整 `@vben/hooks` 等依赖的导入路径
+2. **API URL**：根据 v4 的 API 地址调整 `baseURL`
+3. **类型定义**：调整 TypeScript 类型定义的路径
+
+**不需要调整的部分**：
+- Model 的字段定义（装饰器）
+- Model 的关系定义
+- API 操作的定义
+- 自动保存机制
+
+#### 9.3.3 pinia-orm 的优势
+1. **类型安全**：使用 TypeScript 装饰器，编译时类型检查
+2. **自动 CRUD**：内置 CRUD 操作，减少重复代码
+3. **关系管理**：自动处理模型之间的关系
+4. **响应式更新**：与 Vue 的响应式系统无缝集成
+5. **数据持久化**：支持自动保存到 localStorage
+
+#### 9.3.4 示例：Model 文件的迁移
+**v3 文件**（`uctoo-app-client-pc/src/store/uctoo/uctoo_uctoo_user.ts`）：
+```typescript
+import { Model } from 'pinia-orm';
+import { Attr, Str, Uid, Num } from 'pinia-orm/decorators';
+import { useAxiosRepo } from '@pinia-orm/axios';
+import { useAppConfig } from '@vben/hooks';
+
+const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+
+export class uctoo_uctoo_user extends Model {
+  static override entity = 'uctoo_uctoo_user'
+
+  @Uid() declare id: string
+  @Str('') declare name: string
+  // ... 其他字段
+
+  static override config = {
+    axiosApi: {
+      actions: {
+        getuctooUctooUserList(page, pageSize, searchParams) {
+          return useAxiosRepo(uctoo_uctoo_user).api().get(`/uctoo/uctoo_user/${pageSize}/${page}`, {
+            baseURL: apiURL,
+          })
+        },
+      }
+    }
+  }
+}
+```
+
+**v4 文件**（`web-admin/uctoo-admin/web/src/store/modules/uctoo/uctoo_uctoo_user.ts`）：
+```typescript
+import { Model } from 'pinia-orm';
+import { Attr, Str, Uid, Num } from 'pinia-orm/decorators';
+import { useAxiosRepo } from '@pinia-orm/axios';
+// 调整导入路径
+import { useAppConfig } from '@/hooks';
+
+const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+
+export class uctoo_uctoo_user extends Model {
+  static override entity = 'uctoo_uctoo_user'
+
+  @Uid() declare id: string
+  @Str('') declare name: string
+  // ... 其他字段（完全相同）
+
+  static override config = {
+    axiosApi: {
+      actions: {
+        getuctooUctooUserList(page, pageSize, searchParams) {
+          return useAxiosRepo(uctoo_uctoo_user).api().get(`/uctoo/uctoo_user/${pageSize}/${page}`, {
+            baseURL: apiURL, // 可能需要调整
+          })
+        },
+      }
+    }
+  }
+}
+```
+
+**迁移步骤**：
+1. 复制 v3 的 Model 文件到 v4
+2. 调整导入路径
+3. 检查 API URL 配置
+4. 测试功能是否正常
+
+#### 9.3.5 pinia-orm 插件系统
+pinia-orm 提供了丰富的插件系统：
+
+**官方插件**：
+- `@pinia-orm/axios` - Axios 集成
+- `@pinia-orm/localstorage` - LocalStorage 持久化
+- `@pinia-orm/search` - 搜索功能
+
+**插件使用示例**：
+```typescript
+import { createPinia } from 'pinia'
+import { createORM } from 'pinia-orm'
+import { createAxiosPlugin } from '@pinia-orm/axios'
+
+const pinia = createPinia()
+const orm = createORM({
+  plugins: [
+    createAxiosPlugin({
+      baseURL: '/api'
+    })
+  ]
+})
+
+app.use(pinia).use(orm)
+```
+
+#### 9.3.6 参考文档
+- **Pinia ORM 官方文档**：https://pinia-orm.codedredd.de/
+- **快速开始**：https://pinia-orm.codedredd.de/guide/getting-started/quick-start
+- **插件介绍**：https://pinia-orm.codedredd.de/plugins/introduction
+- **Axios 插件**：https://pinia-orm.codedredd.de/plugins/axios

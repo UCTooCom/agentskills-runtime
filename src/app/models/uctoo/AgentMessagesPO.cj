@@ -55,6 +55,18 @@ public class AgentMessagesPO {
         @ORMField['deleted_at']
     public var deletedAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['aip_session_id']
+    public var aipSessionId: Option<String> = None<String>
+
+        @ORMField['aip_message_id']
+    public var aipMessageId: Option<String> = None<String>
+
+        @ORMField['sender_role']
+    public var senderRole: Option<String> = None<String>
+
+        @ORMField['data_items']
+    public var dataItems: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -68,7 +80,11 @@ public class AgentMessagesPO {
                 creator: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
-                deletedAt: Option<DateTime>
+                deletedAt: Option<DateTime>,
+                aipSessionId: Option<String>,
+                aipMessageId: Option<String>,
+                senderRole: Option<String>,
+                dataItems: Option<String>
     ) {
                 this.id = id
                 this.fromAgentId = fromAgentId
@@ -81,9 +97,11 @@ public class AgentMessagesPO {
                 this.createdAt = createdAt
                 this.updatedAt = updatedAt
                 this.deletedAt = deletedAt
+                this.aipSessionId = aipSessionId
+                this.aipMessageId = aipMessageId
+                this.senderRole = senderRole
+                this.dataItems = dataItems
     }
-
-    /// 序列化为 JsonValue
     public func toJsonValue(): JsonValue {
         var map = HashMap<String, JsonValue>()
         map.add("id", this.id.toJsonValue())
@@ -97,6 +115,10 @@ public class AgentMessagesPO {
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("aip_session_id", optionToJsonValue(this.aipSessionId))
+        map.add("aip_message_id", optionToJsonValue(this.aipMessageId))
+        map.add("sender_role", optionToJsonValue(this.senderRole))
+        map.add("data_items", optionToJsonValue(this.dataItems))
         return JsonObject(map)
     }
 

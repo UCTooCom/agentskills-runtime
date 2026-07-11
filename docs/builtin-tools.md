@@ -1,10 +1,10 @@
 # 内置工具 v2.0 文档
 
 > **版本**: v2.0  
-> **更新日期**: 2026-03-26  
+> **更新日期**: 2026-06-16  
 > **作者**: CodeArts Agent
 
-本文档详细说明 AgentSkills Runtime v2.0 中内置的各种工具及其使用方式。
+本文档详细说明 AgentSkills Runtime v2.0 中内置的各种工具及其使用方式。文档与实际实现保持一致。
 
 ## 概述
 
@@ -68,9 +68,9 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
 - **功能**: 读取文件内容
 - **参数**:
   - `path` (必填): 文件路径
-  - `encoding` (可选): 文件编码,默认utf-8
-  - `offset` (可选): 起始行号
-  - `limit` (可选): 读取行数
+  - `withLineNumber` (可选): 是否显示行号,默认false
+  - `startLine` (可选): 起始行号(从1开始),默认1
+  - `endLine` (可选): 结束行号,默认读取到文件末尾
 - **HTTP示例**:
   ```bash
   POST /api/v1/tools/file_read
@@ -78,6 +78,15 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
   
   {
     "path": "./SKILL.md"
+  }
+  ```
+- **响应**:
+  ```json
+  {
+    "success": "true",
+    "path": "./SKILL.md",
+    "content": "文件内容...",
+    "lineCount": "100"
   }
   ```
 
@@ -89,8 +98,7 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
 - **参数**:
   - `path` (必填): 文件路径
   - `content` (必填): 文件内容
-  - `encoding` (可选): 文件编码,默认utf-8
-  - `append` (可选): 是否追加,默认false
+  - `mode` (可选): 写入模式(create/append/overwrite),默认create
 - **HTTP示例**:
   ```bash
   POST /api/v1/tools/file_write
@@ -98,6 +106,15 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
   {
     "path": "./output.txt",
     "content": "Hello World"
+  }
+  ```
+- **响应**:
+  ```json
+  {
+    "success": "true",
+    "path": "./output.txt",
+    "bytesWritten": "11",
+    "mode": "create"
   }
   ```
 
@@ -108,48 +125,59 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
 - **功能**: 编辑文件内容
 - **参数**:
   - `path` (必填): 文件路径
-  - `old` (必填): 要替换的内容
-  - `new` (必填): 替换后的内容
-  - `replace_all` (可选): 替换所有匹配,默认false
+  - `oldText` (必填): 要替换的内容
+  - `newText` (必填): 替换后的内容
+  - `replaceAll` (可选): 是否替换所有匹配,默认false
+  - `createIfNotExists` (可选): 文件不存在时是否创建,默认false
+- **响应**:
+  ```json
+  {
+    "success": "true",
+    "path": "./file.txt",
+    "replacements": "1"
+  }
+  ```
 
 #### FileDeleteTool
 - **名称**: `file_delete`
 - **权限**: `/api/v1/tools/fs/delete`
 - **敏感级别**: 高 (3)
 - **需要确认**: 是
-- **功能**: 删除文件
+- **功能**: 删除文件或目录
 - **参数**:
-  - `path` (必填): 文件路径
-  - `confirm` (必填): 确认删除,必须为true
-
-#### FileCopyTool
-- **名称**: `file_copy`
-- **权限**: `/api/v1/tools/fs/copy`
-- **敏感级别**: 低 (1)
-- **功能**: 复制文件
-- **参数**:
-  - `source` (必填): 源文件路径
-  - `destination` (必填): 目标文件路径
-
-#### FileMoveTool
-- **名称**: `file_move`
-- **权限**: `/api/v1/tools/fs/move`
-- **敏感级别**: 中 (2)
-- **功能**: 移动文件
-- **参数**:
-  - `source` (必填): 源文件路径
-  - `destination` (必填): 目标文件路径
+  - `path` (必填): 文件或目录路径
+  - `recursive` (可选): 是否递归删除目录,默认false
+  - `force` (可选): 是否强制删除只读文件,默认false
+- **响应**:
+  ```json
+  {
+    "success": "true",
+    "path": "./file.txt",
+    "type": "file"
+  }
+  ```
 
 #### FileSearchTool
 - **名称**: `file_search`
 - **权限**: `/api/v1/tools/fs/search`
 - **敏感级别**: 低 (1)
-- **功能**: 搜索文件
+- **功能**: 在文件或目录中搜索文本
 - **参数**:
-  - `path` (必填): 搜索路径
-  - `pattern` (可选): 文件名模式
-  - `content` (可选): 内容搜索
-  - `recursive` (可选): 递归搜索,默认false
+  - `path` (必填): 搜索路径(文件或目录)
+  - `query` (必填): 搜索关键词
+  - `recursive` (可选): 是否递归搜索目录,默认false
+- **响应**:
+  ```json
+  {
+    "success": "true",
+    "path": "./directory",
+    "query": "magic",
+    "matchCount": "2",
+    "matches": [
+      {"file": "./file1.txt", "line": "1", "content": "Contains magic"}
+    ]
+  }
+  ```
 
 #### DirectoryListTool
 - **名称**: `directory_list`
@@ -158,6 +186,19 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
 - **功能**: 列出目录内容
 - **参数**:
   - `path` (必填): 目录路径
+  - `recursive` (可选): 是否递归列出,默认false
+  - `pattern` (可选): 文件名过滤模式(如*.txt)
+- **响应**:
+  ```json
+  {
+    "success": "true",
+    "path": "./directory",
+    "count": "5",
+    "entries": [
+      {"name": "file.txt", "type": "file", "size": 1024}
+    ]
+  }
+  ```
 
 #### DirectoryCreateTool
 - **名称**: `directory_create`
@@ -166,6 +207,15 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
 - **功能**: 创建目录
 - **参数**:
   - `path` (必填): 目录路径
+  - `recursive` (可选): 是否递归创建嵌套目录,默认false
+- **响应**:
+  ```json
+  {
+    "success": "true",
+    "path": "./newdir",
+    "created": "true"
+  }
+  ```
 
 ---
 
@@ -287,8 +337,8 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
 
 | 级别 | 说明 | 示例工具 |
 |------|------|----------|
-| 1 (低) | 只读操作,低风险 | file_read, file_copy, directory_list |
-| 2 (中) | 修改操作,中等风险 | file_write, file_edit, http_request |
+| 1 (低) | 只读操作,低风险 | file_read, file_search, directory_list |
+| 2 (中) | 修改操作,中等风险 | file_write, file_edit, directory_create |
 | 3 (高) | 危险操作,高风险 | file_delete, cli_execute |
 
 ### 3.2 默认权限配置
@@ -375,13 +425,28 @@ curl -X POST https://javatoarktsapi.uctoo.com/api/v1/tools/file_read \
 **响应**:
 ```json
 {
-  "success": true,
-  "result": "# SKILL.md content...",
-  "isError": false
+  "success": "true",
+  "path": "./SKILL.md",
+  "content": "# SKILL.md content...",
+  "lineCount": "50"
 }
 ```
 
-### 4.3 调用HTTP请求工具
+### 4.3 按行范围读取文件
+
+```bash
+curl -X POST https://javatoarktsapi.uctoo.com/api/v1/tools/file_read \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "./file.txt",
+    "startLine": 10,
+    "endLine": 50,
+    "withLineNumber": true
+  }'
+```
+
+### 4.4 调用HTTP请求工具
 
 ```bash
 curl -X POST https://javatoarktsapi.uctoo.com/api/v1/tools/http_request \
@@ -433,17 +498,24 @@ curl -X POST https://javatoarktsapi.uctoo.com/api/v1/tools/http_request \
 
 ## 七、工具总数
 
-当前版本共提供 **22个** 内置工具:
-- 文件工具: 9个
-- 网络工具: 4个
-- 技能工具: 2个
-- 代码生成工具: 2个
-- CLI工具: 1个
-- 其他工具: 4个
+当前版本共提供 **19个** 内置工具:
+- 文件工具: 7个 (file_read, file_write, file_edit, file_delete, file_search, directory_list, directory_create)
+- 网络工具: 3个 (http_request, web_fetch, firecrawl)
+- 技能工具: 2个 (skill_initializer, skill_packager)
+- 代码生成工具: 2个 (template_engine, code_snippet_generator)
+- CLI工具: 1个 (cli_execute)
+- WebMCP工具: 4个
 
 ---
 
 ## 八、更新日志
+
+### v2.0 (2026-06-16)
+- ✅ 修复文档与实现不一致问题
+- ✅ 更新FileReadTool参数(startLine/endLine/withLineNumber)
+- ✅ 更新FileEditTool参数(oldText/newText/replaceAll)
+- ✅ 更新FileDeleteTool参数(recursive/force)
+- ✅ 更新工具总数统计
 
 ### v2.0 (2026-03-26)
 - ✅ 新增统一的HTTP接口
@@ -460,4 +532,4 @@ curl -X POST https://javatoarktsapi.uctoo.com/api/v1/tools/http_request \
 ---
 
 **文档维护**: CodeArts Agent  
-**最后更新**: 2026-03-26
+**最后更新**: 2026-06-16

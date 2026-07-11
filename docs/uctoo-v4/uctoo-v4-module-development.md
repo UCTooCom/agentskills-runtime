@@ -52,10 +52,10 @@ src/app/
 
 ### 通用模块开发流程  
 
-1. 根据业务需求进行数据库建模，设计出表结构以及表变更的DDL文件。  
+1. 根据业务需求进行数据库建模，设计出表结构以及表变更的DDL文件，放置在 `sql/incremental/` 目录下。  
 2. 一般由人工执行数据库结构新增和变更。后续待f_orm和uctoo中的migration机制完善了，数据库变更也可以自动化。  
-3. 使用/api/v1/uctoo/db_info/load-db-info 接口刷新db_info表数据库信息。todo:有空了应该重构load-db-info 接口，分离出一个独立的CLI工具loadDbInfo，可以不依赖于runtime主应用启动，类似于crudgen可以独立运行的命令行工具。  
-4. 使用crudgen生成新增表或表更表的标准crud模块。使用crudweb生成web项目中的数据库表管理界面。可选使用crudapp生成移动端APP，todo:开发中。  
+3. 使用 `loaddbinfo` 命令行工具刷新 db_info 表数据库信息。  
+4. 使用 `crudgen` 命令行工具生成新增表或变更表的标准 CRUD 后端模块（Model/DAO/Service/Controller/Route）。使用 `crudweb` 命令行工具生成 Web 项目中的数据库表管理界面。可选使用 crudapp 生成移动端 APP（开发中）。  
 5. 在生成的标准模块基础上进行迭代开发。  
 
 ### 3.1 步骤一：定义数据模型
@@ -977,53 +977,172 @@ executor.setSql('select * from table where id = ${arg(id)}').first<{Table}PO>()
 - 控制器: [EntityController.cj](../../src/app/controllers/uctoo/entity/EntityController.cj)
 - 路由: [EntityRoute.cj](../../src/app/routes/uctoo/entity/EntityRoute.cj)
 
-## 8. 使用 crud-generator 自动生成 CRUD 模块
+## 8. 代码生成命令行工具
 
 ### 8.1 概述
 
-`crud-generator` 技能可以自动生成数据库表的标准 CRUD 模块代码，包括 Model、DAO、Service、Controller、Route 五层完整代码，并自动注册路由。
+UCToo V4 提供三个命令行工具用于代码生成，均基于 `cjpm run` 方式运行，从 `db_info` 表读取数据库结构信息，自动生成标准 CRUD 模块代码。
 
-### 8.2 使用方法
+| 工具 | 用途 | 包名 |
+|------|------|------|
+| `loaddbinfo` | 从数据库结构加载表信息到 db_info 表 | `magic.app.tools.loaddbinfo` |
+| `crudgen` | 生成后端 CRUD 模块（Model/DAO/Service/Controller/Route） | `magic.app.tools.crudgen` |
+| `crudweb` | 生成 Web 前端管理界面 | `magic.app.tools.crudweb` |
+
+### 8.2 loaddbinfo - 数据库信息加载工具
+
+从数据库的 `information_schema` 读取表结构信息，保存到 `db_info` 表中，供 `crudgen` 和 `crudweb` 使用。
+
+**运行命令**：
 
 ```bash
-# 进入 crud-generator 脚本目录
-cd apps/agentskills-runtime/skills/crud-generator/scripts
-
-# 运行生成脚本
-node generate-from-template-v2.js
+# 加载指定数据库的表结构信息
+cjpm run --skip-build --name magic.app.tools.loaddbinfo --run-args "--db uctoo"
 ```
 
-或在代码中调用：
+**命令行参数**：
 
-```javascript
-import { generateModule } from './generate-from-template-v2.js'
-import { parseTable } from './sql-schema-parser.js'
-
-// 解析表结构（从uctooDB.sql）
-const tableInfo = parseTable('entity')
-
-// 生成entity模块
-await generateModule({
-    tableName: 'entity',
-    dbName: 'uctoo',
-    fields: tableInfo.fields,
-    outputDir: './src/app'
-})
-```
-
-### 8.3 生成内容
-
-`crud-generator` 会自动生成以下文件：
-
-| 文件 | 路径 | 说明 |
+| 参数 | 说明 | 必需 |
 |------|------|------|
-| Model | `models/{db}/{Table}PO.cj` | 数据模型，包含 ORM 注解 |
-| DAO | `dao/{db}/{Table}DAO.cj` | 数据访问接口 |
-| Service | `services/{db}/{Table}Service.cj` | 业务逻辑层 |
-| Controller | `controllers/{db}/{table}/{Table}Controller.cj` | HTTP 控制器 |
-| Route | `routes/{db}/{table}/{Table}Route.cj` | 路由定义 |
+| `--db <数据库名>` | 指定要加载的数据库名称 | 是 |
+| `--help` / `-h` | 显示帮助信息 | 否 |
 
-### 8.4 V4优化收益
+**执行流程**：
+
+1. 初始化 ORM 和数据库连接（从 `.env` 文件读取连接信息）
+2. 注册 PostgreSQL 驱动
+3. 清空该数据库原有的 `db_info` 记录
+4. 从 `information_schema.columns` 和 `pg_catalog` 读取表结构信息
+5. 写入 `db_info` 表
+
+**注意事项**：
+
+- 此工具独立运行，不依赖 runtime 服务启动
+- 加载后会清空该数据库原有的 `db_info` 记录并重新写入
+- 支持 PostgreSQL 数据库
+- 必须在执行 `crudgen` 之前运行，确保 `db_info` 表中有最新的表结构信息
+
+### 8.3 crudgen - CRUD 代码生成工具
+
+从 `db_info` 表读取表结构信息，自动生成 Model、DAO、Service、Controller、Route 五层完整代码，并自动生成权限节点。
+
+**运行命令**：
+
+```bash
+# 生成指定表的 CRUD 模块
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --table entity"
+
+# 生成所有表的 CRUD 模块
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --all"
+
+# 指定输出目录
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --table entity --output ./src/app"
+```
+
+**命令行参数**：
+
+| 参数 | 说明 | 必需 | 默认值 |
+|------|------|------|--------|
+| `--db <数据库名>` | 指定数据库名称（对应 db_info 表中的 table_catalog） | 是 | - |
+| `--table <表名>` | 指定要生成 CRUD 代码的表名 | 与 `--all` 二选一 | - |
+| `--all` | 生成指定数据库中所有表的 CRUD 代码 | 与 `--table` 二选一 | - |
+| `--output <目录>` | 指定输出目录 | 否 | `./src/app` |
+| `--help` / `-h` | 显示帮助信息 | 否 | - |
+
+**生成结果**：
+
+```
+src/app/
+├── models/uctoo/EntityPO.cj           # Model 层
+├── dao/uctoo/EntityDAO.cj             # DAO 层
+├── services/uctoo/EntityService.cj    # Service 层
+├── controllers/uctoo/entity/          # Controller 层
+│   └── EntityController.cj
+└── routes/uctoo/entity/               # Route 层
+    └── EntityRoute.cj
+```
+
+**核心特性**：
+
+1. **确定性代码生成**：相同输入产生相同输出，确保代码一致性
+2. **数据库驱动**：从 `db_info` 表直接读取表结构信息
+3. **关键字处理**：自动检测和处理 70 个仓颉保留关键字，避免冲突
+4. **AutoCreateCode 标记**：清晰标识自动生成代码区域，支持定制代码保留
+5. **权限节点生成**：自动生成权限节点，幂等性保证
+6. **类型映射**：自动将 PostgreSQL 类型映射为仓颉类型
+
+**类型映射规则**：
+
+| 数据库类型 | 仓颉类型 | 可空类型 |
+|-----------|---------|---------|
+| UUID, VARCHAR, TEXT | String | Option<String> |
+| INT, INTEGER | Int32 | Option<Int32> |
+| BIGINT | Int64 | Option<Int64> |
+| FLOAT, DOUBLE | Float64 | Option<Float64> |
+| DATETIME, TIMESTAMPTZ | DateTime | Option<DateTime> |
+| BOOLEAN | Bool | Option<Bool> |
+
+**注意事项**：
+
+- 运行前必须先执行 `loaddbinfo` 确保 `db_info` 表中有最新的表结构信息
+- 生成代码中的 `creator` 字段为 `String` 类型（非 `Option<String>`），Service 层使用 `isEmpty()` 而非 `isNone()` 判断
+- 定制代码应放在 `AutoCreateCode` 区域外，避免重新生成时被覆盖
+- 生成权限节点失败不会影响代码生成
+
+### 8.4 crudweb - Web 前端代码生成工具
+
+从 `db_info` 表读取表结构信息，生成 Web 管理界面代码。
+
+**运行命令**：
+
+```bash
+# 生成指定表的 Web 管理界面
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table entity"
+
+# 生成所有表的 Web 管理界面
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --all"
+
+# 指定输出目录
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table entity --output ./web-admin/web/src/views/database"
+```
+
+**命令行参数**：
+
+| 参数 | 说明 | 必需 | 默认值 |
+|------|------|------|--------|
+| `--db <数据库名>` | 指定数据库名称 | 是 | - |
+| `--table <表名>` | 指定表名 | 与 `--all` 二选一 | - |
+| `--all` | 生成所有表的 Web CRUD 代码 | 与 `--table` 二选一 | - |
+| `--output <目录>` | 指定输出目录 | 否 | 由 `WEB_CRUD_OUTPUT_DIR` 环境变量决定 |
+| `--help` / `-h` | 显示帮助信息 | 否 | - |
+
+**注意事项**：
+
+- 运行前必须先执行 `loaddbinfo` 确保 `db_info` 表中有最新的表结构信息
+- 默认输出目录由 `.env` 中的 `WEB_CRUD_OUTPUT_DIR` 环境变量控制
+
+### 8.5 完整使用流程示例
+
+以新增 `aip_agent_identity` 表为例：
+
+```bash
+# 步骤1：人工执行DDL（在数据库中创建表）
+# 将DDL文件放在 sql/incremental/ 目录下，然后手动执行
+
+# 步骤2：加载表结构信息到 db_info 表
+cjpm run --skip-build --name magic.app.tools.loaddbinfo --run-args "--db uctoo"
+
+# 步骤3：生成后端 CRUD 模块
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --table aip_agent_identity"
+
+# 步骤4：生成 Web 前端管理界面
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table aip_agent_identity"
+
+# 步骤5：在生成的代码基础上进行迭代开发
+# 定制代码放在 AutoCreateCode 区域外
+```
+
+### 8.6 V4优化收益
 
 基于重构后的模块开发规范,crud-generator的收益：
 

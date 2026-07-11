@@ -4,13 +4,13 @@
 package magic.app.controllers.uctoo.uctoo_user
 
 import magic.app.core.http.{HttpRequest, HttpResponse}
-import magic.app.models.uctoo.UctooUserPO
-import magic.app.services.uctoo.{UctooUserService, LoginLogService}
+import magic.app.models.uctoo.{UctooUserPO, UserHasRolesPO}
+import magic.app.services.uctoo.{UctooUserService, LoginLogService, SmsLogService, UserHasRolesService}
 import magic.app.utils.auth.{BcryptUtil, AuthorizeUtil, JWTUtil, AuthProvider}
 import magic.log.LogUtils
 import std.time.DateTime
 import std.collection.{HashMap, Map, ArrayList}
-import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool}
+import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool, JsonArray}
 
 /**
  * UctooUserAuthController - 用户认证控制器
@@ -19,17 +19,26 @@ import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat
  */
 public class UctooUserAuthController {
     private let userService: UctooUserService
+    private let smsLogService: SmsLogService
+    private let userHasRolesService: UserHasRolesService
     private let bcryptUtil: BcryptUtil
     private let authorizeUtil: AuthorizeUtil
     private let jwtUtil: JWTUtil
     
+    // 默认注册用户角色 ID（普通用户角色）
+    private static let DEFAULT_USER_ROLE_ID = "6352fad7-76ae-4911-ac7e-63cd33ba5083"
+    
     public init(
         userService: UctooUserService,
+        smsLogService: SmsLogService,
+        userHasRolesService: UserHasRolesService,
         bcryptUtil: BcryptUtil,
         authorizeUtil: AuthorizeUtil,
         jwtUtil: JWTUtil
     ) {
         this.userService = userService
+        this.smsLogService = smsLogService
+        this.userHasRolesService = userHasRolesService
         this.bcryptUtil = bcryptUtil
         this.authorizeUtil = authorizeUtil
         this.jwtUtil = jwtUtil
@@ -91,6 +100,13 @@ public class UctooUserAuthController {
             
             let u = user.getOrThrow()
             
+            // 检查是否为智能体帐号，智能体帐号不支持密码登录
+            if (u.userType == "agent") {
+                LoginLogService.recordLoginFailed(loginAccount, clientIp, browser, os)
+                res.status(403).json("{\"errno\":\"AUTH-AGENT-001\",\"errmsg\":\"该帐号为智能体专用帐号，不支持密码登录\"}")
+                return
+            }
+            
             // 验证密码
             if (!bcryptUtil.comparePassword(password, u.password)) {
                 // 记录登录失败日志
@@ -140,9 +156,23 @@ public class UctooUserAuthController {
             let username = getStringFromJson(obj, "username")
             let email = getStringFromJson(obj, "email")
             let password = getStringFromJson(obj, "password")
+            let verifyCode = getStringFromJson(obj, "verifyCode")
             
             if (username.isEmpty() || email.isEmpty() || password.isEmpty()) {
                 res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"用户名、邮箱和密码不能为空\"}")
+                return
+            }
+            
+            // 验证邮箱验证码
+            if (verifyCode.isEmpty()) {
+                res.status(400).json("{\"errno\":\"40005\",\"errmsg\":\"验证码不能为空\"}")
+                return
+            }
+            
+            let codeResult = smsLogService.verifyEmailCode(email, verifyCode, "register")
+            if (!codeResult.success) {
+                let reason = codeResult.reason ?? "验证码错误"
+                res.status(400).json("{\"errno\":\"40006\",\"errmsg\":\"${reason}\"}")
                 return
             }
             
@@ -168,12 +198,35 @@ public class UctooUserAuthController {
             user.status = 1
             user.createdAt = DateTime.now()
             
+            LogUtils.info("UctooUserAuthController", "=== Signup: creating user with username=${username}, email=${email}, name=${user.name} ===")
+            
             let result = userService.create(user, "")
+            LogUtils.info("UctooUserAuthController", "=== Signup: create result success=${result.success}, reason=${result.reason} ===")
+            
             if (result.success) {
-                // 注册成功，自动登录
-                authorizeUtil.authorizeAndEnd(user, req, res, AuthProvider.Local, true)
+                // 注册成功，分配默认角色
+                LogUtils.info("UctooUserAuthController", "=== Signup: user created successfully, assigning default role ===")
+                
+                let userRole = UserHasRolesPO()
+                userRole.userId = user.id
+                userRole.roleId = DEFAULT_USER_ROLE_ID
+                userRole.status = 1
+                userRole.createdAt = DateTime.now()
+                
+                let roleResult = userHasRolesService.create(userRole, user.id)
+                LogUtils.info("UctooUserAuthController", "=== Signup: role assignment result success=${roleResult.success}, reason=${roleResult.reason} ===")
+                
+                if (!roleResult.success) {
+                    LogUtils.info("UctooUserAuthController", "=== Signup: role assignment failed, but continuing ===")
+                }
+                
+                // 注册成功，返回成功信息（不自动登录）
+                LogUtils.info("UctooUserAuthController", "=== Signup: success, returning result ===")
+                res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"注册成功，请登录\"}")
             } else {
-                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"注册失败\"}")
+                let errMsg = "注册失败: ${result.reason}"
+                LogUtils.error("UctooUserAuthController", "=== ${errMsg} ===")
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errMsg}\"}")
             }
             
         } catch (e: Exception) {
@@ -352,6 +405,99 @@ public class UctooUserAuthController {
             
         } catch (e: Exception) {
             LogUtils.error("Check token failed: ${e.message}")
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    /**
+     * 通过邮箱验证码重置密码（忘记密码）
+     * POST /api/v1/uctoo/uctoo_user/forgot-reset
+     * 
+     * 参数：{ "email": "xxx@example.com", "verifyCode": "123456", "newPassword": "xxx" }
+     * 
+     * 不需要登录，通过邮箱验证码验证身份后重置密码
+     */
+    public func forgotResetPassword(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let body = req.body
+            LogUtils.info("UctooUserAuthController", "=== ForgotResetPassword: body size=${body.size} ===")
+            
+            if (body.isEmpty()) {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"请求体为空\"}")
+                return
+            }
+            
+            let jsonValue = JsonValue.fromStr(body)
+            
+            var jsonObj: JsonObject = JsonObject()
+            if (jsonValue is JsonObject) {
+                jsonObj = jsonValue.asObject()
+            } else if (jsonValue is JsonArray) {
+                let arr = jsonValue.asArray()
+                if (arr.getItems().size > 0) {
+                    let firstItem = arr.getItems()[0]
+                    if (firstItem is JsonObject) {
+                        jsonObj = firstItem.asObject()
+                    }
+                }
+            }
+            
+            if (jsonObj.getFields().isEmpty()) {
+                res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"请求格式错误\"}")
+                return
+            }
+            
+            let email = getStringFromJson(jsonObj, "email")
+            let verifyCode = getStringFromJson(jsonObj, "verifyCode")
+            let newPassword = getStringFromJson(jsonObj, "newPassword")
+            
+            LogUtils.info("UctooUserAuthController", "=== ForgotResetPassword: email=${email}, verifyCode=${verifyCode} ===")
+            
+            if (email.isEmpty() || verifyCode.isEmpty() || newPassword.isEmpty()) {
+                res.status(400).json("{\"errno\":\"40003\",\"errmsg\":\"参数不完整，email、verifyCode、newPassword不能为空\"}")
+                return
+            }
+            
+            if (newPassword.size < 6) {
+                res.status(400).json("{\"errno\":\"40004\",\"errmsg\":\"密码长度不能少于6位\"}")
+                return
+            }
+            
+            // 验证邮箱验证码
+            let verifyResult = smsLogService.verifyEmailCode(email, verifyCode, "forgot_password")
+            LogUtils.info("UctooUserAuthController", "=== ForgotResetPassword: verify result success=${verifyResult.success} ===")
+            
+            if (!verifyResult.success) {
+                let errMsg = verifyResult.reason ?? "验证码验证失败"
+                res.status(400).json("{\"errno\":\"40005\",\"errmsg\":\"${errMsg}\"}")
+                return
+            }
+            
+            // 查找用户
+            let userResult = userService.findByEmail(email)
+            if (userResult.isNone()) {
+                res.status(404).json("{\"errno\":\"40401\",\"errmsg\":\"用户不存在\"}")
+                return
+            }
+            
+            if (let Some(user) <- userResult) {
+                // 更新密码
+                user.password = bcryptUtil.hashPassword(newPassword)
+                user.updatedAt = DateTime.now()
+                
+                let updateResult = userService.update(user.id, user)
+                if (updateResult.success) {
+                    LogUtils.info("UctooUserAuthController", "=== ForgotResetPassword: password reset success for email=${email} ===")
+                    res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"密码重置成功，请登录\"}")
+                } else {
+                    let errMsg = updateResult.reason ?? "密码重置失败"
+                    LogUtils.error("UctooUserAuthController", "=== ForgotResetPassword: update failed - ${errMsg} ===")
+                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errMsg}\"}")
+                }
+            }
+            
+        } catch (e: Exception) {
+            LogUtils.error("UctooUserAuthController", "=== ForgotResetPassword exception: ${e.message} ===")
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }

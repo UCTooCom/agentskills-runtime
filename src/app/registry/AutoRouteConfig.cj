@@ -93,6 +93,46 @@ import magic.app.controllers.uctoo.event_handlers.EventHandlersManagementControl
 import magic.app.controllers.uctoo.executor.ExecutorSwitchController
 import magic.app.controllers.uctoo.skill.SkillValidationController
 import magic.app.controllers.uctoo.event_handlers.EventHandlersController
+import magic.app.routes.uctoo.attachments.AttachmentsRoute
+import magic.app.controllers.uctoo.attachments.AttachmentsController
+import magic.app.routes.uctoo.sms_log.SmsLogRoute
+import magic.app.controllers.uctoo.sms_log.SmsLogController
+import magic.app.routes.uctoo.company.CompanyRoute
+import magic.app.controllers.uctoo.company.CompanyController
+import magic.app.routes.uctoo.company.PublicCompaniesRoute
+import magic.app.controllers.uctoo.company.PublicCompaniesController
+import magic.app.routes.uctoo.tasks.TasksRoute
+import magic.app.controllers.uctoo.tasks.TasksController
+import magic.app.routes.uctoo.tasks.PublicTasksRoute
+import magic.app.controllers.uctoo.tasks.PublicTasksController
+import magic.app.routes.uctoo.user_has_company.UserHasCompanyRoute
+import magic.app.controllers.uctoo.user_has_company.UserHasCompanyController
+import magic.app.routes.uctoo.user_has_tasks.UserHasTasksRoute
+import magic.app.controllers.uctoo.user_has_tasks.UserHasTasksController
+import magic.app.routes.uctoo.messages.MessagesRoute
+import magic.app.controllers.uctoo.messages.MessagesController
+import magic.app.routes.uctoo.user_score.UserScoreRoute
+import magic.app.controllers.uctoo.user_score.UserScoreController
+import magic.app.routes.uctoo.task_settlements.TaskSettlementsRoute
+import magic.app.controllers.uctoo.task_settlements.TaskSettlementsController
+import magic.app.routes.uctoo.point_transactions.PointTransactionsRoute
+import magic.app.controllers.uctoo.point_transactions.PointTransactionsController
+import magic.app.routes.uctoo.aip_agent_identity.AipAgentIdentityRoute
+import magic.app.controllers.uctoo.aip_agent_identity.AipAgentIdentityController
+import magic.app.routes.uctoo.aip_agent_credential.AipAgentCredentialRoute
+import magic.app.controllers.uctoo.aip_agent_credential.AipAgentCredentialController
+import magic.app.routes.uctoo.aip_agent_description.AipAgentDescriptionRoute
+import magic.app.controllers.uctoo.aip_agent_description.AipAgentDescriptionController
+import magic.app.routes.uctoo.aip_interaction_session.AipInteractionSessionRoute
+import magic.app.controllers.uctoo.aip_interaction_session.AipInteractionSessionController
+import magic.app.routes.uctoo.aip_interaction_task.AipInteractionTaskRoute
+import magic.app.controllers.uctoo.aip_interaction_task.AipInteractionTaskController
+import magic.app.routes.uctoo.aip_interaction_message.AipInteractionMessageRoute
+import magic.app.controllers.uctoo.aip_interaction_message.AipInteractionMessageController
+import magic.app.routes.uctoo.aip_service_config.AipServiceConfigRoute
+import magic.app.controllers.uctoo.aip_service_config.AipServiceConfigController
+import magic.app.routes.uctoo.aip_discovery_cache.AipDiscoveryCacheRoute
+import magic.app.controllers.uctoo.aip_discovery_cache.AipDiscoveryCacheController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -133,7 +173,26 @@ import magic.app.services.uctoo.{
     AgentApprovalsService,
     RetrieversService,
     UsageQuotasService,
-    EventHandlersService,}
+    EventHandlersService,
+    AttachmentsService,
+    SmsLogService,
+    CompanyService,
+    UserHasCompanyService,
+    UserHasTasksService,
+    MessagesService,
+    TasksService,
+
+    UserScoreService,
+    TaskSettlementsService,
+    PointTransactionsService,
+    AipAgentIdentityService,
+    AipAgentCredentialService,
+    AipAgentDescriptionService,
+    AipInteractionSessionService,
+    AipInteractionTaskService,
+    AipInteractionMessageService,
+    AipServiceConfigService,
+    AipDiscoveryCacheService,}
 import magic.app.services.crontab.SchedulerService
 
 
@@ -499,6 +558,276 @@ public class AutoRouteConfig {
         ))
         
         // ==================== CRUD 路由配置 ====================
+        // AipDiscoveryCache 路由
+        registry.add(RouteEntry(
+            "aip_discovery_cache",
+            "/api/v1/uctoo/aip_discovery_cache",
+            10,
+            true,
+            { router: Router =>
+                let service = AipDiscoveryCacheService()
+                let controller = AipDiscoveryCacheController(service)
+                let route = AipDiscoveryCacheRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AipServiceConfig 路由
+        registry.add(RouteEntry(
+            "aip_service_config",
+            "/api/v1/uctoo/aip_service_config",
+            10,
+            true,
+            { router: Router =>
+                let service = AipServiceConfigService()
+                let controller = AipServiceConfigController(service)
+                let route = AipServiceConfigRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AipInteractionMessage 路由
+        registry.add(RouteEntry(
+            "aip_interaction_message",
+            "/api/v1/uctoo/aip_interaction_message",
+            10,
+            true,
+            { router: Router =>
+                let service = AipInteractionMessageService()
+                let controller = AipInteractionMessageController(service)
+                let route = AipInteractionMessageRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AipInteractionTask 路由
+        registry.add(RouteEntry(
+            "aip_interaction_task",
+            "/api/v1/uctoo/aip_interaction_task",
+            10,
+            true,
+            { router: Router =>
+                let service = AipInteractionTaskService()
+                let controller = AipInteractionTaskController(service)
+                let route = AipInteractionTaskRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AipInteractionSession 路由
+        registry.add(RouteEntry(
+            "aip_interaction_session",
+            "/api/v1/uctoo/aip_interaction_session",
+            10,
+            true,
+            { router: Router =>
+                let service = AipInteractionSessionService()
+                let controller = AipInteractionSessionController(service)
+                let route = AipInteractionSessionRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AipAgentDescription 路由
+        registry.add(RouteEntry(
+            "aip_agent_description",
+            "/api/v1/uctoo/aip_agent_description",
+            10,
+            true,
+            { router: Router =>
+                let service = AipAgentDescriptionService()
+                let controller = AipAgentDescriptionController(service)
+                let route = AipAgentDescriptionRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AipAgentCredential 路由
+        registry.add(RouteEntry(
+            "aip_agent_credential",
+            "/api/v1/uctoo/aip_agent_credential",
+            10,
+            true,
+            { router: Router =>
+                let service = AipAgentCredentialService()
+                let controller = AipAgentCredentialController(service)
+                let route = AipAgentCredentialRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AipAgentIdentity 路由
+        registry.add(RouteEntry(
+            "aip_agent_identity",
+            "/api/v1/uctoo/aip_agent_identity",
+            10,
+            true,
+            { router: Router =>
+                let service = AipAgentIdentityService()
+                let controller = AipAgentIdentityController(service)
+                let route = AipAgentIdentityRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // PointTransactions 路由
+        registry.add(RouteEntry(
+            "point_transactions",
+            "/api/v1/uctoo/point_transactions",
+            10,
+            true,
+            { router: Router =>
+                let service = PointTransactionsService()
+                let controller = PointTransactionsController(service)
+                let route = PointTransactionsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // TaskSettlements 路由
+        registry.add(RouteEntry(
+            "task_settlements",
+            "/api/v1/uctoo/task_settlements",
+            10,
+            true,
+            { router: Router =>
+                let service = TaskSettlementsService()
+                let controller = TaskSettlementsController(service)
+                let route = TaskSettlementsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // UserScore 路由
+        registry.add(RouteEntry(
+            "user_score",
+            "/api/v1/uctoo/user_score",
+            10,
+            true,
+            { router: Router =>
+                let service = UserScoreService()
+                let controller = UserScoreController(service)
+                let route = UserScoreRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // Messages 路由
+        registry.add(RouteEntry(
+            "messages",
+            "/api/v1/uctoo/messages",
+            10,
+            true,
+            { router: Router =>
+                let service = MessagesService()
+                let controller = MessagesController(service)
+                let route = MessagesRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // UserHasTasks 路由
+        registry.add(RouteEntry(
+            "user_has_tasks",
+            "/api/v1/uctoo/user_has_tasks",
+            10,
+            true,
+            { router: Router =>
+                let service = UserHasTasksService()
+                let controller = UserHasTasksController(service)
+                let route = UserHasTasksRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // UserHasCompany 路由
+        registry.add(RouteEntry(
+            "user_has_company",
+            "/api/v1/uctoo/user_has_company",
+            10,
+            true,
+            { router: Router =>
+                let service = UserHasCompanyService()
+                let controller = UserHasCompanyController(service)
+                let route = UserHasCompanyRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // Tasks 路由
+        registry.add(RouteEntry(
+            "tasks",
+            "/api/v1/uctoo/tasks",
+            10,
+            true,
+            { router: Router =>
+                let service = TasksService()
+                let controller = TasksController(service)
+                let route = TasksRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // Company 路由
+        registry.add(RouteEntry(
+            "company",
+            "/api/v1/uctoo/company",
+            10,
+            true,
+            { router: Router =>
+                let service = CompanyService()
+                let controller = CompanyController(service)
+                let route = CompanyRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // SmsLog 路由
+        registry.add(RouteEntry(
+            "sms_log",
+            "/api/v1/uctoo/sms_log",
+            10,
+            true,
+            { router: Router =>
+                let service = SmsLogService()
+                let controller = SmsLogController(service)
+                let route = SmsLogRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // Attachments 路由
+        registry.add(RouteEntry(
+            "attachments",
+            "/api/v1/uctoo/attachments",
+            10,
+            true,
+            { router: Router =>
+                let service = AttachmentsService()
+                let controller = AttachmentsController(service)
+                let route = AttachmentsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
         // EventHandlers 路由
         registry.add(RouteEntry(
             "event_handlers",

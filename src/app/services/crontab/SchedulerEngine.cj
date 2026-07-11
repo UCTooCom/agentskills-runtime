@@ -11,7 +11,7 @@ import magic.app.models.uctoo.{CrontabPO, CrontabLogPO}
 import magic.app.dao.uctoo.{CrontabDAO, CrontabLogDAO, CrontabTaskRegistryDAO}
 import magic.app.services.crontab.model.{TriggerType, triggerTypeToString, CrontabExecutionContext, ExecutionResult, SchedulerStatus, durationMsBetween}
 import magic.app.services.crontab.executor.{ExecutorRegistry, CrontabExecutor, ScriptExecutor, HttpExecutor, BuiltinExecutor, AgentExecutionExecutor, QuotaResetExecutor}
-import magic.app.services.crontab.executor.builtin.{BuiltinTaskHandler, DatabaseCleanupHandler, CacheRefreshHandler, LogRotationHandler, HealthCheckHandler, MetricsReportHandler}
+import magic.app.services.crontab.executor.builtin.{BuiltinTaskHandler, DatabaseCleanupHandler, CacheRefreshHandler, LogRotationHandler, HealthCheckHandler, MetricsReportHandler, AibuilderTaskRefundHandler}
 import magic.app.services.crontab.misfire.{MisfireManager, MisfireAction}
 import magic.app.services.crontab.retry.RetryManager
 import magic.app.services.crontab.log.AsyncLogWriter
@@ -72,6 +72,7 @@ public class SchedulerEngine {
         builtinExecutor.registerBuiltinTask("log-rotation", LogRotationHandler())
         builtinExecutor.registerBuiltinTask("health-check", HealthCheckHandler())
         builtinExecutor.registerBuiltinTask("metrics-report", MetricsReportHandler())
+        builtinExecutor.registerBuiltinTask("aibuilder-task-refund", AibuilderTaskRefundHandler())
 
         executorRegistry.register("script", scriptExecutor)
         executorRegistry.register("http", httpExecutor)

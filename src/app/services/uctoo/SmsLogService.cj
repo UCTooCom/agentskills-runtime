@@ -1,0 +1,1113 @@
+/*
+ * Copyright (c) UCToo Co., Ltd. 2026. All rights reserved.
+ */
+package magic.app.services.uctoo
+
+// ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+
+// ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
+//#region AutoCreateCode
+
+import std.collection.*
+import std.time.DateTime
+import f_orm.*
+import magic.app.models.uctoo.SmsLogPO
+import magic.app.dao.uctoo.SmsLogDAO
+import magic.app.core.response.APIResult
+import magic.app.core.query.{RequestParserService, ParsedQuery, CompositeCondition, FieldCondition, QueryOperator, LogicOperator, QueryValue, SortCondition}
+import magic.app.core.{PermissionLevel, PermissionConfig, hasPermission}
+import magic.app.utils.PermissionUtils
+import magic.log.LogUtils
+import std.random.Random
+
+/**
+ * SmsLogService - sms_log服务类
+ *
+ * 提供sms_log相关的业务逻辑处理，遵循UCTOO V4 ORM规范
+ * 使用DAO层进行数据访问
+ */
+public class SmsLogService {
+    private func getExecutor(): SqlExecutor {
+        ORM.executor()
+    }
+
+    // 查询参数解析服务
+    private let requestParser = RequestParserService()
+
+    public init() {}
+
+    /**
+     * 创建sms_log
+     * @param entity SmsLogPO对象
+     * @param creatorId 创建者ID
+     * @return 创建结果
+     */
+    public func create(entity: SmsLogPO, creatorId: String): APIResult<SmsLogPO> {
+        try {
+            entity.createdAt = DateTime.now()
+            entity.updatedAt = DateTime.now()
+
+            // 只有当 creatorId 是有效的 UUID 时才设置 creator
+            if (entity.creator.isNone() && !creatorId.isEmpty() && isValidUUID(creatorId)) {
+                entity.creator = Some(creatorId)
+            }
+
+            let id = getExecutor().insertSmsLog(entity)
+            
+            if (!id.isEmpty()) {
+                entity.id = id
+                return APIResult<SmsLogPO>(entity)
+            } else {
+                return APIResult<SmsLogPO>(false, "数据库操作失败")
+            }
+        } catch (e: Exception) {
+            return APIResult<SmsLogPO>(false, e.message)
+        }
+    }
+
+    /**
+     * 更新sms_log（无权限检查）
+     * @param entityId ID
+     * @param entity SmsLogPO对象
+     * @return 更新结果
+     */
+    public func update(entityId: String, entity: SmsLogPO): APIResult<SmsLogPO> {
+        try {
+            let existing = getExecutor().findSmsLogById(entityId)
+            
+            if (existing.isNone()) {
+                return APIResult<SmsLogPO>(false, "sms_log不存在")
+            }
+            
+            let existingEntity = existing.getOrThrow()
+            
+            // 合并字段：只更新entity中非默认值的字段
+                        if (entity.event.size > 0) {
+                existingEntity.event = entity.event
+            }
+            if (entity.mobile.isSome()) {
+                existingEntity.mobile = entity.mobile
+            }
+            if (entity.code.size > 0) {
+                existingEntity.code = entity.code
+            }
+            existingEntity.times = entity.times
+            if (entity.ip.isSome()) {
+                existingEntity.ip = entity.ip
+            }
+            if (entity.creator.isSome()) {
+                existingEntity.creator = entity.creator
+            }
+            if (entity.deletedAt.isSome()) {
+                existingEntity.deletedAt = entity.deletedAt
+            }
+            if (entity.email.isSome()) {
+                existingEntity.email = entity.email
+            }
+
+            
+            // 设置更新时间和ID
+            existingEntity.updatedAt = DateTime.now()
+            existingEntity.id = entityId
+            
+            let rows = getExecutor().updateSmsLog(existingEntity)
+            
+            if (rows > 0) {
+                return APIResult<SmsLogPO>(existingEntity)
+            } else {
+                return APIResult<SmsLogPO>(false, "更新失败")
+            }
+        } catch (e: Exception) {
+            return APIResult<SmsLogPO>(false, e.message)
+        }
+    }
+
+    /**
+     * 批量更新sms_log
+     * @param entities sms_log列表
+     * @return 更新结果
+     */
+    public func updateMultiple(entities: ArrayList<SmsLogPO>): APIResult<ArrayList<SmsLogPO>> {
+        try {
+            let updatedEntities = ArrayList<SmsLogPO>()
+
+            for (entity in entities) {
+                entity.updatedAt = DateTime.now()
+                let rows = getExecutor().updateSmsLog(entity)
+
+                if (rows > 0) {
+                    updatedEntities.add(entity)
+                }
+            }
+
+            if (updatedEntities.size > 0) {
+                return APIResult<ArrayList<SmsLogPO>>(updatedEntities)
+            } else {
+                return APIResult<ArrayList<SmsLogPO>>(false, "批量更新失败")
+            }
+        } catch (e: Exception) {
+            return APIResult<ArrayList<SmsLogPO>>(false, e.message)
+        }
+    }
+
+    /**
+     * 删除sms_log（无权限检查）
+     * @param entityId ID
+     * @param force 是否强制删除（true: 硬删除，false: 软删除）
+     * @return 删除结果
+     */
+    public func delete(entityId: String, force: Bool): APIResult<Bool> {
+        try {
+            let existing = getExecutor().findSmsLogById(entityId)
+            
+            if (existing.isNone()) {
+                return APIResult<Bool>(false, "sms_log不存在")
+            }
+            
+            let rows: Int64
+            if (force) {
+                rows = getExecutor().deleteSmsLogById(entityId)
+            } else {
+                rows = getExecutor().softDeleteSmsLogById(entityId)
+            }
+            
+            if (rows > 0) {
+                return APIResult<Bool>(true)
+            } else {
+                return APIResult<Bool>(false, "删除失败")
+            }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    /**
+     * 批量删除sms_log
+     * @param ids sms_logID列表
+     * @param force 是否强制删除（true: 硬删除，false: 软删除）
+     * @return 删除结果
+     */
+    public func deleteMultiple(ids: ArrayList<String>, force: Bool): APIResult<Bool> {
+        try {
+            let rows: Int64
+            if (force) {
+                rows = getExecutor().batchDeleteSmsLog(ids)
+            } else {
+                rows = getExecutor().batchSoftDeleteSmsLog(ids)
+            }
+
+            if (rows > 0) {
+                return APIResult<Bool>(true)
+            } else {
+                return APIResult<Bool>(false, "批量删除失败")
+            }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    /**
+     * 恢复软删除的sms_log
+     * @param entityId sms_logID
+     * @return 恢复结果
+     */
+    public func restore(entityId: String): APIResult<SmsLogPO> {
+        try {
+            let rows = getExecutor().restoreSmsLogById(entityId)
+
+            if (rows > 0) {
+                let result = getExecutor().findSmsLogById(entityId)
+                if (let Some(entity) <- result) {
+                    return APIResult<SmsLogPO>(entity)
+                } else {
+                    return APIResult<SmsLogPO>(false, "恢复后查询失败")
+                }
+            } else {
+                return APIResult<SmsLogPO>(false, "恢复失败")
+            }
+        } catch (e: Exception) {
+            return APIResult<SmsLogPO>(false, e.message)
+        }
+    }
+
+    /**
+     * 批量恢复软删除的sms_log
+     * @param ids sms_logID列表
+     * @return 恢复结果
+     */
+    public func restoreMultiple(ids: ArrayList<String>): APIResult<Bool> {
+        try {
+            var rows: Int64 = 0
+            for (id in ids) {
+                rows = rows + getExecutor().restoreSmsLogById(id)
+            }
+
+            if (rows > 0) {
+                return APIResult<Bool>(true)
+            } else {
+                return APIResult<Bool>(false, "批量恢复失败")
+            }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    /**
+     * 根据ID获取sms_log（无权限检查）
+     * @param entityId ID
+     * @return sms_log对象
+     */
+    public func getById(entityId: String): APIResult<SmsLogPO> {
+        try {
+            let result = getExecutor().findSmsLogById(entityId)
+            
+            if (let Some(entity) <- result) {
+                return APIResult<SmsLogPO>(entity)
+            } else {
+                return APIResult<SmsLogPO>(false, "未找到该sms_log")
+            }
+        } catch (e: Exception) {
+            return APIResult<SmsLogPO>(false, e.message)
+        }
+    }
+
+    /**
+     * 获取sms_log列表（分页）
+     * @param page 页码
+     * @param pageSize 每页大小
+     * @return sms_log列表和总数
+     */
+    public func getList(page: Int64, pageSize: Int64): (ArrayList<SmsLogPO>, Int64) {
+        try {
+            let pagination = getExecutor().findAllSmsLogPage(page, pageSize)
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<SmsLogPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取sms_log列表（分页，支持排序和过滤，无权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询：
+     * - 排序：sort="-created_at,id"
+     * - 过滤：filter={"name":{"contains":"test"},"status":{"equals":"active"}}
+     * - 条件组合：filter={"AND":[{"name":{"contains":"test"}},{"status":{"equals":"active"}}]}
+     *
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param sort 排序参数（如 "-created_at,id"）
+     * @param filter 过滤条件（JSON字符串）
+     * @return sms_log列表和总数
+     */
+    public func getListWithFilter(
+        page: Int32,
+        pageSize: Int32,
+        sort: String,
+        filter: String
+    ): (ArrayList<SmsLogPO>, Int64) {
+        try {
+            // 1. 解析查询参数
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            // 2. 构建 WHERE 条件
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            // 3. 构建 ORDER BY 子句
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            // 4. 执行查询
+            let pagination = getExecutor().findSmsLogByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<SmsLogPO>(), 0)
+        }
+    }
+
+    /**
+     * 构建WHERE子句字符串
+     *
+     * 将组合条件转换为SQL WHERE子句
+     */
+    private func buildWhereClause(composite: CompositeCondition): String {
+        let sb = StringBuilder()
+
+        // 处理字段条件
+        let fieldConditions = composite.fieldConditions
+        for (fieldCondition in fieldConditions) {
+            if (sb.size > 0) {
+                match (composite.logic) {
+                    case LogicOperator.And => sb.append(" AND ")
+                    case LogicOperator.Or => sb.append(" OR ")
+                    case LogicOperator.Not => sb.append(" AND ")
+                }
+            }
+            sb.append(buildFieldClause(fieldCondition))
+        }
+
+        // 处理嵌套组合条件
+        let compositeConditions = composite.compositeConditions
+        for (nestedComposite in compositeConditions) {
+            if (sb.size > 0) {
+                match (composite.logic) {
+                    case LogicOperator.And => sb.append(" AND ")
+                    case LogicOperator.Or => sb.append(" OR ")
+                    case LogicOperator.Not => sb.append(" AND ")
+                }
+            }
+            let nestedClause = buildWhereClause(nestedComposite)
+            if (!nestedClause.isEmpty()) {
+                sb.append("(${nestedClause})")
+            }
+        }
+
+        // 处理 NOT 逻辑操作符
+        match (composite.logic) {
+            case LogicOperator.Not =>
+                if (sb.size > 0) {
+                    return "NOT(${sb.toString()})"
+                } else {
+                    return sb.toString()
+                }
+            case _ =>
+                return sb.toString()
+        }
+    }
+
+    /**
+     * 构建单个字段条件的SQL子句
+     */
+    private func buildFieldClause(fieldCondition: FieldCondition): String {
+        let field = fieldCondition.field
+        let op = fieldCondition.op
+        let value = fieldCondition.value
+
+        match (op) {
+            case QueryOperator.Equals => buildEqualsClause(field, value)
+            case QueryOperator.Not => buildNotClause(field, value)
+            case QueryOperator.Lt => buildLtClause(field, value)
+            case QueryOperator.Lte => buildLteClause(field, value)
+            case QueryOperator.Gt => buildGtClause(field, value)
+            case QueryOperator.Gte => buildGteClause(field, value)
+            case QueryOperator.Contains => buildContainsClause(field, value)
+            case QueryOperator.StartsWith => buildStartsWithClause(field, value)
+            case QueryOperator.EndsWith => buildEndsWithClause(field, value)
+            case QueryOperator.In => buildInClauseWrapper(field, value, true)
+            case QueryOperator.NotIn => buildInClauseWrapper(field, value, false)
+            case QueryOperator.IsSet => buildIsSetClause(field, value)
+            case QueryOperator.Between => buildBetweenClauseWrapper(field, value, true)
+            case QueryOperator.NotBetween => buildBetweenClauseWrapper(field, value, false)
+        }
+    }
+
+    private func buildEqualsClause(field: String, value: QueryValue): String {
+        if (value.isNull()) {
+            return "${field} IS NULL"
+        }
+
+        if (let Some(v) <- value.stringValue) {
+            return "${field} = '${v}'"
+        } else if (let Some(v) <- value.intValue) {
+            return "${field} = ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} = ${v}"
+        } else if (let Some(v) <- value.boolValue) {
+            return "${field} = ${v}"
+        }
+        return ""
+    }
+
+    private func buildNotClause(field: String, value: QueryValue): String {
+        if (value.isNull()) {
+            return "${field} IS NOT NULL"
+        }
+
+        if (let Some(v) <- value.stringValue) {
+            return "${field} != '${v}'"
+        } else if (let Some(v) <- value.intValue) {
+            return "${field} != ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} != ${v}"
+        } else if (let Some(v) <- value.boolValue) {
+            return "${field} != ${v}"
+        }
+        return ""
+    }
+
+    private func buildLtClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} < ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} < ${v}"
+        }
+        return ""
+    }
+
+    private func buildLteClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} <= ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} <= ${v}"
+        }
+        return ""
+    }
+
+    private func buildGtClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} > ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} > ${v}"
+        }
+        return ""
+    }
+
+    private func buildGteClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.intValue) {
+            return "${field} >= ${v}"
+        } else if (let Some(v) <- value.floatValue) {
+            return "${field} >= ${v}"
+        }
+        return ""
+    }
+
+    private func buildContainsClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '%${v}%'"
+        }
+        return ""
+    }
+
+    private func buildStartsWithClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '${v}%'"
+        }
+        return ""
+    }
+
+    private func buildEndsWithClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.stringValue) {
+            return "${field} LIKE '%${v}'"
+        }
+        return ""
+    }
+
+    private func buildInClauseWrapper(field: String, value: QueryValue, isIn: Bool): String {
+        if (let Some(arr) <- value.arrayValue) {
+            return buildInClause(field, arr, isIn)
+        }
+        return ""
+    }
+
+    private func buildIsSetClause(field: String, value: QueryValue): String {
+        if (let Some(v) <- value.boolValue) {
+            if (v) {
+                return "${field} IS NOT NULL"
+            } else {
+                return "${field} IS NULL"
+            }
+        }
+        return ""
+    }
+
+    private func buildBetweenClauseWrapper(field: String, value: QueryValue, isBetween: Bool): String {
+        if (let Some(arr) <- value.arrayValue) {
+            if (arr.size >= 2) {
+                return buildBetweenClause(field, arr[0], arr[1], isBetween)
+            }
+        }
+        return ""
+    }
+
+    private func buildInClause(field: String, values: ArrayList<QueryValue>, isIn: Bool): String {
+        let sb = StringBuilder()
+        sb.append("${field} ")
+        if (!isIn) {
+            sb.append("NOT ")
+        }
+        sb.append("IN (")
+
+        let size = values.size
+        for (i in 0..size) {
+            if (i > 0) {
+                sb.append(", ")
+            }
+            let v = values[i]
+            if (let Some(s) <- v.stringValue) {
+                sb.append("'${s}'")
+            } else if (let Some(n) <- v.intValue) {
+                sb.append("${n}")
+            } else if (let Some(f) <- v.floatValue) {
+                sb.append("${f}")
+            }
+        }
+
+        sb.append(")")
+        return sb.toString()
+    }
+
+
+    /**
+     * 构建BETWEEN子句
+     */
+    private func buildBetweenClause(field: String, v1: QueryValue, v2: QueryValue, isBetween: Bool): String {
+        let sb = StringBuilder()
+        sb.append("${field} ")
+
+        if (!isBetween) {
+            sb.append("NOT ")
+        }
+        sb.append("BETWEEN ")
+
+        if (let Some(s) <- v1.stringValue) {
+            sb.append("'${s}'")
+        } else if (let Some(n) <- v1.intValue) {
+            sb.append("${n}")
+        } else if (let Some(f) <- v1.floatValue) {
+            sb.append("${f}")
+        }
+
+        sb.append(" AND ")
+
+        if (let Some(s) <- v2.stringValue) {
+            sb.append("'${s}'")
+        } else if (let Some(n) <- v2.intValue) {
+            sb.append("${n}")
+        } else if (let Some(f) <- v2.floatValue) {
+            sb.append("${f}")
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 构建ORDER BY子句
+     */
+    private func buildOrderByClause(sort: ArrayList<SortCondition>): String {
+        if (sort.isEmpty()) {
+            return "created_at DESC"
+        }
+
+        let sb = StringBuilder()
+        let size = sort.size
+
+        for (i in 0..size) {
+            let condition = sort[i]
+            if (sb.size > 0) {
+                sb.append(", ")
+            }
+            sb.append("${condition.field} ${if (condition.ascending) { "ASC" } else { "DESC" }}")
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 获取sms_log列表（带跳过参数，带权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
+     * @param page 页码（从0开始）
+     * @param pageSize 每页大小
+     * @param skip 跳过条数
+     * @param sort 排序参数
+     * @param filter 过滤条件
+     * @param userId 用户ID
+     * @return sms_log列表和总数
+     */
+    public func getListWithSkipWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        skip: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<SmsLogPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "sms_log")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithSkip(page, pageSize, skip, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pageNum = if (pageSize > 0) { (skip / pageSize) + 1 } else { Int32(1) }
+            let pagination = getExecutor().findSmsLogByCondition(
+                whereClause,
+                orderByClause,
+                Int64(pageNum),
+                Int64(pageSize)
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<SmsLogPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取sms_log列表（带跳过参数，无权限过滤）
+     *
+     * 支持完整的 Prisma 风格查询
+     *
+     * @param page 页码（从0开始）
+     * @param pageSize 每页大小
+     * @param skip 跳过条数
+     * @param sort 排序参数
+     * @param filter 过滤条件
+     * @return sms_log列表和总数
+     */
+    public func getListWithSkip(
+        page: Int32,
+        pageSize: Int32,
+        skip: Int32,
+        sort: String,
+        filter: String
+    ): (ArrayList<SmsLogPO>, Int64) {
+        try {
+            // 1. 解析查询参数
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page + 1), Int64(pageSize))
+
+            // 2. 构建 WHERE 条件
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            // 3. 构建 ORDER BY 子句
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            // 4. 执行查询（带跳过参数）
+            let pagination = getExecutor().findSmsLogByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<SmsLogPO>(), 0)
+        }
+    }
+
+    /**
+     * 获取所有sms_log列表（分页）
+     * @param page 页码
+     * @param pageSize 每页大小
+     * @return sms_log列表和总数
+     */
+    public func getAllList(
+        page: Int32,
+        pageSize: Int32
+    ): (ArrayList<SmsLogPO>, Int64) {
+        let pagination = getExecutor().findAllSmsLogPage(
+            Int64(page + 1),
+            Int64(pageSize)
+        )
+
+        return (pagination.list, pagination.rows)
+    }
+
+    /**
+     * 批量获取sms_log
+     * @param ids ID列表
+     * @return sms_log列表
+     */
+    public func getByIds(ids: ArrayList<String>): ArrayList<SmsLogPO> {
+        getExecutor().findSmsLogByIds(ids)
+    }
+
+    /**
+     * 统计用户的sms_log数量
+     * @param userId 用户ID
+     * @return sms_log数量
+     */
+    public func countByUser(userId: String): Int64 {
+        getExecutor().countSmsLogByCreator(userId)
+    }
+
+    /**
+     * 统计所有sms_log数量
+     * @return sms_log数量
+     */
+    public func countAll(): Int64 {
+        getExecutor().countAllSmsLog()
+    }
+
+    /**
+     * 获取sms_log列表（带过滤条件）
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param link 链接模糊查询
+     * @param description 描述模糊查询
+     * @param deletedAt 软删除筛选 (null: 未删除, "not_null": 已删除, None: 不过滤)
+     * @return sms_log列表和总数
+     */
+    public func getFilteredList(
+        page: Int64,
+        pageSize: Int64,
+        link: ?String,
+        description: ?String,
+        deletedAt: ?String
+    ): (ArrayList<SmsLogPO>, Int64) {
+        let pagination = getExecutor().findSmsLogByFilterPage(
+            link,
+            description,
+            deletedAt,
+            page,
+            pageSize
+        )
+
+        return (pagination.list, pagination.rows)
+    }
+
+    /**
+     * 清空回收站（硬删除所有已软删除的sms_log）
+     * @return 删除结果
+     */
+    public func emptyRecycleBinSmsLog(): APIResult<Bool> {
+        try {
+            let rows = getExecutor().emptyRecycleBinSmsLog()
+
+            if (rows > 0) {
+                return APIResult<Bool>(true)
+            } else {
+                return APIResult<Bool>(false, "回收站为空")
+            }
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+    // ==================== 行级权限集成方法（每个表都需要的标准化代码） ====================
+
+    public func createWithPermission(entity: SmsLogPO, creatorId: String): APIResult<SmsLogPO> {
+        let result = create(entity, creatorId)
+        if (result.success) {
+            if (result.data.isSome()) {
+                let data = result.data.getOrThrow()
+                if (!data.id.isEmpty()) {
+                    PermissionUtils.autoGrantCreatorPermission(creatorId, data.id, "sms_log")
+                }
+            }
+        }
+        return result
+    }
+
+    public func getByIdWithPermission(entityId: String, userId: String): APIResult<SmsLogPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkReadPermission(userId, entityId, "sms_log")
+            if (!hasPermission) {
+                return APIResult<SmsLogPO>(false, reason)
+            }
+            return getById(entityId)
+        } catch (e: Exception) {
+            return APIResult<SmsLogPO>(false, e.message)
+        }
+    }
+
+    public func getListWithPermission(
+        page: Int32,
+        pageSize: Int32,
+        sort: String,
+        filter: String,
+        userId: String
+    ): (ArrayList<SmsLogPO>, Int64) {
+        try {
+            if (PermissionUtils.hasWildcardPermission(userId)) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let (permFilter, permParams) = PermissionUtils.appendPermissionFilter(userId, "sms_log")
+
+            if (permFilter == "1=1" || permFilter.isEmpty()) {
+                return getListWithFilter(page, pageSize, sort, filter)
+            }
+
+            let parsedQuery = requestParser.parseQuery(filter, sort, Int64(page), Int64(pageSize))
+
+            var whereClause = ""
+            if (let Some(filterCondition) <- parsedQuery.filter) {
+                whereClause = buildWhereClause(filterCondition)
+            }
+
+            if (whereClause.isEmpty()) {
+                whereClause = permFilter
+            } else {
+                whereClause = "(${whereClause}) AND ${permFilter}"
+            }
+
+            let orderByClause = buildOrderByClause(parsedQuery.sort)
+
+            let pagination = getExecutor().findSmsLogByCondition(
+                whereClause,
+                orderByClause,
+                parsedQuery.page,
+                parsedQuery.pageSize
+            )
+
+            return (pagination.list, pagination.rows)
+        } catch (e: Exception) {
+            return (ArrayList<SmsLogPO>(), 0)
+        }
+    }
+
+    public func updateWithPermission(entityId: String, entity: SmsLogPO, userId: String): APIResult<SmsLogPO> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "sms_log")
+            if (!hasPermission) {
+                return APIResult<SmsLogPO>(false, reason)
+            }
+            return update(entityId, entity)
+        } catch (e: Exception) {
+            return APIResult<SmsLogPO>(false, e.message)
+        }
+    }
+
+    public func deleteWithPermission(entityId: String, force: Bool, userId: String): APIResult<Bool> {
+        try {
+            let (hasPermission, reason) = PermissionUtils.checkWritePermission(userId, entityId, "sms_log")
+            if (!hasPermission) {
+                return APIResult<Bool>(false, reason)
+            }
+            return delete(entityId, force)
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, e.message)
+        }
+    }
+
+//#endregion AutoCreateCode
+// ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    // ==================== 发送邮箱验证码 ====================
+
+    /**
+     * 发送邮箱验证码
+     * 
+     * 生成6位随机数字验证码，保存到数据库，并发送邮件
+     * 验证码10分钟有效
+     * 
+     * @param email 目标邮箱
+     * @param ip 客户端IP地址
+     * @param event 事件类型（如 "register"）
+     * @return 发送结果
+     */
+    public func sendEmailCode(email: String, ip: String, event: String): APIResult<Bool> {
+        try {
+            LogUtils.info("SmsLogService", "=== sendEmailCode start: email=${email}, ip=${ip}, event=${event} ===")
+
+            let random = Random()
+            var code = ""
+            for (_ in 0..6) {
+                let digit = random.nextInt64()
+                let positiveDigit = if (digit < 0) { -digit } else { digit }
+                code = code + (positiveDigit % 10).toString()
+            }
+            LogUtils.info("SmsLogService", "=== Generated code: ${code} ===")
+
+            let entity = SmsLogPO()
+            entity.event = event
+            entity.email = Some(email)
+            entity.code = code
+            entity.ip = Some(ip)
+            entity.times = 0
+            entity.createdAt = DateTime.now()
+            entity.updatedAt = DateTime.now()
+
+            LogUtils.info("SmsLogService", "=== Creating entity: event=${entity.event}, email=${entity.email}, code=${entity.code}, ip=${entity.ip}, times=${entity.times}, mobile=${entity.mobile} ===")
+
+            let createResult = create(entity, "")
+            LogUtils.info("SmsLogService", "=== Create result: success=${createResult.success}, reason=${createResult.reason} ===")
+            if (!createResult.success) {
+                LogUtils.error("SmsLogService", "=== Failed to save email code to database: ${createResult.reason} ===")
+                return APIResult<Bool>(false, "验证码保存失败: ${createResult.reason}")
+            }
+
+            var emailSubject = ""
+            var emailContent = ""
+            
+            if (event == "forgot_password") {
+                emailSubject = "【AgentSkills】您的找回密码验证码"
+                emailContent = """
+                    尊敬的用户您好！
+
+                    您正在进行找回密码操作，您的验证码为：
+
+                    ${code}
+
+                    验证码有效期为10分钟，请勿告知他人。
+
+                    如果您未进行找回密码操作，请忽略此邮件。
+
+                    --
+                    AgentSkills Team
+                """
+            } else {
+                emailSubject = "【AgentSkills】您的注册验证码"
+                emailContent = """
+                    尊敬的用户您好！
+
+                    您正在进行的注册操作，您的验证码为：
+
+                    ${code}
+
+                    验证码有效期为10分钟，请勿告知他人。
+
+                    如果您未进行注册操作，请忽略此邮件。
+
+                    --
+                    AgentSkills Team
+                """
+            }
+
+            let sent = MailConfig.sendEmail(email, emailSubject, emailContent)
+            LogUtils.info("SmsLogService", "=== MailConfig.sendEmail returned: ${sent} ===")
+            if (!sent) {
+                LogUtils.error("SmsLogService", "=== Failed to send email to: ${email} ===")
+                return APIResult<Bool>(false, "邮件发送失败")
+            }
+
+            LogUtils.info("SmsLogService", "=== Email code sent successfully to: ${email}, code: ${code} ===")
+            return APIResult<Bool>(true)
+        } catch (e: Exception) {
+            return APIResult<Bool>(false, "发送验证码失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 验证邮箱验证码
+     * 
+     * @param email 邮箱
+     * @param code 验证码
+     * @param event 事件类型
+     * @return 验证结果
+     */
+    public func verifyEmailCode(email: String, code: String, event: String): APIResult<Bool> {
+        try {
+            LogUtils.info("SmsLogService", "=== verifyEmailCode start: email=${email}, event=${event} ===")
+            
+            let expirationMinutes = 10
+            let maxRetryTimes: Int32 = 5
+            let expirationTime = DateTime.now().addMinutes(-expirationMinutes)
+
+            let entities = getExecutor().findSmsLogByEmailAndEvent(email, event, expirationTime)
+
+            if (entities.isEmpty()) {
+                LogUtils.info("SmsLogService", "=== No valid code found for email: ${email}, event: ${event} ===")
+                return APIResult<Bool>(false, "验证码不存在或已过期")
+            }
+
+            var latestEntity: ?SmsLogPO = None<SmsLogPO>
+            for (entity in entities) {
+                if (entity.deletedAt.isNone()) {
+                    if (latestEntity.isNone()) {
+                        latestEntity = Some(entity)
+                    } else if (entity.createdAt > latestEntity.getOrThrow().createdAt) {
+                        latestEntity = Some(entity)
+                    }
+                }
+            }
+
+            if (let Some(entity) <- latestEntity) {
+                LogUtils.info("SmsLogService", "=== Found latest code: times=${entity.times}, maxRetry=${maxRetryTimes} ===")
+                
+                if (entity.times >= maxRetryTimes) {
+                    LogUtils.info("SmsLogService", "=== Code retry limit exceeded for email: ${email} ===")
+                    return APIResult<Bool>(false, "验证码错误次数过多，请重新获取")
+                }
+
+                if (entity.code == code) {
+                    entity.times = entity.times + 1
+                    entity.updatedAt = DateTime.now()
+                    entity.deletedAt = Some(DateTime.now())
+                    update(entity.id, entity)
+
+                    LogUtils.info("SmsLogService", "=== Email code verified successfully for: ${email}, code marked as used ===")
+                    return APIResult<Bool>(true)
+                } else {
+                    entity.times = entity.times + 1
+                    entity.updatedAt = DateTime.now()
+                    update(entity.id, entity)
+                    
+                    let remainingTimes = maxRetryTimes - entity.times
+                    LogUtils.info("SmsLogService", "=== Email code mismatch for: ${email}, expected: ${entity.code}, got: ${code}, remaining: ${remainingTimes} ===")
+                    
+                    if (remainingTimes <= 0) {
+                        return APIResult<Bool>(false, "验证码错误次数过多，请重新获取")
+                    }
+                    return APIResult<Bool>(false, "验证码错误，还可尝试${remainingTimes}次")
+                }
+            }
+
+            LogUtils.info("SmsLogService", "=== No unused valid code found for email: ${email} ===")
+            return APIResult<Bool>(false, "验证码不存在或已过期")
+        } catch (e: Exception) {
+            LogUtils.error("SmsLogService", "=== VerifyEmailCode exception: ${e.message} ===")
+            return APIResult<Bool>(false, "验证码验证失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 验证字符串是否为有效的 UUID 格式
+     * UUID 格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+     */
+    private func isValidUUID(str: String): Bool {
+        // UUID 固定长度为 36
+        if (str.size != 36) {
+            return false
+        }
+
+        // 检查分隔符位置：第9、14、19、24个字符应该是 '-'
+        if (str[8..9] != "-" || str[13..14] != "-" || str[18..19] != "-" || str[23..24] != "-") {
+            return false
+        }
+
+        // 检查每个部分是否只包含十六进制字符
+        let hexChars = "0123456789abcdefABCDEF"
+        let parts = [
+            str[0..8],    // 前8位
+            str[9..13],   // 中4位
+            str[14..18],  // 中4位
+            str[19..23],  // 中4位
+            str[24..36]   // 后12位
+        ]
+
+        for (part in parts) {
+            for (c in part) {
+                if (!hexChars.contains(c.toString())) {
+                    return false
+                }
+            }
+        }
+
+        return true
+    }
+
+}

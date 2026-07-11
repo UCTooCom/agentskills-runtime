@@ -49,6 +49,23 @@ public class WebMCPController {
     }
 
     /**
+     * 设置 CORS 响应头
+     * 注意：当使用 credentials 时，不能使用通配符 *，需要回显请求的 Origin
+     */
+    private func setCorsHeaders(req: HttpRequest, res: HttpResponse): HttpResponse {
+        let origin = req.header("Origin")
+        // 在 credentials 模式下，必须回显具体 origin 而不是使用 *
+        let allowOrigin = if (let Some(o) <- origin) {
+            o
+        } else {
+            "*"
+        }
+        res.header("Access-Control-Allow-Origin", allowOrigin)
+           .header("Access-Control-Allow-Credentials", "true")
+        return res
+    }
+
+    /**
      * 初始化 WebMCPProtocol 的基础设施注入
      * 包括：SSE 连接管理器、待处理工具调用管理器、前端工具注册表、菜单数据提供者
      * 同时设置 WebMCPToolContext 全局单例的会话上下文
@@ -121,17 +138,17 @@ public class WebMCPController {
         LogUtils.info("WebMCP request body length: ${body.size}")
         if (body.isEmpty()) {
             LogUtils.warn("WebMCP request body is empty")
+            setCorsHeaders(req, res)
             res.status(400)
-               .header("Access-Control-Allow-Origin", "*")
                .header("Content-Type", "application/json")
                .send("{\"error\": \"Empty request body\"}")
             return
         }
-        
+
         LogUtils.info("WebMCP request body: ${body}")
-        
+
         // 设置 CORS 头部
-        res.header("Access-Control-Allow-Origin", "*")
+        setCorsHeaders(req, res)
            .header("Access-Control-Allow-Methods", "POST, OPTIONS")
            .header("Access-Control-Allow-Headers", "*")
         
@@ -362,7 +379,7 @@ public class WebMCPController {
      */
     public func handleClientRequest(req: HttpRequest, res: HttpResponse): Unit {
         // 设置 CORS 头部
-        res.header("Access-Control-Allow-Origin", "*")
+        setCorsHeaders(req, res)
            .header("Access-Control-Allow-Methods", "GET, OPTIONS")
            .header("Access-Control-Allow-Headers", "*")
 
@@ -455,7 +472,7 @@ public class WebMCPController {
         LogUtils.info("WebMCP tool-result request received")
 
         // 设置 CORS 头部
-        res.header("Access-Control-Allow-Origin", "*")
+        setCorsHeaders(req, res)
            .header("Access-Control-Allow-Methods", "POST, OPTIONS")
            .header("Access-Control-Allow-Headers", "*")
 
@@ -569,7 +586,7 @@ public class WebMCPController {
            .header("Content-Type", "text/event-stream")
            .header("Cache-Control", "no-cache")
            .header("Connection", "keep-alive")
-           .header("Access-Control-Allow-Origin", "*")
+        setCorsHeaders(req, res)
 
         // 注册 SSE 连接到 SSEConnectionManager
         // writer 函数：将消息写入 HTTP 响应流

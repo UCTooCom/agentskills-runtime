@@ -43,24 +43,47 @@ public class UserHasRolesService {
      */
     public func create(entity: UserHasRolesPO, creatorId: String): APIResult<UserHasRolesPO> {
         try {
+            LogUtils.info("UserHasRolesService", "=== Create start: userId=${entity.userId}, roleId=${entity.roleId} ===")
+            
             entity.createdAt = DateTime.now()
             entity.updatedAt = DateTime.now()
             
-            if (entity.creator.isNone()) {
-                entity.creator = Some(creatorId)
+            // 验证并设置 creator（只有当 creatorId 是有效 UUID 时才设置）
+            if (entity.creator.isNone() && !creatorId.isEmpty()) {
+                if (isValidUUID(creatorId)) {
+                    entity.creator = Some(creatorId)
+                } else {
+                    entity.creator = None<String>
+                }
             }
+            
+            LogUtils.info("UserHasRolesService", "=== Before insert: creator=${entity.creator} ===")
             
             let id = getExecutor().insertUserHasRoles(entity)
             
+            LogUtils.info("UserHasRolesService", "=== After insert: returned id=${id} ===")
+            
             if (!id.isEmpty()) {
                 entity.id = id
+                LogUtils.info("UserHasRolesService", "=== Create success: entity.id=${entity.id} ===")
                 return APIResult<UserHasRolesPO>(entity)
             } else {
+                LogUtils.error("UserHasRolesService", "=== Create failed: id is empty ===")
                 return APIResult<UserHasRolesPO>(false, "数据库操作失败")
             }
         } catch (e: Exception) {
+            LogUtils.error("UserHasRolesService", "=== Create exception: ${e.message} ===")
             return APIResult<UserHasRolesPO>(false, e.message)
         }
+    }
+    
+    // 验证 UUID 格式
+    private func isValidUUID(str: String): Bool {
+        if (str.size != 36) {
+            return false
+        }
+        let uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+        return uuidRegex.matches(str)
     }
 
     /**

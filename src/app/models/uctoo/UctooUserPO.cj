@@ -80,6 +80,12 @@ public class UctooUserPO {
         @ORMField['refresh_token']
     public var refreshToken: Option<String> = None<String>
 
+        @ORMField['user_type']
+    public var userType: String = "human"
+
+        @ORMField['agent_id']
+    public var agentId: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -100,7 +106,9 @@ public class UctooUserPO {
                 status: Int32,
                 updatedAt: DateTime,
                 accessToken: Option<String>,
-                refreshToken: Option<String>
+                refreshToken: Option<String>,
+                userType: String,
+                agentId: Option<String>
     ) {
                 this.id = id
                 this.name = name
@@ -120,6 +128,8 @@ public class UctooUserPO {
                 this.updatedAt = updatedAt
                 this.accessToken = accessToken
                 this.refreshToken = refreshToken
+                this.userType = userType
+                this.agentId = agentId
     }
 
     /// 序列化为 JsonValue
@@ -143,6 +153,8 @@ public class UctooUserPO {
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("access_token", optionToJsonValue(this.accessToken))
         map.add("refresh_token", optionToJsonValue(this.refreshToken))
+        map.add("user_type", this.userType.toJsonValue())
+        map.add("agent_id", optionToJsonValue(this.agentId))
         return JsonObject(map)
     }
 

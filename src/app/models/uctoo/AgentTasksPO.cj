@@ -61,6 +61,15 @@ public class AgentTasksPO {
         @ORMField['deleted_at']
     public var deletedAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['aip_session_id']
+    public var aipSessionId: Option<String> = None<String>
+
+        @ORMField['aip_task_id']
+    public var aipTaskId: Option<String> = None<String>
+
+        @ORMField['aip_task_state']
+    public var aipTaskState: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -76,7 +85,10 @@ public class AgentTasksPO {
                 createdAt: DateTime,
                 updatedAt: DateTime,
                 completedAt: Option<DateTime>,
-                deletedAt: Option<DateTime>
+                deletedAt: Option<DateTime>,
+                aipSessionId: Option<String>,
+                aipTaskId: Option<String>,
+                aipTaskState: Option<String>
     ) {
                 this.id = id
                 this.agentId = agentId
@@ -91,9 +103,10 @@ public class AgentTasksPO {
                 this.updatedAt = updatedAt
                 this.completedAt = completedAt
                 this.deletedAt = deletedAt
+                this.aipSessionId = aipSessionId
+                this.aipTaskId = aipTaskId
+                this.aipTaskState = aipTaskState
     }
-
-    /// 序列化为 JsonValue
     public func toJsonValue(): JsonValue {
         var map = HashMap<String, JsonValue>()
         map.add("id", this.id.toJsonValue())
@@ -109,6 +122,9 @@ public class AgentTasksPO {
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("completed_at", optionToJsonValue(this.completedAt))
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("aip_session_id", optionToJsonValue(this.aipSessionId))
+        map.add("aip_task_id", optionToJsonValue(this.aipTaskId))
+        map.add("aip_task_state", optionToJsonValue(this.aipTaskState))
         return JsonObject(map)
     }
 

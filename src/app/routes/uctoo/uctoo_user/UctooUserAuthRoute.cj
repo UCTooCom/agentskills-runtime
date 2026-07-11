@@ -44,6 +44,9 @@ public class UctooUserAuthRoute {
         // 用户注册
         router.post("/api/v1/uctoo/uctoo_user/signup", authController.signup)
 
+        // 忘记密码 - 通过邮箱验证码重置密码（公开接口）
+        router.post("/api/v1/uctoo/uctoo_user/forgot-reset", authController.forgotResetPassword)
+
         // ========== 需要认证的接口 ==========
 
         // 用户登出（需要认证）

@@ -210,11 +210,8 @@ func initializeORM(): Bool {
         // 初始化ORM
         ORM.initialize()
         println("ORM初始化成功")
-        
-        // 测试连接
-        let connection = ORM.connection()
+
         println("数据库连接成功")
-        connection.close()
         
         return true
     } catch (e: Exception) {

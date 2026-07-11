@@ -28,6 +28,10 @@
 #  hicrypto = { path = "../CangjieMagic/resource/TPC/hicrypto" }
   blowfish = { path = "./libs/blowfish-cj" }
   json4cj = { path = "./libs/json4cj" }
+  cos = { path = "./libs/cos-sdk" }
+  cj_mail = { path = "./libs/cj_mail" }
+  activemq4cj = { path = "./libs/activemq4cj", compile-option = "-Woff unused" }
+  hyperion = { path = "./libs/hyperion", compile-option = "-Woff unused" }
 
 
 #----------------------------------------
@@ -85,6 +89,8 @@
   output-type = "executable"
 [package.package-configuration."magic.app.tools.crudweb"]
   output-type = "executable"
+[package.package-configuration."magic.app.tools.loaddbinfo"]
+  output-type = "executable"
 #[package.package-configuration."magic.app.test.integration"]
 #  output-type = "executable"
 #[package.package-configuration."magic.examples.firecrawl_test"]
@@ -107,13 +113,13 @@
 [target.x86_64-unknown-windows-gnu]
   compile-option = "--cfg \"ohos=false\""
 [target.x86_64-unknown-windows-gnu.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.4.1/windows_x86_64_llvm/dynamic/stdx"]
 
 [target.x86_64-w64-mingw32]
   compile-option = "-Woff unused -Woff deprecated --dy-std --cfg \"ohos=false\""
 
 [target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.4.1/windows_x86_64_llvm/dynamic/stdx"]
 
 [target.aarch64-unknown-linux-gnu]
   compile-option = "--cfg \"ohos=false\""

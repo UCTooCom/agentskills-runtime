@@ -40,6 +40,11 @@ public interface UserHasRolesDAO <: RootDAO {
      * @return 插入成功返回生成的ID，失败返回空字符串
      */
     func insertUserHasRoles(entity: UserHasRolesPO): String {
+        let creatorValue = match (entity.creator) {
+            case Some(c) => "'${c}'"
+            case None => "NULL"
+        }
+        
         executor.setSql('''
             insert into user_has_roles(
                 user_id,
@@ -53,7 +58,7 @@ public interface UserHasRolesDAO <: RootDAO {
 ${arg(entity.userId)},
                 ${arg(entity.roleId)},
                 ${arg(entity.status)},
-                ${arg(entity.creator)},
+                ${creatorValue},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
                 ${arg(entity.deletedAt)}

@@ -372,8 +372,6 @@ cd agentskills-runtime
 # 构建项目（Windows 需要配置CANGJIE_HOME、CANGJIE_STDX_PATH环境变量）
 cjpm build
 
-# 运行示例
-cjpm run --skip-build --name magic.examples.uctoo_api_skill
 ```
 
 ### 运行 API 服务
@@ -385,6 +383,85 @@ cjpm run --skip-build --name magic.app 8081
 ```
 
 有关运行 API 服务的详细说明，请参见 [API 服务运行指南](docs/api-service-run.md)。
+
+### 代码生成工具（crudgen / crudweb）
+
+AgentSkills Runtime 内置了两个代码生成工具，可从数据库表结构自动生成后端 CRUD 模块和前端 Web 页面，实现代码定义规范（CDS）特性，确保架构稳定不腐化。
+
+> **重要提示**：必须使用 `cjpm run` 命令执行代码生成工具，不能直接运行 target 目录下的 exe 文件（会因 DLL 路径问题导致启动失败）。工作目录必须是 agentskills-runtime 项目根目录。
+
+#### crudgen - 后端 CRUD 模块生成器
+
+从数据库表结构自动生成仓颉后端标准模块（Model → DAO → Service → Controller → Route）。
+
+```bash
+# 生成指定表的后端 CRUD 模块
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db <数据库名> --table <表名>"
+
+# 示例：生成 uctoo 数据库 point_transactions 表的后端模块
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db uctoo --table point_transactions"
+
+# 生成指定数据库所有表的后端 CRUD 模块
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db uctoo --all"
+
+# 查看帮助信息
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--help"
+```
+
+**生成内容**：
+- PO（持久化对象）：`src/app/po/uctoo/<table_name>PO.cj`
+- Model（模型）：`src/app/models/uctoo/<TableName>.cj`
+- DAO（数据访问层）：`src/app/dao/uctoo/<TableName>DAO.cj`
+- Service（业务逻辑层）：`src/app/services/uctoo/<TableName>Service.cj`
+- Controller（控制器层）：`src/app/controllers/uctoo/<table_name>/<TableName>Controller.cj`
+- Route（路由层）：`src/app/routes/uctoo/<table_name>/<TableName>Route.cj`
+- 自动更新 `AutoRouteConfig.cj` 注册路由
+
+#### crudweb - 前端 Web 页面生成器
+
+从数据库表结构自动生成 Vue 前端 CRUD 页面（列表、新增、编辑表单、数据表格）和 Pinia-ORM Store 模型。
+
+```bash
+# 生成指定表的前端 Web 页面
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db <数据库名> --table <表名>"
+
+# 示例：生成 uctoo 数据库 point_transactions 表的前端页面
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --table point_transactions"
+
+# 生成指定数据库所有表的前端 Web 页面
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --all"
+
+# 指定输出目录（可选，默认通过 .env 中的 WEB_CRUD_OUTPUT_DIR 配置）
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --table <表名> --output <输出目录>"
+
+# 查看帮助信息
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--help"
+```
+
+**生成内容**（输出到 `WEB_CRUD_OUTPUT_DIR` 配置的目录，追加 `/web/src/` 路径）：
+- 页面入口：`views/database/<db_name>/<table_name>/index.vue`
+- 新增组件：`views/database/<db_name>/<table_name>/components/add-<table_name>.vue`
+- 数据表格：`views/database/<db_name>/<table_name>/components/<table_name>-table.vue`
+- 编辑表单：`views/database/<db_name>/<table_name>/components/edit-form.vue`
+- Store 模型：`store/models/<db_name>/<table_name>.ts`
+- 自动更新 Store 的 `index.ts` 导出
+
+**环境变量配置**（在 `.env` 文件中）：
+```ini
+# Web CRUD 代码输出根目录（crudweb 会自动追加 /web/src/ 子目录）
+WEB_CRUD_OUTPUT_DIR=D:\path\to\web-admin
+```
+
+#### 通用模块开发流程
+
+按照 [uctoo-v4 模块开发规范](docs/uctoo-v4/uctoo-v4-module-development.md)，新增数据库表后的标准开发流程：
+
+1. **执行 SQL 变更**：在数据库中执行建表或表结构变更 SQL
+2. **刷新数据库信息**：通过 Web 管理后台的"数据库信息"页面点击"加载数据库信息"，或调用 API
+3. **生成后端模块**：使用 crudgen 生成后端标准 CRUD 模块
+4. **生成前端页面**：使用 crudweb 生成前端 Web 页面
+5. **业务逻辑开发**：在 AutoCreateCode 区域之外编写自定义业务逻辑
+6. **编译验证**：执行 `cjpm build` 验证编译通过
 
 ## 发布打包
 

@@ -52,7 +52,10 @@ public interface AgentTasksDAO <: RootDAO {
                 created_at,
                 updated_at,
                 completed_at,
-                deleted_at
+                deleted_at,
+                aip_session_id,
+                aip_task_id,
+                aip_task_state
             ) values(
 ${arg(entity.agentId)},
                 ${arg(entity.parentTaskId)},
@@ -65,7 +68,10 @@ ${arg(entity.agentId)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
                 ${arg(entity.completedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.aipSessionId)},
+                ${arg(entity.aipTaskId)},
+                ${arg(entity.aipTaskState)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -80,7 +86,7 @@ ${arg(entity.agentId)},
      */
     func findAgentTasksById(id: String): Option<AgentTasksPO> {
         executor.setSql('''
-            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at from agent_tasks where id = ${arg(id)}
+            select * from agent_tasks where id = ${arg(id)}
         ''').first<AgentTasksPO>()
     }
 
@@ -104,6 +110,9 @@ ${arg(entity.agentId)},
                 creator = ${arg(entity.creator)},
                 completed_at = ${arg(entity.completedAt)},
                 deleted_at = ${arg(entity.deletedAt)},
+                aip_session_id = ${arg(entity.aipSessionId)},
+                aip_task_id = ${arg(entity.aipTaskId)},
+                aip_task_state = ${arg(entity.aipTaskState)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -358,4 +367,22 @@ ${arg(entity.agentId)},
 
 //#endregion AutoCreateCode
 // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    func findTasksByAipSessionId(sessionId: String): ArrayList<AgentTasksPO> {
+        executor.setSql('''
+            select * from agent_tasks where aip_session_id = ${arg(sessionId)} and deleted_at is null order by created_at asc
+        ''').list<AgentTasksPO>()
+    }
+
+    func findTasksByAipSessionIdPage(sessionId: String, page: Int64, size: Int64): Pagination<AgentTasksPO> {
+        executor.page<AgentTasksPO>('''
+            select * from agent_tasks where aip_session_id = ${arg(sessionId)} and deleted_at is null order by created_at asc
+        ''', size, page: page)
+    }
+
+    func updateTaskAipState(taskId: String, aipTaskState: String): Int64 {
+        executor.setSql('''
+            update agent_tasks set aip_task_state = ${arg(aipTaskState)}, updated_at = ${arg(DateTime.now())} where id = ${arg(taskId)}
+        ''').update
+    }
 }

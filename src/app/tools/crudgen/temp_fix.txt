@@ -1,0 +1,3 @@
+        sb.append("\n            returning id")
+        sb.append("\n        '''").singleFirst<String>() ?? \"\"")
+        sb.append("\n    }")

@@ -43,24 +43,47 @@ public class UctooUserService {
      */
     public func create(entity: UctooUserPO, creatorId: String): APIResult<UctooUserPO> {
         try {
+            LogUtils.info("UctooUserService", "=== Create start: username=${entity.username}, email=${entity.email} ===")
+            
             entity.createdAt = DateTime.now()
             entity.updatedAt = DateTime.now()
             
-            if (entity.creator.isNone()) {
-                entity.creator = Some(creatorId)
+            // 验证并设置 creator
+            if (entity.creator.isNone() && !creatorId.isEmpty()) {
+                if (isValidUUID(creatorId)) {
+                    entity.creator = Some(creatorId)
+                } else {
+                    entity.creator = None<String>
+                }
             }
+            
+            LogUtils.info("UctooUserService", "=== Before insert: creator=${entity.creator} ===")
             
             let id = getExecutor().insertUctooUser(entity)
             
+            LogUtils.info("UctooUserService", "=== After insert: returned id=${id} ===")
+            
             if (!id.isEmpty()) {
                 entity.id = id
+                LogUtils.info("UctooUserService", "=== Create success: entity.id=${entity.id} ===")
                 return APIResult<UctooUserPO>(entity)
             } else {
+                LogUtils.error("UctooUserService", "=== Create failed: id is empty ===")
                 return APIResult<UctooUserPO>(false, "数据库操作失败")
             }
         } catch (e: Exception) {
+            LogUtils.error("UctooUserService", "=== Create exception: ${e.message} ===")
             return APIResult<UctooUserPO>(false, e.message)
         }
+    }
+    
+    // 验证 UUID 格式
+    private func isValidUUID(str: String): Bool {
+        if (str.size != 36) {
+            return false
+        }
+        let uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+        return uuidRegex.matches(str)
     }
 
     /**

@@ -66,7 +66,7 @@ public class QueryResultWrap <: QueryResult {
                         case 'UInt64' => result.getOrNull<UInt64>(i)
                         case 'SqlReal' | 'Float32' => result.getOrNull<Float32>(i)
                         case 'SqlDouble' | 'Float64' => result.getOrNull<Float64>(i)
-                        case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' | 'std.time.DateTime' => result.getOrNull<DateTime>(i)
+                        case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'SqlTimestampTz' | 'DateTime' | 'std.time.DateTime' => result.getOrNull<DateTime>(i)
                         case 'SqlInterval' | 'Duration' => result.getOrNull<Duration>(i)
                         case _ => result.getOrNull<String>(i)
                     }
@@ -991,8 +991,8 @@ public class QueryResultWrap <: QueryResult {
                 case 'SqlNullableReal' | '?Float32' | 'Option<Float32>' => getOrNull<Float32>(index)
                 case 'SqlDouble' | 'Float64' => get<Float64>(index)
                 case 'SqlNullableDouble' | '?Float64' | 'Option<Float64>' => getOrNull<Float64>(index)
-                case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' => get<DateTime>(index)
-                case 'SqlNullableDate' | 'SqlNullableTime' | 'SqlNullableTimeTz' | 'SqlNullableTimestamp' |
+                case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'SqlTimestampTz' | 'DateTime' => get<DateTime>(index)
+                case 'SqlNullableDate' | 'SqlNullableTime' | 'SqlNullableTimeTz' | 'SqlNullableTimestamp' | 'SqlNullableTimestampTz' |
                      '?DateTime' | 'Option<DateTime>' => getOrNull<DateTime>(index)
                 case 'SqlInterval' | 'Duration' => get<Duration>(index)
                 case 'SqlNullableInterval' | '?Duration' | 'Option<Duration>' => getOrNull<Duration>(index)

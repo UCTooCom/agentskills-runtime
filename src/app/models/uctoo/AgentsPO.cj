@@ -103,6 +103,27 @@ public class AgentsPO {
         @ORMField['last_sync_at']
     public var lastSyncAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['aic']
+    public var aic: Option<String> = None<String>
+
+        @ORMField['identity_status']
+    public var identityStatus: String = "none"
+
+        @ORMField['aip_registered_at']
+    public var aipRegisteredAt: Option<DateTime> = None<DateTime>
+
+        @ORMField['capabilities']
+    public var capabilities: Option<String> = None<String>
+
+        @ORMField['default_input_types']
+    public var defaultInputTypes: Option<String> = None<String>
+
+        @ORMField['default_output_types']
+    public var defaultOutputTypes: Option<String> = None<String>
+
+        @ORMField['discoverable']
+    public var discoverable: Bool = true
+
     public init() {}
 
     public init(
@@ -132,7 +153,14 @@ public class AgentsPO {
                 permissions: Option<String>,
                 sourcePath: Option<String>,
                 syncStatus: Option<String>,
-                lastSyncAt: Option<DateTime>
+                lastSyncAt: Option<DateTime>,
+                aic: Option<String>,
+                identityStatus: String,
+                aipRegisteredAt: Option<DateTime>,
+                capabilities: Option<String>,
+                defaultInputTypes: Option<String>,
+                defaultOutputTypes: Option<String>,
+                discoverable: Bool
     ) {
                 this.id = id
                 this.name = name
@@ -161,6 +189,13 @@ public class AgentsPO {
                 this.sourcePath = sourcePath
                 this.syncStatus = syncStatus
                 this.lastSyncAt = lastSyncAt
+                this.aic = aic
+                this.identityStatus = identityStatus
+                this.aipRegisteredAt = aipRegisteredAt
+                this.capabilities = capabilities
+                this.defaultInputTypes = defaultInputTypes
+                this.defaultOutputTypes = defaultOutputTypes
+                this.discoverable = discoverable
     }
 
     /// 序列化为 JsonValue
@@ -193,6 +228,13 @@ public class AgentsPO {
         map.add("source_path", optionToJsonValue(this.sourcePath))
         map.add("sync_status", optionToJsonValue(this.syncStatus))
         map.add("last_sync_at", optionToJsonValue(this.lastSyncAt))
+        map.add("aic", optionToJsonValue(this.aic))
+        map.add("identity_status", this.identityStatus.toJsonValue())
+        map.add("aip_registered_at", optionToJsonValue(this.aipRegisteredAt))
+        map.add("capabilities", optionToJsonValue(this.capabilities))
+        map.add("default_input_types", optionToJsonValue(this.defaultInputTypes))
+        map.add("default_output_types", optionToJsonValue(this.defaultOutputTypes))
+        map.add("discoverable", this.discoverable.toJsonValue())
         return JsonObject(map)
     }
 

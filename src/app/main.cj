@@ -17,6 +17,7 @@ import magic.app.routes.skill.SkillRoutes
 import magic.app.routes.tool.ToolRoutes
 import magic.app.routes.webmcp.WebMCPRoutes
 import magic.app.routes.uctoo.ai.AIRoutes
+import magic.app.routes.aip.AipRoute
 import magic.tool.{ToolDispatcher, BuiltinToolsRegistry, SimpleToolManager}
 import magic.app.services.tool.ToolAuditService
 import magic.app.services.uctoo.OperateLogService
@@ -545,6 +546,11 @@ public class Application {
         let syncRoute = SyncRoute(router)
         syncRoute.register()
         LogUtils.info("Sync routes registered successfully")
+        
+        // 注册 AIP 智能体互联路由
+        let aipRoute = AipRoute(router)
+        aipRoute.register()
+        LogUtils.info("AIP routes registered successfully")
         
         // 注册健康检查和应用信息接口,todo:从cjpm.toml配置文件读取version版本号
         router.get("/api/v1/health", { req, res =>

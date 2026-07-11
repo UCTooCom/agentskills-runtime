@@ -361,8 +361,6 @@ cd agentskills-runtime
 # Build the project
 cjpm build
 
-# Run examples
-cjpm run --skip-build --name magic.examples.uctoo_api_skill
 ```
 
 ### Running API Service
@@ -375,6 +373,85 @@ cjpm run --skip-build --name magic.app 8081
 ```
 
 For detailed instructions on running the API service, see [API Service Run Guide](docs/api-service-run.md).
+
+### Code Generation Tools (crudgen / crudweb)
+
+AgentSkills Runtime includes two built-in code generation tools that automatically generate backend CRUD modules and frontend Web pages from database table structures, implementing Code Definition Specification (CDS) features to ensure architectural stability.
+
+> **Important**: You must use the `cjpm run` command to execute code generation tools. Do not run exe files directly from the target directory (DLL path issues will cause startup failures). The working directory must be the agentskills-runtime project root directory.
+
+#### crudgen - Backend CRUD Module Generator
+
+Automatically generates Cangjie backend standard modules (Model → DAO → Service → Controller → Route) from database table structures.
+
+```bash
+# Generate backend CRUD module for a specific table
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db <database> --table <table_name>"
+
+# Example: Generate backend module for point_transactions table in uctoo database
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db uctoo --table point_transactions"
+
+# Generate backend CRUD modules for all tables in a database
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db uctoo --all"
+
+# View help information
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--help"
+```
+
+**Generated files**:
+- PO (Persistence Object): `src/app/po/uctoo/<table_name>PO.cj`
+- Model: `src/app/models/uctoo/<TableName>.cj`
+- DAO (Data Access Layer): `src/app/dao/uctoo/<TableName>DAO.cj`
+- Service (Business Logic Layer): `src/app/services/uctoo/<TableName>Service.cj`
+- Controller: `src/app/controllers/uctoo/<table_name>/<TableName>Controller.cj`
+- Route: `src/app/routes/uctoo/<table_name>/<TableName>Route.cj`
+- Auto-updates `AutoRouteConfig.cj` for route registration
+
+#### crudweb - Frontend Web Page Generator
+
+Automatically generates Vue frontend CRUD pages (list, add, edit form, data table) and Pinia-ORM Store models from database table structures.
+
+```bash
+# Generate frontend Web page for a specific table
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db <database> --table <table_name>"
+
+# Example: Generate frontend page for point_transactions table in uctoo database
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --table point_transactions"
+
+# Generate frontend Web pages for all tables in a database
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --all"
+
+# Specify output directory (optional, defaults to WEB_CRUD_OUTPUT_DIR in .env)
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --table <table_name> --output <output_dir>"
+
+# View help information
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--help"
+```
+
+**Generated files** (output to directory configured by `WEB_CRUD_OUTPUT_DIR`, with `/web/src/` path appended):
+- Page entry: `views/database/<db_name>/<table_name>/index.vue`
+- Add component: `views/database/<db_name>/<table_name>/components/add-<table_name>.vue`
+- Data table: `views/database/<db_name>/<table_name>/components/<table_name>-table.vue`
+- Edit form: `views/database/<db_name>/<table_name>/components/edit-form.vue`
+- Store model: `store/models/<db_name>/<table_name>.ts`
+- Auto-updates Store `index.ts` exports
+
+**Environment variable configuration** (in `.env` file):
+```ini
+# Web CRUD code output root directory (crudweb automatically appends /web/src/ subdirectory)
+WEB_CRUD_OUTPUT_DIR=D:\path\to\web-admin
+```
+
+#### Standard Module Development Process
+
+Following the [uctoo-v4 Module Development Specification](docs/uctoo-v4/uctoo-v4-module-development.md), the standard development process after adding new database tables:
+
+1. **Execute SQL changes**: Run table creation or schema change SQL in the database
+2. **Refresh database info**: Click "Load Database Info" in the Web admin "Database Info" page, or call the API
+3. **Generate backend modules**: Use crudgen to generate backend standard CRUD modules
+4. **Generate frontend pages**: Use crudweb to generate frontend Web pages
+5. **Business logic development**: Write custom business logic outside the AutoCreateCode regions
+6. **Build verification**: Run `cjpm build` to verify compilation passes
 
 ## Release Packaging
 

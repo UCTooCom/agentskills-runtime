@@ -443,35 +443,19 @@ public class HTTPServer {
                 return ""
             }
             
-            // 尝试从请求体读取所有字节
-            let buf = ByteBuffer()
-            let copied = copy(req.body, to: buf)
-            eprintln("=== readRequestBody: copy returned ${copied} bytes ===")
+            // 使用 StringReader 读取请求体（标准库推荐方式）
+            let body = StringReader(req.body).readToEnd()
+            eprintln("=== readRequestBody: got ${body.size} chars ===")
             
-            if (copied == 0) {
+            if (body.isEmpty()) {
                 logger.warn("Empty body read, bodySize was: ${bodySize}")
                 return ""
             }
             
-            // 读取 ByteBuffer 中的所有字节
-            buf.seek(Begin(0))
-            let bodyBytes = readToEnd(buf)
-            eprintln("=== readRequestBody: got ${bodyBytes.size} bytes ===")
+            let previewLength = if (body.size > 200) { 200 } else { body.size }
+            eprintln("=== readRequestBody: decoded body (${body.size} chars): [${body[0..previewLength]}] ===")
             
-            if (bodyBytes.isEmpty()) {
-                logger.warn("Empty body byte array despite ${copied} bytes copied")
-                return ""
-            }
-            
-            // 使用字节数组转换为字符串
-            let decoded = tryDecodeBody(bodyBytes)
-            if (!decoded.isEmpty()) {
-                let previewLength = if (decoded.size > 200) { 200 } else { decoded.size }
-                eprintln("=== readRequestBody: decoded body (${decoded.size} chars): [${decoded[0..previewLength]}] ===")
-                return decoded
-            }
-            
-            return ""
+            return body
         } catch (ex: Exception) {
             logger.error("Error reading request body: ${ex.message}")
             eprintln("=== readRequestBody exception: ${ex.message} ===")

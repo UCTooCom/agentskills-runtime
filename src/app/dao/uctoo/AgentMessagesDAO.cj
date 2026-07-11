@@ -50,7 +50,11 @@ public interface AgentMessagesDAO <: RootDAO {
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                aip_session_id,
+                aip_message_id,
+                sender_role,
+                data_items
             ) values(
 ${arg(entity.fromAgentId)},
                 ${arg(entity.toAgentId)},
@@ -61,7 +65,11 @@ ${arg(entity.fromAgentId)},
                 ${arg(entity.creator)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.aipSessionId)},
+                ${arg(entity.aipMessageId)},
+                ${arg(entity.senderRole)},
+                ${arg(entity.dataItems)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -76,7 +84,7 @@ ${arg(entity.fromAgentId)},
      */
     func findAgentMessagesById(id: String): Option<AgentMessagesPO> {
         executor.setSql('''
-            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at from agent_messages where id = ${arg(id)}
+            select * from agent_messages where id = ${arg(id)}
         ''').first<AgentMessagesPO>()
     }
 
@@ -98,6 +106,10 @@ ${arg(entity.fromAgentId)},
                 status = ${arg(entity.status)},
                 creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
+                aip_session_id = ${arg(entity.aipSessionId)},
+                aip_message_id = ${arg(entity.aipMessageId)},
+                sender_role = ${arg(entity.senderRole)},
+                data_items = ${arg(entity.dataItems)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -352,4 +364,16 @@ ${arg(entity.fromAgentId)},
 
 //#endregion AutoCreateCode
 // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    func findMessagesByAipSessionId(sessionId: String): ArrayList<AgentMessagesPO> {
+        executor.setSql('''
+            select * from agent_messages where aip_session_id = ${arg(sessionId)} and deleted_at is null order by created_at asc
+        ''').list<AgentMessagesPO>()
+    }
+
+    func findMessagesByAipSessionIdPage(sessionId: String, page: Int64, size: Int64): Pagination<AgentMessagesPO> {
+        executor.page<AgentMessagesPO>('''
+            select * from agent_messages where aip_session_id = ${arg(sessionId)} and deleted_at is null order by created_at asc
+        ''', size, page: page)
+    }
 }

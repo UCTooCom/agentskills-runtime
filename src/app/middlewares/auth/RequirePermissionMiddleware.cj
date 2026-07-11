@@ -92,6 +92,14 @@ public class RequirePermissionMiddleware <: Middleware {
         if (route.contains("/signin") || route.contains("/signup")) {
             return true
         }
+        // 发送邮箱验证码路由(公开API,不需要登录)
+        if (route.contains("/send-email-code")) {
+            return true
+        }
+        // 忘记密码重置密码路由(公开API,不需要登录)
+        if (route.contains("/forgot-reset")) {
+            return true
+        }
         // 公开API
         if (route.contains("/public/")) {
             return true
@@ -114,6 +122,14 @@ public class RequirePermissionMiddleware <: Middleware {
         }
         // lang 语言包路由（所有用户都需要获取语言包）
         if (route.contains("/api/v1/uctoo/lang/")) {
+            return true
+        }
+        // AIP 智能体互联健康检查路由（公开API）
+        if (route.contains("/api/v1/uctoo/aip/health/")) {
+            return true
+        }
+        // AIP 智能体自动登录路由（Agent通过agent_id获取JWT）
+        if (route.contains("/api/v1/uctoo/aip/identity/agent-login")) {
             return true
         }
         false

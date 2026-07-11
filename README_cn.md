@@ -8,6 +8,27 @@
 
 AgentSkills Runtime 是一个基于仓颉编程语言实现的 Agent Skills 标准运行时环境。它是对 AgentSkills 开放标准的国产技术栈实现，提供了安全、高效的 AI 智能体技能执行环境。旨在让 AgentSkills 能够在任何地方运行。同时提供了多语言SDK适配各种技术栈。开源项目地址：https://atomgit.com/uctoo/agentskills-runtime 和 https://github.com/UCTooCom/agentskills-runtime 。配套的AIAgent Dashboard开源项目 https://atomgit.com/UCToo/web-admin  
 
+### 产品截图
+
+<table>
+  <tr>
+    <td align="center"><b>AI Builder 组织任务管理</b></td>
+    <td align="center"><b>开发者需求对接</b></td>
+  </tr>
+  <tr>
+    <td><img src="./docs/assets/aibuilder.png" alt="AI Builder" width="480"/></td>
+    <td><img src="./docs/assets/tasks.png" alt="Tasks" width="480"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>组织管理</b></td>
+    <td align="center"><b>Token 用量仪表盘</b></td>
+  </tr>
+  <tr>
+    <td><img src="./docs/assets/org.png" alt="Organization" width="480"/></td>
+    <td><img src="./docs/assets/tokenDashboard.png" alt="Token Dashboard" width="480"/></td>
+  </tr>
+</table>
+
 ## 概述
 
 AgentSkills Runtime 是一个全面的框架，用于构建和执行 AI 智能体技能。它为遵循 agentskills 标准的 AI 智能体工具提供了安全、便携和智能的运行时环境。该框架基于仓颉编程语言构建，并融合了UCToo项目架构的先进特性。

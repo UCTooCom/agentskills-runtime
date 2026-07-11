@@ -1,0 +1,26 @@
+{
+    "host": "127.0.0.1",
+    "port": "61616",
+    "userName": "admin",
+    "password": "admin",
+    "wireformat": {
+        "cacheEnabled": "true",
+        "stackTraceEnabled": "true",
+        "platformDetails": "Cangjie",
+        "host": "127.0.0.1",
+        "tcpNoDelayEnabled": "true",
+        "sizePrefixDisabled": "false",
+        "cacheSize": "1024",
+        "providerName": "ActiveMQ", 
+        "tightEncodingEnabled": "true",
+        "maxFrameSize": "10000",
+        "maxInactivityDuration": "30000",
+        "maxInactivityDurationInitalDelay": "10000",
+        "maxFrameSizeEnabled": "true"
+    },
+    "threadPoolName": "activemq-client",
+    "queueSize": "4096",
+    "maxThreads": "10",
+    "minThreads": "0",
+    "threadIdleTimeoutInSeconds": "1200"
+}

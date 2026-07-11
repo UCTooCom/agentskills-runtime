@@ -1,0 +1,47 @@
+[dependencies]
+charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop" }
+stdx = { path = "../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm" }
+
+[package]
+  cjc-version = "1.0.4"
+  compile-option = ""
+  description = "a mail utils for cangjie, smtp, pop, imap, base64 has been implemented"
+  link-option = ""
+  name = "cj_mail"
+  output-type = "static"
+  src-dir = ""
+  target-dir = ""
+  version = "1.0.0"
+  package-configuration = {}
+
+#----------------------------------------
+#  Setting cangjie-stdx
+#----------------------------------------
+
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["../cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
+
+[target.x86_64-unknown-windows-gnu]
+  compile-option = "--cfg \"ohos=false\""
+[target.x86_64-unknown-windows-gnu.bin-dependencies]
+  path-option = ["../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+
+[target.x86_64-w64-mingw32]
+  compile-option = "-Woff unused -Woff deprecated --dy-std --cfg \"ohos=false\""
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "--cfg \"ohos=false\""
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["../cangjie-stdx-linux-aarch64-1.0.0.1/linux_aarch64_llvm/dynamic/stdx"]
+
+[target.x86_64-apple-darwin]
+  compile-option = "--cfg \"ohos=false\""
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["../cangjie-stdx-mac-x64-1.0.0.1/darwin_x86_64_llvm/dynamic/stdx"]
+
+[target.aarch64-apple-darwin]
+  compile-option = "--cfg \"ohos=false\""
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["../cangjie-stdx-mac-aarch64-1.0.0.1/darwin_aarch64_llvm/dynamic/stdx"]

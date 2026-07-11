@@ -1,0 +1,12 @@
+.cache
+.vscode/
+hyperion
+*_internal
+**/build
+**/target
+**/.cjpm-history
+**/*macrocall
+**/module-lock.json
+**/cjpm.lock
+**/unittest
+.idea/

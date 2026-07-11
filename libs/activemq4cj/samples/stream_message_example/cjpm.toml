@@ -1,0 +1,22 @@
+[package]
+vendor = "Beijing Baolande Software Corporation"
+cjc-version ="1.0.0"
+compile-option ="-g -O0"
+description ="ActiveMQ Client: stream_message_example"
+link-option =""
+name = "stream_message_samples"
+output-type ="executable"
+version ="1.0.0"
+package-configuration ={}
+scripts = {}
+
+[target]
+  [target.x86_64-unknown-linux-gnu]
+    [target.x86_64-unknown-linux-gnu.bin-dependencies]
+      path-option = ["${CANGJIE_STDX_PATH}", "../../target/release/hyperion", "../../target/release/activemq4cj"]
+  [target.x86_64-apple-darwin]
+    [target.x86_64-apple-darwin.bin-dependencies]
+      path-option = ["${CANGJIE_STDX_PATH}", "../../target/release/hyperion", "../../target/release/activemq4cj"]
+  [target.x86_64-w64-mingw32]
+    [target.x86_64-w64-mingw32.bin-dependencies]
+      path-option = ["${CANGJIE_STDX_PATH}", "../../target/release/hyperion", "../../target/release/activemq4cj"]

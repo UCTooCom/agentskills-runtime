@@ -1,0 +1,25 @@
+[dependencies]
+  hyperion = { path = "../hyperion" }
+
+[package]
+  vendor = "Beijing Baolande Software Corporation"
+  cjc-version = "1.0.4"
+  compile-option = "-Woff all"
+  description = "ActiveMQ Cangjie SDK Implementation"
+  link-option = ""
+  name = "activemq4cj"
+  output-type = "static"
+  version = "1.0.0"
+  package-configuration = {}
+  scripts = {}
+
+[target]
+  [target.x86_64-unknown-linux-gnu]
+    [target.x86_64-unknown-linux-gnu.bin-dependencies]
+      path-option = ["../cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
+  [target.x86_64-apple-darwin]
+    [target.x86_64-apple-darwin.bin-dependencies]
+      path-option = ["../cangjie-stdx-mac-x64-1.0.0.1/darwin_x86_64_llvm/dynamic/stdx"]
+  [target.x86_64-w64-mingw32]
+    [target.x86_64-w64-mingw32.bin-dependencies]
+      path-option = ["../cangjie-stdx-windows-x64-1.0.4.1/windows_x86_64_llvm/dynamic/stdx"]

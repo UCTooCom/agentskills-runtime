@@ -1,0 +1,9 @@
+.cache
+.vscode/
+*_internal
+**/build
+**/.cjpm-history
+**/*macrocall
+**/module-lock.json
+**/cjpm.lock
+

@@ -1,0 +1,6 @@
+*.cj.macrocall
+.vscode/
+target/
+cjpm.lock
+ignore.cj
+tmpFile*

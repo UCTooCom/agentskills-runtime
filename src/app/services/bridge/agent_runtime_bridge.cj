@@ -173,6 +173,13 @@ public class AgentRuntimeBridge {
         po.background = Some(definition.background)
         po.color = definition.color
         po.isolationMode = definition.isolation
+        po.aic = definition.aic
+        po.identityStatus = definition.identityStatus
+        po.aipRegisteredAt = definition.aipRegisteredAt
+        po.capabilities = definition.capabilities
+        po.defaultInputTypes = definition.defaultInputTypes
+        po.defaultOutputTypes = definition.defaultOutputTypes
+        po.discoverable = definition.discoverable
         po.sourcePath = Some(definition.sourcePath.toString())
         po.syncStatus = Some("synced")
 
@@ -222,6 +229,13 @@ public class AgentRuntimeBridge {
             permissions,
             po.color,
             po.isolationMode,
+            po.aic,
+            po.identityStatus,
+            po.aipRegisteredAt,
+            po.capabilities,
+            po.defaultInputTypes,
+            po.defaultOutputTypes,
+            po.discoverable,
             if (let Some(s) <- po.systemPrompt) { s } else { "" },
             Path(if (let Some(s) <- po.sourcePath) { s } else { "." }),
             Path(".")

@@ -305,6 +305,20 @@
 | model | VARCHAR(50) | 模型名称 | - |
 | parent_id | UUID | 父 Agent ID | FOREIGN KEY |
 | user_id | UUID | 关联用户 ID | FOREIGN KEY |
+| color | VARCHAR(20) | 显示颜色 | - |
+| background | BOOL | 是否后台运行 | DEFAULT false |
+| memory_scope | VARCHAR(20) | 内存范围 | DEFAULT 'user' |
+| isolation_mode | VARCHAR(20) | 隔离模式 | - |
+| max_turns | INT4 | 最大对话轮数 | DEFAULT 200 |
+| initial_prompt | TEXT | 初始提示 | - |
+| aic | VARCHAR(128) | 智能体身份码(AIC)，符合GB/Z 185.2 | - |
+| identity_status | VARCHAR(20) | AIP身份状态：none/active/locked/revoked | DEFAULT 'none' |
+| aip_registered_at | TIMESTAMPTZ | AIP身份注册时间 | - |
+| capabilities | JSONB | 辅助功能描述(ACS)，符合GB/Z 185.4 | - |
+| default_input_types | JSONB | 默认输入类型(ACS)，符合GB/Z 185.4 | - |
+| default_output_types | JSONB | 默认输出类型(ACS)，符合GB/Z 185.4 | - |
+| discoverable | BOOL | 是否允许被智能体发现，符合GB/Z 185.5 | DEFAULT true |
+| creator | UUID | 创建人 | FOREIGN KEY |
 | created_at | TIMESTAMPTZ | 创建时间 | DEFAULT NOW() |
 | updated_at | TIMESTAMPTZ | 更新时间 | DEFAULT NOW() |
 | deleted_at | TIMESTAMPTZ | 删除时间 | - |

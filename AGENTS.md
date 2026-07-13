@@ -8,6 +8,8 @@ model: deepseek
 maxTurns: 500
 memory: user
 background: false
+identity_status: none
+discoverable: true
 permissions:
   - database.uctoo.agents:read
   - database.uctoo.agents:write

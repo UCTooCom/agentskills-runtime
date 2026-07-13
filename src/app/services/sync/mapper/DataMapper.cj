@@ -30,6 +30,13 @@ public class DataMapper {
         po.background = Some(definition.background)
         po.color = definition.color
         po.isolationMode = definition.isolation
+        po.aic = definition.aic
+        po.identityStatus = definition.identityStatus
+        po.aipRegisteredAt = definition.aipRegisteredAt
+        po.capabilities = definition.capabilities
+        po.defaultInputTypes = definition.defaultInputTypes
+        po.defaultOutputTypes = definition.defaultOutputTypes
+        po.discoverable = definition.discoverable
         po.sourcePath = Some(ChangeDetector().normalizePath(definition.sourcePath.toString()))
         po.syncStatus = Some("synced")
         po.lastSyncAt = Some(DateTime.now())
@@ -77,6 +84,20 @@ public class DataMapper {
             if (let Some(isolation) <- po.isolationMode) {
                 builder.setIsolation(isolation)
             }
+            if (let Some(aic) <- po.aic) {
+                builder.setAic(aic)
+            }
+            builder.setIdentityStatus(po.identityStatus)
+            if (let Some(capabilities) <- po.capabilities) {
+                builder.setCapabilities(capabilities)
+            }
+            if (let Some(inputTypes) <- po.defaultInputTypes) {
+                builder.setDefaultInputTypes(inputTypes)
+            }
+            if (let Some(outputTypes) <- po.defaultOutputTypes) {
+                builder.setDefaultOutputTypes(outputTypes)
+            }
+            builder.setDiscoverable(po.discoverable)
             if (let Some(sp) <- po.sourcePath) {
                 builder.setSourcePath(Path(sp))
             }

@@ -243,6 +243,30 @@ public class AgentLoader {
             builder.setIsolation(isolation)
         }
         
+        if (let Some(aic) <- yaml.get("aic")) {
+            builder.setAic(aic)
+        }
+        
+        if (let Some(identityStatus) <- yaml.get("identity_status")) {
+            builder.setIdentityStatus(identityStatus)
+        }
+        
+        if (let Some(capabilities) <- yaml.get("capabilities")) {
+            builder.setCapabilities(capabilities)
+        }
+        
+        if (let Some(defaultInputTypes) <- yaml.get("default_input_types")) {
+            builder.setDefaultInputTypes(defaultInputTypes)
+        }
+        
+        if (let Some(defaultOutputTypes) <- yaml.get("default_output_types")) {
+            builder.setDefaultOutputTypes(defaultOutputTypes)
+        }
+        
+        if (let Some(discoverableStr) <- yaml.get("discoverable")) {
+            builder.setDiscoverable(discoverableStr.toAsciiLower() == "true")
+        }
+        
         return builder.build()
     }
     

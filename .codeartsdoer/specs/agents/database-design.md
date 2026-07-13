@@ -66,6 +66,13 @@ CREATE TABLE "public"."agents" (
   "isolation_mode" varchar(20),
   "max_turns" int4 DEFAULT 200,
   "initial_prompt" text,
+  "aic" varchar(128) DEFAULT NULL,
+  "identity_status" varchar(20) NOT NULL DEFAULT 'none',
+  "aip_registered_at" timestamptz(6) DEFAULT NULL,
+  "capabilities" jsonb DEFAULT NULL,
+  "default_input_types" jsonb DEFAULT NULL,
+  "default_output_types" jsonb DEFAULT NULL,
+  "discoverable" bool NOT NULL DEFAULT true,
   "creator" uuid,
   "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -80,6 +87,9 @@ CREATE INDEX IF NOT EXISTS "idx_agents_type" ON "public"."agents" USING btree ("
 CREATE INDEX IF NOT EXISTS "idx_agents_parent_id" ON "public"."agents" USING btree ("parent_id");
 CREATE INDEX IF NOT EXISTS "idx_agents_user_id" ON "public"."agents" USING btree ("user_id");
 CREATE INDEX IF NOT EXISTS "idx_agents_deleted_at" ON "public"."agents" USING btree ("deleted_at");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_agents_aic" ON "public"."agents" USING btree ("aic") WHERE "aic" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS "idx_agents_identity_status" ON "public"."agents" USING btree ("identity_status");
+CREATE INDEX IF NOT EXISTS "idx_agents_discoverable" ON "public"."agents" USING btree ("discoverable") WHERE "deleted_at" IS NULL;
 ```
 
 #### 字段说明
@@ -103,6 +113,13 @@ CREATE INDEX IF NOT EXISTS "idx_agents_deleted_at" ON "public"."agents" USING bt
 | isolation_mode | varchar(20) | 隔离模式 (worktree/remote) |
 | max_turns | int4 | 最大对话轮数 |
 | initial_prompt | text | 初始提示 |
+| aic | varchar(128) | 智能体身份码(AIC)，符合GB/Z 185.2 OID格式 |
+| identity_status | varchar(20) | AIP身份状态：none-未注册，active-已激活，locked-已锁定，revoked-已注销 |
+| aip_registered_at | timestamptz | AIP身份注册时间 |
+| capabilities | jsonb | 辅助功能描述(ACS)，符合GB/Z 185.4，JSON格式 |
+| default_input_types | jsonb | 默认输入类型(ACS)，符合GB/Z 185.4，JSON数组格式 |
+| default_output_types | jsonb | 默认输出类型(ACS)，符合GB/Z 185.4，JSON数组格式 |
+| discoverable | bool | 是否允许被智能体发现，符合GB/Z 185.5 |
 | creator | uuid | 创建人，关联 uctoo_user.id |
 | created_at | timestamptz | 创建时间 |
 | updated_at | timestamptz | 更新时间 |

@@ -243,6 +243,24 @@ public class AgentSyncHandler <: SyncHandler {
         if (let Some(isolation) <- definition.isolation) {
             sb.append("isolation: ${isolation}\n")
         }
+        if (let Some(aic) <- definition.aic) {
+            sb.append("aic: ${aic}\n")
+        }
+        if (definition.identityStatus != "none") {
+            sb.append("identity_status: ${definition.identityStatus}\n")
+        }
+        if (let Some(capabilities) <- definition.capabilities) {
+            sb.append("capabilities: ${capabilities}\n")
+        }
+        if (let Some(defaultInputTypes) <- definition.defaultInputTypes) {
+            sb.append("default_input_types: ${defaultInputTypes}\n")
+        }
+        if (let Some(defaultOutputTypes) <- definition.defaultOutputTypes) {
+            sb.append("default_output_types: ${defaultOutputTypes}\n")
+        }
+        if (!definition.discoverable) {
+            sb.append("discoverable: false\n")
+        }
         sb.append("---\n\n")
         sb.append(definition.systemPrompt)
         return sb.toString()

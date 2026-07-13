@@ -6,6 +6,7 @@ public package magic.core.agent
 import std.collection.ArrayList
 import std.io.IOException
 import std.fs.{File, Path}
+import std.time.DateTime
 import stdx.encoding.json.*
 import magic.jsonable.JsonUtils
 import magic.skill.infrastructure.utils.MarkdownUtils
@@ -150,6 +151,27 @@ public class AgentDefinition {
     /** 隔离模式 */
     public let isolation: Option<String>
     
+    /** 智能体身份码(AIC)，符合GB/Z 185.2 OID格式 */
+    public let aic: Option<String>
+    
+    /** AIP身份状态：none-未注册，active-已激活，locked-已锁定，revoked-已注销 */
+    public let identityStatus: String
+    
+    /** AIP身份注册时间 */
+    public let aipRegisteredAt: Option<DateTime>
+    
+    /** 辅助功能描述(ACS)，符合GB/Z 185.4 */
+    public let capabilities: Option<String>
+    
+    /** 默认输入类型(ACS)，符合GB/Z 185.4 */
+    public let defaultInputTypes: Option<String>
+    
+    /** 默认输出类型(ACS)，符合GB/Z 185.4 */
+    public let defaultOutputTypes: Option<String>
+    
+    /** 是否允许被智能体发现，符合GB/Z 185.5 */
+    public let discoverable: Bool
+    
     /** 系统提示词 */
     public let systemPrompt: String
     
@@ -173,6 +195,13 @@ public class AgentDefinition {
         permissions: Array<AgentPermission>,
         color: Option<String>,
         isolation: Option<String>,
+        aic: Option<String>,
+        identityStatus: String,
+        aipRegisteredAt: Option<DateTime>,
+        capabilities: Option<String>,
+        defaultInputTypes: Option<String>,
+        defaultOutputTypes: Option<String>,
+        discoverable: Bool,
         systemPrompt: String,
         sourcePath: Path,
         baseDir: Path
@@ -190,6 +219,13 @@ public class AgentDefinition {
         this.permissions = permissions
         this.color = color
         this.isolation = isolation
+        this.aic = aic
+        this.identityStatus = identityStatus
+        this.aipRegisteredAt = aipRegisteredAt
+        this.capabilities = capabilities
+        this.defaultInputTypes = defaultInputTypes
+        this.defaultOutputTypes = defaultOutputTypes
+        this.discoverable = discoverable
         this.systemPrompt = systemPrompt
         this.sourcePath = sourcePath
         this.baseDir = baseDir
@@ -240,6 +276,26 @@ public class AgentDefinition {
             items.add(("isolation", JsonString(isolationVal)))
         }
         
+        if (let Some(aicVal) <- aic) {
+            items.add(("aic", JsonString(aicVal)))
+        }
+        
+        items.add(("identity_status", JsonString(identityStatus)))
+        
+        if (let Some(capabilitiesVal) <- capabilities) {
+            items.add(("capabilities", JsonString(capabilitiesVal)))
+        }
+        
+        if (let Some(inputTypesVal) <- defaultInputTypes) {
+            items.add(("default_input_types", JsonString(inputTypesVal)))
+        }
+        
+        if (let Some(outputTypesVal) <- defaultOutputTypes) {
+            items.add(("default_output_types", JsonString(outputTypesVal)))
+        }
+        
+        items.add(("discoverable", JsonBool(discoverable)))
+        
         return JsonUtils.buildJsonObject(items.toArray())
     }
 }
@@ -261,6 +317,13 @@ public class AgentDefinitionBuilder {
     private var permissions: Array<AgentPermission> = []
     private var color: Option<String> = None
     private var isolation: Option<String> = None
+    private var aic: Option<String> = None
+    private var identityStatus: String = "none"
+    private var aipRegisteredAt: Option<DateTime> = None<DateTime>
+    private var capabilities: Option<String> = None
+    private var defaultInputTypes: Option<String> = None
+    private var defaultOutputTypes: Option<String> = None
+    private var discoverable: Bool = true
     private var systemPrompt: Option<String> = None
     private var sourcePath: Option<Path> = None
     private var baseDir: Option<Path> = None
@@ -340,6 +403,41 @@ public class AgentDefinitionBuilder {
         return this
     }
     
+    public func setAic(aic: String): AgentDefinitionBuilder {
+        this.aic = Some(aic)
+        return this
+    }
+    
+    public func setIdentityStatus(identityStatus: String): AgentDefinitionBuilder {
+        this.identityStatus = identityStatus
+        return this
+    }
+    
+    public func setAipRegisteredAt(aipRegisteredAt: DateTime): AgentDefinitionBuilder {
+        this.aipRegisteredAt = Some(aipRegisteredAt)
+        return this
+    }
+    
+    public func setCapabilities(capabilities: String): AgentDefinitionBuilder {
+        this.capabilities = Some(capabilities)
+        return this
+    }
+    
+    public func setDefaultInputTypes(defaultInputTypes: String): AgentDefinitionBuilder {
+        this.defaultInputTypes = Some(defaultInputTypes)
+        return this
+    }
+    
+    public func setDefaultOutputTypes(defaultOutputTypes: String): AgentDefinitionBuilder {
+        this.defaultOutputTypes = Some(defaultOutputTypes)
+        return this
+    }
+    
+    public func setDiscoverable(discoverable: Bool): AgentDefinitionBuilder {
+        this.discoverable = discoverable
+        return this
+    }
+    
     public func setSystemPrompt(systemPrompt: String): AgentDefinitionBuilder {
         this.systemPrompt = Some(systemPrompt)
         return this
@@ -374,6 +472,13 @@ public class AgentDefinitionBuilder {
             permissions,
             color,
             isolation,
+            aic,
+            identityStatus,
+            aipRegisteredAt,
+            capabilities,
+            defaultInputTypes,
+            defaultOutputTypes,
+            discoverable,
             systemPrompt.getOrThrow(),
             sourcePath.getOrThrow(),
             baseDir.getOrThrow()

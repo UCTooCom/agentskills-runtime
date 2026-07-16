@@ -59,6 +59,66 @@ This implementation follows clean architecture principles with clear separation 
 
 ## Features
 
+### GB/Z 185-2026 National Standard for Agent Interconnection Support
+
+AgentSkills Runtime has implemented support for the national standard "Artificial Intelligence - Agent Interconnection" (GB/Z 185.1~185.7-2026), adopting a **dual-mode layered architecture**:
+
+- **Local Mode**: For agent collaboration within the same system, reusing the existing uctoo_user + RBAC system for identity management, agent_messages + agent_tasks for message passing, and extending the national standard data models (ACS description format, interaction message/task/session structures). The system runs in local mode by default.
+- **Interconnection Mode**: For scenarios requiring interconnection with agents in external systems, fully implementing GB/Z 185.2~185.7 capabilities on top of local mode, integrating with ACPs registry service, CA service, discovery service, and MQ service, with AIC identity codes, CAI credentials, and mTLS authentication. Interconnection mode is a superset of local mode.
+
+#### Core Capabilities
+
+| Standard Part | Capability | Local Mode | Interconnection Mode |
+|---------------|-----------|------------|---------------------|
+| GB/Z 185.2 | Agent Identity Management (AIC/CAI) | uctoo_user + RBAC | ACPs registry + AIC + CAI + mTLS |
+| GB/Z 185.3 | Agent Trusted Registration (ATR) | Local auto-creation | ACPs registry full process |
+| GB/Z 185.4 | Agent Capability Description (ACS) | agents + agent_skills table extension | Sync to ACPs registry/discovery |
+| GB/Z 185.5 | Agent Discovery (ADP) | Local agents table query | ACPs discovery cross-system |
+| GB/Z 185.6 | Agent Interaction Protocol (AIP) | agent_messages + agent_tasks | MQ message distribution + mTLS |
+| GB/Z 185.7 | Tool Invocation | Reuse MCP tool system | Reuse MCP tool system |
+
+#### Database Extensions
+
+The agents table has been extended with AIP-related fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `aic` | varchar(128) | Agent Identity Code (AIC), GB/Z 185.2 OID format |
+| `identity_status` | varchar(20) | AIP identity status: none/active/locked/revoked |
+| `aip_registered_at` | timestamptz | AIP identity registration time |
+| `capabilities` | jsonb | Auxiliary Capability Description (ACS), GB/Z 185.4 |
+| `default_input_types` | jsonb | Default input types (ACS), GB/Z 185.4 |
+| `default_output_types` | jsonb | Default output types (ACS), GB/Z 185.4 |
+| `discoverable` | bool | Whether discoverable by other agents, GB/Z 185.5 |
+
+#### AGENTS.md Format Extension
+
+The YAML frontmatter of AGENTS.md has been extended to support AIP fields:
+
+```yaml
+---
+name: MainAgent
+agent_type: main
+description: Main Agent description
+identity_status: none          # AIP identity status
+discoverable: true             # Whether discoverable
+capabilities: []               # Auxiliary Capability Description (ACS)
+default_input_types: []        # Default input types
+default_output_types: []       # Default output types
+---
+```
+
+#### MQ Message Distribution Adapter
+
+In interconnection mode, AcpsMqAdapter implements reliable distribution of GB/Z 185.6 group interaction messages, based on activemq4cj (Cangjie ActiveMQ SDK, JMS 2.0 specification implementation), supporting:
+- Point-to-point and publish/subscribe dual-mode message channels
+- Durable subscriptions and transactional messages
+- Failover automatic reconnection
+- TLS encrypted connections
+- MQ authentication service ACL validation
+
+> For detailed design documentation, see `.codeartsdoer/specs/aip-implementation/` and `.codeartsdoer/specs/aip-mq-adapter/`.
+
 ### AgentSkills Standard Support
 - Loading skills from SKILL.md files according to the agentskills specification
 - YAML frontmatter parsing with validation

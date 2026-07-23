@@ -199,7 +199,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func find{{className}}ByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<{{className}}PO> {
         let sql = StringBuilder()
-        sql.append("select {{selectColumns}} from {{tableName}} where 1=1")
+        sql.append('''select {{selectColumns}} from {{tableName}} where 1=1''')
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -272,7 +272,7 @@ public interface {{className}}DAO <: RootDAO {
      */
     func find{{className}}ByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<{{className}}PO> {
         let sql = StringBuilder()
-        sql.append("select {{selectColumns}} from {{tableName}}")
+        sql.append('''select {{selectColumns}} from {{tableName}}''')
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

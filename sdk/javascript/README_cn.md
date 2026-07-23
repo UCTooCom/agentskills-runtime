@@ -110,7 +110,7 @@ npx skills run my-skill -p '{"input": "data"}'
 
 ```bash
 npx skills install-runtime
-npx skills install-runtime --runtime-version 0.0.23
+npx skills install-runtime --runtime-version 0.0.25
 ```
 
 #### `npx skills start`

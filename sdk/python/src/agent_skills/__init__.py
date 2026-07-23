@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 __version__ = "0.0.4"
-RUNTIME_VERSION = "0.0.23"
+RUNTIME_VERSION = "0.0.25"
 
 from agent_skills.models import (
     ApiError,

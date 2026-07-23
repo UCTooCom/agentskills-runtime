@@ -133,6 +133,8 @@ import magic.app.routes.uctoo.aip_service_config.AipServiceConfigRoute
 import magic.app.controllers.uctoo.aip_service_config.AipServiceConfigController
 import magic.app.routes.uctoo.aip_discovery_cache.AipDiscoveryCacheRoute
 import magic.app.controllers.uctoo.aip_discovery_cache.AipDiscoveryCacheController
+import magic.app.routes.uctoo.config.ConfigRoute
+import magic.app.controllers.uctoo.config.ConfigController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -192,7 +194,8 @@ import magic.app.services.uctoo.{
     AipInteractionTaskService,
     AipInteractionMessageService,
     AipServiceConfigService,
-    AipDiscoveryCacheService,}
+    AipDiscoveryCacheService,
+    ConfigService,}
 import magic.app.services.crontab.SchedulerService
 
 
@@ -558,6 +561,21 @@ public class AutoRouteConfig {
         ))
         
         // ==================== CRUD 路由配置 ====================
+        // Config 路由
+        registry.add(RouteEntry(
+            "config",
+            "/api/v1/uctoo/config",
+            10,
+            true,
+            { router: Router =>
+                let service = ConfigService()
+                let controller = ConfigController(service)
+                let route = ConfigRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
         // AipDiscoveryCache 路由
         registry.add(RouteEntry(
             "aip_discovery_cache",

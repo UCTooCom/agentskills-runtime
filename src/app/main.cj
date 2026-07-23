@@ -43,6 +43,7 @@ import opengauss.driver.PGDriver // 导入 PostgreSQL 驱动
 import magic.core.agent.{AgentLoadManager, AgentLoader} // 导入 Agent 加载模块
 import magic.app.services.sync.SyncManager // 导入同步管理器
 import magic.app.services.sync.model.TriggerSource // 导入同步触发源
+import magic.app.services.uctoo.ConfigSyncHandler // 导入配置同步处理器
 import magic.app.routes.uctoo.sync.SyncRoute // 导入同步路由
 import magic.app.services.billing.{BillingEventHandler, QuotaCheckHandler} // 导入计费事件处理器
 import magic.app.services.bridge.{WebSocketEventBridge, AgentRuntimeBridge} // 导入桥接层
@@ -265,6 +266,23 @@ public class Application {
         SyncManager.initialize(agentBasePath, skillBasePath)
         LogUtils.info("SyncManager initialized with agentBasePath: ${agentBasePath}, skillBasePath: ${skillBasePath}")
         
+        // 启动时同步 .env 配置到 config 表（同步执行，确保在服务就绪前完成）
+        try {
+            eprintln("=== Starting config startup sync ===")
+            let configSyncHandler = ConfigSyncHandler()
+            let configSyncResult = configSyncHandler.startupSync()
+            eprintln("=== Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount} ===")
+            LogUtils.info("Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount}")
+            for (detail in configSyncResult.details) {
+                if (!detail.success) {
+                    LogUtils.error("Config sync failed for ${detail.envKey}: ${detail.errorMessage ?? "unknown"}")
+                }
+            }
+        } catch (e: Exception) {
+            eprintln("=== Config startup sync failed: ${e.message} ===")
+            LogUtils.error("Config startup sync failed: ${e.message}")
+        }
+        
         // 异步执行启动全量同步（不阻塞启动）
         spawn {
             eprintln("=== Starting async initial sync ===")
@@ -430,6 +448,23 @@ public class Application {
         let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./.codeartsdoer/skills" })
         SyncManager.initialize(agentBasePath, skillBasePath)
         LogUtils.info("SyncManager initialized with agentBasePath: ${agentBasePath}, skillBasePath: ${skillBasePath}")
+        
+        // 启动时同步 .env 配置到 config 表（同步执行，确保在服务就绪前完成）
+        try {
+            eprintln("=== Starting config startup sync (HTTPS) ===")
+            let configSyncHandler = ConfigSyncHandler()
+            let configSyncResult = configSyncHandler.startupSync()
+            eprintln("=== Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount} ===")
+            LogUtils.info("Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount}")
+            for (detail in configSyncResult.details) {
+                if (!detail.success) {
+                    LogUtils.error("Config sync failed for ${detail.envKey}: ${detail.errorMessage ?? "unknown"}")
+                }
+            }
+        } catch (e: Exception) {
+            eprintln("=== Config startup sync failed: ${e.message} ===")
+            LogUtils.error("Config startup sync failed: ${e.message}")
+        }
         
         // 异步执行启动全量同步（不阻塞启动）
         spawn {

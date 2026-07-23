@@ -1142,7 +1142,7 @@ public class CrudGenerator {
                 sb.append(",\n")
             }
             let fieldName = generateSafeFieldName(field.columnName, tableInfo.tableName)
-            sb.append("                ${field.columnName} = \${arg(entity.${fieldName})}")
+            sb.append("                ${escapeColumnName(field.columnName)} = \${arg(entity.${fieldName})}")
             first = false
         }
         if (!first) {

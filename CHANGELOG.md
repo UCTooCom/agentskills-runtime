@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 0.0.25 (2026-07-23)
+
+### 新功能
+- **可视化系统配置管理**：实现对 .env 配置文件的全生命周期管理，提供 CLI、API、可视化界面三种配置通道
+- **config 表扩展**：新增 env_key/config_group/config_type/is_sensitive 等 10 个字段，支持 .env 文件同步映射
+- **EnvFileService**：.env 文件读写服务，支持备份、原子写入、回滚，保持注释和格式不变
+- **ConfigValidator**：配置项验证引擎，基于 config_type 和 validation_rule 进行输入验证
+- **ConfigSyncHandler**：配置同步处理器，支持启动同步、双写同步、定时同步（每5分钟）
+- **config_cli**：命令行配置通道，支持 config get/set/list/export/import 命令
+- **系统配置可视化界面**：分组 Tab 布局的配置表单，元数据驱动的表单渲染，敏感项脱敏显示
+
+### 改进
+- 配置管理从手动编辑 .env 文件升级为可视化界面管理
+- .env 文件与 config 表自动同步，保障配置一致性
+- 敏感配置项自动脱敏（前4后4中间*替代），提升安全性
+- 配置变更审计日志，支持变更追溯
+- RBAC 权限体系保护所有配置读写操作（config:read / config:write）
+
 ## 0.0.17 (2026-03-10)
 
 ### 新功能

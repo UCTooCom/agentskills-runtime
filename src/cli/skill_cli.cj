@@ -67,6 +67,7 @@ public class SkillCLI {
             case "web" => executeWebCommand(subArgs)
             case "search" => executeSearchCommand(subArgs)
             case "crontab" => executeCrontabCommand(subArgs)
+            case "config"  => executeConfigCommand(subArgs)
             case "help" => printUsage()
             case "--help" => printUsage()
             case "-h" => printUsage()
@@ -98,6 +99,7 @@ public class SkillCLI {
         getStdOut().writeln("  auth [options]                Authentication management for external services")
         getStdOut().writeln("  web [options]                 Launch web interface for skill management")
         getStdOut().writeln("  search [options]              Advanced semantic search with filtering options")
+        getStdOut().writeln("  config <command> [options]    System config management (get/set/list/export/import/sync)")
         getStdOut().writeln("  help                          Show this help message")
         getStdOut().writeln("")
         getStdOut().writeln("Install Options:")
@@ -440,6 +442,11 @@ public class SkillCLI {
 
     private func executeCrontabCommand(args: Array<String>): Unit {
         let cli = CrontabCLI()
+        cli.execute(args)
+    }
+
+    private func executeConfigCommand(args: Array<String>): Unit {
+        let cli = ConfigCLI()
         cli.execute(args)
     }
 }

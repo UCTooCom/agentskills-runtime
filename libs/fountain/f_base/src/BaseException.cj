@@ -24,7 +24,7 @@ public func printStackTrace(exception: Exception, output: OutputStream): Unit {
         buf.write("An exception has occured:${OS.current.nextLine}${exception}${OS.current.nextLine}".unsafeBytes())
         for (stack in exception.getStackTrace()) {
             buf.write(
-                "         at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})${OS.current.nextLine}"
+                "        at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})${OS.current.nextLine}"
                     .unsafeBytes())
         }
     }
@@ -70,6 +70,9 @@ public open class BaseException <: Exception {
         get() {
             suppressed_
         }
+    }
+    public func toString(): String {
+        '${TypeInfo.of(this)}:${this.message}'
     }
     public func printStackTrace(output: OutputStream): Unit {
         printStackTrace(output) {

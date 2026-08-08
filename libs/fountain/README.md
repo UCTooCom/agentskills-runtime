@@ -1,6 +1,7 @@
 ![LICENSE](https://img.shields.io/badge/License-ApacheV2.0-orange.svg?style=flat-square&logo=opensourceinitiative&logoSize=14)
 ![stars](https://gitcode.com/Cangjie-SIG/fountain/star/badge.svg?style=flat-square&logoSize=14)
 ![star](https://gitcode.com/Cangjie-SIG/fountain/star/2025top.svg)
+[![AtomGit Star](https://atomgit.com/Cangjie-SIG/fountain/star/badge.svg)](https://atomgit.com/Cangjie-SIG/fountain)
 ```
   _____                    __         .__
 _/ ____\____  __ __  _____/  |______  |__| ____

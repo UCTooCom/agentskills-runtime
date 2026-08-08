@@ -37,31 +37,19 @@ public class ConfigSyncHandler {
 
     public func startupSync(): SyncResult {
         let result = SyncResult()
-        eprintln("=== [ConfigSync] startupSync() ENTERED ===")
         try {
             let envPath = envFileService.getEnvFilePath()
-            eprintln("=== [ConfigSync] envPath = ${envPath} ===")
             LogUtils.info("ConfigSyncHandler", "Startup sync: checking .env file at: ${envPath}")
             let fileExists = envFileService.envFileExists(envPath)
-            eprintln("=== [ConfigSync] envFileExists = ${fileExists} ===")
             if (!fileExists) {
                 LogUtils.warn("ConfigSyncHandler", ".env file not found: ${envPath}")
                 return result
             }
             let envValues = envFileService.readAllEnvValues(envPath)
-            eprintln("=== [ConfigSync] readAllEnvValues returned ${envValues.size} items ===")
             LogUtils.info("ConfigSyncHandler", "Read ${envValues.size} config items from .env file")
-            eprintln("=== [ConfigSync] getting ORM.executor() ===")
             let executor = ORM.executor()
-            eprintln("=== [ConfigSync] ORM.executor() obtained ===")
 
-            var processedCount = 0
             for ((key, value) in envValues) {
-                processedCount++
-                if (processedCount <= 5) {
-                    let displayVal = if (value.size > 30) { value[0..30] + "..." } else { value }
-                    eprintln("=== [ConfigSync] processing #${processedCount}: key=${key}, value=${displayVal} ===")
-                }
                 let detail = SyncDetail()
                 detail.envKey = key
                 detail.envValue = value
@@ -95,22 +83,18 @@ public class ConfigSyncHandler {
                             newEntity.status = 1
                             newEntity.lastSyncedAt = Some(DateTime.now())
                             let insertId = executor.insertConfig(newEntity)
-                            eprintln("=== [ConfigSync] insertConfig for ${key}, returned id=${insertId} ===")
                             detail.success = true
                             result.successCount++
                     }
                 } catch (e: Exception) {
-                    eprintln("=== [ConfigSync] ERROR for key=${key}: ${e.message} ===")
                     detail.success = false
                     detail.errorMessage = Some(e.message)
                     result.failedCount++
                 }
                 result.details.add(detail)
             }
-            eprintln("=== [ConfigSync] Startup sync completed: ${result.successCount}/${result.totalCount} succeeded, ${result.failedCount} failed ===")
             LogUtils.info("ConfigSyncHandler", "Startup sync completed: ${result.successCount}/${result.totalCount} succeeded")
         } catch (e: Exception) {
-            eprintln("=== [ConfigSync] FATAL ERROR: ${e.message} ===")
             LogUtils.error("ConfigSyncHandler", "Startup sync failed: ${e.message}")
         }
         result

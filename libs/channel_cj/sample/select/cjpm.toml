@@ -1,0 +1,9 @@
+[package]
+cjc-version = "1.0.5"
+name = "sample_select"
+version = "1.0.0"
+description = "select 多路复用演示"
+output-type = "executable"
+
+[dependencies]
+channel_cj = { path = "../..", output-type = "static" }

@@ -135,6 +135,30 @@ import magic.app.routes.uctoo.aip_discovery_cache.AipDiscoveryCacheRoute
 import magic.app.controllers.uctoo.aip_discovery_cache.AipDiscoveryCacheController
 import magic.app.routes.uctoo.config.ConfigRoute
 import magic.app.controllers.uctoo.config.ConfigController
+import magic.app.routes.uctoo.orchestration_plans.OrchestrationPlansRoute
+import magic.app.controllers.uctoo.orchestration_plans.OrchestrationPlansController
+import magic.app.routes.uctoo.orchestration_steps.OrchestrationStepsRoute
+import magic.app.controllers.uctoo.orchestration_steps.OrchestrationStepsController
+import magic.app.routes.uctoo.execution_evidences.ExecutionEvidencesRoute
+import magic.app.controllers.uctoo.execution_evidences.ExecutionEvidencesController
+import magic.app.routes.uctoo.verification_evidences.VerificationEvidencesRoute
+import magic.app.controllers.uctoo.verification_evidences.VerificationEvidencesController
+import magic.app.routes.uctoo.skill_compositions.SkillCompositionsRoute
+import magic.app.controllers.uctoo.skill_compositions.SkillCompositionsController
+import magic.app.routes.uctoo.composition_executions.CompositionExecutionsRoute
+import magic.app.controllers.uctoo.composition_executions.CompositionExecutionsController
+import magic.app.routes.uctoo.agent_group_members.AgentGroupMembersRoute
+import magic.app.controllers.uctoo.agent_group_members.AgentGroupMembersController
+import magic.app.routes.uctoo.agent_verification_records.AgentVerificationRecordsRoute
+import magic.app.controllers.uctoo.agent_verification_records.AgentVerificationRecordsController
+import magic.app.routes.uctoo.agent_loop_metrics.AgentLoopMetricsRoute
+import magic.app.controllers.uctoo.agent_loop_metrics.AgentLoopMetricsController
+import magic.app.routes.uctoo.agent_loop_tuning_configs.AgentLoopTuningConfigsRoute
+import magic.app.controllers.uctoo.agent_loop_tuning_configs.AgentLoopTuningConfigsController
+import magic.app.routes.uctoo.skill_usage_stats.SkillUsageStatsRoute
+import magic.app.controllers.uctoo.skill_usage_stats.SkillUsageStatsController
+import magic.app.routes.uctoo.agent_kanban_tasks.AgentKanbanTasksRoute
+import magic.app.controllers.uctoo.agent_kanban_tasks.AgentKanbanTasksController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -195,7 +219,19 @@ import magic.app.services.uctoo.{
     AipInteractionMessageService,
     AipServiceConfigService,
     AipDiscoveryCacheService,
-    ConfigService,}
+    ConfigService,
+    OrchestrationPlansService,
+    OrchestrationStepsService,
+    ExecutionEvidencesService,
+    VerificationEvidencesService,
+    SkillCompositionsService,
+    CompositionExecutionsService,
+    AgentGroupMembersService,
+    AgentVerificationRecordsService,
+    AgentLoopMetricsService,
+    AgentLoopTuningConfigsService,
+    SkillUsageStatsService,
+    AgentKanbanTasksService,}
 import magic.app.services.crontab.SchedulerService
 
 
@@ -561,6 +597,188 @@ public class AutoRouteConfig {
         ))
         
         // ==================== CRUD 路由配置 ====================
+        // AgentKanbanTasks 路由
+        registry.add(RouteEntry(
+            "agent_kanban_tasks",
+            "/api/v1/uctoo/agent_kanban_tasks",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentKanbanTasksService()
+                let controller = AgentKanbanTasksController(service)
+                let route = AgentKanbanTasksRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // SkillUsageStats 路由
+        registry.add(RouteEntry(
+            "skill_usage_stats",
+            "/api/v1/uctoo/skill_usage_stats",
+            10,
+            true,
+            { router: Router =>
+                let service = SkillUsageStatsService()
+                let controller = SkillUsageStatsController(service)
+                let route = SkillUsageStatsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AgentLoopTuningConfigs 路由
+        registry.add(RouteEntry(
+            "agent_loop_tuning_configs",
+            "/api/v1/uctoo/agent_loop_tuning_configs",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentLoopTuningConfigsService()
+                let controller = AgentLoopTuningConfigsController(service)
+                let route = AgentLoopTuningConfigsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AgentLoopMetrics 路由
+        registry.add(RouteEntry(
+            "agent_loop_metrics",
+            "/api/v1/uctoo/agent_loop_metrics",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentLoopMetricsService()
+                let controller = AgentLoopMetricsController(service)
+                let route = AgentLoopMetricsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AgentVerificationRecords 路由
+        registry.add(RouteEntry(
+            "agent_verification_records",
+            "/api/v1/uctoo/agent_verification_records",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentVerificationRecordsService()
+                let controller = AgentVerificationRecordsController(service)
+                let route = AgentVerificationRecordsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // AgentGroupMembers 路由
+        registry.add(RouteEntry(
+            "agent_group_members",
+            "/api/v1/uctoo/agent_group_members",
+            10,
+            true,
+            { router: Router =>
+                let service = AgentGroupMembersService()
+                let controller = AgentGroupMembersController(service)
+                let route = AgentGroupMembersRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+
+        // CompositionExecutions 路由
+        registry.add(RouteEntry(
+            "composition_executions",
+            "/api/v1/uctoo/composition_executions",
+            10,
+            true,
+            { router: Router =>
+                let service = CompositionExecutionsService()
+                let controller = CompositionExecutionsController(service)
+                let route = CompositionExecutionsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // SkillCompositions 路由
+        registry.add(RouteEntry(
+            "skill_compositions",
+            "/api/v1/uctoo/skill_compositions",
+            10,
+            true,
+            { router: Router =>
+                let service = SkillCompositionsService()
+                let controller = SkillCompositionsController(service)
+                let route = SkillCompositionsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // VerificationEvidences 路由
+        registry.add(RouteEntry(
+            "verification_evidences",
+            "/api/v1/uctoo/verification_evidences",
+            10,
+            true,
+            { router: Router =>
+                let service = VerificationEvidencesService()
+                let controller = VerificationEvidencesController(service)
+                let route = VerificationEvidencesRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // ExecutionEvidences 路由
+        registry.add(RouteEntry(
+            "execution_evidences",
+            "/api/v1/uctoo/execution_evidences",
+            10,
+            true,
+            { router: Router =>
+                let service = ExecutionEvidencesService()
+                let controller = ExecutionEvidencesController(service)
+                let route = ExecutionEvidencesRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // OrchestrationSteps 路由
+        registry.add(RouteEntry(
+            "orchestration_steps",
+            "/api/v1/uctoo/orchestration_steps",
+            10,
+            true,
+            { router: Router =>
+                let service = OrchestrationStepsService()
+                let controller = OrchestrationStepsController(service)
+                let route = OrchestrationStepsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // OrchestrationPlans 路由
+        registry.add(RouteEntry(
+            "orchestration_plans",
+            "/api/v1/uctoo/orchestration_plans",
+            10,
+            true,
+            { router: Router =>
+                let service = OrchestrationPlansService()
+                let controller = OrchestrationPlansController(service)
+                let route = OrchestrationPlansRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+
         // Config 路由
         registry.add(RouteEntry(
             "config",

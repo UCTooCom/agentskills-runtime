@@ -1,7 +1,7 @@
 [dependencies]
 
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.5"
   compile-option = "-O2 -Woff unused"
   description = "YAML解析工具"
   link-option = ""
@@ -9,7 +9,7 @@
   output-type = "dynamic"
   src-dir = "src"
   target-dir = ""
-  version = "1.0.4"
+  version = "1.0.0"
   package-configuration = {}
   scripts = {}
 
@@ -17,16 +17,16 @@
 #  Setting cangjie-stdx
 #----------------------------------------
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["../cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-linux-x64-1.0.5.1/linux_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-unknown-windows-gnu.bin-dependencies]
-  path-option = ["../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["../cangjie-stdx-linux-aarch64-1.0.0.1/linux_aarch64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-linux-aarch64-1.0.5.1/linux_aarch64_cjnative/dynamic/stdx"]
 
 [target.aarch64-apple-darwin.bin-dependencies]
-  path-option = ["../cangjie-stdx-mac-aarch64-1.0.0.1/darwin_aarch64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-mac-aarch64-1.0.5.1/darwin_aarch64_cjnative/dynamic/stdx"]

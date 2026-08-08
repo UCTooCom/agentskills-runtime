@@ -1,4 +1,6 @@
 /*
+ Navicat Premium Dump SQL
+
  Source Server         : pglocal
  Source Server Type    : PostgreSQL
  Source Server Version : 160008 (160008)
@@ -10,7 +12,7 @@
  Target Server Version : 160008 (160008)
  File Encoding         : 65001
 
- Date: 10/07/2026 21:58:26
+ Date: 30/07/2026 07:26:48
 */
 
 
@@ -110,6 +112,37 @@ COMMENT ON COLUMN "public"."agent_executors"."is_builtin" IS '是否内置策略
 COMMENT ON TABLE "public"."agent_executors" IS '执行策略配置表';
 
 -- ----------------------------
+-- Table structure for agent_group_members
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."agent_group_members";
+CREATE TABLE "public"."agent_group_members" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "group_id" uuid NOT NULL,
+  "agent_id" uuid NOT NULL,
+  "role" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'worker'::character varying,
+  "parent_agent_id" uuid,
+  "skills" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "config" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "creator" uuid,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6)
+)
+;
+COMMENT ON COLUMN "public"."agent_group_members"."id" IS '成员记录唯一标识';
+COMMENT ON COLUMN "public"."agent_group_members"."group_id" IS '关联agent_groups表id';
+COMMENT ON COLUMN "public"."agent_group_members"."agent_id" IS '关联agents表id';
+COMMENT ON COLUMN "public"."agent_group_members"."role" IS '角色：manager/team_leader/worker';
+COMMENT ON COLUMN "public"."agent_group_members"."parent_agent_id" IS '上级Agent ID，Worker关联TeamLeader，TeamLeader关联Manager';
+COMMENT ON COLUMN "public"."agent_group_members"."skills" IS '技能列表(JSON数组)';
+COMMENT ON COLUMN "public"."agent_group_members"."config" IS '成员配置(JSON)';
+COMMENT ON COLUMN "public"."agent_group_members"."creator" IS '创建人';
+COMMENT ON COLUMN "public"."agent_group_members"."created_at" IS '创建时间';
+COMMENT ON COLUMN "public"."agent_group_members"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."agent_group_members"."deleted_at" IS '删除时间';
+COMMENT ON TABLE "public"."agent_group_members" IS 'Agent协作组成员表。存储团队成员的角色和层级关系，支持Manager-TeamLeader-Worker三层架构。';
+
+-- ----------------------------
 -- Table structure for agent_groups
 -- ----------------------------
 DROP TABLE IF EXISTS "public"."agent_groups";
@@ -126,14 +159,116 @@ CREATE TABLE "public"."agent_groups" (
   "creator" varchar(36) COLLATE "pg_catalog"."default",
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "deleted_at" timestamptz(6)
+  "deleted_at" timestamptz(6),
+  "team_config" jsonb DEFAULT '{}'::jsonb
 )
 ;
 COMMENT ON COLUMN "public"."agent_groups"."group_type" IS '组类型：leader/linear/free/auto_discuss/round_robin';
 COMMENT ON COLUMN "public"."agent_groups"."leader_id" IS '领导者Agent ID，关联agents.id';
 COMMENT ON COLUMN "public"."agent_groups"."member_ids" IS '成员Agent ID列表(JSON数组)';
 COMMENT ON COLUMN "public"."agent_groups"."max_round" IS '讨论最大轮次';
+COMMENT ON COLUMN "public"."agent_groups"."team_config" IS '团队层级配置(JSON)，定义manager/leaders/workers结构，仅group_type=manager时使用';
 COMMENT ON TABLE "public"."agent_groups" IS 'Agent协作组定义表';
+
+-- ----------------------------
+-- Table structure for agent_kanban_tasks
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."agent_kanban_tasks";
+CREATE TABLE "public"."agent_kanban_tasks" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "title" varchar(200) COLLATE "pg_catalog"."default" NOT NULL,
+  "description" text COLLATE "pg_catalog"."default" DEFAULT ''::text,
+  "state" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'todo'::character varying,
+  "assignee" varchar(100) COLLATE "pg_catalog"."default" DEFAULT ''::character varying,
+  "priority" int4 NOT NULL DEFAULT 0,
+  "parent_task_id" uuid,
+  "sub_task_ids" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "dependencies" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "result" jsonb,
+  "agent_id" uuid,
+  "session_id" varchar(100) COLLATE "pg_catalog"."default",
+  "creator" uuid,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6)
+)
+;
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."title" IS '任务标题';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."description" IS '任务描述';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."state" IS '看板状态：todo/in_progress/review/done/blocked';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."assignee" IS '分配给(Agent名称)';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."priority" IS '优先级。数值越大优先级越高';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."parent_task_id" IS '父任务ID（任务分解）';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."sub_task_ids" IS '子任务ID列表(JSON数组)';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."dependencies" IS '依赖任务ID列表(JSON数组)';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."result" IS '任务执行结果(JSON)';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."agent_id" IS '关联agents表id';
+COMMENT ON COLUMN "public"."agent_kanban_tasks"."session_id" IS '会话ID';
+COMMENT ON TABLE "public"."agent_kanban_tasks" IS 'Agent看板任务表。存储协同任务的看板状态、分配、依赖关系和执行结果。';
+
+-- ----------------------------
+-- Table structure for agent_loop_metrics
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."agent_loop_metrics";
+CREATE TABLE "public"."agent_loop_metrics" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "agent_id" uuid NOT NULL,
+  "session_id" varchar(100) COLLATE "pg_catalog"."default",
+  "evaluation_type" varchar(50) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'session'::character varying,
+  "success_rate" float8 NOT NULL DEFAULT 0.0,
+  "avg_duration_ms" int8 NOT NULL DEFAULT 0,
+  "prompt_tokens" int8 NOT NULL DEFAULT 0,
+  "completion_tokens" int8 NOT NULL DEFAULT 0,
+  "total_tokens" int8 NOT NULL DEFAULT 0,
+  "tool_call_count" int8 NOT NULL DEFAULT 0,
+  "side_effect_count" int8 NOT NULL DEFAULT 0,
+  "metrics_detail" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "time_range_start" timestamptz(6),
+  "time_range_end" timestamptz(6),
+  "creator" uuid,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6)
+)
+;
+COMMENT ON COLUMN "public"."agent_loop_metrics"."agent_id" IS '关联agents表id';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."session_id" IS '会话ID';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."evaluation_type" IS '评估类型：session/agent/global';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."success_rate" IS '成功率(0.0-1.0)';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."avg_duration_ms" IS '平均执行耗时(毫秒)';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."prompt_tokens" IS 'Prompt Token消耗';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."completion_tokens" IS 'Completion Token消耗';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."total_tokens" IS '总Token消耗';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."tool_call_count" IS '工具调用次数';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."side_effect_count" IS '副作用数量';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."metrics_detail" IS '指标详情(JSON)';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."time_range_start" IS '评估时间范围起始';
+COMMENT ON COLUMN "public"."agent_loop_metrics"."time_range_end" IS '评估时间范围结束';
+COMMENT ON TABLE "public"."agent_loop_metrics" IS 'AgentLoop评估指标表。存储Agent执行质量评估结果，包括成功率、Token消耗、耗时等指标。';
+
+-- ----------------------------
+-- Table structure for agent_loop_tuning_configs
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."agent_loop_tuning_configs";
+CREATE TABLE "public"."agent_loop_tuning_configs" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "agent_id" uuid NOT NULL,
+  "strategy_type" varchar(50) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'prompt_optimization'::character varying,
+  "config" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "is_enabled" bool NOT NULL DEFAULT true,
+  "last_applied_at" timestamptz(6),
+  "creator" uuid,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6)
+)
+;
+COMMENT ON COLUMN "public"."agent_loop_tuning_configs"."agent_id" IS '关联agents表id';
+COMMENT ON COLUMN "public"."agent_loop_tuning_configs"."strategy_type" IS '策略类型：prompt_optimization/tool_selection_optimization/execution_path_optimization';
+COMMENT ON COLUMN "public"."agent_loop_tuning_configs"."config" IS '策略配置(JSON)';
+COMMENT ON COLUMN "public"."agent_loop_tuning_configs"."is_enabled" IS '是否启用';
+COMMENT ON COLUMN "public"."agent_loop_tuning_configs"."last_applied_at" IS '最近应用时间';
+COMMENT ON TABLE "public"."agent_loop_tuning_configs" IS 'AgentLoop调优策略配置表。存储基于评估结果自动选择的调优策略，支持提示词/工具选择/执行路径优化。';
 
 -- ----------------------------
 -- Table structure for agent_memories
@@ -153,7 +288,12 @@ CREATE TABLE "public"."agent_memories" (
   "creator" varchar(36) COLLATE "pg_catalog"."default",
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "deleted_at" timestamptz(6)
+  "deleted_at" timestamptz(6),
+  "sharing" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'private'::character varying,
+  "access_count" int4 NOT NULL DEFAULT 0,
+  "source_session" varchar(100) COLLATE "pg_catalog"."default",
+  "source_agent" varchar(36) COLLATE "pg_catalog"."default",
+  "expires_at" timestamptz(6)
 )
 ;
 COMMENT ON COLUMN "public"."agent_memories"."agent_id" IS '所属Agent ID，关联agents.id';
@@ -162,6 +302,11 @@ COMMENT ON COLUMN "public"."agent_memories"."embedding_vector" IS '嵌入向量(
 COMMENT ON COLUMN "public"."agent_memories"."scope" IS '记忆作用域：working/episodic/semantic/procedural';
 COMMENT ON COLUMN "public"."agent_memories"."weight" IS '记忆权重，语义记忆权重更高';
 COMMENT ON COLUMN "public"."agent_memories"."tags" IS '标签列表(JSON数组)';
+COMMENT ON COLUMN "public"."agent_memories"."sharing" IS '共享范围：private/shared/global';
+COMMENT ON COLUMN "public"."agent_memories"."access_count" IS '访问次数';
+COMMENT ON COLUMN "public"."agent_memories"."source_session" IS '来源会话ID';
+COMMENT ON COLUMN "public"."agent_memories"."source_agent" IS '来源Agent ID，关联agents.id';
+COMMENT ON COLUMN "public"."agent_memories"."expires_at" IS '过期时间，NULL表示永不过期';
 COMMENT ON TABLE "public"."agent_memories" IS 'Agent记忆持久化表';
 
 -- ----------------------------
@@ -449,6 +594,45 @@ COMMENT ON COLUMN "public"."agent_tasks"."aip_session_id" IS 'AIP交互会话ID�
 COMMENT ON COLUMN "public"."agent_tasks"."aip_task_id" IS 'AIP任务标识符，符合GB/Z 185.6任务结构';
 COMMENT ON COLUMN "public"."agent_tasks"."aip_task_state" IS 'AIP任务状态：accepted/rejected/completed/failed/cancelled/in_progress，符合GB/Z 185.6';
 COMMENT ON TABLE "public"."agent_tasks" IS 'Agent任务表。存储Agent执行的任务信息，支持任务嵌套。';
+
+-- ----------------------------
+-- Table structure for agent_verification_records
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."agent_verification_records";
+CREATE TABLE "public"."agent_verification_records" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "task_id" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "step_name" varchar(100) COLLATE "pg_catalog"."default",
+  "overall_status" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'valid'::character varying,
+  "valid_count" int4 NOT NULL DEFAULT 0,
+  "invalid_count" int4 NOT NULL DEFAULT 0,
+  "partial_count" int4 NOT NULL DEFAULT 0,
+  "validation_results" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "rules_applied" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "evidence_id" varchar(100) COLLATE "pg_catalog"."default",
+  "metadata" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "creator" uuid,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6)
+)
+;
+COMMENT ON COLUMN "public"."agent_verification_records"."id" IS '验证记录唯一标识';
+COMMENT ON COLUMN "public"."agent_verification_records"."task_id" IS '关联任务ID';
+COMMENT ON COLUMN "public"."agent_verification_records"."step_name" IS '步骤名称';
+COMMENT ON COLUMN "public"."agent_verification_records"."overall_status" IS '整体验证状态：valid/invalid/partial';
+COMMENT ON COLUMN "public"."agent_verification_records"."valid_count" IS '通过的规则数';
+COMMENT ON COLUMN "public"."agent_verification_records"."invalid_count" IS '失败的规则数';
+COMMENT ON COLUMN "public"."agent_verification_records"."partial_count" IS '部分通过的规则数';
+COMMENT ON COLUMN "public"."agent_verification_records"."validation_results" IS '验证结果详情(JSON数组)';
+COMMENT ON COLUMN "public"."agent_verification_records"."rules_applied" IS '应用的验证规则(JSON数组)';
+COMMENT ON COLUMN "public"."agent_verification_records"."evidence_id" IS '关联执行证据ID';
+COMMENT ON COLUMN "public"."agent_verification_records"."metadata" IS '扩展元数据(JSON)';
+COMMENT ON COLUMN "public"."agent_verification_records"."creator" IS '创建人';
+COMMENT ON COLUMN "public"."agent_verification_records"."created_at" IS '创建时间';
+COMMENT ON COLUMN "public"."agent_verification_records"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."agent_verification_records"."deleted_at" IS '删除时间';
+COMMENT ON TABLE "public"."agent_verification_records" IS 'Agent验证记录表。持久化AgentResultValidator的验证结果，支持验证历史查询和审计。';
 
 -- ----------------------------
 -- Table structure for agents
@@ -1718,6 +1902,39 @@ COMMENT ON COLUMN "public"."component_setting"."deleted_at" IS '删除时间';
 COMMENT ON TABLE "public"."component_setting" IS '组件配置';
 
 -- ----------------------------
+-- Table structure for composition_executions
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."composition_executions";
+CREATE TABLE "public"."composition_executions" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "composition_id" uuid NOT NULL,
+  "status" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'running'::character varying,
+  "step_results" jsonb,
+  "final_output" jsonb,
+  "cache_hits" int4 NOT NULL DEFAULT 0,
+  "duration_ms" int4,
+  "creator" uuid NOT NULL,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "completed_at" timestamptz(6) DEFAULT NULL::timestamp with time zone,
+  "deleted_at" timestamptz(6) DEFAULT NULL::timestamp with time zone
+)
+;
+COMMENT ON COLUMN "public"."composition_executions"."id" IS '执行记录唯一标识';
+COMMENT ON COLUMN "public"."composition_executions"."composition_id" IS '关联skill_compositions表id';
+COMMENT ON COLUMN "public"."composition_executions"."status" IS '执行状态：running/completed/failed';
+COMMENT ON COLUMN "public"."composition_executions"."step_results" IS '各步骤执行结果(JSONB)';
+COMMENT ON COLUMN "public"."composition_executions"."final_output" IS '最终输出(JSONB)';
+COMMENT ON COLUMN "public"."composition_executions"."cache_hits" IS '缓存命中次数';
+COMMENT ON COLUMN "public"."composition_executions"."duration_ms" IS '总执行耗时(毫秒)';
+COMMENT ON COLUMN "public"."composition_executions"."creator" IS '创建人';
+COMMENT ON COLUMN "public"."composition_executions"."created_at" IS '创建时间';
+COMMENT ON COLUMN "public"."composition_executions"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."composition_executions"."completed_at" IS '完成时间';
+COMMENT ON COLUMN "public"."composition_executions"."deleted_at" IS '删除时间';
+COMMENT ON TABLE "public"."composition_executions" IS '技能组合执行记录表。存储组合的每次执行情况。';
+
+-- ----------------------------
 -- Table structure for config
 -- ----------------------------
 DROP TABLE IF EXISTS "public"."config";
@@ -1732,7 +1949,17 @@ CREATE TABLE "public"."config" (
   "creator" uuid,
   "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
+  "deleted_at" timestamptz(6),
+  "env_key" varchar COLLATE "pg_catalog"."default",
+  "config_group" varchar COLLATE "pg_catalog"."default" DEFAULT 'other'::character varying,
+  "config_type" varchar COLLATE "pg_catalog"."default" DEFAULT 'string'::character varying,
+  "is_sensitive" bool DEFAULT false,
+  "default_value" varchar COLLATE "pg_catalog"."default",
+  "validation_rule" varchar COLLATE "pg_catalog"."default",
+  "description" varchar COLLATE "pg_catalog"."default",
+  "display_order" int4 DEFAULT 0,
+  "editable" bool DEFAULT true,
+  "last_synced_at" timestamptz(6)
 )
 ;
 COMMENT ON COLUMN "public"."config"."name" IS '配置名称';
@@ -1745,6 +1972,16 @@ COMMENT ON COLUMN "public"."config"."creator" IS '创建人';
 COMMENT ON COLUMN "public"."config"."created_at" IS '创建时间';
 COMMENT ON COLUMN "public"."config"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "public"."config"."deleted_at" IS '删除时间';
+COMMENT ON COLUMN "public"."config"."env_key" IS '对应.env文件中的键名，唯一约束';
+COMMENT ON COLUMN "public"."config"."config_group" IS '配置分组标识：logging/environment/database/ssl/model/api_key/skill/mail/storage/token/other';
+COMMENT ON COLUMN "public"."config"."config_type" IS '配置项类型：string/int/bool/url/password/path/json';
+COMMENT ON COLUMN "public"."config"."is_sensitive" IS '是否为敏感配置项（脱敏显示）';
+COMMENT ON COLUMN "public"."config"."default_value" IS '配置项默认值';
+COMMENT ON COLUMN "public"."config"."validation_rule" IS '验证规则描述，如 port:1-65535、url、bool:true|false';
+COMMENT ON COLUMN "public"."config"."description" IS '配置项中文描述说明';
+COMMENT ON COLUMN "public"."config"."display_order" IS '在分组内的显示排序，数值越小越靠前';
+COMMENT ON COLUMN "public"."config"."editable" IS '是否允许通过界面编辑';
+COMMENT ON COLUMN "public"."config"."last_synced_at" IS 'config表与.env文件最后一致的时间';
 COMMENT ON TABLE "public"."config" IS '配置信息';
 
 -- ----------------------------
@@ -2375,6 +2612,45 @@ CREATE TABLE "public"."event_handlers" (
 COMMENT ON COLUMN "public"."event_handlers"."event_type" IS '事件类型(13种：ToolCallStart/End/Repeat/ChatModelStart/End/Failure/AgentStart/End/Step/SubAgentStart/End/Timeout/UserInput/Notify)';
 COMMENT ON COLUMN "public"."event_handlers"."handler_class" IS '处理器类全限定名';
 COMMENT ON TABLE "public"."event_handlers" IS '事件处理器注册表';
+
+-- ----------------------------
+-- Table structure for execution_evidences
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."execution_evidences";
+CREATE TABLE "public"."execution_evidences" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "agent_id" uuid NOT NULL,
+  "session_id" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "step_id" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "parent_step_id" varchar(100) COLLATE "pg_catalog"."default",
+  "step_type" varchar(20) COLLATE "pg_catalog"."default" NOT NULL,
+  "input" jsonb NOT NULL,
+  "output" jsonb,
+  "duration_ms" int8,
+  "side_effects" jsonb,
+  "hash" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "creator" uuid NOT NULL,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6) DEFAULT NULL::timestamp with time zone
+)
+;
+COMMENT ON COLUMN "public"."execution_evidences"."id" IS '证据唯一标识';
+COMMENT ON COLUMN "public"."execution_evidences"."agent_id" IS '关联agents表id';
+COMMENT ON COLUMN "public"."execution_evidences"."session_id" IS '执行会话ID';
+COMMENT ON COLUMN "public"."execution_evidences"."step_id" IS '步骤ID';
+COMMENT ON COLUMN "public"."execution_evidences"."parent_step_id" IS '父步骤ID';
+COMMENT ON COLUMN "public"."execution_evidences"."step_type" IS '步骤类型：decision/tool_call/task_transfer';
+COMMENT ON COLUMN "public"."execution_evidences"."input" IS '步骤输入(JSONB)';
+COMMENT ON COLUMN "public"."execution_evidences"."output" IS '步骤输出(JSONB)';
+COMMENT ON COLUMN "public"."execution_evidences"."duration_ms" IS '执行耗时(毫秒)';
+COMMENT ON COLUMN "public"."execution_evidences"."side_effects" IS '副作用记录(JSONB)';
+COMMENT ON COLUMN "public"."execution_evidences"."hash" IS '哈希链校验值(SHA-256)';
+COMMENT ON COLUMN "public"."execution_evidences"."creator" IS '创建人';
+COMMENT ON COLUMN "public"."execution_evidences"."created_at" IS '创建时间';
+COMMENT ON COLUMN "public"."execution_evidences"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."execution_evidences"."deleted_at" IS '删除时间';
+COMMENT ON TABLE "public"."execution_evidences" IS '执行证据表。记录Agent执行的每个步骤的完整证据链。';
 
 -- ----------------------------
 -- Table structure for faq
@@ -4494,6 +4770,82 @@ COMMENT ON COLUMN "public"."operate_log"."deleted_at" IS '删除时间';
 COMMENT ON TABLE "public"."operate_log" IS '操作记录';
 
 -- ----------------------------
+-- Table structure for orchestration_plans
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."orchestration_plans";
+CREATE TABLE "public"."orchestration_plans" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "name" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "status" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'draft'::character varying,
+  "dag_definition" jsonb NOT NULL,
+  "current_step" varchar(100) COLLATE "pg_catalog"."default",
+  "checkpoint" jsonb,
+  "result" jsonb,
+  "team_id" uuid,
+  "creator" uuid NOT NULL,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6) DEFAULT NULL::timestamp with time zone
+)
+;
+COMMENT ON COLUMN "public"."orchestration_plans"."id" IS '执行计划唯一标识';
+COMMENT ON COLUMN "public"."orchestration_plans"."name" IS '计划名称';
+COMMENT ON COLUMN "public"."orchestration_plans"."status" IS '状态：draft/scheduled/running/paused/completed/failed/rolling_back';
+COMMENT ON COLUMN "public"."orchestration_plans"."dag_definition" IS 'DAG定义(JSONB)，包含步骤和依赖关系';
+COMMENT ON COLUMN "public"."orchestration_plans"."current_step" IS '当前执行步骤名称';
+COMMENT ON COLUMN "public"."orchestration_plans"."checkpoint" IS '检查点(JSONB)，用于恢复执行';
+COMMENT ON COLUMN "public"."orchestration_plans"."result" IS '执行结果(JSONB)';
+COMMENT ON COLUMN "public"."orchestration_plans"."team_id" IS '关联agent_groups表id';
+COMMENT ON COLUMN "public"."orchestration_plans"."creator" IS '创建人';
+COMMENT ON COLUMN "public"."orchestration_plans"."created_at" IS '创建时间';
+COMMENT ON COLUMN "public"."orchestration_plans"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."orchestration_plans"."deleted_at" IS '删除时间';
+COMMENT ON TABLE "public"."orchestration_plans" IS 'DAG执行计划表。存储任务编排的执行计划和状态。';
+
+-- ----------------------------
+-- Table structure for orchestration_steps
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."orchestration_steps";
+CREATE TABLE "public"."orchestration_steps" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "plan_id" uuid NOT NULL,
+  "step_name" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "step_type" varchar(20) COLLATE "pg_catalog"."default" NOT NULL,
+  "target_ref" varchar(200) COLLATE "pg_catalog"."default" NOT NULL,
+  "input_mapping" jsonb,
+  "condition" varchar(500) COLLATE "pg_catalog"."default",
+  "depends_on" text[] COLLATE "pg_catalog"."default",
+  "status" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'pending'::character varying,
+  "result" jsonb,
+  "side_effects" jsonb,
+  "started_at" timestamptz(6) DEFAULT NULL::timestamp with time zone,
+  "completed_at" timestamptz(6) DEFAULT NULL::timestamp with time zone,
+  "creator" uuid NOT NULL,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6) DEFAULT NULL::timestamp with time zone
+)
+;
+COMMENT ON COLUMN "public"."orchestration_steps"."id" IS '步骤唯一标识';
+COMMENT ON COLUMN "public"."orchestration_steps"."plan_id" IS '关联orchestration_plans表id';
+COMMENT ON COLUMN "public"."orchestration_steps"."step_name" IS '步骤名称';
+COMMENT ON COLUMN "public"."orchestration_steps"."step_type" IS '步骤类型：skill/agent/condition/subplan';
+COMMENT ON COLUMN "public"."orchestration_steps"."target_ref" IS '目标引用（技能名或Agent类型）';
+COMMENT ON COLUMN "public"."orchestration_steps"."input_mapping" IS '输入映射(JSONB)';
+COMMENT ON COLUMN "public"."orchestration_steps"."condition" IS '条件表达式';
+COMMENT ON COLUMN "public"."orchestration_steps"."depends_on" IS '依赖步骤列表(JSONB数组)';
+COMMENT ON COLUMN "public"."orchestration_steps"."status" IS '状态：pending/running/completed/failed/skipped';
+COMMENT ON COLUMN "public"."orchestration_steps"."result" IS '步骤执行结果(JSONB)';
+COMMENT ON COLUMN "public"."orchestration_steps"."side_effects" IS '副作用记录(JSONB)';
+COMMENT ON COLUMN "public"."orchestration_steps"."started_at" IS '开始时间';
+COMMENT ON COLUMN "public"."orchestration_steps"."completed_at" IS '完成时间';
+COMMENT ON COLUMN "public"."orchestration_steps"."creator" IS '创建人';
+COMMENT ON COLUMN "public"."orchestration_steps"."created_at" IS '创建时间';
+COMMENT ON COLUMN "public"."orchestration_steps"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."orchestration_steps"."deleted_at" IS '删除时间';
+COMMENT ON TABLE "public"."orchestration_steps" IS 'DAG执行步骤表。存储执行计划中每个步骤的定义和状态。';
+
+-- ----------------------------
 -- Table structure for org_join_application
 -- ----------------------------
 DROP TABLE IF EXISTS "public"."org_join_application";
@@ -4715,6 +5067,75 @@ COMMENT ON COLUMN "public"."sensitive_word"."created_at" IS '创建时间';
 COMMENT ON COLUMN "public"."sensitive_word"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "public"."sensitive_word"."deleted_at" IS '删除时间';
 COMMENT ON TABLE "public"."sensitive_word" IS '敏感词';
+
+-- ----------------------------
+-- Table structure for skill_compositions
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."skill_compositions";
+CREATE TABLE "public"."skill_compositions" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "name" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "description" varchar(1024) COLLATE "pg_catalog"."default",
+  "definition" jsonb NOT NULL,
+  "source_path" varchar(500) COLLATE "pg_catalog"."default",
+  "template_ref" varchar(100) COLLATE "pg_catalog"."default",
+  "is_template" bool NOT NULL DEFAULT false,
+  "sync_status" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'synced'::character varying,
+  "creator" uuid NOT NULL,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6) DEFAULT NULL::timestamp with time zone
+)
+;
+COMMENT ON COLUMN "public"."skill_compositions"."id" IS '组合唯一标识';
+COMMENT ON COLUMN "public"."skill_compositions"."name" IS '组合名称';
+COMMENT ON COLUMN "public"."skill_compositions"."description" IS '组合描述';
+COMMENT ON COLUMN "public"."skill_compositions"."definition" IS '组合定义(JSONB)，包含步骤和依赖关系';
+COMMENT ON COLUMN "public"."skill_compositions"."source_path" IS 'COMPOSITION.yaml源文件路径';
+COMMENT ON COLUMN "public"."skill_compositions"."template_ref" IS '引用的模板名称';
+COMMENT ON COLUMN "public"."skill_compositions"."is_template" IS '是否为模板';
+COMMENT ON COLUMN "public"."skill_compositions"."sync_status" IS '同步状态：synced/pending/error';
+COMMENT ON COLUMN "public"."skill_compositions"."creator" IS '创建人';
+COMMENT ON COLUMN "public"."skill_compositions"."created_at" IS '创建时间';
+COMMENT ON COLUMN "public"."skill_compositions"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."skill_compositions"."deleted_at" IS '删除时间';
+COMMENT ON TABLE "public"."skill_compositions" IS '技能组合定义表。存储技能的声明式组合定义。';
+
+-- ----------------------------
+-- Table structure for skill_usage_stats
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."skill_usage_stats";
+CREATE TABLE "public"."skill_usage_stats" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "skill_name" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "use_count" int8 NOT NULL DEFAULT 0,
+  "view_count" int8 NOT NULL DEFAULT 0,
+  "modify_count" int8 NOT NULL DEFAULT 0,
+  "success_count" int8 NOT NULL DEFAULT 0,
+  "failure_count" int8 NOT NULL DEFAULT 0,
+  "state" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'experimental'::character varying,
+  "avg_execution_time_ms" float8 NOT NULL DEFAULT 0.0,
+  "user_rating" float8 NOT NULL DEFAULT 0.0,
+  "last_used_at" timestamptz(6),
+  "stats_detail" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "creator" uuid,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6)
+)
+;
+COMMENT ON COLUMN "public"."skill_usage_stats"."skill_name" IS '技能名称（唯一）';
+COMMENT ON COLUMN "public"."skill_usage_stats"."use_count" IS '使用次数';
+COMMENT ON COLUMN "public"."skill_usage_stats"."view_count" IS '查看次数';
+COMMENT ON COLUMN "public"."skill_usage_stats"."modify_count" IS '修改次数';
+COMMENT ON COLUMN "public"."skill_usage_stats"."success_count" IS '成功次数';
+COMMENT ON COLUMN "public"."skill_usage_stats"."failure_count" IS '失败次数';
+COMMENT ON COLUMN "public"."skill_usage_stats"."state" IS '技能状态：experimental/stable/recommended/deprecated/retired';
+COMMENT ON COLUMN "public"."skill_usage_stats"."avg_execution_time_ms" IS '平均执行耗时(毫秒)';
+COMMENT ON COLUMN "public"."skill_usage_stats"."user_rating" IS '用户评分(0.0-5.0)';
+COMMENT ON COLUMN "public"."skill_usage_stats"."last_used_at" IS '最近使用时间';
+COMMENT ON COLUMN "public"."skill_usage_stats"."stats_detail" IS '统计详情(JSON)';
+COMMENT ON TABLE "public"."skill_usage_stats" IS '技能使用统计表。存储技能的使用次数、成功率、状态等统计信息，支持技能自进化状态流转。';
 
 -- ----------------------------
 -- Table structure for sms_config
@@ -5539,6 +5960,41 @@ COMMENT ON COLUMN "public"."user_wallet_log"."created_at" IS '创建时间';
 COMMENT ON COLUMN "public"."user_wallet_log"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "public"."user_wallet_log"."deleted_at" IS '删除时间';
 COMMENT ON TABLE "public"."user_wallet_log" IS '用户提现记录';
+
+-- ----------------------------
+-- Table structure for verification_evidences
+-- ----------------------------
+DROP TABLE IF EXISTS "public"."verification_evidences";
+CREATE TABLE "public"."verification_evidences" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "agent_id" uuid NOT NULL,
+  "session_id" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "verification_type" varchar(20) COLLATE "pg_catalog"."default" NOT NULL,
+  "scope" varchar(20) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'session'::character varying,
+  "command" varchar(500) COLLATE "pg_catalog"."default",
+  "status" varchar(20) COLLATE "pg_catalog"."default" NOT NULL,
+  "exit_code" int4,
+  "output_summary" text COLLATE "pg_catalog"."default",
+  "creator" uuid NOT NULL,
+  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" timestamptz(6) DEFAULT NULL::timestamp with time zone
+)
+;
+COMMENT ON COLUMN "public"."verification_evidences"."id" IS '验证证据唯一标识';
+COMMENT ON COLUMN "public"."verification_evidences"."agent_id" IS '关联agents表id';
+COMMENT ON COLUMN "public"."verification_evidences"."session_id" IS '执行会话ID';
+COMMENT ON COLUMN "public"."verification_evidences"."verification_type" IS '验证类型：compile/test/business_rule';
+COMMENT ON COLUMN "public"."verification_evidences"."scope" IS '验证范围：session/repository';
+COMMENT ON COLUMN "public"."verification_evidences"."command" IS '验证命令';
+COMMENT ON COLUMN "public"."verification_evidences"."status" IS '验证状态：passed/failed/error';
+COMMENT ON COLUMN "public"."verification_evidences"."exit_code" IS '退出码';
+COMMENT ON COLUMN "public"."verification_evidences"."output_summary" IS '输出摘要';
+COMMENT ON COLUMN "public"."verification_evidences"."creator" IS '创建人';
+COMMENT ON COLUMN "public"."verification_evidences"."created_at" IS '创建时间';
+COMMENT ON COLUMN "public"."verification_evidences"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "public"."verification_evidences"."deleted_at" IS '删除时间';
+COMMENT ON TABLE "public"."verification_evidences" IS '验证证据表。记录编译、测试、业务规则验证的结构化结果。';
 
 -- ----------------------------
 -- Table structure for vmc
@@ -6483,6 +6939,19 @@ ALTER TABLE "public"."agent_executors" ADD CONSTRAINT "agent_executors_name_key"
 ALTER TABLE "public"."agent_executors" ADD CONSTRAINT "agent_executors_pkey" PRIMARY KEY ("id");
 
 -- ----------------------------
+-- Indexes structure for table agent_group_members
+-- ----------------------------
+CREATE INDEX "idx_group_members_agent" ON "public"."agent_group_members" USING btree (
+  "agent_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_group_members_group" ON "public"."agent_group_members" USING btree (
+  "group_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_group_members_role" ON "public"."agent_group_members" USING btree (
+  "role" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
 -- Indexes structure for table agent_groups
 -- ----------------------------
 CREATE INDEX "idx_agent_groups_creator" ON "public"."agent_groups" USING btree (
@@ -6501,6 +6970,49 @@ CREATE INDEX "idx_agent_groups_type" ON "public"."agent_groups" USING btree (
 ALTER TABLE "public"."agent_groups" ADD CONSTRAINT "agent_groups_pkey" PRIMARY KEY ("id");
 
 -- ----------------------------
+-- Indexes structure for table agent_kanban_tasks
+-- ----------------------------
+CREATE INDEX "idx_kanban_tasks_agent" ON "public"."agent_kanban_tasks" USING btree (
+  "agent_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_kanban_tasks_assignee" ON "public"."agent_kanban_tasks" USING btree (
+  "assignee" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_kanban_tasks_parent" ON "public"."agent_kanban_tasks" USING btree (
+  "parent_task_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_kanban_tasks_state" ON "public"."agent_kanban_tasks" USING btree (
+  "state" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
+-- Indexes structure for table agent_loop_metrics
+-- ----------------------------
+CREATE INDEX "idx_loop_metrics_agent" ON "public"."agent_loop_metrics" USING btree (
+  "agent_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_loop_metrics_session" ON "public"."agent_loop_metrics" USING btree (
+  "session_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_loop_metrics_time" ON "public"."agent_loop_metrics" USING btree (
+  "time_range_start" "pg_catalog"."timestamptz_ops" ASC NULLS LAST,
+  "time_range_end" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_loop_metrics_type" ON "public"."agent_loop_metrics" USING btree (
+  "evaluation_type" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
+-- Indexes structure for table agent_loop_tuning_configs
+-- ----------------------------
+CREATE INDEX "idx_tuning_configs_agent" ON "public"."agent_loop_tuning_configs" USING btree (
+  "agent_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_tuning_configs_strategy" ON "public"."agent_loop_tuning_configs" USING btree (
+  "strategy_type" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
 -- Indexes structure for table agent_memories
 -- ----------------------------
 CREATE INDEX "idx_agent_memories_agent" ON "public"."agent_memories" USING btree (
@@ -6512,6 +7024,12 @@ CREATE INDEX "idx_agent_memories_agent_scope" ON "public"."agent_memories" USING
 );
 CREATE INDEX "idx_agent_memories_scope" ON "public"."agent_memories" USING btree (
   "scope" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_memories_session" ON "public"."agent_memories" USING btree (
+  "session_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_memories_sharing" ON "public"."agent_memories" USING btree (
+  "sharing" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
 );
 
 -- ----------------------------
@@ -6623,6 +7141,22 @@ CREATE INDEX "idx_agent_tasks_status" ON "public"."agent_tasks" USING btree (
 -- Primary Key structure for table agent_tasks
 -- ----------------------------
 ALTER TABLE "public"."agent_tasks" ADD CONSTRAINT "agent_tasks_pkey" PRIMARY KEY ("id");
+
+-- ----------------------------
+-- Indexes structure for table agent_verification_records
+-- ----------------------------
+CREATE INDEX "idx_verification_records_evidence" ON "public"."agent_verification_records" USING btree (
+  "evidence_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_verification_records_status" ON "public"."agent_verification_records" USING btree (
+  "overall_status" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_verification_records_step" ON "public"."agent_verification_records" USING btree (
+  "step_name" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_verification_records_task" ON "public"."agent_verification_records" USING btree (
+  "task_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
 
 -- ----------------------------
 -- Indexes structure for table agents
@@ -6951,6 +7485,31 @@ ALTER TABLE "public"."company" ADD CONSTRAINT "company_pkey" PRIMARY KEY ("id");
 ALTER TABLE "public"."component_setting" ADD CONSTRAINT "component_setting_pkey" PRIMARY KEY ("id");
 
 -- ----------------------------
+-- Indexes structure for table composition_executions
+-- ----------------------------
+CREATE INDEX "idx_executions_composition" ON "public"."composition_executions" USING btree (
+  "composition_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_executions_status" ON "public"."composition_executions" USING btree (
+  "status" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
+-- Primary Key structure for table composition_executions
+-- ----------------------------
+ALTER TABLE "public"."composition_executions" ADD CONSTRAINT "pk_composition_executions" PRIMARY KEY ("id");
+
+-- ----------------------------
+-- Indexes structure for table config
+-- ----------------------------
+CREATE UNIQUE INDEX "idx_config_env_key" ON "public"."config" USING btree (
+  "env_key" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+) WHERE env_key IS NOT NULL;
+CREATE INDEX "idx_config_group" ON "public"."config" USING btree (
+  "config_group" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
 -- Primary Key structure for table config
 -- ----------------------------
 ALTER TABLE "public"."config" ADD CONSTRAINT "config_pkey" PRIMARY KEY ("id");
@@ -7106,6 +7665,27 @@ CREATE UNIQUE INDEX "idx_event_handlers_unique" ON "public"."event_handlers" USI
 -- Primary Key structure for table event_handlers
 -- ----------------------------
 ALTER TABLE "public"."event_handlers" ADD CONSTRAINT "event_handlers_pkey" PRIMARY KEY ("id");
+
+-- ----------------------------
+-- Indexes structure for table execution_evidences
+-- ----------------------------
+CREATE INDEX "idx_evidences_agent" ON "public"."execution_evidences" USING btree (
+  "agent_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_evidences_hash" ON "public"."execution_evidences" USING btree (
+  "hash" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_evidences_session" ON "public"."execution_evidences" USING btree (
+  "session_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_evidences_step" ON "public"."execution_evidences" USING btree (
+  "step_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
+-- Primary Key structure for table execution_evidences
+-- ----------------------------
+ALTER TABLE "public"."execution_evidences" ADD CONSTRAINT "pk_execution_evidences" PRIMARY KEY ("id");
 
 -- ----------------------------
 -- Primary Key structure for table faq
@@ -7518,6 +8098,48 @@ ALTER TABLE "public"."module_config" ADD CONSTRAINT "module_config_pkey" PRIMARY
 ALTER TABLE "public"."operate_log" ADD CONSTRAINT "operate_log_pkey" PRIMARY KEY ("id");
 
 -- ----------------------------
+-- Indexes structure for table orchestration_plans
+-- ----------------------------
+CREATE INDEX "idx_orch_plans_status" ON "public"."orchestration_plans" USING btree (
+  "status" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_orch_plans_team" ON "public"."orchestration_plans" USING btree (
+  "team_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_orchestration_plans_status" ON "public"."orchestration_plans" USING btree (
+  "status" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_orchestration_plans_team" ON "public"."orchestration_plans" USING btree (
+  "team_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
+-- Primary Key structure for table orchestration_plans
+-- ----------------------------
+ALTER TABLE "public"."orchestration_plans" ADD CONSTRAINT "pk_orchestration_plans" PRIMARY KEY ("id");
+
+-- ----------------------------
+-- Indexes structure for table orchestration_steps
+-- ----------------------------
+CREATE INDEX "idx_orch_steps_plan" ON "public"."orchestration_steps" USING btree (
+  "plan_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_orch_steps_status" ON "public"."orchestration_steps" USING btree (
+  "status" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_steps_plan" ON "public"."orchestration_steps" USING btree (
+  "plan_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_steps_status" ON "public"."orchestration_steps" USING btree (
+  "status" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
+-- Primary Key structure for table orchestration_steps
+-- ----------------------------
+ALTER TABLE "public"."orchestration_steps" ADD CONSTRAINT "pk_orchestration_steps" PRIMARY KEY ("id");
+
+-- ----------------------------
 -- Indexes structure for table org_join_application
 -- ----------------------------
 CREATE INDEX "idx_oja_company_id" ON "public"."org_join_application" USING btree (
@@ -7613,6 +8235,31 @@ ALTER TABLE "public"."role_has_permission" ADD CONSTRAINT "role_has_permission_p
 -- Primary Key structure for table sensitive_word
 -- ----------------------------
 ALTER TABLE "public"."sensitive_word" ADD CONSTRAINT "sensitive_word_pkey" PRIMARY KEY ("id");
+
+-- ----------------------------
+-- Indexes structure for table skill_compositions
+-- ----------------------------
+CREATE INDEX "idx_compositions_name" ON "public"."skill_compositions" USING btree (
+  "name" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_compositions_template" ON "public"."skill_compositions" USING btree (
+  "is_template" "pg_catalog"."bool_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
+-- Primary Key structure for table skill_compositions
+-- ----------------------------
+ALTER TABLE "public"."skill_compositions" ADD CONSTRAINT "pk_skill_compositions" PRIMARY KEY ("id");
+
+-- ----------------------------
+-- Indexes structure for table skill_usage_stats
+-- ----------------------------
+CREATE UNIQUE INDEX "idx_skill_usage_stats_name" ON "public"."skill_usage_stats" USING btree (
+  "skill_name" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_skill_usage_stats_state" ON "public"."skill_usage_stats" USING btree (
+  "state" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
 
 -- ----------------------------
 -- Primary Key structure for table sms_config
@@ -7898,6 +8545,24 @@ ALTER TABLE "public"."user_wallet_apply" ADD CONSTRAINT "user_wallet_apply_pkey"
 ALTER TABLE "public"."user_wallet_log" ADD CONSTRAINT "user_wallet_log_pkey" PRIMARY KEY ("id");
 
 -- ----------------------------
+-- Indexes structure for table verification_evidences
+-- ----------------------------
+CREATE INDEX "idx_verification_agent" ON "public"."verification_evidences" USING btree (
+  "agent_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_verification_session" ON "public"."verification_evidences" USING btree (
+  "session_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_verification_type" ON "public"."verification_evidences" USING btree (
+  "verification_type" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+-- ----------------------------
+-- Primary Key structure for table verification_evidences
+-- ----------------------------
+ALTER TABLE "public"."verification_evidences" ADD CONSTRAINT "pk_verification_evidences" PRIMARY KEY ("id");
+
+-- ----------------------------
 -- Primary Key structure for table vmc
 -- ----------------------------
 ALTER TABLE "public"."vmc" ADD CONSTRAINT "vmc_pkey" PRIMARY KEY ("id");
@@ -8074,6 +8739,11 @@ ALTER TABLE "public"."aip_interaction_task" ADD CONSTRAINT "fk_aip_task_session"
 ALTER TABLE "public"."chat_messages" ADD CONSTRAINT "chat_messages_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "public"."chat_conversations" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- ----------------------------
+-- Foreign Keys structure for table composition_executions
+-- ----------------------------
+ALTER TABLE "public"."composition_executions" ADD CONSTRAINT "fk_executions_composition" FOREIGN KEY ("composition_id") REFERENCES "public"."skill_compositions" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+-- ----------------------------
 -- Foreign Keys structure for table entity
 -- ----------------------------
 ALTER TABLE "public"."entity" ADD CONSTRAINT "Entity_creatorId_fkey" FOREIGN KEY ("creator") REFERENCES "public"."uctoo_user" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
@@ -8099,6 +8769,11 @@ ALTER TABLE "public"."i18" ADD CONSTRAINT "i18_lang_id_fkey" FOREIGN KEY ("lang_
 -- Foreign Keys structure for table minishop_store
 -- ----------------------------
 ALTER TABLE "public"."minishop_store" ADD CONSTRAINT "minishop_store_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."minishop_store" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- ----------------------------
+-- Foreign Keys structure for table orchestration_steps
+-- ----------------------------
+ALTER TABLE "public"."orchestration_steps" ADD CONSTRAINT "fk_steps_plan" FOREIGN KEY ("plan_id") REFERENCES "public"."orchestration_plans" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- ----------------------------
 -- Foreign Keys structure for table permissions

@@ -1,9 +1,9 @@
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_exception  = {path = "../f_exception", version = "1.0.45"}
+  f_base  = {path = "../f_base"}
+  f_exception  = {path = "../f_exception"}
   
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "IO模块"
@@ -20,7 +20,6 @@
   authors = ["吴京润"]
 
 [profile.build]
-#  lto = "full"
   incremental = true
 
 [target]

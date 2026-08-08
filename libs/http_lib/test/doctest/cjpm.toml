@@ -1,0 +1,11 @@
+[package]
+  cjc-version = "1.0.5"
+  name = "doctest"
+  version = "1.0.0"
+  output-type = "executable"
+  compile-option = "-Woff unused"
+  src-dir = "src"
+  target-dir = "target"
+
+[dependencies]
+  http_lib = { path = "../.." }

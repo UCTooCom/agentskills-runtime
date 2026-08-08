@@ -64,6 +64,21 @@ public class AgentMemoriesPO {
         @ORMField['deleted_at']
     public var deletedAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['sharing']
+    public var sharing: String = ""
+
+        @ORMField['access_count']
+    public var accessCount: Int32 = 0
+
+        @ORMField['source_session']
+    public var sourceSession: Option<String> = None<String>
+
+        @ORMField['source_agent']
+    public var sourceAgent: Option<String> = None<String>
+
+        @ORMField['expires_at']
+    public var expiresAt: Option<DateTime> = None<DateTime>
+
     public init() {}
 
     public init(
@@ -80,7 +95,12 @@ public class AgentMemoriesPO {
                 creator: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
-                deletedAt: Option<DateTime>
+                deletedAt: Option<DateTime>,
+                sharing: String,
+                accessCount: Int32,
+                sourceSession: Option<String>,
+                sourceAgent: Option<String>,
+                expiresAt: Option<DateTime>
     ) {
                 this.id = id
                 this.agentId = agentId
@@ -96,6 +116,11 @@ public class AgentMemoriesPO {
                 this.createdAt = createdAt
                 this.updatedAt = updatedAt
                 this.deletedAt = deletedAt
+                this.sharing = sharing
+                this.accessCount = accessCount
+                this.sourceSession = sourceSession
+                this.sourceAgent = sourceAgent
+                this.expiresAt = expiresAt
     }
 
     /// 序列化为 JsonValue
@@ -115,6 +140,11 @@ public class AgentMemoriesPO {
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("sharing", this.sharing.toJsonValue())
+        map.add("access_count", this.accessCount.toJsonValue())
+        map.add("source_session", optionToJsonValue(this.sourceSession))
+        map.add("source_agent", optionToJsonValue(this.sourceAgent))
+        map.add("expires_at", optionToJsonValue(this.expiresAt))
         return JsonObject(map)
     }
 

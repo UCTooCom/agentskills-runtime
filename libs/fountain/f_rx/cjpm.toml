@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   name = "f_rx"
   description = "反应式编程"
   version = "1.0.45"
@@ -16,11 +16,10 @@
   authors = ["吴京润"]
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_concurrent  = {path = "../f_concurrent", version = "1.0.45"}
+  f_base  = {path = "../f_base"}
+  f_concurrent  = {path = "../f_concurrent"}
 
 [profile.build]
-#  lto = "full"
   incremental = true
 
 [target]

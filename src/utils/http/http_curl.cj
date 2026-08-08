@@ -15,7 +15,7 @@ import std.regex.Regex
 import std.convert.Parsable
 
 import stdx.encoding.json.*
-import stdx.net.http.HttpHeaders
+import http_lib.core.HttpHeaders
 @When[cjc_version < "1.0.0"]
 import std.core.Duration
 

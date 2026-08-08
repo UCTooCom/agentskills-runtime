@@ -13,7 +13,9 @@ import magic.app.models.uctoo.AgentMessagesPO
 import magic.app.services.uctoo.AgentMessagesService
 import magic.tool.{TokenManager, SessionContext}
 import f_util.UUID
-import stdx.net.http.{HttpContext, WebSocket, WebSocketFrameType, HttpHeaders}
+import http_lib.server.{WebSocketConn, ConnectionController, WebSocketOpcode, WebSocketMessage as LibWsMessage}
+import http_lib.message.{HttpRequest as LibHttpRequest, HttpResponse as LibHttpResponse}
+import http_lib.core.HttpStatus
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonArray}
 import std.time.DateTime
 import std.sync.Mutex
@@ -68,29 +70,33 @@ public class WsChatController {
     }
     
     /**
-     * 处理 WebSocket 聊天连接（使用 HttpContext，直接处理）
+     * 处理 WebSocket 聊天连接（使用 http_lib HttpRequest）
      * WS /api/v1/uctoo/ws/chat
      */
-    public func handleChat(ctx: HttpContext): Unit {
-        handleWebSocket(ctx)
+    public func handleChat(req: LibHttpRequest): LibHttpResponse {
+        match (req.connection) {
+            case Some(conn) =>
+                let controller = ConnectionController(conn)
+                try {
+                    controller.upgradeToWebSocket(req)
+                } catch (ex: Exception) {
+                    return LibHttpResponse.text(HttpStatus.BAD_REQUEST, "WebSocket upgrade failed: ${ex.message}")
+                }
+
+                let wsConn = WebSocketConn(conn)
+                handleWebSocketSession(wsConn)
+                return LibHttpResponse.empty(HttpStatus.OK)
+            case None =>
+                return LibHttpResponse.text(HttpStatus.INTERNAL_SERVER_ERROR, "Connection hijack not supported")
+        }
     }
 
     /**
-     * 处理 WebSocket 连接（使用 HttpContext）
+     * 处理 WebSocket 会话
      */
-    public func handleWebSocket(ctx: HttpContext): Unit {
-        let websocket = WebSocket.upgradeFromServer(
-            ctx,
-            subProtocols: ArrayList<String>(["skill-chat", "agent-execution"]),
-            userFunc: { _ =>
-                let headers = HttpHeaders()
-                headers.add("X-Connection-Type", "skill-chat")
-                headers
-            }
-        )
-
+    private func handleWebSocketSession(wsConn: WebSocketConn): Unit {
         let sessionId = _generateSessionId()
-        let session = WebSocketSession(sessionId, websocket)
+        let session = WebSocketSession(sessionId, wsConn)
 
         _sessionsMutex.lock()
         _sessions.add(sessionId, session)
@@ -136,22 +142,23 @@ public class WsChatController {
     }
 
     private func _messageLoop(session: WebSocketSession): Unit {
-        var frame = session.websocket.read()
+        var msgOpt = session.websocket.readMessage()
         while (true) {
-            match (frame.frameType) {
-                case WebSocketFrameType.TextWebFrame =>
-                    let message = String.fromUtf8(frame.payload)
-                    _handleTextMessage(session, message)
-                case WebSocketFrameType.BinaryWebFrame =>
-                    _handleBinaryMessage(session, frame.payload)
-                case WebSocketFrameType.CloseWebFrame =>
-                    session.websocket.write(WebSocketFrameType.CloseWebFrame, frame.payload)
+            match (msgOpt) {
+                case Some(msg) =>
+                    if (msg.isText()) {
+                        _handleTextMessage(session, msg.text())
+                    } else if (msg.isBinary()) {
+                        _handleBinaryMessage(session, msg.data)
+                    } else if (msg.isClose()) {
+                        break
+                    } else if (msg.isPing()) {
+                        session.websocket.writePong(msg.data)
+                    }
+                case None =>
                     break
-                case WebSocketFrameType.PingWebFrame =>
-                    session.websocket.writePongFrame(frame.payload)
-                case _ => ()
             }
-            frame = session.websocket.read()
+            msgOpt = session.websocket.readMessage()
         }
         session.close()
     }

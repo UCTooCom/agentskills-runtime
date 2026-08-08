@@ -1,6 +1,10 @@
 package magic.mcp
 
-import stdx.net.http.*
+import http_lib.server.{HttpServer, HttpServerConfig, ConnectionController}
+import http_lib.router.{Router, Handler}
+import http_lib.message.{HttpRequest, HttpResponse}
+import http_lib.core.{HttpStatus, HttpHeaders}
+import http_lib.connection.Connection
 import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.time.*
@@ -11,81 +15,76 @@ import magic.jsonable.*
 import magic.core.tool.Tool
 import magic.utils.{randomString}
 
-import stdx.net.http.*
-
-extend HttpContext {
-    public func startSSE(): Unit {
-        this.responseBuilder.header("Content-Type", "text/event-stream")
-        this.responseBuilder.header("Cache-Control", "no-cache")
-        this.responseBuilder.header("Connection", "keep-alive")
-        this.responseBuilder.header("Transfer-Encoding", "chunked")
-        this.responseBuilder.status(200)
-    }
-}
-
 public class SseMCPServer <: AbsMCPServer {
-    var client_map = ConcurrentHashMap<String, HttpResponseWriter>()
+    var client_map = ConcurrentHashMap<String, Connection>()
 
     public init(tools: Array<Tool>) {
         super(tools)
     }
 
     public func start(host: String, port: UInt16): Unit {
-        let http_server = ServerBuilder().addr(host).port(port).build()
+        let router = Router()
 
-        let sseHandler: HttpRequestHandler = FuncHandler({ httpContext =>
-            if (httpContext.request.method != "GET") {
-                return
-            }
+        router.get("/sse", { req: HttpRequest =>
+            match (req.connection) {
+                case Some(conn) =>
+                    let controller = ConnectionController(conn)
+                    controller.write(unsafe { "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n".rawData() })
+                    req.takenOver = true
 
-            httpContext.startSSE()
+                    let uuid = randomString(size: 12)
+                    controller.write(unsafe { "event: endpoint\ndata: /messages/?session_id=${uuid}\n\n".rawData() })
+                    this.client_map.add(uuid, conn)
 
-            let writer = HttpResponseWriter(httpContext)
-            let uuid = randomString(size: 12)
-
-            writer.write("event: endpoint\ndata: /messages/?session_id=${uuid}\n\n".toArray())
-            this.client_map.add(uuid, writer)
-
-            while (true) {
-                sleep(Duration.second * 8)
-                try {
-                    writer.write(": ping - ${DateTime.now()}\n\n".toArray())
-                } catch (e: Exception) {
-                    LogUtils.error("Client: ${uuid} ${e.message}")
-                    this.client_map.remove(uuid)
-                    break
-                }
+                    spawn {
+                        while (true) {
+                            sleep(Duration.second * 8)
+                            try {
+                                conn.write(unsafe { ": ping - ${DateTime.now()}\n\n".rawData() })
+                                conn.flush()
+                            } catch (e: Exception) {
+                                LogUtils.error("Client: ${uuid} ${e.message}")
+                                this.client_map.remove(uuid)
+                                break
+                            }
+                        }
+                    }
+                    return HttpResponse.empty(HttpStatus.OK)
+                case None =>
+                    return HttpResponse.text(HttpStatus.INTERNAL_SERVER_ERROR, "Connection hijack not supported")
             }
         })
 
-        var messagesHandler: HttpRequestHandler = FuncHandler({ httpContext =>
-            if (httpContext.request.method != "POST") {
-                return
+        router.post("/messages/", { req: HttpRequest =>
+            let bodyBytes = req.bodyAsBytes()
+            let msg = String.fromUtf8(bodyBytes)
+
+            let queryString = match (req.url.indexOf("?")) {
+                case Some(idx) => req.url[idx + 1..]
+                case None => ""
+            }
+            let params = queryString.split("&")
+            var uuidVar = ""
+            for (param in params) {
+                let parts = param.split("=")
+                if (parts.size == 2 && parts[0] == "session_id") {
+                    uuidVar = parts[1]
+                }
             }
 
-            let query = httpContext.request.url.queryForm
-            let length = httpContext.request.bodySize
-
-            let stream = Array<UInt8>(length.getOrThrow(), repeat: 0)
-            httpContext.request.body.read(stream)
-
-            let msg = String.fromUtf8(stream)
-            let uuid = query.get("session_id").getOrThrow().toString()
-
+            let uuid = uuidVar
             LogUtils.info("Recv: ${uuid}: ${msg}")
-
-            httpContext.responseBuilder.status(202)
-            httpContext.responseBuilder.body("Accepted")
 
             spawn {
                 this.loop(msg, uuid)
             }
+
+            return HttpResponse.text(HttpStatus(202), "Accepted")
         })
 
-        http_server.distributor.register("/sse", sseHandler)
-        http_server.distributor.register("/messages/", messagesHandler)
-
-        http_server.serve()
+        let config = HttpServerConfig()
+        let server = HttpServer(handler: router.handler(), config: config)
+        server.listenAndServe(host, port)
     }
 
     public func loop(msg: String, uuid: String): Unit {
@@ -96,7 +95,13 @@ public class SseMCPServer <: AbsMCPServer {
 
     private func send(msg: String, uuid: String): Unit {
         LogUtils.info("Send: ${uuid}: ${msg}")
-        client_map.get(uuid).getOrThrow().write("event: message\ndata: ${msg}\n\n".toArray())
+        match (client_map.get(uuid)) {
+            case Some(conn) =>
+                conn.write(unsafe { "event: message\ndata: ${msg}\n\n".rawData() })
+                conn.flush()
+            case None =>
+                LogUtils.error("Client not found: ${uuid}")
+        }
     }
 
     private func send<T>(response: T, uuid: String): Unit where T <: ToJsonValue {
@@ -115,7 +120,6 @@ public class SseMCPServer <: AbsMCPServer {
         let allTools = ArrayList<Tool>()
         for (agent in agents) {
             allTools.add(all: agent.toolManager.tools)
-            // The agent itself is also a tool
             allTools.add(AgentAsTool(agent))
         }
         let server = SseMCPServer(allTools.toArray())

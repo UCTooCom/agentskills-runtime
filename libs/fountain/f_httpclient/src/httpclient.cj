@@ -244,7 +244,7 @@ extend HttpResponse <: ExtendHttpResponse {
 public class MultipartFormDataBuilder {
     private let data = MultipartFormData()
     MultipartFormDataBuilder(private let client: HttpClient){
-        client.header('Content-Type', 'multipart/form-data, boundary=${data.boundary}')
+        client.header('Content-Type', 'multipart/form-data; boundary=${data.boundary}')
     }
     public func newPart(): MultipartFileBuilder{
         data.newPart()

@@ -48,11 +48,11 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
      */
     | Contains(String)
     /**
-     * 传on的字符串是构造器参数的子串
+     * 传入on的字符串是构造器参数的子串
      */
     | In(String)
 
-    public func toString() {
+    public func toString(): String {
         match (this) {
             case IgnoreCond => 'IgnoreCond'
             case Exactly(n) => 'Exactly(${n})'
@@ -85,7 +85,7 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
             }
         }
     }
-    public operator func ==(right: StringCond) {
+    public operator func ==(right: StringCond): Bool {
         match ((this, right)) {
             case (IgnoreCond, IgnoreCond) => true
             case (Exactly(a), Exactly(b)) => a == b
@@ -98,7 +98,7 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
             case _ => false
         }
     }
-    public operator func ==(right: String) {
+    public operator func ==(right: String): Bool {
         this == Exactly(right)
     }
 }

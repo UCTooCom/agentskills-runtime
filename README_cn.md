@@ -50,25 +50,79 @@ AgentSkills Runtime 是一个全面的框架，用于构建和执行 AI 智能�
 
 ## 落地案例与价值说明书 (Business Case & Value Proposition)
 
-### 4.1 行业业务痛点
-在当前的AI Agent领域面临以下核心痛点：
-1. **Agent与传统ICT数字基础设施缺少集成**：Agent系统大部分情况下都是新建了一个独立的烟囱系统，和传统ICT数字基础设施缺少集成，这是影响Agent落地最后1公里面临的主要问题。  
-2. **Agent安全性达不到企业级要求**：很多Claw类智能体项目缺少完善的安全机制，导致在企业环境中应用存在安全风险。  
-3. **Agent的自进化机制不完善**：很多Agent自进化机制仅限于skills的进化，缺少对Agent自身代码以及数据库的进化能力。  
+> **参赛作品**：金融行业应用 Agent 黑客松（2026/07/27 - 2026/08/08）
+> **演示视频**：[智能投研助理 Demo 录屏](./public/demo.mp4)
+> **项目源码**：https://atomgit.com/UCToo/agentskills-runtime
+> **技术文档**：本 README（产品文档 + 架构设计 + 核心模块 + 性能数据）
 
-### 4.2 落地实施方案
-本 Agent 项目已具备完整的企业级落地实施能力：
-1. **AI驱动开发框架**：本项目将Agent与高性能服务器端应用进行了有机集成，形成了继harness之后的AIAgent领域新物种AI驱动开发框架,特性对比详见apps\agentskills-runtime\docs\ref 目录中的文档。作者受邀在2026.04.24仓颉伙伴发展与开发者交流大会，做了《仓颉智能体框架设计哲学》主题演讲，发布了AI驱动开发框架的理念。https://mp.weixin.qq.com/s/X-jKkA2R0nKvoXr6Xi9bcQ  
-2. **采用仓颉编程语言实现强安全特性**：
-   - 本项目采用仓颉编程语言实现了MCP、WebMCP、AgentSkills、AGENTS.md等AI领域的标准和规范，形成全链路自主可控AIAgent基础设施。  
-   - 本项目采用了Agent与人类用户一致使用行为对齐的设计理念，所有的API、CLI等都受RBAC权限系统保护，确保了Agent操作的安全性。  
-3. **skills+代码+数据库的自进化**：本项目内置crudgen和crudweb等工具，可从数据库结构确定性生成多端一致协同的CRUD标准模块代码，实现代码定义规范CDS特性。确保了AI驱动开发框架自主代码+数据库进化的架构稳定不腐化。    
+### 4.1 落地场景
 
-### 4.3 场景复用能力 (可扩展性)
-本项目已经在多个极客松/黑客松项目中得到验证，具备极强的快速开发能力和场景复用价值：
-- **暖守黑客松项目**： https://atomgit.com/UCToo/nuanshou 在她启黑客松中36小时急速开发暖守项目，实现WebServer+WebAdmin+WebAPP全栈可运营级交付开发成果，获得二等奖。并在华为云开发者训练营第七期进行了《codearts+仓颉急速通关AI黑客松》线上直播分享   
-- **WayToAGI**：2026.06.15入选WayToAGI+红衫的AGI Builder活动，但是活动官网https://www.agibuilder.ai/ 不具有任何AI能力，作者采用本项目仅用一天时间（不到）完全重写实现了agibuilder.ai的全部功能，并且支持了WebMCP+WebAgent+WebSkills的AI驱动bashboard特性。
-- **采用Crontab可配置的Loop特性**：最近被一些国外开发者带火的Agent Loop理念，本项目在上个月发布的0.0.22版本中即已采用Crontab机制实现了开发框架级别的自由计划任务配置，比业界大部分Agent Loop更加强大和灵活。要实现全链路AI基础设施的自主可控首先要破除技术媚外。  
+本作品面向金融行业真实业务场景，以"智能投研助理（Investment Research Assistant）"为典型落地应用，实现金融行业 Agent 核心场景"自动抓取 → 数据清洗 → 要素提取 → 研报生成 → 结果落库 → 每日投资简报"的全流程自动化：
+
+1. **智能投研与每日投资简报**：自动抓取行情/公告/新闻等多源数据，清洗去重，提取估值、财务、事件、情绪等关键投资要素，生成结构化每日投资简报，按公司写入 `company` 表、研报内容写入 `tasks` 表，通过 aibuilder 模块可视化呈现，替代人工整理研报的低效流程。
+2. **金融行业 Agent 基础设施**：AgentSkills Runtime 提供标准化的技能运行环境（SKILL.md 加载校验、WASM 沙箱、RBAC 权限、MCP/WebMCP 集成、审计日志），金融业务 Agent 可在其上快速开发与安全运行，满足信创与合规要求。
+3. **金融业务系统集成**：基于仓颉语言高性能应用服务器（HTTP/HTTPS、WebSocket、SSE），Agent 与传统金融 ICT 基础设施无缝集成，打通数据抓取、分析、落库、呈现的完整闭环。
+
+### 4.2 目标客户
+
+| 客户类型 | 典型场景 | 价值主张 |
+|---------|---------|---------|
+| 券商/基金投研部门 | 每日投资简报、个股分析、行业研报 | 研报生产效率提升，标准化输出 |
+| 银行/保险财富管理 | 客户持仓分析、市场资讯聚合 | 投顾内容自动化，提升服务覆盖面 |
+| 金融科技公司 | Agent 应用开发平台、投研数据服务 | 快速交付业务 Agent，降低开发成本 |
+| 金融监管/研究机构 | 市场数据监测、舆情分析 | 数据合规留痕，审计可追溯 |
+| 开发者/开源社区 | Agent 技能开发、标准实践 | 开放标准、国产自主可控技术栈 |
+
+### 4.3 商业模式
+
+1. **开源社区版（免费）**：AgentSkills Runtime 以 MIT 协议开源，提供完整技能运行环境与智能投研助理技能（investment-research-assistant），吸引开发者生态共建。
+2. **企业私有化部署（License）**：面向金融机构提供私有化部署版本，内置 PostgreSQL、RBAC 权限体系、审计日志、国产化技术栈（仓颉 + 昇腾算力），满足金融信创与数据安全要求，按年度 License 收费。
+3. **云服务订阅（SaaS）**：提供托管式 Agent 运行平台与智能投研服务订阅，按席位/调用量计费，降低中小金融机构的 AI 应用门槛。可与公有云及大模型厂商等产业链上下游合作，开源项目已支持云原生部署和多渠道大模型接入。
+4. **增值服务**：行业技能定制开发、数据源接入集成、系统部署运维、培训与技术支持等专业服务收入。
+
+### 4.4 参赛作品：智能投研助理技能（investment-research-assistant）
+
+本次参赛核心交付物为 `skills/investment-research-assistant` 技能，实现"**自动抓取 → 数据清洗 → 要素提取 → 研报生成 → 结果落库 → 每日投资简报**"六步全流程 SOP：
+
+| 环节 | 实现 | 说明 |
+|------|------|------|
+| 1. 自动抓取 | `scripts/fetch_market_data.py` + `web_fetch` / `http_request` | 行情/公告/新闻/宏观多源合规数据抓取 |
+| 2. 数据清洗 | `scripts/clean_market_data.py` | 去重、去噪、格式统一、无效数据剔除 |
+| 3. 要素提取 | `scripts/extract_factors.py` | 估值/财务/事件/情绪等投资要素 |
+| 4. 研报生成 | 昇腾 API（AtomGit）大模型 | 结构化每日投资简报（含结论/看点/风险提示） |
+| 5. 结果落库 | `scripts/save_report_to_db.py` | 公司写入 `company` 表、研报写入 `tasks` 表 |
+| 6. 简报输出 | `COMPOSITION.yaml` 声明式编排 | 通过 aibuilder 模块可视化呈现 |
+
+- **输入参数**：`companies`（如 `600519,000858`）、`date`、`data_sources`、`output_dir`
+- **输出产物**：`output/raw/`、`output/clean/`、`output/factors/`、`output/brief/` + 数据库落库记录
+- **算力底座**：昇腾 AI（AtomGit 昇腾 API，OpenAI 兼容接口，通过 runtime `.env` 配置）
+
+**如何使用与复现**：
+
+```bash
+# 方式一：通过 runtime 技能执行（推荐，走全流程编排）
+skill run investment-research-assistant:generate-daily-brief companies="600519,000858"
+
+# 方式二：直接运行脚本（逐步复现）
+python3 scripts/fetch_market_data.py --companies "600519,000858"
+python3 scripts/clean_market_data.py --input output/raw/2026-08-07.json
+python3 scripts/extract_factors.py --input output/clean/2026-08-07.json
+python3 scripts/save_report_to_db.py --report output/brief/2026-08-07.md
+```
+
+### 4.5 规范驱动开发方法论（评审指南）
+
+本作品严格遵循**规范驱动开发（Specification-Driven Development）**方法论，全流程按"需求规格 → 技术设计 → 任务清单 → 编码落地 → 验证发布"的规范链路交付，全部工程文档位于 `.codeartsdoer/specs/fintech-agent-hackathon/` 目录：
+
+| 文档 | 定位（定义什么） | 评审重点 |
+|------|----------------|---------|
+| `comp.md` | 赛事要求（比赛规则 / 评审标准） | 对照金融场景、必须能跑、解决真问题三个硬性要求 |
+| `spec.md` | 需求规格（做什么） | 功能范围、六步 SOP、合规与安全边界 |
+| `design.md` | 技术设计（怎么做） | 总体架构图、技术选型、数据流设计 |
+| `tasks.md` | 编码任务清单（按什么顺序做） | 阶段划分与完成状态（Phase 0-5） |
+| `publish.md` | 提交要求（交付什么） | 交付件清单（可运行代码 + 录屏 + 技术文档 + 商业化说明） |
+
+**评审建议**：评委可先阅读 `comp.md` 对照赛事要求，再按 `spec.md → design.md → tasks.md` 顺序查阅工程文档理解设计链路；实际运行验证请参考 4.4 节"如何使用与复现"步骤，重点考察作品是否满足"金融场景、必须能跑、解决真问题"三个硬性要求，以及是否运行在昇腾 AI 算力底座之上。
 
 ## 架构设计
 

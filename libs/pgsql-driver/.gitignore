@@ -1,0 +1,16 @@
+# Cangjie build artifacts
+/target/
+
+# Coverage reports
+/cov_output/
+/cov_report/
+*.gcda
+*.gcno
+
+# Cangjie language-server / tooling cache (AST data, symbol index)
+/.cache/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/

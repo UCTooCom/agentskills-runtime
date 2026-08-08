@@ -10,8 +10,7 @@ import stdx.encoding.json.JsonValue
 import std.core.StringBuilder
 import std.collection.ArrayList
 import std.io.StringReader
-import stdx.net.http.*
-import stdx.net.tls.*
+
 import std.time.*
 import magic.config.Config
 import stdx.encoding.json.JsonObject

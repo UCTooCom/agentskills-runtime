@@ -1,0 +1,9 @@
+[package]
+cjc-version = "1.0.5"
+name = "sample_unbuffered"
+version = "1.0.0"
+description = "无缓冲通道同步握手演示"
+output-type = "executable"
+
+[dependencies]
+channel_cj = { path = "../..", output-type = "static" }

@@ -1,0 +1,9 @@
+[package]
+cjc-version = "1.0.5"
+name = "sample_fan_out"
+version = "1.0.0"
+description = "扇出模式演示"
+output-type = "executable"
+
+[dependencies]
+channel_cj = { path = "../..", output-type = "static" }

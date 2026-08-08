@@ -6,22 +6,21 @@
 [workspace]
   version = "1.0.45"
   members=["./boot", "./user"]
-  compile-option = "--dy-std -Woff unused"
-  override-compile-option = "--dy-std -Woff unused"
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
 
 [profile.build]
-##  lto = "full"
   incremental = true
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "--dy-std -Woff unused"
-  override-compile-option = "--dy-std -Woff unused"
+  compile-option = "-O2 --lto=full --dy-std -Woff unused"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff unused"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "--dy-std -Woff unused"
-  override-compile-option = "--dy-std -Woff unused"
+  compile-option = "-O2 --lto=full --dy-std -Woff unused"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff unused"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-w64-mingw32]

@@ -42,7 +42,7 @@ Phase 3: 集成与扩展
 
 ## 关键约定
 
-1. **cangjie-coder 技能**：所有仓颉代码的编写、修改和适配工作，必须使用 cangjie-coder 技能的四步工作流程执行（Consult→Retrieval→Editing→Writing），禁止直接生成仓颉代码
+1. **cangjie-coder 技能**：所有仓颉代码(.cj文件)的编写、修改和适配工作，必须使用 cangjie-coder 技能的四步工作流程执行（查阅文档→检索代码→编辑适配→写入文件），禁止直接生成仓颉代码
 2. **日志规范**：统一使用 `magic.log.LogUtils`
 3. **命名规范**：数据库列名 snake_case，仓颉代码 camelCase
 4. **JsonObject 构造**：`JsonObject` 没有 `add` 方法，必须用 `HashMap<String, JsonValue>` 收集后构造

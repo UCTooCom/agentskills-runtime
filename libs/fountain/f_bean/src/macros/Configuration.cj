@@ -24,22 +24,24 @@ public macro Configuration(input: Tokens): Tokens {
     var staticTokens = quote()
     var instanceTokens = quote()
     for (d in klass.body.decls) {
+        func expandFuncTokens(f: FuncDecl, fnIdentifier: Tokens, fnPrefix: Tokens): Tokens {
+            let fname = f.identifier.value
+            quote(
+                BeanFactory.instance.$fnIdentifier<$identifier>($fname){$fnPrefix.$(f.identifier)()}$(`nl`)
+            ) + `nl`
+        }
         match (d) {
             case med: MacroExpandDecl =>
                 var md: Decl = med
+                var isBeanInit = false
                 while (let d: MacroExpandDecl <- md) {
+                    isBeanInit ||= d.fullIdentifier.value == 'BeanInit'
                     md = d.macroInputDecl
                     match (md) {
-                        case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
-                            let fname = f.identifier.value
-                            instanceTokens += quote(
-                                BeanFactory.instance.register<$identifier>($fname){$(identifier).$(f.identifier)()}$(`nl`)
-                            )
-                        case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
-                            let fname = f.identifier.value
-                            staticTokens += quote(
-                                BeanFactory.instance.register<$identifier>($fname){configuration.$(f.identifier)()}$(`nl`)
-                            )
+                        case f: FuncDecl where isBeanInit && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
+                            staticTokens += expandFuncTokens(f, quote(registerByStaticFunction), quote($identifier))
+                        case f: FuncDecl where isBeanInit && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
+                            instanceTokens += expandFuncTokens(f, quote(registerByInstanceFunction), quote(configuration))
                         case f: MacroExpandDecl => continue
                         case _ => break
                     }

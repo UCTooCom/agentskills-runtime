@@ -46,9 +46,7 @@ public class {{className}}Service {
             entity.createdAt = DateTime.now()
             entity.updatedAt = DateTime.now()
             
-            if (entity.creator.isNone()) {
-                entity.creator = Some(creatorId)
-            }
+            {{creatorCheckCode}}
             
             let id = getExecutor().insert{{className}}(entity)
             

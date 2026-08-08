@@ -1,0 +1,27 @@
+steps:
+  - name: test-planner
+    agent: test-planner
+    input:
+      source_files: "${input.source_files}"
+      test_type: "${input.test_type}"
+    output:
+      test_plan: "${output}"
+
+  - name: test-writer
+    agent: test-writer
+    depends_on: [test-planner]
+    input:
+      test_plan: "${test-planner.output.test_plan}"
+      target_dir: "${input.target_dir}"
+    output:
+      test_files: "${output.test_files}"
+
+  - name: test-runner
+    agent: test-runner
+    depends_on: [test-writer]
+    input:
+      test_files: "${test-writer.output.test_files}"
+      max_retries: "${input.max_retries}"
+    output:
+      results: "${output.results}"
+      fixes_applied: "${output.fixes_applied}"

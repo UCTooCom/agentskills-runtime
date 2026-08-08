@@ -19,7 +19,7 @@ package f_mvc
  * HTTP status series.
  * Retrievable via HttpStatus series.
  */
-public class Series <: Equatable<Series> {
+public struct Series <: Equatable<Series> {
     public static let INFORMATIONAL = Series(1)
     public static let SUCCESSFUL = Series(2)
     public static let REDIRECTION = Series(3)
@@ -41,7 +41,7 @@ public class Series <: Equatable<Series> {
         }
     }
     public operator func ==(series: Series) {
-        refEq(this, series) || this.value == series.value
+        this.value == series.value
     }
 
     public static func valueOf(status: HttpStatus): Series {

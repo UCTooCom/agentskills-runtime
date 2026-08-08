@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   name = "f_app"
   description = "依赖fountain开发的应用进程启动模块"
   version = "1.0.45"
@@ -16,12 +16,11 @@
   authors = ["吴京润"]
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_log  = {path = "../f_log", version = "1.0.45"}
-  f_version  = {path = "../f_version", version = "1.0.45"}
+  f_base  = {path = "../f_base"}
+  f_log  = {path = "../f_log"}
+  f_version  = {path = "../f_version"}
 
 [profile.build]
-##  lto = "full"
   incremental = true
 
 [target]

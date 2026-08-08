@@ -16,7 +16,7 @@ public class RuntimeManager {
     private String baseUrl;
     private static final String DEFAULT_BASE_URL = "http://127.0.0.1:8080/api/v1/uctoo";
     private static final String SDK_VERSION = "0.0.1";
-    private static final String RUNTIME_VERSION = "0.0.25";
+    private static final String RUNTIME_VERSION = "0.0.26";
     private static final String GITHUB_REPO = "UCTooCom/agentskills-runtime";
     private static final String ATOMGIT_REPO = "uctoo/agentskills-runtime";
 

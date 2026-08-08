@@ -1,12 +1,12 @@
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_collection  = {path = "../f_collection", version = "1.0.45"}
-  f_exception  = {path = "../f_exception", version = "1.0.45"}
-  f_random  = {path = "../f_random", version = "1.0.45"}
-  stdx = { path = "../../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm" }
+##  stdx = { git = "https://gitcode.com/Cangjie/cangjie_stdx.git" }
+  f_base  = {path = "../f_base"}
+  f_collection  = {path = "../f_collection"}
+  f_exception  = {path = "../f_exception"}
+  f_random  = {path = "../f_random"}
 
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "并发模块"
@@ -60,5 +60,4 @@
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [profile.build]
-#  lto = "full"
   incremental = true

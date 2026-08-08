@@ -53,7 +53,12 @@ public interface AgentMemoriesDAO <: RootDAO {
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                sharing,
+                access_count,
+                source_session,
+                source_agent,
+                expires_at
             ) values(
 ${arg(entity.agentId)},
                 ${arg(entity.content)},
@@ -67,7 +72,12 @@ ${arg(entity.agentId)},
                 ${arg(entity.creator)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.sharing)},
+                ${arg(entity.accessCount)},
+                ${arg(entity.sourceSession)},
+                ${arg(entity.sourceAgent)},
+                ${arg(entity.expiresAt)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -82,7 +92,7 @@ ${arg(entity.agentId)},
      */
     func findAgentMemoriesById(id: String): Option<AgentMemoriesPO> {
         executor.setSql('''
-            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at from agent_memories where id = ${arg(id)}
+            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at, sharing, access_count, source_session, source_agent, expires_at from agent_memories where id = ${arg(id)}
         ''').first<AgentMemoriesPO>()
     }
 
@@ -107,6 +117,11 @@ ${arg(entity.agentId)},
                 session_id = ${arg(entity.sessionId)},
                 creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
+                sharing = ${arg(entity.sharing)},
+                access_count = ${arg(entity.accessCount)},
+                source_session = ${arg(entity.sourceSession)},
+                source_agent = ${arg(entity.sourceAgent)},
+                expires_at = ${arg(entity.expiresAt)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -157,7 +172,7 @@ ${arg(entity.agentId)},
      */
     func findAllAgentMemoriesPage(page: Int64, size: Int64): Pagination<AgentMemoriesPO> {
         executor.page<AgentMemoriesPO>('''
-            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at from agent_memories order by created_at desc
+            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at, sharing, access_count, source_session, source_agent, expires_at from agent_memories order by created_at desc
         ''', size, page: page)
     }
 
@@ -170,7 +185,7 @@ ${arg(entity.agentId)},
      */
     func findAgentMemoriesByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<AgentMemoriesPO> {
         executor.page<AgentMemoriesPO>('''
-            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at from agent_memories where creator = ${arg(creator)} order by created_at desc
+            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at, sharing, access_count, source_session, source_agent, expires_at from agent_memories where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -180,7 +195,7 @@ ${arg(entity.agentId)},
      */
     func listAllAgentMemories(): ArrayList<AgentMemoriesPO> {
         executor.setSql('''
-            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at from agent_memories order by created_at desc
+            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at, sharing, access_count, source_session, source_agent, expires_at from agent_memories order by created_at desc
         ''').list<AgentMemoriesPO>()
     }
 
@@ -194,7 +209,7 @@ ${arg(entity.agentId)},
             return ArrayList<AgentMemoriesPO>()
         }
         executor.setSql('''
-            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at from agent_memories where id ${IN(ids)}
+            select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at, sharing, access_count, source_session, source_agent, expires_at from agent_memories where id ${IN(ids)}
         ''').list<AgentMemoriesPO>()
     }
 
@@ -233,7 +248,7 @@ ${arg(entity.agentId)},
      */
     func findAgentMemoriesByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentMemoriesPO> {
         let sql = StringBuilder()
-        sql.append("select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at from agent_memories where 1=1")
+        sql.append("select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at, sharing, access_count, source_session, source_agent, expires_at from agent_memories where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -306,7 +321,7 @@ ${arg(entity.agentId)},
      */
     func findAgentMemoriesByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentMemoriesPO> {
         let sql = StringBuilder()
-        sql.append("select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at from agent_memories")
+        sql.append("select id, agent_id, content, embedding_vector, scope, weight, tags, metadata, task_id, session_id, creator, created_at, updated_at, deleted_at, sharing, access_count, source_session, source_agent, expires_at from agent_memories")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

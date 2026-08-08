@@ -1,0 +1,56 @@
+name: ai-dev-demo
+description: AI-driven development demo with SDD workflow and AgentTeams
+version: 1.0.0
+
+steps:
+  - name: generate-spec
+    skill: sdd-spec
+    step_type: skill
+    depends_on: []
+    input:
+      requirement: "${input.requirement}"
+      project_path: "${input.project_path}"
+
+  - name: generate-design
+    skill: sdd-design
+    step_type: skill
+    depends_on:
+      - generate-spec
+    input:
+      spec_path: "${generate-spec.output.spec_path}"
+      project_path: "${input.project_path}"
+
+  - name: generate-tasks
+    skill: sdd-task
+    step_type: skill
+    depends_on:
+      - generate-design
+    input:
+      design_path: "${generate-design.output.design_path}"
+      project_path: "${input.project_path}"
+
+  - name: implement-code
+    skill: fullstack-codegen
+    step_type: skill
+    depends_on:
+      - generate-tasks
+    input:
+      table_name: "${extract-table-name.output.table_name}"
+      database: "uctoo"
+      project_path: "${input.project_path}"
+
+  - name: verify-code
+    skill: sdd-test
+    step_type: skill
+    depends_on:
+      - implement-code
+    input:
+      code_path: "${input.project_path}"
+      verification_types:
+        - "build"
+
+outputs:
+  spec_path: "${generate-spec.output.spec_path}"
+  design_path: "${generate-design.output.design_path}"
+  tasks_path: "${generate-tasks.output.tasks_path}"
+  verification_passed: "${verify-code.output.passed}"

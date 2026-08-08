@@ -3,7 +3,7 @@
  */
 package magic.app.services.ws_support
 
-import stdx.net.http.{WebSocket, WebSocketFrameType}
+import http_lib.server.WebSocketConn
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt}
 import std.time.DateTime
 import magic.log.LogUtils
@@ -30,10 +30,10 @@ public class WebSocketMessage {
 
 public class WebSocketSession {
     public let sessionId: String
-    public let websocket: WebSocket
+    public let websocket: WebSocketConn
     private let _connectedAt: Int64
 
-    public init(sessionId: String, websocket: WebSocket) {
+    public init(sessionId: String, websocket: WebSocketConn) {
         this.sessionId = sessionId
         this.websocket = websocket
         this._connectedAt = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
@@ -46,8 +46,7 @@ public class WebSocketSession {
     public func sendMessage(message: WebSocketMessage): Unit {
         try {
             let jsonStr = message.toJsonString()
-            let bytes = jsonStr.toArray()
-            websocket.write(WebSocketFrameType.TextWebFrame, bytes)
+            websocket.writeText(jsonStr)
         } catch (ex: Exception) {
             LogUtils.error("Failed to send message to session ${sessionId}: ${ex.message}")
         }
@@ -55,7 +54,7 @@ public class WebSocketSession {
 
     public func close(): Unit {
         try {
-            websocket.writeCloseFrame()
+            websocket.close(1000)
         } catch (ex: Exception) {
             LogUtils.error("Error closing WebSocket session ${sessionId}: ${ex.message}")
         }

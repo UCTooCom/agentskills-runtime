@@ -1,0 +1,11 @@
+[package]
+  cjc-version = "1.1.0"
+  name = "kaca_cookies"
+  description = "Cookie parsing and storage aligned with WPT behavior"
+  version = "0.8.0"
+  output-type = "static"
+
+[dependencies]
+
+[profile.build]
+  incremental = true

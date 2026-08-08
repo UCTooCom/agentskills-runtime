@@ -1,0 +1,62 @@
+name: demo-team
+description: AI驱动开发全流程Demo团队
+version: "1.0.0"
+
+manager:
+  name: demo-manager
+  model: deepseek
+  max_turns: 50
+  skills:
+    - crud-generator
+    - cangjie-coder
+    - tiny-vue-skill
+
+leaders:
+  - name: backend-leader
+    model: deepseek-coder
+    max_turns: 30
+    skills:
+      - cangjie-coder
+      - crud-generator
+    language: cangjie
+    language_context: cangjie-language-guide,cangjie-full-docs
+
+  - name: frontend-leader
+    model: deepseek-coder
+    max_turns: 30
+    skills:
+      - tiny-vue-skill
+    language: typescript
+
+workers:
+  - name: doc-consultant
+    model: deepseek
+    max_turns: 20
+    skills:
+      - cangjie-coder
+    role: doc-consultant
+    language: cangjie
+
+  - name: code-searcher
+    model: deepseek-coder
+    max_turns: 20
+    skills:
+      - cangjie-coder
+    role: code-searcher
+    language: cangjie
+
+  - name: code-editor
+    model: deepseek-coder
+    max_turns: 30
+    skills:
+      - cangjie-coder
+    role: code-editor
+    language: cangjie
+
+  - name: code-verifier
+    model: deepseek
+    max_turns: 20
+    skills:
+      - cangjie-coder
+    role: code-verifier
+    language: cangjie

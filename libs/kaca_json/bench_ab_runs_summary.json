@@ -1,0 +1,20 @@
+﻿[
+    {
+        "group":  "compact",
+        "avg_current":  125746.8,
+        "avg_other":  125588,
+        "avg_ratio_pct":  -0.126
+    },
+    {
+        "group":  "pretty",
+        "avg_current":  149422.2,
+        "avg_other":  152329.8,
+        "avg_ratio_pct":  1.946
+    },
+    {
+        "group":  "filter",
+        "avg_current":  46519,
+        "avg_other":  47584.2,
+        "avg_ratio_pct":  2.29
+    }
+]

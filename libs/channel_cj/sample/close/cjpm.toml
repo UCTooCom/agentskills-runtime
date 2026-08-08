@@ -1,0 +1,9 @@
+[package]
+cjc-version = "1.0.5"
+name = "sample_close"
+version = "1.0.0"
+description = "通道关闭与资源释放演示"
+output-type = "executable"
+
+[dependencies]
+channel_cj = { path = "../..", output-type = "static" }

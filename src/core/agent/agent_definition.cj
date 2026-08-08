@@ -172,6 +172,12 @@ public class AgentDefinition {
     /** 是否允许被智能体发现，符合GB/Z 185.5 */
     public let discoverable: Bool
     
+    /** 编程语言（如cangjie, typescript, python） */
+    public let language: Option<String>
+    
+    /** 语言上下文来源（技能名列表，逗号分隔） */
+    public let languageContext: Option<String>
+    
     /** 系统提示词 */
     public let systemPrompt: String
     
@@ -202,6 +208,8 @@ public class AgentDefinition {
         defaultInputTypes: Option<String>,
         defaultOutputTypes: Option<String>,
         discoverable: Bool,
+        language: Option<String>,
+        languageContext: Option<String>,
         systemPrompt: String,
         sourcePath: Path,
         baseDir: Path
@@ -226,6 +234,8 @@ public class AgentDefinition {
         this.defaultInputTypes = defaultInputTypes
         this.defaultOutputTypes = defaultOutputTypes
         this.discoverable = discoverable
+        this.language = language
+        this.languageContext = languageContext
         this.systemPrompt = systemPrompt
         this.sourcePath = sourcePath
         this.baseDir = baseDir
@@ -296,6 +306,14 @@ public class AgentDefinition {
         
         items.add(("discoverable", JsonBool(discoverable)))
         
+        if (let Some(langVal) <- language) {
+            items.add(("language", JsonString(langVal)))
+        }
+        
+        if (let Some(langCtxVal) <- languageContext) {
+            items.add(("language_context", JsonString(langCtxVal)))
+        }
+        
         return JsonUtils.buildJsonObject(items.toArray())
     }
 }
@@ -324,6 +342,8 @@ public class AgentDefinitionBuilder {
     private var defaultInputTypes: Option<String> = None
     private var defaultOutputTypes: Option<String> = None
     private var discoverable: Bool = true
+    private var language: Option<String> = None<String>
+    private var languageContext: Option<String> = None<String>
     private var systemPrompt: Option<String> = None
     private var sourcePath: Option<Path> = None
     private var baseDir: Option<Path> = None
@@ -438,6 +458,16 @@ public class AgentDefinitionBuilder {
         return this
     }
     
+    public func setLanguage(language: String): AgentDefinitionBuilder {
+        this.language = Some(language)
+        return this
+    }
+    
+    public func setLanguageContext(languageContext: String): AgentDefinitionBuilder {
+        this.languageContext = Some(languageContext)
+        return this
+    }
+    
     public func setSystemPrompt(systemPrompt: String): AgentDefinitionBuilder {
         this.systemPrompt = Some(systemPrompt)
         return this
@@ -479,6 +509,8 @@ public class AgentDefinitionBuilder {
             defaultInputTypes,
             defaultOutputTypes,
             discoverable,
+            language,
+            languageContext,
             systemPrompt.getOrThrow(),
             sourcePath.getOrThrow(),
             baseDir.getOrThrow()

@@ -1,9 +1,9 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
-  f_io  = {path = "../f_io", version = "1.0.45"}
-  f_regex  = {path = "../f_regex", version = "1.0.45"}
+  charset4cj = { path = "../../charset4cj" }
+  f_io  = {path = "../f_io"}
+  f_regex  = {path = "../f_regex"}
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "进程封装"
@@ -20,7 +20,6 @@
   authors = ["吴京润"]
 
 [profile.build]
-#  lto = "full"
   incremental = true
 
 [target]

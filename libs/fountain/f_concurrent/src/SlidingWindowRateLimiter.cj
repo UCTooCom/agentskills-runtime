@@ -34,7 +34,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
         queue = ArrayBlockingQueue<Mono>(limit)
         let timer = Timer.after(Duration.Zero) {
             if (let Some(out) <- this.prev.load() && !out.finished) {
-                println(
+                Console.writeln(
                     'SlidingWindowRateLimiter: ${unfinishedTasks.fetchAdd(1)} tasks are timeout in SlidingWindowRateLimiter for ${TypeInfo.of<T>()}.')
             }
             let mono = queue.remove()

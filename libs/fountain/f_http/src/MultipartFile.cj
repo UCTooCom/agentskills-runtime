@@ -30,7 +30,7 @@ public class MultipartFile <: Multipart & InputStream & Resource & DataFields<Mu
         this
     }
     public func toString(): String {
-        throw MediaTypeException('Not Supported')
+        'contentDisposition:${contentDisposition}, charset: ${charset}'
     }
     public static func fromData(data: Data){
         fromData(data, DEFAULT_DATA_FLAG)
@@ -42,7 +42,10 @@ public class MultipartFile <: Multipart & InputStream & Resource & DataFields<Mu
         tryFromData(data, flag)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        throw MediaTypeException('Not Supported')
+        match(data){
+            case x: MultipartFile => x
+            case _ => throw MediaTypeException('Not Supported')
+        }
     }
     public static func parse(string: String): Data {
         tryParse(string).getOrThrow()

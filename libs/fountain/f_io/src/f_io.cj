@@ -17,7 +17,7 @@ package f_io
 
 internal import std.io.{InputStream, OutputStream, ByteBuffer}
 internal import std.collection.concurrent.ArrayBlockingQueue
-import f_base.*
+internal import f_base.*
 import f_exception.IllegalSizeException
 
 public func pipe<I, O>(input!: I, output!: O, bufferSize!: Int64 = 4096): Unit where I <: InputStream, O <: OutputStream {

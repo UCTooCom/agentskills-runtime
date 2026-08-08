@@ -24,6 +24,10 @@ public class ExecutorRegistry {
         if (lower.startsWith("https://")) { return "http" }
         if (lower.startsWith("http://")) { return "http" }
         if (lower.startsWith("builtin://")) { return "builtin" }
+        if (lower.startsWith("evaluation://")) { return "evaluation" }
+        if (lower.startsWith("skill-curator://")) { return "skill-curator" }
+        if (lower.startsWith("agent_execution://")) { return "agent_execution" }
+        if (lower.startsWith("quota_reset://")) { return "quota_reset" }
         return ""
     }
 
@@ -31,6 +35,10 @@ public class ExecutorRegistry {
         let lower = taskUri.toAsciiLower()
         if (lower.startsWith("script://")) { return taskUri[9..] }
         if (lower.startsWith("builtin://")) { return taskUri[10..] }
+        if (lower.startsWith("evaluation://")) { return taskUri[13..] }
+        if (lower.startsWith("skill-curator://")) { return taskUri[16..] }
+        if (lower.startsWith("agent_execution://")) { return taskUri[18..] }
+        if (lower.startsWith("quota_reset://")) { return taskUri[15..] }
         if (lower.startsWith("http://")) { return taskUri }
         if (lower.startsWith("https://")) { return taskUri }
         return taskUri

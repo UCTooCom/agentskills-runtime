@@ -1,0 +1,59 @@
+name: sdd-flow
+description: Complete SDD workflow from requirements to verified code
+version: 1.0.0
+
+steps:
+  - name: generate-spec
+    skill: sdd-spec
+    step_type: skill
+    depends_on: []
+    input:
+      requirement: "${input.requirement}"
+      project_path: "${input.project_path}"
+
+  - name: generate-design
+    skill: sdd-design
+    step_type: skill
+    depends_on:
+      - generate-spec
+    input:
+      spec_path: "${generate-spec.output.spec_path}"
+      project_path: "${input.project_path}"
+    condition: "${generate-spec.output.spec_path} != ''"
+
+  - name: generate-tasks
+    skill: sdd-task
+    step_type: skill
+    depends_on:
+      - generate-design
+    input:
+      design_path: "${generate-design.output.design_path}"
+      project_path: "${input.project_path}"
+    condition: "${generate-design.output.design_path} != ''"
+
+  - name: implement-code
+    skill: cangjie-coder
+    step_type: skill
+    depends_on:
+      - generate-tasks
+    input:
+      tasks_path: "${generate-tasks.output.tasks_path}"
+      project_path: "${input.project_path}"
+    condition: "${generate-tasks.output.tasks_path} != ''"
+
+  - name: verify-code
+    skill: sdd-test
+    step_type: skill
+    depends_on:
+      - implement-code
+    input:
+      code_path: "${input.project_path}"
+      verification_types:
+        - "build"
+        - "lint"
+
+outputs:
+  spec_path: "${generate-spec.output.spec_path}"
+  design_path: "${generate-design.output.design_path}"
+  tasks_path: "${generate-tasks.output.tasks_path}"
+  verification_passed: "${verify-code.output.passed}"

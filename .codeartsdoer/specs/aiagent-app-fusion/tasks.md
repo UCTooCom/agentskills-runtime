@@ -13,17 +13,15 @@
 
 ### 通用模块开发流程（必须遵循）
 
-1. **数据库建模**：根据业务需求设计表结构 DDL 文件
-2. **人工执行 DDL**：在 PostgreSQL 中执行数据库结构新增和变更
-3. **刷新 db_info**：调用 `/api/v1/uctoo/db_info/load-db-info` 接口刷新数据库元信息
-4. **crudgen 生成后端 CRUD**：使用 `crudgen` 生成新增表的标准 CRUD 模块（PO/DAO/Service/Controller/Route）
-5. **crudweb 生成前端 CRUD**：使用 `crudweb` 生成 Web 项目中的数据库表管理界面
-6. **迭代开发**：在生成的标准模块基础上进行二次迭代开发
+1. **[自动化]** 在 `sql/incremental/` 目录生成数据库DDL脚本
+2. **[人工操作]** 通知人工执行数据库变更（执行DDL）
+3. **[人工操作]** 人工使用 `loaddbinfo` 刷新 db_info 表，使用 `crudgen` 生成标准CRUD模块（Model/DAO/Service/Controller/Route），使用 `crudweb` 生成Web管理界面
+4. **[自动化]** 基于生成的CRUD模块进行迭代开发（定制代码写在 `//#region AutoCreateCode` 区域外）
 
 ### 仓颉代码编写规范（必须遵循）
 
-- **使用 cangjie-coder 技能**：所有 .cj 文件必须使用 cangjie-coder 技能编写
-- **四步工作流程**：查阅文档 → 检索代码片段 → 编辑适配 → 写入文件
+- **使用 cangjie-coder 技能**：所有仓颉代码(.cj文件)的编写必须使用 cangjie-coder 技能
+- **四步工作流程**：查阅文档→检索代码→编辑适配→写入文件
 - **必须检索已有代码**：编写前必须检索到确定的已有代码作为编程依据，禁止凭空生成
 - **仓颉语法规范**：package/import/class/interface/prop/泛型/Option/match/spawn/注解
 

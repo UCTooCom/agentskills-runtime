@@ -28,4 +28,9 @@ public class HellowordController {
     public func helloworld(): String {
         return "helloworld"
     }
+    @GetMapping[path:"/redirect/helloworld", produces:'text/plain', consumes:'application/x-www-form-urlencoded']
+    @IgnoreSecurity
+    public func redirectHelloworld(): Redirect {
+        Redirect.found('/helloworld')
+    }
 }

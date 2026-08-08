@@ -68,7 +68,13 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             }
         }
         func check(metas: HashMap<String, RequestMeta>): HttpRequestHandler {
-            if (let Some(m) <- metas.get(consumes) && let h <- check(m)) {
+            let idx = consumes.indexOf(';') ?? -1
+            let c = if(idx > 0){
+                consumes[0 .. idx]
+            }else{
+                consumes
+            }
+            if (let Some(m) <- metas.get(c) && let h <- check(m)) {
                 h
             } else {
                 UNSUPPORTED_MEDIA_TYPE

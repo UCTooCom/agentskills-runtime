@@ -342,18 +342,14 @@ T-004 ────┘     │
 
 ### 仓颉代码开发
 
-⚠️ **重要**：如果涉及到开发仓颉代码，必须使用 `cangjie-coder` 技能。
-
-在对话中明确说明需要编写仓颉代码，AI 会自动调用该技能，确保代码符合仓颉语言规范。
+⚠️ **重要**：所有仓颉代码(.cj文件)的编写必须使用 **cangjie-coder 技能**，遵循查阅文档→检索代码→编辑适配→写入文件的四步工作流程。
 
 ### 数据库表结构变更
 
-⚠️ **重要**：如果涉及到新增和变更数据库表结构，必须遵循以下流程：
-
-1. **数据库建模** → 设计表结构和 DDL 文件
-2. **执行数据库变更** → 人工执行 DDL
-3. **刷新数据库信息** → 调用 `/api/v1/uctoo/db_info/load-db-info`
-4. **生成标准模块** → 使用 `crudgen` 和 `crudweb`
-5. **迭代开发** → 在生成代码基础上扩展
+⚠️ **重要**：涉及数据库结构变更和新增时，必须遵循 uctoo-v4 通用模块开发流程：
+1. **[自动化]** 在 `sql/incremental/` 目录生成数据库DDL脚本
+2. **[人工操作]** 通知人工执行数据库变更（执行DDL）
+3. **[人工操作]** 人工使用 `loaddbinfo` 刷新 db_info 表，使用 `crudgen` 生成标准CRUD模块（Model/DAO/Service/Controller/Route），使用 `crudweb` 生成Web管理界面
+4. **[自动化]** 基于生成的CRUD模块进行迭代开发（定制代码写在 `//#region AutoCreateCode` 区域外）
 
 详细规范请参考：`apps/agentskills-runtime/docs/uctoo-v4/uctoo-v4-module-development.md`

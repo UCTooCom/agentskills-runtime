@@ -16,11 +16,13 @@ limitations under the License.
 package f_http
 
 /**
- * multipart/form-data, boundary=AaB03x
+ * multipart/form-data; boundary=AaB03x
  */
 public class MultipartMediaType <: MediaType {
-    private static const MEDIA_TYPE_NAME = "multipart/form-data"
-    public static let instance = MultipartMediaType(MEDIA_TYPE_NAME)
+    private static const FORM_DATA = "multipart/form-data"
+    private static const MIXED = "multipart/midxed"
+    public static let formData = MultipartMediaType(FORM_DATA)
+    public static let mixed = MultipartMediaType(MIXED)
     private MultipartMediaType(
         mediaType: String,
         public let boundary!: String = ""
@@ -43,11 +45,12 @@ public class MultipartMediaType <: MediaType {
         hash
     }
     public func make(mediaType: String): MediaType {
-        if (mediaType.startsWith(MEDIA_TYPE_NAME)) {
-            let idx = mediaType.indexOf(", boundary=") ?? -1
+        let currentMediaType = this.mediaType
+        if (mediaType.startsWith(currentMediaType)) {
+            let idx = mediaType.indexOf("; boundary=") ?? -1
             if (idx > 0) {
-                MultipartMediaType(mediaType[0..idx], boundary: mediaType[idx + ", boundary=".size..])
-            } else if (mediaType == MEDIA_TYPE_NAME) {
+                MultipartMediaType(mediaType[0..idx], boundary: mediaType[idx + "; boundary=".size..])
+            } else if (mediaType == currentMediaType) {
                 this
             } else {
                 throw MediaTypeException("${mediaType} is illegal")
@@ -58,12 +61,12 @@ public class MultipartMediaType <: MediaType {
     }
 
     public func fromData(data: Data): Array<Byte> {
-        throw MediaTypeException("${MEDIA_TYPE_NAME} does not support current access")
+        throw MediaTypeException("${this.mediaType} does not support current access")
     }
     public func toData(data: Array<Byte>): Data {
-        throw MediaTypeException("${MEDIA_TYPE_NAME} does not support current access")
+        throw MediaTypeException("${this.mediaType} does not support current access")
     }
     public func toData(input: InputStream): Data {
-        MultipartFormDataParser(input, boundary).parse()
+        MultipartFormDataParser(input, mediaType, boundary).parse()
     }
 }

@@ -10,7 +10,7 @@ import f_orm.*
 import f_config.Config
 import f_orm.wrap.ORMConfig
 import std.database.sql.DriverManager
-import opengauss.driver.PGDriver
+import pgsql.PostgresDriver
 
 /**
  * Web CRUD代码生成器命令行工具
@@ -43,16 +43,16 @@ main(args: Array<String>) {
     }
     
     // Sync ORM config
-    let ormDrivers = AppConfig.env["orm_drivers"].getOrDefault({ => "opengauss" })
-    let ormDefaultDriver = AppConfig.env["orm_defaultDriver"].getOrDefault({ => "opengauss" })
+    let ormDrivers = AppConfig.env["orm_drivers"].getOrDefault({ => "postgres" })
+    let ormDefaultDriver = AppConfig.env["orm_defaultDriver"].getOrDefault({ => "postgres" })
     let ormConnectionUrl = AppConfig.env["orm_connectionUrl"].getOrDefault({ => "postgresql://postgres:uctoo123@127.0.0.1:5432/uctoo" })
-    let opengaussOrmConnectionUrl = AppConfig.env["opengauss_orm_connectionUrl"].getOrDefault({ => ormConnectionUrl })
+    let postgresOrmConnectionUrl = AppConfig.env["postgres_orm_connectionUrl"].getOrDefault({ => ormConnectionUrl })
     
     let ormConfigs: Array<(String, String)> = [
         ("orm_drivers", ormDrivers),
         ("orm_defaultDriver", ormDefaultDriver),
         ("orm_connectionUrl", ormConnectionUrl),
-        ("opengauss_orm_connectionUrl", opengaussOrmConnectionUrl)
+        ("postgres_orm_connectionUrl", postgresOrmConnectionUrl)
     ]
     Config.set(ormConfigs)
     ORMConfig.refresh {}
@@ -202,7 +202,7 @@ func initializeORM(): Bool {
         // 注册 PostgreSQL 驱动
         let driver = DriverManager.getDriver("postgres")
         if (driver.isNone()) {
-            let pgDriver = PGDriver("postgres")
+            let pgDriver = PostgresDriver()
             DriverManager.register("postgres", pgDriver)
             println("PostgreSQL驱动已注册")
         }

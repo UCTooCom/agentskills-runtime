@@ -7,7 +7,7 @@ import magic.log.LogUtils
 
 import std.collection.HashMap
 import stdx.encoding.json.JsonObject
-import stdx.net.http.HttpHeaders
+import http_lib.core.HttpHeaders
 
 protected class HttpException <: Exception {
     protected HttpException(

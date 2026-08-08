@@ -1,0 +1,21 @@
+[package]
+  cjc-version = "1.1.3"
+  name = "http_lib"
+  description = "仓颉 HTTP 协议封装库，支持 HTTP/1.x + HTTP/2 客户端与服务器"
+  version = "0.1.0"
+  output-type = "static"
+  compile-option = "-Woff unused"
+  override-compile-option = "-Woff unused"
+  src-dir = "src"
+  target-dir = "target"
+  authors = ["changeden"]
+  include = ["src"]
+  exclude = ["*_test.cj"]
+
+[dependencies]
+  kaca_json = { path = "../kaca_json", output-type = "static" }
+  jinguissl = { path = "../jinguissl", output-type = "static" }
+  jinguissl_core = { path = "../jinguissl_core", output-type = "static" }
+  kaca_cookies = { path = "../kaca_cookies", output-type = "static" }
+  compress4cj = { path = "../compress4cj", output-type = "static" }
+  quic_cj = { path = "../quic_cj", output-type = "static" }

@@ -388,7 +388,7 @@ public class WebCrudGenerator {
                 let inputType = getInputType(field.dataType)
                 
                 formRowsSb.append("          <TinyCol :span=\"12\">\n")
-                formRowsSb.append("            <TinyFormItem label=\"${field.columnComment}\" prop=\"${field.columnName}\">\n")
+                formRowsSb.append("            <TinyFormItem :label=\"`'${escapeVueAttr(field.columnComment)}'`\" prop=\"${field.columnName}\">\n")
                 
                 if (inputType == "textarea") {
                     formRowsSb.append("              <TinyInput\n")
@@ -537,7 +537,7 @@ public class WebCrudGenerator {
             
             gridColumnsSb.append("    <TinyGridColumn\n")
             gridColumnsSb.append("      field=\"${field.columnName}\"\n")
-            gridColumnsSb.append("      title=\"${label}\"\n")
+            gridColumnsSb.append("      :title=\"`'${escapeVueAttr(label)}'`\"\n")
             if (field.columnName != "id" && field.columnName != "created_at" && field.columnName != "updated_at" && field.columnName != "deleted_at") {
                 gridColumnsSb.append("      :editor=\"{ component: 'input' }\"\n")
             }
@@ -675,7 +675,7 @@ public class WebCrudGenerator {
                 let inputType = getInputType(field.dataType)
                 
                 editFormRowsSb.append("      <TinyCol class=\"w-1/2 max-sm:w-full\">\n")
-                editFormRowsSb.append("        <TinyFormItem label=\"${field.columnComment}\" prop=\"${field.columnName}\">\n")
+                editFormRowsSb.append("        <TinyFormItem :label=\"`'${escapeVueAttr(field.columnComment)}'`\" prop=\"${field.columnName}\">\n")
                 
                 if (field.columnName == "id") {
                     editFormRowsSb.append("          <TinyInput v-model=\"formData.${field.columnName}\" disabled />\n")
@@ -704,7 +704,7 @@ public class WebCrudGenerator {
                     editFormRowsSb.append("            v-model=\"formData.${field.columnName}\"\n")
                     editFormRowsSb.append("            type=\"textarea\"\n")
                     editFormRowsSb.append("            :rows=\"3\"\n")
-                    editFormRowsSb.append("            placeholder=\"请输入${field.columnComment}\"\n")
+                    editFormRowsSb.append("            :placeholder=\"`请输入'${escapeVueAttr(field.columnComment)}'`\"\n")
                     editFormRowsSb.append("          />\n")
                 } else {
                     editFormRowsSb.append("          <TinyInput v-model=\"formData.${field.columnName}\" />\n")
@@ -853,6 +853,14 @@ public class WebCrudGenerator {
         }
         
         return "handlerInput"
+    }
+    
+    /**
+     * 转义Vue模板属性值中的双引号
+     * 将双引号替换为单引号，避免破坏HTML属性语法
+     */
+    private func escapeVueAttr(value: String): String {
+        value.replace("\"", "'")
     }
     
     /**
@@ -1118,8 +1126,9 @@ public class WebCrudGenerator {
         sb.append("import { Model } from 'pinia-orm';\n")
         sb.append("import { Attr, Str, Uid, Num, Bool } from 'pinia-orm/decorators';\n")
         sb.append("import { useAxiosRepo } from '@pinia-orm/axios';\n")
+        sb.append("import { getRuntimeApiURL } from '@/utils/runtime-config';\n")
         sb.append("\n")
-        sb.append("const apiURL = import.meta.env.VITE_BACKEND_URL || 'https://localhost:443';\n")
+        sb.append("const apiURL = getRuntimeApiURL();\n")
         sb.append("\n")
         sb.append("export class ${tableName} extends Model {\n")
         sb.append("  static override entity = '${tableName}'\n")

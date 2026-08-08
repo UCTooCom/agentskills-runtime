@@ -4,9 +4,8 @@
 
 ### 仓颉代码开发
 - 所有仓颉（.cj）代码必须使用 **cangjie-coder 技能** 编写
-- **严格遵循 V4 通用模块开发流程**：先执行DDL → load-db-info → crudgen生成标准CRUD → 在AutoCreateCode区域外进行定制开发
+- 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 - 编写代码前，必须先在项目中查找确认正确的仓颉代码作为参考
-- 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
 - 仓颉代码必须符合 CangjieMagic 框架和 V4 模块的约定和模式
 - 数据库列名使用 snake_case（deleted_at, updated_at），仓颉代码使用 camelCase（createdAt, updatedAt）
 - **禁止使用SQL保留字作为列名**：`type`、`status`等关键字必须加前缀（task_type、task_status、member_role、message_type、msg_related_type）
@@ -34,6 +33,13 @@ magic.app.routes.uctoo       ← 路由层（Route）— crudgen生成标准路�
 - DAO层不过滤软删除数据，软删除过滤由Service层或API使用方决定
 - 统一使用ErrorHandler处理错误
 - 使用APIResult作为Service层返回类型
+
+### 数据库结构变更流程（uctoo-v4 通用模块开发流程）
+- 涉及数据库结构变更和新增时，必须遵循以下流程：
+  1. **[自动化]** 在 `sql/incremental/` 目录生成数据库DDL脚本
+  2. **[人工操作]** 通知人工执行数据库变更（执行DDL）
+  3. **[人工操作]** 人工使用 `loaddbinfo` 刷新 db_info 表，使用 `crudgen` 生成标准CRUD模块（Model/DAO/Service/Controller/Route），使用 `crudweb` 生成Web管理界面
+  4. **[自动化]** 基于生成的CRUD模块进行迭代开发（定制代码写在 `//#region AutoCreateCode` 区域外）
 
 ### 前端代码开发
 - 使用 TypeScript 编写前端代码

@@ -67,11 +67,11 @@ public func lookupTreeSet<T>(cond: StringCond): TreeSet<T> where T <: Comparable
     TreeSet<T>(lookupList<T>(cond))
 }
 
-public func lookupHashMap<T>(): HashMap<String, T> where T <: Object {
+public func lookupHashMap<T>(): HashMap<String, T> {
     lookupHashMap<T>(IgnoreCond)
 }
 
-public func lookupHashMap<T>(cond: StringCond): HashMap<String, T> where T <: Object {
+public func lookupHashMap<T>(cond: StringCond): HashMap<String, T> {
     BeanFactory.instance.getMap<T>(cond: cond)
 }
 

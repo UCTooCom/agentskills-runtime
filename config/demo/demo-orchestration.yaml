@@ -1,0 +1,52 @@
+name: demo-fullstack-crud
+description: 全栈CRUD代码生成Demo编排
+version: "1.0.0"
+
+steps:
+  - name: generate-ddl
+    step_type: skill
+    target_ref: crud-generator
+    depends_on: []
+
+  - name: generate-backend
+    step_type: skill
+    target_ref: cangjie-coder
+    depends_on:
+      - generate-ddl
+    input_mapping:
+      ddl_output: "${generate-ddl.output.ddl_content}"
+      task: "Generate CRUD backend code from DDL"
+
+  - name: generate-frontend
+    step_type: skill
+    target_ref: tiny-vue-skill
+    depends_on:
+      - generate-backend
+    input_mapping:
+      api_endpoints: "${generate-backend.output.api_endpoints}"
+      task: "Generate Vue frontend pages from API endpoints"
+
+  - name: verify-build
+    step_type: skill
+    target_ref: cangjie-coder
+    depends_on:
+      - generate-backend
+    input_mapping:
+      task: "Verify build: run cjpm build and check for errors"
+
+  - name: verify-frontend
+    step_type: skill
+    target_ref: tiny-vue-skill
+    depends_on:
+      - generate-frontend
+    input_mapping:
+      task: "Verify frontend: check Vue components and API integration"
+
+  - name: report-results
+    step_type: skill
+    target_ref: cangjie-coder
+    depends_on:
+      - verify-build
+      - verify-frontend
+    input_mapping:
+      task: "Generate final report with evidence chain"

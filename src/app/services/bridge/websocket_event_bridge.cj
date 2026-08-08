@@ -6,9 +6,10 @@ package magic.app.services.bridge
 import magic.interaction.{EventHandlerManager, AgentStartEvent, AgentEndEvent, AgentStepEvent, ChatModelEndEvent, ChatModelFailureEvent, ToolCallStartEvent, ToolCallEndEvent, SubAgentStartEvent, SubAgentEndEvent, AgentStartEventHandler, AgentEndEventHandler, AgentStepEventHandler, ChatModelEndEventHandler, ChatModelFailureEventHandler, ToolCallStartEventHandler, ToolCallEndEventHandler, SubAgentStartEventHandler, SubAgentEndEventHandler, EventResponse}
 import magic.core.agent.AgentResponse
 import magic.core.tool.ToolResponse
+import magic.app.services.ws_support.WebSocketMessage
 import magic.log.LogUtils
 import std.collection.{ArrayList, concurrent.ConcurrentHashMap}
-import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonBool, JsonArray}
+import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool, JsonArray}
 import std.time.DateTime
 
 public class WebSocketEventBridge {
@@ -138,5 +139,74 @@ public class WebSocketEventBridge {
         obj.put("agentId", JsonString(agentId))
         obj.put("timestamp", JsonString(DateTime.now().toString()))
         obj
+    }
+
+    public func pushTraceStart(sessionId: String, agentName: String, traceId: String): Unit {
+        let data = buildEventJson("trace_start", agentName)
+        data.put("session_id", JsonString(sessionId))
+        data.put("trace_id", JsonString(traceId))
+        pushEvent(agentName, data)
+        broadcastToSessions(data)
+    }
+
+    public func pushTraceStep(sessionId: String, agentName: String, stepType: String, stepData: JsonObject): Unit {
+        let data = buildEventJson("trace_step", agentName)
+        data.put("session_id", JsonString(sessionId))
+        data.put("step_type", JsonString(stepType))
+        data.put("step_data", stepData)
+        pushEvent(agentName, data)
+        broadcastToSessions(data)
+    }
+
+    public func pushTraceTokenUsage(sessionId: String, agentName: String, promptTokens: Int64, completionTokens: Int64, totalTokens: Int64): Unit {
+        let data = buildEventJson("trace_token_usage", agentName)
+        data.put("session_id", JsonString(sessionId))
+        data.put("prompt_tokens", JsonInt(promptTokens))
+        data.put("completion_tokens", JsonInt(completionTokens))
+        data.put("total_tokens", JsonInt(totalTokens))
+        pushEvent(agentName, data)
+        broadcastToSessions(data)
+    }
+
+    public func pushTraceEnd(sessionId: String, agentName: String, status: String): Unit {
+        let data = buildEventJson("trace_end", agentName)
+        data.put("session_id", JsonString(sessionId))
+        data.put("status", JsonString(status))
+        pushEvent(agentName, data)
+        broadcastToSessions(data)
+    }
+
+    public func pushEvaluationResult(agentId: String, evaluationType: String, successRate: Float64, avgDurationMs: Int64, totalTokens: Int64): Unit {
+        let data = buildEventJson("evaluation_result", agentId)
+        data.put("evaluation_type", JsonString(evaluationType))
+        data.put("success_rate", JsonFloat(successRate))
+        data.put("avg_duration_ms", JsonInt(avgDurationMs))
+        data.put("total_tokens", JsonInt(totalTokens))
+        pushEvent(agentId, data)
+        broadcastToSessions(data)
+    }
+
+    public func pushTuningApplied(agentId: String, strategyType: String): Unit {
+        let data = buildEventJson("tuning_applied", agentId)
+        data.put("strategy_type", JsonString(strategyType))
+        pushEvent(agentId, data)
+        broadcastToSessions(data)
+    }
+
+    private func broadcastToSessions(eventJson: JsonObject): Unit {
+        try {
+            let sessionManager = WebSocketSessionManager.instance
+            let sessionIds = sessionManager.getAllSessionIds()
+            for (sessionId in sessionIds) {
+                match (sessionManager.getSession(sessionId)) {
+                    case Some(session) =>
+                        let message = WebSocketMessage("agent_loop_event", eventJson, (DateTime.now() - DateTime.UnixEpoch).toMilliseconds())
+                        session.sendMessage(message)
+                    case None => ()
+                }
+            }
+        } catch (e: Exception) {
+            LogUtils.debug("WebSocketEventBridge", "广播事件到WebSocket会话失败: ${e.message}")
+        }
     }
 }

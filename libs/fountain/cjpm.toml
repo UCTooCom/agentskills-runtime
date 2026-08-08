@@ -1,5 +1,5 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch="develop"}
+  charset4cj = { path = "../charset4cj" }
   f_app = {path = "./f_app"}
   f_aspect = {path = "./f_aspect"}
   f_base = {path = "./f_base"}
@@ -33,7 +33,7 @@
   f_version = {path = "./f_version"}
 
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "utility for server app development"

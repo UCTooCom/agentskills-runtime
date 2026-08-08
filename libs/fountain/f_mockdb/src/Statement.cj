@@ -44,13 +44,15 @@ public class MockStatement <: Statement {
         }
     }
     public func update(): UpdateResult {
-        if(MOCKDB.toThrowOnExecuting(sql, args)){
+        MOCKDB.execution(sql, args)
+        if(MOCKDB.toThrowOnExecuting){
             throw MockDbException()
         }
         MockUpdateResult()
     }
     public func query(): QueryResult {
-        if(MOCKDB.toThrowOnExecuting(sql, args)){
+        MOCKDB.execution(sql, args)
+        if(MOCKDB.toThrowOnExecuting){
             throw MockDbException()
         }
         MockQueryResult()

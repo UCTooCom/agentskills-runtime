@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   name = "f_version"
   description = "应用与fountain的版本信息和应用BANNER"
   version = "1.0.45"
@@ -53,5 +53,4 @@
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
   
 [profile.build]
-#  lto = "full"
   incremental = true

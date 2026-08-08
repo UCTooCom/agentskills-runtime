@@ -15,18 +15,20 @@ limitations under the License.
  */
 package f_http
 
-import std.reflect.ClassTypeInfo
-import std.sync.AtomicBool
+import std.sync.{AtomicInt8, Mutex}
 import f_log.*
 
 public class MediaTypes {
     private static let log = LoggerFactory.getLogger<MediaTypes>()
     private static let mediaTypes = ConcurrentHashMap<String, MediaType>()
-    private static let mediaTypeBeansRegistered = AtomicBool(false)
+    private static let mediaTypeBeansRegistered = AtomicInt8(0)
+    private static let mutex = Mutex()
+    private static let condition = synchronized(mutex){mutex.condition()}
     private init(){}
     static init() {
         register(JsonMediaType.instance)
-        register(MultipartMediaType.instance)
+        register(MultipartMediaType.formData)
+        register(MultipartMediaType.mixed)
         register(PlainTextMediaType.instance)
     }
     public static func register(mediaType: MediaType) {
@@ -37,8 +39,18 @@ public class MediaTypes {
         tryParse(mediaType).getOrThrow {MediaTypeException("${mediaType} is an illegal MediaType string")}
     }
     private static func registerFromBeanFactory() {
-        if(mediaTypeBeansRegistered.compareAndSwap(false, true)){
+        if(mediaTypeBeansRegistered.compareAndSwap(0, -1)){
             register(BeanFactory.instance.getList<MediaType>())
+            mediaTypeBeansRegistered.store(1)
+            synchronized(mutex){
+                condition.notifyAll()
+            }
+        }else if (mediaTypeBeansRegistered.load() == -1) {
+            synchronized(mutex){
+                if (mediaTypeBeansRegistered.load() == -1) {
+                    condition.wait()
+                }
+            }
         }
     }
     private static func register(mediaTypes: ArrayList<MediaType>) {

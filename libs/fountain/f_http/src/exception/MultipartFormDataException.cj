@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_http.exception
 
-public class MultipartFormDataException <: MediaTypeException {
+public class MultipartException <: MediaTypeException {
     public init() {}
 
     public init(message: String) {

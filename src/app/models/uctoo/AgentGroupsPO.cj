@@ -61,6 +61,9 @@ public class AgentGroupsPO {
         @ORMField['deleted_at']
     public var deletedAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['team_config']
+    public var teamConfig: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -76,7 +79,8 @@ public class AgentGroupsPO {
                 creator: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
-                deletedAt: Option<DateTime>
+                deletedAt: Option<DateTime>,
+                teamConfig: Option<String>
     ) {
                 this.id = id
                 this.name = name
@@ -91,6 +95,7 @@ public class AgentGroupsPO {
                 this.createdAt = createdAt
                 this.updatedAt = updatedAt
                 this.deletedAt = deletedAt
+                this.teamConfig = teamConfig
     }
 
     /// 序列化为 JsonValue
@@ -109,6 +114,7 @@ public class AgentGroupsPO {
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("team_config", optionToJsonValue(this.teamConfig))
         return JsonObject(map)
     }
 

@@ -1,0 +1,49 @@
+name: fullstack-codegen
+description: Full-stack code generation from database schema to verified code
+version: 1.0.0
+
+steps:
+  - name: load-db-info
+    skill: loaddbinfo
+    step_type: skill
+    depends_on: []
+    input:
+      database: "${input.database}"
+      table_name: "${input.table_name}"
+
+  - name: generate-crud
+    skill: crud-generator
+    step_type: skill
+    depends_on:
+      - load-db-info
+    input:
+      table_name: "${input.table_name}"
+      database: "${input.database}"
+      generate_backend: true
+      generate_frontend: "${input.generate_frontend}"
+
+  - name: optimize-backend
+    skill: cangjie-coder
+    step_type: skill
+    depends_on:
+      - generate-crud
+    input:
+      action: "optimize"
+      files: "${generate-crud.output.files}"
+      project_path: "${input.project_path}"
+    condition: "${input.optimize_code} == true"
+
+  - name: verify-code
+    skill: code-gen-verifier
+    step_type: skill
+    depends_on:
+      - optimize-backend
+    input:
+      files: "${generate-crud.output.files}"
+      project_path: "${input.project_path}"
+
+outputs:
+  backend_files: "${generate-crud.output.files}"
+  frontend_files: "${generate-crud.output.api_endpoints}"
+  verification_passed: "${verify-code.output.passed}"
+  api_endpoints: "${generate-crud.output.api_endpoints}"

@@ -3,9 +3,9 @@
 ## 开发规范
 
 ### 仓颉代码开发
-- 所有仓颉（.cj）代码必须使用 **cangjie-coder 技能** 编写
+- 所有仓颉代码(.cj文件)的编写必须使用 **cangjie-coder 技能**，遵循查阅文档→检索代码→编辑适配→写入文件的四步工作流程
 - 编写代码前，必须先在项目中查找确认正确的仓颉代码作为参考
-- 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+- 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 - 仓颉代码必须符合 CangjieMagic 框架的约定和模式
 - 数据库列名使用 snake_case（deleted_at, updated_at），仓颉代码使用 camelCase（createdAt, updatedAt）
 
@@ -49,7 +49,7 @@
     - 同目录下已有的 WebMCPProtocol.cj 中的 JsonObject 使用和 toJson() 方法模式
     - `src/app/models/uctoo/AgentsPO.cj` 中的 Model 数据结构定义模式
     - CangjieMagic 框架的 JSON 序列化约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. DeviceInfo 类可正常实例化，支持全参数构造和无参构造（默认空字符串）
@@ -75,7 +75,7 @@
     - TASK-01 新建的 `DeviceInfo.cj` 中的数据模型和 toJson() 模式
     - `WebMCPProtocol.cj` 中的类定义和成员变量声明模式
     - CangjieMagic 框架的 DateTime 使用约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. SessionInfo 类可正常实例化，所有字段正确初始化
@@ -102,7 +102,7 @@
     - `WebMCPProtocol.cj` 中的 HashMap 使用和 LogUtils 日志记录模式
     - `WebMCPController.cj` 中的会话管理相关代码（_sessions 变量使用模式）
     - CangjieMagic 框架的 UUID 生成和 DateTime 时间计算约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. createSession 生成 UUID v4 格式的 sessionId，不同调用生成不同 ID
@@ -139,7 +139,7 @@
     - `SessionManager.cj`（TASK-03 新建）中的会话管理 API
     - `DeviceInfo.cj`（TASK-01 新建）中的设备信息数据结构
     - CangjieMagic 框架的 HTTP 请求/响应处理约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. 不再使用硬编码 "webmcp-default" 作为 sessionId
@@ -173,7 +173,7 @@
     - `WebMCPRoutes.cj` 中已有的路由注册代码和中间件使用模式
     - 项目中已有的中间件实现（如 `RequirePermissionMiddleware.cj`）的中间件模式
     - CangjieMagic 框架的中间件和路由注册约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. 所有 WebMCP 端点响应包含正确的 CORS 头
@@ -200,7 +200,7 @@
     - `src/app/middleware/RequirePermissionMiddleware.cj` 中的中间件定义和静态方法模式
     - `WebMCPController.cj` 中的 HTTP 响应头设置模式
     - CangjieMagic 框架的中间件约定和 UUID/DateTime 使用模式
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. injectTracingHeaders 正确注入三个追踪头
@@ -239,7 +239,7 @@
     - 同文件中已有的 `createSuccessResponse()` 和 `createErrorResponse()` 方法
     - `src/app/controllers/uctoo/AIController.cj` 中的流式响应实现（handleStreamChat 方法）
     - CangjieMagic 框架的 SSE 输出和 StringBuilder 使用约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. 流式请求返回 Content-Type: text/event-stream 格式
@@ -269,7 +269,7 @@
     - `src/app/controllers/uctoo/AIController.cj` 中的 SSE 响应头设置和流式输出模式
     - `WebMCPProtocol.cj`（TASK-07 修改后）中的 handleStreamCompletion 方法签名
     - CangjieMagic 框架的 HTTP 响应头设置约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. 流式响应头包含 Content-Type: text/event-stream
@@ -298,7 +298,7 @@
     - 同文件中已有的 `_processChatRequest()` 方法（TASK-07 新增）
     - `AgentRuntimeBridge` 的 syncToDatabase 调用模式
     - CangjieMagic 框架的 Agent 对话和上下文管理约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. sendMessage 请求正确调用 SkillAwareAgent.chat() 返回 AI 响应
@@ -331,7 +331,7 @@
     - 同文件中已有的 `skillToJson()` 方法中的 JsonObject 构建模式
     - 同文件中已有的 `createSuccessResponse()` 和 `createErrorResponse()` 方法
     - CangjieMagic 框架的 match 表达式和 HashMap 静态初始化约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. 使用标准方法名（tools/list、tools/call）正常处理
@@ -367,7 +367,7 @@
     - `WebMCPProtocol.cj` 中的 HashMap 使用和 LogUtils 日志记录模式
     - `DeviceInfo.cj`（TASK-01 新建）中的数据模型定义模式
     - CangjieMagic 框架的 JsonObject/JsonArray/JsonString 使用约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. FrontendToolDefinition 可正常实例化和序列化
@@ -398,7 +398,7 @@
     - 同文件中已有的 `handleInvokeTool()` 方法中的参数解析和校验模式
     - `FrontendToolRegistry.cj`（TASK-11 新建）中的注册和查询 API
     - CangjieMagic 框架的 JSON-RPC 请求处理和响应构建约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. tools/register 请求正确存储前端工具定义
@@ -433,7 +433,7 @@
     - `WebMCPRoutes.cj` 中已有的路由注册代码模式
     - `FrontendToolRegistry.cj`（TASK-11 新建）中的工具查询 API
     - CangjieMagic 框架的 HashMap、Lambda 和 HTTP 路由注册约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. tools/call 请求先查后端技能，未找到再查前端工具
@@ -505,7 +505,7 @@
     - `WebMCPProtocol.cj` 中的 HashMap 使用和 LogUtils 日志记录模式
     - `SessionManager.cj`（TASK-03 新建）中的管理器类定义模式
     - CangjieMagic 框架的接口定义和 SSE 消息格式约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. SSEWriter 接口正确定义
@@ -535,7 +535,7 @@
     - `SessionManager.cj`（TASK-03 新建）中的管理器类定义和 HashMap 使用模式
     - `DeviceInfo.cj`（TASK-01 新建）中的设备信息引用
     - CangjieMagic 框架的 ArrayList 和 HashMap 操作约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. RemoterSessionInfo 正确存储控制端会话信息
@@ -571,7 +571,7 @@
     - `RemoterManager.cj`（TASK-17 新建）中的控制端注册和查询 API
     - `SessionManager.cj`（TASK-03 新建）中的会话创建和查询 API
     - CangjieMagic 框架的 SSE 响应头设置、spawn 并发和 sleep 定时约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. GET /sse 无 sessionId 时创建新会话（Proxy 模式）
@@ -601,7 +601,7 @@
     - `SSEConnectionManager.cj`（TASK-16 新建）中的连接检查和清理 API
     - `RemoterManager.cj`（TASK-17 新建）中的控制端查询和清理 API
     - CangjieMagic 框架的 ArrayList 遍历和 JsonObject/JsonArray 构建约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. GET /ping 正确检查所有会话连通性
@@ -632,7 +632,7 @@
     - `SSEConnectionManager.cj`（TASK-16 新建）中的连接清理 API
     - `RemoterManager.cj`（TASK-17 新建）中的控制端清理 API
     - CangjieMagic 框架的 HTTP 请求头检查和响应状态码设置约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. GET /mcp (Accept: text/event-stream) 建立 SSE 连接
@@ -667,7 +667,7 @@
     - `RemoterManager.cj`（TASK-17 新建）中的控制端查询 API
     - `SessionManager.cj`（TASK-03 新建）中的 findBySuffix 和 getAllSessions API
     - CangjieMagic 框架的 HTTP 请求查询参数读取和 JsonObject 响应构建约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. GET /list 返回兼容 WebAgent 格式的会话列表
@@ -700,7 +700,7 @@
     - `SessionManager.cj`（TASK-03 新建）中的 getActiveSessionCount API
     - `SSEConnectionManager.cj`（TASK-16 新建）中的 getActiveConnectionIds API
     - CangjieMagic 框架的 DateTime 使用和 JsonObject/JsonInt 构建约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. GET /health 返回服务基础信息和端点列表
@@ -739,7 +739,7 @@
     - 同文件中已有的路由注册代码（_router.get/post/delete 调用模式）
     - 同文件中已有的 CORS 中间件应用模式（TASK-05 新增的 webmcpCorsMiddleware）
     - CangjieMagic 框架的路由注册和 Lambda 回调约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. 所有新增端点可通过 /api/v1/uctoo/webmcp/* 路径访问
@@ -766,7 +766,7 @@
     - 同文件中已有的 `handleStreamableHttp()` 方法中的请求体解析模式
     - `McpTracingMiddleware.cj`（TASK-06 新建）中的 injectTracingHeaders 静态方法
     - CangjieMagic 框架的 HTTP 响应头设置约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. /mcp 端点所有响应包含 X-MCP-Request-ID 头
@@ -794,7 +794,7 @@
     - 同文件中已有的 `setSessionInfo()` 方法
     - `WebMCPController.cj` 中已有的 WebMCPProtocol 实例化代码
     - CangjieMagic 框架的类构造函数和依赖注入约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. 新会话创建时 WebMCPProtocol 正确实例化
@@ -821,7 +821,7 @@
     - 同文件中已有的 `_sessionId` 成员变量和 `setSessionInfo()` 方法
     - 同文件中已有的 `createSuccessResponse()` 方法
     - CangjieMagic 框架的 JSON-RPC 响应构建约定
-  - 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+  - 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 
 - **验收标准**：
   1. initialize 响应的 sessionId 为动态 UUID

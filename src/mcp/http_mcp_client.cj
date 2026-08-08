@@ -67,10 +67,13 @@ public class HttpMCPClient <: AbsMCPClient {
 
         // If session ID not set, extract from response header
         if (this.sessionId.isNone()) {
-            if (let Some(sessionId) <- result.header.getFirst("mcp-session-id")) {
-                this.sessionId = sessionId
-            } else if (let Some(sessionId) <- result.header.getFirst("Mcp-Session-Id")) {
-                this.sessionId = sessionId
+            match (result.header.get("mcp-session-id")) {
+                case Some(sid) => this.sessionId = sid
+                case None =>
+                    match (result.header.get("Mcp-Session-Id")) {
+                        case Some(sid) => this.sessionId = sid
+                        case None => ()
+                    }
             }
         }
 

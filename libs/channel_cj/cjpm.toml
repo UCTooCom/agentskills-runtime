@@ -1,0 +1,13 @@
+[package]
+  cjc-version = "1.0.5"
+  name = "channel_cj"
+  description = "基于 Go channel 模型的仓颉通道库，支持有缓冲和无缓冲并发通道"
+  version = "1.0.0"
+  target-dir = ""
+  output-type = "static"
+  compile-option = "-Woff unused"
+  override-compile-option = ""
+  link-option = ""
+  package-configuration = {}
+
+[dependencies]

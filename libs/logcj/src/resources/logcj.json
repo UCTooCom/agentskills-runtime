@@ -1,0 +1,59 @@
+{
+    "appenders": [
+        {
+            "enabled": "true",
+            "name": "console",
+            "type": "console",
+            "pattern": "[%D %T %m] [%L] [%l] (%S) %M"
+        },
+        {
+            "enabled": "true",
+            "name": "file",
+            "type": "file",
+            "pattern": "[%D %T %m] [%L] [%l] (%S) %M",
+            "properties": [
+                {
+                    "name": "filename",
+                    "value": "root.log"
+                },
+                {
+                    "name": "rotate",
+                    "value": "true"
+                },
+                {
+                    "name": "maxsize",
+                    "value": "20M"
+                },
+                {
+                    "name": "daily",
+                    "value": "false"
+                }
+            ]
+        }
+    ],
+    "loggers":[
+        {
+            "name":"Demo",
+            "level":"info",
+            "appender-refs": [
+                {
+                    "ref": "console"
+                },
+                {
+                    "ref": "file"
+                }
+            ]
+        }
+    ],
+    "root": {
+        "level": "info",
+        "appender-refs": [
+            {
+                "ref": "console"
+            },
+            {
+                "ref": "file"
+            }
+        ]
+    }
+}

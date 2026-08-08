@@ -9,6 +9,24 @@
 
 ---
 
+## 开发规范
+
+### 仓颉代码开发
+- 所有仓颉代码(.cj文件)的编写必须使用 **cangjie-coder 技能**，遵循查阅文档→检索代码→编辑适配→写入文件的四步工作流程
+- 编写代码前，必须先在项目中查找确认正确的仓颉代码作为参考
+- 仓颉代码必须符合 CangjieMagic 框架和 V4 模块的约定和模式
+- 数据库列名使用 snake_case，仓颉代码使用 camelCase
+- crudgen 生成的代码写在 `//#region AutoCreateCode` 区域内，增量开发代码写在该区域外
+
+### 数据库结构变更流程（uctoo-v4 通用模块开发流程）
+- 涉及数据库结构变更和新增时，必须遵循以下流程：
+  1. **[自动化]** 在 `sql/incremental/` 目录生成数据库DDL脚本
+  2. **[人工操作]** 通知人工执行数据库变更（执行DDL）
+  3. **[人工操作]** 人工使用 `loaddbinfo` 刷新 db_info 表，使用 `crudgen` 生成标准CRUD模块（Model/DAO/Service/Controller/Route），使用 `crudweb` 生成Web管理界面
+  4. **[自动化]** 基于生成的CRUD模块进行迭代开发（定制代码写在 `//#region AutoCreateCode` 区域外）
+
+---
+
 ## 任务依赖关系图
 
 ```
@@ -55,8 +73,7 @@ Phase 1: 数据模型与基础设施
 ## 1. 数据模型与基础设施 [Phase 1]
 
 ### 1.1 数据库迁移脚本 [P0 | 1h]
-- [ ] 创建迁移脚本文件 `scripts/migration/sync_system_mvp_v1.sql`
-  - 编写 agents 表新增字段 DDL：`source_path VARCHAR(512)`、`sync_status VARCHAR(32) DEFAULT 'pending'`、`last_sync_at TIMESTAMPTZ`
+- [ ] 创建迁移脚本文件 `scripts/migration/sync_system_mvp_v1.sql`：`source_path VARCHAR(512)`、`sync_status VARCHAR(32) DEFAULT 'pending'`、`last_sync_at TIMESTAMPTZ`
   - 编写 agents 表唯一索引 `uk_agents_source_path`（仅非空值唯一）和普通索引 `idx_agents_sync_status`
   - 编写 agents 表字段 COMMENT
   - 编写 agent_skills 表新增字段 DDL：同上三个字段

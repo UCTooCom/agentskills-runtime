@@ -1,6 +1,41 @@
 ---
 name: crud-generator
 description: Generate standard CRUD modules for UCToo V4 with DAO layer. Use this skill when the user wants to create a new database module, scaffold CRUD operations, or generate boilerplate code for a database table. The skill uses the crudgen command-line tool to read database structure from db_info table and generate Model, DAO, Service, Controller, Route files in Cangjie language. It also generates permission nodes automatically. Trigger when user mentions "generate CRUD", "create module", "scaffold", "new table", "add entity", "为xxx表生成CRUD" or "创建xxx模块".
+version: 2.0.0
+author: OpenCangjie Team
+inputs:
+  - name: table_name
+    type: string
+    required: true
+    description: 要生成CRUD代码的数据库表名
+  - name: database
+    type: string
+    required: true
+    description: 数据库名称（对应db_info表中的table_catalog）
+  - name: generate_backend
+    type: boolean
+    default: true
+    description: 是否生成后端CRUD代码
+  - name: generate_frontend
+    type: boolean
+    default: true
+    description: 是否生成前端CRUD页面
+  - name: output_dir
+    type: string
+    default: "./src/app"
+    description: 输出目录
+outputs:
+  - name: files
+    type: string[]
+    description: 生成的文件路径列表
+  - name: api_endpoints
+    type: string[]
+    description: 生成的API端点列表
+  - name: permission_nodes
+    type: string[]
+    description: 生成的权限节点列表
+dependencies:
+  - loaddbinfo
 ---
 
 # CRUD Generator Skill

@@ -565,6 +565,12 @@ public class AgentGroupsController {
         if (let Some(deletedAt) <- map.get("deleted_at")) {
             // DateTime类型, 由数据库处理
         }
+        if (let Some(teamConfig) <- map.get("team_config")) {
+            let teamConfigStr = teamConfig as String
+            if (let Some(s) <- teamConfigStr) {
+                entity.teamConfig = Some<String>(s)
+            }
+        }
         return entity
     }
 
@@ -685,7 +691,7 @@ public class AgentGroupsController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,name,group_type,leader_id,member_ids,config,status,max_round,description,creator,created_at,updated_at,deleted_at\n")
+            sb.append("id,name,group_type,leader_id,member_ids,config,status,max_round,description,creator,created_at,updated_at,deleted_at,team_config\n")
 
             // 写入数据行
             for (entity in entities) {
@@ -703,6 +709,7 @@ public class AgentGroupsController {
                 sb.append("\"" + "${entity.createdAt.toString()}" + ",")
                 sb.append("\"" + "${entity.updatedAt.toString()}" + ",")
                 sb.append(if (let Some(v) <- entity.deletedAt) { "\"" + v.toString() + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.teamConfig) { "\"" + v + "\"," } else { "" })
                 sb.append("\n")
             }
 

@@ -3,9 +3,9 @@
 ## 开发规范
 
 ### 仓颉代码开发
-- 所有仓颉（.cj）代码必须使用 **cangjie-coder 技能** 编写
+- 所有仓颉代码(.cj文件)的编写必须使用 **cangjie-coder 技能**，遵循查阅文档→检索代码→编辑适配→写入文件的四步工作流程
 - 编写代码前，必须先在项目中查找确认正确的仓颉代码作为参考
-- 遵循 cangjie-coder 技能的四步工作流程：查阅 CangjieSkills 技能 → 检索代码片段 → 编辑适配 → 写入文件
+- 遵循 cangjie-coder 技能的四步工作流程：查阅文档→检索代码→编辑适配→写入文件
 - 仓颉代码必须符合 CangjieMagic 框架的约定和模式
 - 数据库列名使用 snake_case（deleted_at, updated_at），仓颉代码使用 camelCase（createdAt, updatedAt）
 - `type` 是保留关键字，用作变量名时用反引号转义 `` `type` ``

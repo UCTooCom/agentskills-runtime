@@ -54,12 +54,12 @@ public class CORSMiddleware <: Middleware {
         }
         res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
         res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, x-lang, mcp-protocol-version")
-        res.header("Access-Control-Max-Age", "86400")  // 预检请求缓存 24 小时
+        res.header("Access-Control-Max-Age", "86400")
         
-        // 处理 OPTIONS 预检请求
         if (req.method == HttpMethod.OPTIONS) {
             LogUtils.info("CORS: Handling OPTIONS preflight request")
             res.status(200)
+            res.header("Connection", "close")
             res.send("")
             return
         }

@@ -17,8 +17,8 @@ package boot
 
 import std.collection.*
 import std.env
-import opengauss.driver.*
-import opengauss.slog
+// import opengauss.driver.*
+// import opengauss.slog
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.data.*
@@ -29,8 +29,8 @@ import fountain.orm.* // orm初始化不要再导入这个包，会在首个DAO�
 
 private let _ = {=>
     try{
-        let logger = LoggerFactory.getLogger("opengauss")
-        slog.setDefault(logger)//必须初始化opengauss，否则无法启动，因为配置项orm_drivers指定了opengauss
+        // let logger = LoggerFactory.getLogger("opengauss")
+        // slog.setDefault(logger)//必须初始化opengauss，否则无法启动，因为配置项orm_drivers指定了opengauss
         // let url = env.getVariable('POSTGRES') ?? ''
         let driverName = 'mockdb'
         let driver = ORM.getDriver(driverName)

@@ -27,6 +27,7 @@ exports(){
     export logger_appender_FDemoFile_rotateDuration=DAY
     export controllerPointcut='*..*Controller.*(**): *'
     export mvc_port=8080 # 这一行可以没有，默认就是8080
+    export mvc_maxRequestBodySize=67108864
     export mvc_overallElapsedSwitch=true # 生产环境建议改为false，默认是false
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler

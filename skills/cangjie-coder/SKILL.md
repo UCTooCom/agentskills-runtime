@@ -1,18 +1,28 @@
 ---
 name: cangjie-coder
-description: 仓颉代码编写技能。当用户需要编写、修改、重构或优化任何 .cj 仓颉代码文件时,必须使用此技能。包括新建仓颉文件、修改现有代码、重构代码结构、优化代码性能、修复代码错误等所有涉及仓颉代码的操作。遵循四步工作流程:查阅CangjieSkills技能 → 检索代码片段 → 编辑适配 → 写入文件。此技能确保所有仓颉代码完全符合语言规范,并提供最佳实践指导。
-version: 2.1.0
+description: 仓颉代码编写技能（编排器模式）。当用户需要编写、修改、重构或优化任何 .cj 仓颉代码文件时,必须使用此技能。通过4个专用subagent协作完成：doc-consultant(文档查阅)→code-searcher(代码检索)→code-editor(代码编辑)→code-verifier(代码验证)，验证失败时自动修复闭环（最多3次）。此技能确保所有仓颉代码完全符合语言规范,并提供最佳实践指导。
+version: 3.0.0
 author: OpenCangjie Team
 dependencies:
   - cangjie-language-guide
   - cangjie-full-docs
+agents:
+  - doc-consultant
+  - code-searcher
+  - code-editor
+  - code-verifier
+scripts:
+  - cangjie_syntax_check.py
+  - cangjie_compile.py
+  - cangjie_test_runner.py
+  - cangjie_fix_suggest.py
 ---
 
-# Cangjie Coder 技能
+# Cangjie Coder 技能（编排器模式）
 
 ## 概述
 
-本技能用于编写、修改、重构和优化符合仓颉(Cangjie)编程语言规范的高质量代码文件(.cj 后缀)。通过整合 CangjieSkills 官方文档资源和代码片段库,确保所有仓颉代码既符合规范又遵循最佳实践。
+本技能用于编写、修改、重构和优化符合仓颉(Cangjie)编程语言规范的高质量代码文件(.cj 后缀)。通过4个专用subagent协作完成代码编写全流程，确保所有仓颉代码既符合规范又遵循最佳实践。
 
 **适用场景**:
 - ✅ 新建仓颉代码文件
@@ -23,15 +33,48 @@ dependencies:
 - ✅ 添加新功能到现有代码
 - ✅ 改进代码质量和可维护性
 
-**核心工作流程**: 查阅文档 → 检索代码 → 编辑适配 → 写入文件
+**核心工作流程**: 查阅文档 → 检索代码 → 编辑适配 → 验证代码（失败时自动修复闭环）
+
+## 编排器模式
+
+本技能以编排器模式运行，通过4个专用subagent协作完成代码编写：
+
+```
+cangjie-coder(编排器)
+    ├── Step 1: doc-consultant    → 查阅CangjieSkills文档
+    ├── Step 2: code-searcher     → 检索代码片段
+    ├── Step 3: code-editor       → 编辑适配 + 写入文件
+    └── Step 4: code-verifier     → 验证代码
+           │
+           └── (验证失败) → code-editor(修复) → code-verifier(重新验证)
+                              最多重试3次
+```
+
+### Subagent说明
+
+| Subagent | 职责 | 工具 | 输入 | 输出 |
+|----------|------|------|------|------|
+| doc-consultant | 文档查阅 | file_read, file_search | topic, detail_level | 文档摘要 |
+| code-searcher | 代码检索 | file_read, file_search | query, doc_summary | 代码片段列表 |
+| code-editor | 代码编辑 | file_read, file_write, file_edit | task_description, doc_summary, code_snippets | 代码文件 |
+| code-verifier | 代码验证 | file_read, cli_execute, file_edit | file_path, verify_level | 验证结果 |
+
+### 自动修复闭环
+
+当code-verifier验证失败时：
+1. code-verifier生成修复建议
+2. code-editor根据建议修复代码
+3. code-verifier重新验证
+4. 最多重试3次，超过后输出结果（含警告）
 
 ## 关键约束
 
-- ⚠️ **必须先查阅文档**: 在编写任何仓颉代码前,必须先查阅 CangjieSkills 技能获取语言规范和最佳实践
-- ⚠️ **禁止直接生成代码**: 不得直接使用大模型生成仓颉代码,必须先检索现有代码片段或参考文档示例
+- ⚠️ **必须先查阅文档**: 在编写任何仓颉代码前,必须先通过doc-consultant查阅 CangjieSkills 技能获取语言规范和最佳实践
+- ⚠️ **禁止直接生成代码**: 不得直接使用大模型生成仓颉代码,必须先通过code-searcher检索现有代码片段或参考文档示例
 - ⚠️ **必须符合规范**: 所有 .cj 文件必须符合仓颉词法和语法规范
-- ⚠️ **工作流程**: 查阅(Consult) → 检索(Retrieval) → 编辑(Editing) → 写入(Writing)
+- ⚠️ **工作流程**: 查阅(Consult) → 检索(Retrieval) → 编辑(Editing) → 验证(Verification)
 - ⚠️ **适用所有场景**: 新建、修改、重构、优化、修复等所有涉及仓颉代码的操作都必须使用此技能
+- ⚠️ **验证闭环**: 代码写入后必须通过code-verifier验证，验证失败时自动修复
 
 ---
 

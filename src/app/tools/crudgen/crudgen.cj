@@ -7,7 +7,7 @@ import f_orm.*
 import f_config.Config
 import f_orm.wrap.ORMConfig
 import std.database.sql.DriverManager
-import opengauss.driver.PGDriver
+import pgsql.PostgresDriver
 
 /**
  * CRUD代码生成器命令行工具
@@ -166,7 +166,7 @@ func initializeORM(): Bool {
         // 注册 PostgreSQL 驱动
         let driver = DriverManager.getDriver("postgres")
         if (driver.isNone()) {
-            let pgDriver = PGDriver("postgres")
+            let pgDriver = PostgresDriver()
             DriverManager.register("postgres", pgDriver)
             println("PostgreSQL驱动已注册")
         }

@@ -1,0 +1,57 @@
+name: investment-research-assistant
+description: 智能投研助理 —— 自动抓取、清洗、提取，输出每日投资简报（金融行业 Agent 最佳实践 SOP）
+version: 1.0.0
+
+# 组合步骤：全流程编排（抓取 → 清洗 → 提取 → 生成 → 落库 → 简报）
+steps:
+  - name: fetch-data
+    step_type: script
+    script: scripts/fetch_market_data.py
+    depends_on: []
+    input:
+      companies: "${input.companies}"
+      date: "${input.date}"
+      outdir: "output/raw"
+
+  - name: clean-data
+    step_type: script
+    script: scripts/clean_market_data.py
+    depends_on:
+      - fetch-data
+    input:
+      input_file: "${fetch-data.output}/raw/${input.date}.json"
+      outdir: "output/clean"
+
+  - name: extract-factors
+    step_type: script
+    script: scripts/extract_factors.py
+    depends_on:
+      - clean-data
+    input:
+      input_file: "${clean-data.output}/clean/${input.date}.json"
+      outdir: "output/factors"
+
+  - name: generate-report
+    step_type: llm
+    depends_on:
+      - extract-factors
+    input:
+      factors_path: "${extract-factors.output}/factors/${input.date}.json"
+      prompt: "基于要素数据生成每日投资简报，按公司输出：一句话结论、行情概览、核心看点、风险提示、数据来源与免责声明。仅供技术交流，不构成投资建议。"
+
+  - name: persist-report
+    step_type: script
+    script: scripts/save_report_to_db.py
+    depends_on:
+      - generate-report
+    input:
+      report: "${generate-report.output}/brief/${input.date}.md"
+      factors: "${extract-factors.output}/factors/${input.date}.json"
+      sql_only: "${input.sql_only}"
+
+  - name: output-brief
+    step_type: output
+    depends_on:
+      - persist-report
+    input:
+      brief_dir: "${generate-report.output}/brief"

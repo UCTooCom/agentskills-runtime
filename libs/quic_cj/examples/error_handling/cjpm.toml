@@ -1,0 +1,10 @@
+[package]
+  name = "sample_error_handling"
+  version = "0.1.0"
+  cjc-version = "1.0.5"
+  output-type = "executable"
+  src-dir = "src"
+  compile-option = "-Woff unused"
+
+[dependencies]
+  quic_cj = { path = "../..", output-type = "static" }

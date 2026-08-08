@@ -120,13 +120,16 @@ public class BeanFactory {
         }
         log.debug{'bean registered ${manager}'}
     }
-    public func register<T>(creator: () -> T) where T <: Object {
-        let typeInfo = TypeInfo.of<T>()
-        let meta = if (let Some(meta) <- typeInfo.findAnnotation<BeanMeta>()) {
-            meta
-        } else {
-            BeanMeta()
-        }
+    public func register<T>(creator: () -> T): Unit where T <: Object {
+        let meta = TypeInfo.of<T>().findAnnotation<BeanMeta>() ?? BeanMeta()
+        doRegister<T>(meta, creator)
+    }
+    public func registerByStaticFunction<T>(fnName: String, creator: () -> T): Unit where T <: Object {
+        let meta = TypeInfo.of<T>().getStaticFunction(fnName, []).findAnnotation<BeanMeta>() ?? BeanMeta()
+        doRegister<T>(meta, creator)
+    }
+    public func registerByInstanceFunction<T>(fnName: String, creator: () -> T): Unit where T <: Object {
+        let meta = TypeInfo.of<T>().getInstanceFunction(fnName, []).findAnnotation<BeanMeta>() ?? BeanMeta()
         doRegister<T>(meta, creator)
     }
     public func afterRegistered() {

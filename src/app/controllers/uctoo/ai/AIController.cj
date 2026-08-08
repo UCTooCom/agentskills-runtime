@@ -13,7 +13,7 @@ import magic.core.agent.{AgentRequest, AgentResponse}
 import magic.agent.memory.tiered.TieredMemory
 import magic.interaction.EventHandlerManager
 import magic.log.LogUtils
-import stdx.net.http.HttpHeaders
+
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 import magic.jsonable.JsonUtils
 import std.time.DateTime

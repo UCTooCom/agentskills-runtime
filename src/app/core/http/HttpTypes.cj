@@ -3,7 +3,7 @@ package magic.app.core.http
 import std.collection.ArrayList
 import std.collection.HashMap
 
-public enum HttpMethod {
+public enum HttpMethod <: ToString {
     | GET
     | POST
     | PUT
@@ -24,9 +24,20 @@ public enum HttpMethod {
         }
     }
     
-    // 实现 == 操作符，支持枚举比较
     public operator func ==(other: HttpMethod): Bool {
         this.level() == other.level()
+    }
+    
+    public func toString(): String {
+        match (this) {
+            case GET => "GET"
+            case POST => "POST"
+            case PUT => "PUT"
+            case DELETE => "DELETE"
+            case PATCH => "PATCH"
+            case HEAD => "HEAD"
+            case OPTIONS => "OPTIONS"
+        }
     }
 }
 

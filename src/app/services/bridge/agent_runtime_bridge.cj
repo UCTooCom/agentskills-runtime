@@ -236,6 +236,8 @@ public class AgentRuntimeBridge {
             po.defaultInputTypes,
             po.defaultOutputTypes,
             po.discoverable,
+            None<String>,
+            None<String>,
             if (let Some(s) <- po.systemPrompt) { s } else { "" },
             Path(if (let Some(s) <- po.sourcePath) { s } else { "." }),
             Path(".")

@@ -1,8 +1,8 @@
 [dependencies]
-  stdx = { path = "../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm" }
+##  stdx = { git = "https://gitcode.com/Cangjie/cangjie_stdx.git" }
 
 [package]
-  cjc-version = "1.0.1"
+  cjc-version = "1.0.5"
   name = "json4cj"
   version = "1.0.0"
   description = "A Jackson-inspired JSON serialization library for Cangjie, powered by compile-time macro code generation with zero runtime overhead."
@@ -35,29 +35,29 @@
     path-option = [ "${X86_64_OHOS_LIBS}", "${X86_64_OHOS_MACRO_LIBS}", "${X86_64_OHOS_KIT_LIBS}" ]
 
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["../cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-linux-x64-1.0.5.1/linux_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-unknown-windows-gnu]
   compile-option = "--cfg \"ohos=false\""
 [target.x86_64-unknown-windows-gnu.bin-dependencies]
-  path-option = ["../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-w64-mingw32]
   compile-option = "-Woff unused -Woff deprecated --dy-std --cfg \"ohos=false\""
 [target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-unknown-linux-gnu]
   compile-option = "--cfg \"ohos=false\""
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["../cangjie-stdx-linux-aarch64-1.0.0.1/linux_aarch64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-linux-aarch64-1.0.5.1/linux_aarch64_cjnative/dynamic/stdx"]
 
 [target.x86_64-apple-darwin]
   compile-option = "--cfg \"ohos=false\""
 [target.x86_64-apple-darwin.bin-dependencies]
-  path-option = ["../cangjie-stdx-mac-x64-1.0.0.1/darwin_x86_64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-mac-x64-1.0.5.1/darwin_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-apple-darwin]
   compile-option = "--cfg \"ohos=false\""
 [target.aarch64-apple-darwin.bin-dependencies]
-  path-option = ["../cangjie-stdx-mac-aarch64-1.0.0.1/darwin_aarch64_llvm/dynamic/stdx"]
+  path-option = ["../cangjie-stdx-mac-aarch64-1.0.5.1/darwin_aarch64_cjnative/dynamic/stdx"]

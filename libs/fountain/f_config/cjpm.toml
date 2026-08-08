@@ -1,7 +1,7 @@
 [dependencies]
   f_data  = {path = "../f_data", version = "1.0.45"}
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "配置模块"

@@ -133,6 +133,7 @@ extend JsonValue <: ExtendJsonValue {
                     obj.put(ks, vs)
                 }
                 obj
+            case x: ToString => JsonString(x.toString())
             case _ => throw DataException("can not convert data type to JsonValue")
         }
     }

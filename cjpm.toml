@@ -1,13 +1,13 @@
 [package]
-  cjc-version = "1.0.4"
-  compile-option = "-Woff all --dy-std --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=cj\""
+  cjc-version = "1.0.5"
+  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=cj\""
   description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
-  link-option = ""
+  link-option = "--allow-multiple-definition"
   name = "magic"
-  output-type = "dynamic"
+  output-type = "static"
   src-dir = ""
   target-dir = ""
-  version = "0.0.25"
+  version = "0.0.26"
 
 [dependencies]
   yaml4cj = { path = "./libs/yaml4cj" }
@@ -19,10 +19,10 @@
   f_ticktock = { path = "./libs/fountain/f_ticktock" }
   f_aspect = { path = "./libs/fountain/f_aspect" }
   f_bean = { path = "./libs/fountain/f_bean" }
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", compile-option = "-Woff unused" }
-  jwt4cj = { git = "https://gitcode.com/Cangjie-TPC/jwt4cj.git", branch = "develop", compile-option = "-Woff unused" }
-  logcj = { git = "https://gitcode.com/Cangjie-TPC/log-cj.git", branch = "develop", compile-option = "-Woff unused" }
-  opengauss = { git = "https://gitcode.com/Cangjie-TPC/opengauss-driver.git", branch = "master", compile-option = "-Woff unused" }
+  charset4cj = { path = "./libs/charset4cj" }
+  jwt4cj = { path = "./libs/jwt4cj", compile-option = "-Woff unused" }
+  logcj = { path = "./libs/logcj", compile-option = "-Woff unused" }
+  pgsql = { path = "./libs/pgsql-driver", compile-option = "-Woff unused" }
 #  redis_sdk = { path = "../CangjieMagic/resource/TPC/redis-sdk"}
 #  pbkdf2 = { path = "../CangjieMagic/resource/TPC/pbkdf2" }
 #  hicrypto = { path = "../CangjieMagic/resource/TPC/hicrypto" }
@@ -32,6 +32,14 @@
   cj_mail = { path = "./libs/cj_mail" }
   activemq4cj = { path = "./libs/activemq4cj", compile-option = "-Woff unused" }
   hyperion = { path = "./libs/hyperion", compile-option = "-Woff unused" }
+  http_lib = { path = "./libs/http_lib", output-type = "static" }
+  quic_cj = { path = "./libs/quic_cj", output-type = "static" }
+  kaca_json = { path = "./libs/kaca_json", output-type = "static" }
+  jinguissl = { path = "./libs/jinguissl", output-type = "static" }
+  jinguissl_core = { path = "./libs/jinguissl_core", output-type = "static" }
+  kaca_cookies = { path = "./libs/kaca_cookies", output-type = "static" }
+  compress4cj = { path = "./libs/compress4cj", output-type = "static" }
+  channel_cj = { path = "./libs/channel_cj", output-type = "static" }
 
 
 #----------------------------------------
@@ -96,6 +104,7 @@
 #[package.package-configuration."magic.examples.firecrawl_test"]
 #  output-type = "executable"
 
+
 #----------------------------------------
 #  Setting FFI libs
 #----------------------------------------
@@ -108,33 +117,33 @@
 #----------------------------------------
 
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-linux-x64-1.0.0.1/linux_x86_64_llvm/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-linux-x64-1.0.5.1/linux_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-unknown-windows-gnu]
   compile-option = "--cfg \"ohos=false\""
 [target.x86_64-unknown-windows-gnu.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.4.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-w64-mingw32]
-  compile-option = "-Woff unused -Woff deprecated --dy-std --cfg \"ohos=false\""
+  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std --cfg \"ohos=false\""
 
 [target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.4.1/windows_x86_64_llvm/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-unknown-linux-gnu]
   compile-option = "--cfg \"ohos=false\""
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-linux-aarch64-1.0.0.1/linux_aarch64_llvm/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-linux-aarch64-1.0.5.1/linux_aarch64_cjnative/dynamic/stdx"]
 
 [target.x86_64-apple-darwin]
   compile-option = "--cfg \"ohos=false\""
 [target.x86_64-apple-darwin.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-mac-x64-1.0.0.1/darwin_x86_64_llvm/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-mac-x64-1.0.5.1/darwin_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-apple-darwin]
   compile-option = "--cfg \"ohos=false\""
 [target.aarch64-apple-darwin.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-mac-aarch64-1.0.0.1/darwin_aarch64_llvm/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-mac-aarch64-1.0.5.1/darwin_aarch64_cjnative/dynamic/stdx"]
 
 
 

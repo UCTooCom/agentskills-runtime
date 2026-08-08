@@ -267,6 +267,14 @@ public class AgentLoader {
             builder.setDiscoverable(discoverableStr.toAsciiLower() == "true")
         }
         
+        if (let Some(language) <- yaml.get("language")) {
+            builder.setLanguage(language)
+        }
+        
+        if (let Some(languageContext) <- yaml.get("language_context")) {
+            builder.setLanguageContext(languageContext)
+        }
+        
         return builder.build()
     }
     

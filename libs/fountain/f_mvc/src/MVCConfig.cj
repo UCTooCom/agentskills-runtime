@@ -60,6 +60,7 @@ public class MVCConfig {
     public static let INTERNAL_SERVER_ERROR_MESSAGE = "${confPrefix}_internalServerErrorMessage"
 
     public static let MVC_OVERALL_ELAPSED_SWITCH = "${confPrefix}_overallElapsedSwitch"
+    public static let MVC_STATIC_RESOURCE_ROOT = "${confPrefix}_staticResourceRoot"
 
     public static prop tlsConfig: ?TlsServerConfig {
         get() {
@@ -253,6 +254,15 @@ public class MVCConfig {
     public static prop mvcOverallElapsedSwitch: Bool {
         get(){
             Config.getValue<Bool>(MVC_OVERALL_ELAPSED_SWITCH) ?? false
+        }
+    }
+    public static prop mvcStaticResourceRoot: Path {
+        get(){
+            if(let Some(p) <- Config.getString(MVC_STATIC_RESOURCE_ROOT)){
+                canonicalize(p)
+            } else {
+                getWorkingDirectory()
+            }
         }
     }
 }

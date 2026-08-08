@@ -52,7 +52,8 @@ public interface AgentGroupsDAO <: RootDAO {
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                team_config
             ) values(
 ${arg(entity.name)},
                 ${arg(entity.groupType)},
@@ -65,7 +66,8 @@ ${arg(entity.name)},
                 ${arg(entity.creator)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.teamConfig)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -80,7 +82,7 @@ ${arg(entity.name)},
      */
     func findAgentGroupsById(id: String): Option<AgentGroupsPO> {
         executor.setSql('''
-            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at from agent_groups where id = ${arg(id)}
+            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at, team_config from agent_groups where id = ${arg(id)}
         ''').first<AgentGroupsPO>()
     }
 
@@ -104,6 +106,7 @@ ${arg(entity.name)},
                 description = ${arg(entity.description)},
                 creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
+                team_config = ${arg(entity.teamConfig)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -154,7 +157,7 @@ ${arg(entity.name)},
      */
     func findAllAgentGroupsPage(page: Int64, size: Int64): Pagination<AgentGroupsPO> {
         executor.page<AgentGroupsPO>('''
-            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at from agent_groups order by created_at desc
+            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at, team_config from agent_groups order by created_at desc
         ''', size, page: page)
     }
 
@@ -167,7 +170,7 @@ ${arg(entity.name)},
      */
     func findAgentGroupsByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<AgentGroupsPO> {
         executor.page<AgentGroupsPO>('''
-            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at from agent_groups where creator = ${arg(creator)} order by created_at desc
+            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at, team_config from agent_groups where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -177,7 +180,7 @@ ${arg(entity.name)},
      */
     func listAllAgentGroups(): ArrayList<AgentGroupsPO> {
         executor.setSql('''
-            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at from agent_groups order by created_at desc
+            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at, team_config from agent_groups order by created_at desc
         ''').list<AgentGroupsPO>()
     }
 
@@ -191,7 +194,7 @@ ${arg(entity.name)},
             return ArrayList<AgentGroupsPO>()
         }
         executor.setSql('''
-            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at from agent_groups where id ${IN(ids)}
+            select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at, team_config from agent_groups where id ${IN(ids)}
         ''').list<AgentGroupsPO>()
     }
 
@@ -230,7 +233,7 @@ ${arg(entity.name)},
      */
     func findAgentGroupsByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentGroupsPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at from agent_groups where 1=1")
+        sql.append("select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at, team_config from agent_groups where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -303,7 +306,7 @@ ${arg(entity.name)},
      */
     func findAgentGroupsByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentGroupsPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at from agent_groups")
+        sql.append("select id, name, group_type, leader_id, member_ids, config, status, max_round, description, creator, created_at, updated_at, deleted_at, team_config from agent_groups")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

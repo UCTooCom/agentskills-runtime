@@ -1,0 +1,96 @@
+composition:
+  name: code-gen-optimize
+  description: 全栈代码生成+验证+优化组合模板，实现从数据库结构到高质量代码的完整闭环
+  version: 1.0.0
+  author: OpenCangjie Team
+
+  inputs:
+    - name: table_name
+      type: string
+      required: true
+      description: 要生成CRUD代码的数据库表名
+    - name: database
+      type: string
+      required: true
+      description: 数据库名称
+    - name: generate_backend
+      type: boolean
+      default: true
+      description: 是否生成后端CRUD代码
+    - name: generate_frontend
+      type: boolean
+      default: true
+      description: 是否生成前端CRUD页面
+    - name: verify_level
+      type: string
+      default: "compile"
+      description: 验证级别（syntax/compile/test）
+
+  outputs:
+    - name: files
+      type: string[]
+      description: 最终生成的文件路径列表
+    - name: verification_passed
+      type: boolean
+      description: 验证是否通过
+    - name: api_endpoints
+      type: string[]
+      description: 生成的API端点列表
+
+  steps:
+    - name: load-db-info
+      skill: loaddbinfo
+      input:
+        database: ${args.database}
+      output:
+        loaded_tables: ${result.loaded_tables}
+
+    - name: gen-crud
+      skill: crud-generator
+      depends_on: [load-db-info]
+      input:
+        table_name: ${args.table_name}
+        database: ${args.database}
+        generate_backend: ${args.generate_backend}
+        generate_frontend: ${args.generate_frontend}
+      output:
+        files: ${result.files}
+        api_endpoints: ${result.api_endpoints}
+
+    - name: verify-code
+      skill: code-gen-verifier
+      depends_on: [gen-crud]
+      input:
+        files: ${gen-crud.output.files}
+        project_path: ${args.project_path}
+        verify_level: ${args.verify_level}
+      output:
+        passed: ${result.passed}
+        errors: ${result.errors}
+        fix_suggestions: ${result.fix_suggestions}
+
+    - name: optimize-code
+      skill: cangjie-coder
+      depends_on: [verify-code]
+      condition: ${verify-code.output.passed} == true
+      input:
+        files: ${gen-crud.output.files}
+        action: optimize
+      output:
+        files: ${result.files}
+
+  error_handling:
+    - step: verify-code
+      on_failure: retry
+      max_retries: 3
+      retry_with: cangjie-coder
+      retry_input:
+        files: ${gen-crud.output.files}
+        action: fix
+        errors: ${verify-code.output.errors}
+        fix_suggestions: ${verify-code.output.fix_suggestions}
+
+  final_output:
+    files: ${optimize-code.output.files}
+    verification_passed: ${verify-code.output.passed}
+    api_endpoints: ${gen-crud.output.api_endpoints}

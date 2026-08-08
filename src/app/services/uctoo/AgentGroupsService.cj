@@ -108,6 +108,9 @@ public class AgentGroupsService {
             if (entity.deletedAt.isSome()) {
                 existingEntity.deletedAt = entity.deletedAt
             }
+            if (entity.teamConfig.isSome()) {
+                existingEntity.teamConfig = entity.teamConfig
+            }
 
             
             // 设置更新时间和ID

@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   name = "f_mockdb"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"

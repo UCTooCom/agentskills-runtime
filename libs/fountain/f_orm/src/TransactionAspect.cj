@@ -19,18 +19,21 @@ import std.reflect.*
 import f_aspect.*
 import f_base.*
 import f_bean.{BeanFactory, BeanMeta}
+import f_log.*
 import f_orm.wrap.ORMConfig
 public import f_aspect.*
 
 @AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
 @BeanMeta
 public class TransactionAspect <: Aspect {
+    private static let log = LoggerFactory.getLogger<TransactionAspect>()
     static init() {
         BeanFactory.instance.register<TransactionAspect>({=> TransactionAspect()})
     }
     private init() {}
 
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
+        log.debug('TransactionAspect.proceed start')
         let transactional = funcInfo.funcInfo.findAnnotation<Transactional>()
         var driverName = ""
         var propagation = None<Propagation>

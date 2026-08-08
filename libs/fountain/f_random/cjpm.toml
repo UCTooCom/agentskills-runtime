@@ -1,8 +1,8 @@
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  stdx = { path = "../../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm" }
+ ## stdx = { git = "https://gitcode.com/Cangjie/cangjie_stdx.git" }
+  f_base  = {path = "../f_base"}
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "随机数扩展、随机字符串、蓄水池算法"
@@ -56,5 +56,4 @@
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [profile.build]
-#  lto = "full"
   incremental = true

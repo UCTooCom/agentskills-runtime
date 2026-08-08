@@ -1,0 +1,11 @@
+[package]
+  cjc-version = "1.0.0"
+  version = "0.1.0"
+  name = "jinguissl_contract_application_smoke"
+  output-type = "executable"
+  src-dir = "src"
+  compile-option = "-Woff unused"
+  description = "Standalone application consumption smoke for JinguiSSLContract"
+
+[dependencies]
+  jinguissl = { path = "../.." }

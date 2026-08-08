@@ -53,11 +53,15 @@ Phase P4: 远期规划
 
 ## 关键约定
 
-1. **开发流程**：数据库变更遵循「DDL → crudgen/loadDbInfo → 扩展 Service/Controller」流程
+1. **开发流程**：数据库变更遵循 uctoo-v4 通用模块开发流程：
+   1. **[自动化]** 在 `sql/incremental/` 目录生成数据库DDL脚本
+   2. **[人工操作]** 通知人工执行数据库变更（执行DDL）
+   3. **[人工操作]** 人工使用 `loaddbinfo` 刷新 db_info 表，使用 `crudgen` 生成标准CRUD模块（Model/DAO/Service/Controller/Route），使用 `crudweb` 生成Web管理界面
+   4. **[自动化]** 基于生成的CRUD模块进行迭代开发（定制代码写在 `//#region AutoCreateCode` 区域外）
 2. **代码区域**：crudgen 生成的代码写在 `//#region AutoCreateCode` 区域内，增量开发代码写在该区域外
 3. **日志规范**：统一使用 `magic.log.LogUtils`
 4. **命名规范**：数据库列名 snake_case，仓颉代码 camelCase
-5. **仓颉代码编写**：使用 cangjie-coder 技能
+5. **仓颉代码编写**：所有仓颉代码(.cj文件)的编写必须使用 **cangjie-coder 技能**，遵循查阅文档→检索代码→编辑适配→写入文件的四步工作流程
 6. **复用原则**：优先复用和完善已有基础设施，不重新开发
 
 ---
@@ -65,8 +69,7 @@ Phase P4: 远期规划
 ## 1. 数据库迁移与模型扩展 [P0]
 
 ### 1.1 数据库迁移脚本 [P0 | 必须 | 1h]
-- [ ] 创建迁移脚本文件 `scripts/migration/aip_local_mode_v1.sql`
-  - 编写 uctoo_user 表新增字段 DDL：`user_type VARCHAR(20) NOT NULL DEFAULT 'human'`、`agent_id UUID DEFAULT NULL`
+- [ ] 创建迁移脚本文件 `scripts/migration/aip_local_mode_v1.sql`- 编写 uctoo_user 表新增字段 DDL：`user_type VARCHAR(20) NOT NULL DEFAULT 'human'`、`agent_id UUID DEFAULT NULL`
   - 编写 uctoo_user 表索引：`idx_uctoo_user_user_type`、`idx_uctoo_user_agent_id`（部分索引，仅非空值）
   - 编写 agents 表新增字段 DDL：`aic VARCHAR(128) DEFAULT NULL`、`identity_status VARCHAR(20) NOT NULL DEFAULT 'none'`、`aip_registered_at TIMESTAMPTZ DEFAULT NULL`、`capabilities JSONB DEFAULT NULL`、`default_input_types JSONB DEFAULT NULL`、`default_output_types JSONB DEFAULT NULL`、`discoverable BOOLEAN NOT NULL DEFAULT true`
   - 编写 agents 表索引：`idx_agents_aic`（唯一部分索引）、`idx_agents_identity_status`、`idx_agents_discoverable`

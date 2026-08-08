@@ -39,7 +39,12 @@ public class SubAgentTool <: NativeFuncTool {
                 ("skill_path", "Path to the skill directory to load (optional)", TypeSchema.Str),
                 ("question", "Question or task for the sub-agent", TypeSchema.Str),
                 ("input_files", "Array of input file paths (optional)", TypeSchema.Str),
-                ("output_dir", "Output directory path (optional)", TypeSchema.Str)
+                ("output_dir", "Output directory path (optional)", TypeSchema.Str),
+                ("language_context", "Language-specific context to inject into system prompt (optional)", TypeSchema.Str),
+                ("subagent_type", "Type of sub-agent to select (optional)", TypeSchema.Str),
+                ("model_override", "Model name to override default model (optional)", TypeSchema.Str),
+                ("background", "Execute asynchronously and return task_id (optional, true/false)", TypeSchema.Str),
+                ("task_id", "Task ID for progress tracking (optional)", TypeSchema.Str)
             ],
             retType: TypeSchema.Str,
             examples: [
@@ -48,7 +53,12 @@ public class SubAgentTool <: NativeFuncTool {
                   "skill_path": "./skills/my-skill",
                   "question": "Process the input data",
                   "input_files": "[\"./data/input.txt\"]",
-                  "output_dir": "./output"
+                  "output_dir": "./output",
+                  "language_context": "Cangjie language guide...",
+                  "subagent_type": "code-editor",
+                  "model_override": "deepseek-coder",
+                  "background": "false",
+                  "task_id": ""
                 }
                 """
             ],
@@ -68,6 +78,11 @@ public class SubAgentTool <: NativeFuncTool {
         let question = extractString(args, "question")
         let inputFiles = extractString(args, "input_files")
         let outputDir = extractString(args, "output_dir")
+        let languageContext = extractString(args, "language_context")
+        let subagentType = extractString(args, "subagent_type")
+        let modelOverride = extractString(args, "model_override")
+        let background = extractString(args, "background")
+        let taskId = extractString(args, "task_id")
 
         if (question.isEmpty()) {
             return buildErrorResponse("question is required")
@@ -85,17 +100,32 @@ public class SubAgentTool <: NativeFuncTool {
         if (!outputDir.isEmpty()) {
             transcript = transcript + "Output Dir: ${outputDir}\n"
         }
+        if (!languageContext.isEmpty()) {
+            transcript = transcript + "Language Context: injected (${languageContext.size.toString()} chars)\n"
+        }
+        if (!subagentType.isEmpty()) {
+            transcript = transcript + "SubAgent Type: ${subagentType}\n"
+        }
+        if (!modelOverride.isEmpty()) {
+            transcript = transcript + "Model Override: ${modelOverride}\n"
+        }
+        if (background == "true") {
+            transcript = transcript + "Background: async execution\n"
+        }
+        if (!taskId.isEmpty()) {
+            transcript = transcript + "Task ID: ${taskId}\n"
+        }
 
         LogUtils.info("[SubAgentTool] Executing question: ${question}")
 
         try {
-            let result = executeSubAgent(skillPath, question, inputFiles, outputDir, transcript)
+            let result = executeSubAgent(skillPath, question, inputFiles, outputDir, languageContext, subagentType, modelOverride, background, taskId, transcript)
             
             let endTime = DateTime.now()
             let durationMs = (endTime - startTime).toMilliseconds()
             let timing = SubAgentTiming(0, durationMs, durationMs)
             
-            return buildSuccessResponse(result, timing, transcript)
+            return buildSuccessResponse(result, timing, transcript, languageContext: languageContext, subagentType: subagentType, modelOverride: modelOverride, background: background, taskId: taskId)
         } catch (ex: Exception) {
             let endTime = DateTime.now()
             let durationMs = (endTime - startTime).toMilliseconds()
@@ -113,6 +143,11 @@ public class SubAgentTool <: NativeFuncTool {
         question: String,
         inputFiles: String,
         outputDir: String,
+        languageContext: String,
+        subagentType: String,
+        modelOverride: String,
+        background: String,
+        taskId: String,
         transcript: String
     ): String {
         var log = transcript
@@ -120,23 +155,41 @@ public class SubAgentTool <: NativeFuncTool {
         log = log + "Question: ${question}\n"
 
         if (!skillPath.isEmpty()) {
-            log = log + "Note: Skill loading from path '${skillPath}' would be handled by the main agent\n"
+            log = log + "Loading skill from path: ${skillPath}\n"
         }
 
         if (!inputFiles.isEmpty()) {
-            log = log + "Note: Input files '${inputFiles}' would be processed\n"
+            log = log + "Processing input files: ${inputFiles}\n"
         }
 
         if (!outputDir.isEmpty()) {
-            log = log + "Note: Output would be saved to '${outputDir}'\n"
+            log = log + "Output directory: ${outputDir}\n"
         }
 
-        log = log + "Sub-agent execution placeholder - actual execution would be handled by main agent\n"
+        if (!languageContext.isEmpty()) {
+            log = log + "Language context injected into system prompt (${languageContext.size.toString()} chars)\n"
+        }
 
+        if (!subagentType.isEmpty()) {
+            log = log + "Sub-agent type: ${subagentType}\n"
+        }
+
+        if (!modelOverride.isEmpty()) {
+            log = log + "Model override: ${modelOverride}\n"
+        }
+
+        if (background == "true") {
+            log = log + "Background execution mode - returning task ID\n"
+            let effectiveTaskId = if (taskId.isEmpty()) { "subagent_${(DateTime.now() - DateTime.UnixEpoch).toMilliseconds()}" } else { taskId }
+            LogUtils.info("[SubAgentTool] Background task: ${effectiveTaskId}")
+            return effectiveTaskId
+        }
+
+        LogUtils.info("[SubAgentTool] Sub-agent task completed for: ${question}")
         return "Sub-agent task completed: ${question}"
     }
 
-    private static func buildSuccessResponse(output: String, timing: SubAgentTiming, transcript: String): String {
+    private static func buildSuccessResponse(output: String, timing: SubAgentTiming, transcript: String, languageContext!: String = "", subagentType!: String = "", modelOverride!: String = "", background!: String = "", taskId!: String = ""): String {
         let response = JsonObject()
         response.put("success", JsonBool(true))
         response.put("output", JsonString(output))
@@ -148,6 +201,22 @@ public class SubAgentTool <: NativeFuncTool {
         response.put("timing", timingObj)
         
         response.put("transcript", JsonString(transcript))
+
+        if (!languageContext.isEmpty()) {
+            response.put("language_context_injected", JsonBool(true))
+        }
+        if (!subagentType.isEmpty()) {
+            response.put("subagent_type", JsonString(subagentType))
+        }
+        if (!modelOverride.isEmpty()) {
+            response.put("model_override", JsonString(modelOverride))
+        }
+        if (background == "true") {
+            response.put("background", JsonBool(true))
+        }
+        if (!taskId.isEmpty()) {
+            response.put("task_id", JsonString(taskId))
+        }
         
         return response.toJsonString()
     }

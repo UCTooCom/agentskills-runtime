@@ -1,0 +1,11 @@
+[
+    {
+        "Name": " zip4j ",
+        "License": " Apache-2.0 license ",
+        "License File": " LICENSE ",
+        "Version Number": " v2.11.3 ",
+        "Owner": "Srikanth Reddy Lingala"
+        "Upstream URL": " https://github.com/srikanth-lingala/zip4j ",
+        "Description": "  A Java library for zip files and streams. "
+    }
+]

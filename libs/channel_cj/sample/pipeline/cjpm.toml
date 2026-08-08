@@ -1,0 +1,9 @@
+[package]
+cjc-version = "1.0.5"
+name = "sample_pipeline"
+version = "1.0.0"
+description = "管道流水线模式演示"
+output-type = "executable"
+
+[dependencies]
+channel_cj = { path = "../..", output-type = "static" }

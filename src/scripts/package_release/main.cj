@@ -498,6 +498,37 @@ main(args: Array<String>): Unit {
         println("  [WARN] Directory not found: ${blowfishDir}")
     }
     
+    // Copy 0.0.26+ dependency DLLs (http_lib + 7 transitive deps are static libs, no DLL output, skipped here)
+    // cos produces DLLs; pgsql/cj_mail/activemq4cj/hyperion are CJO-only, walk yields 0 DLLs harmlessly
+    let extraDeps = ["cos", "pgsql", "cj_mail", "activemq4cj", "hyperion"]
+    for (depName in extraDeps) {
+        println("")
+        println("[STEP] Copying ${depName} DLLs to bin...")
+        
+        let depDir = Path("${targetDir}/${depName}")
+        if (exists(depDir) && exists(binDir)) {
+            let dllCount = ArrayList<String>()
+            
+            Directory.walk(depDir.toString()) { fileInfo =>
+                if (!fileInfo.isDirectory()) {
+                    let name = fileInfo.path.fileName
+                    
+                    if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                        let destPath = Path("${binDir}/${name}")
+                        safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                        dllCount.add(name)
+                        totalDlls.add(name)
+                    }
+                }
+                true
+            }
+            
+            println("  [OK] Copied ${dllCount.size.toString()} ${depName} DLLs to bin/")
+        } else {
+            println("  [WARN] Directory not found: ${depDir}")
+        }
+    }
+    
     // Copy all remaining Fountain framework modules
     let fountainModules = [
         "f_aspect", "f_base", "f_bean", "f_cache", "f_cmd", 
@@ -540,9 +571,9 @@ main(args: Array<String>): Unit {
     let stdxDynamicPath = getVariable("CANGJIE_STDX_DYNAMIC_PATH")
     let stdxDir = if (stdxDynamicPath.isSome()) {
         let p = stdxDynamicPath.getOrThrow()
-        Path("${p}/windows_x86_64_llvm/dynamic/stdx")
+        Path("${p}/windows_x86_64_cjnative/dynamic/stdx")
     } else {
-        Path("${rootPath}/libs/cangjie-stdx-windows-x64-1.0.4.1/windows_x86_64_llvm/dynamic/stdx")
+        Path("${rootPath}/libs/cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx")
     }
     if (exists(stdxDir) && exists(binDir)) {
         let stdxCount = ArrayList<String>()
@@ -576,7 +607,7 @@ main(args: Array<String>): Unit {
     let cangjieHome = getVariable("CANGJIE_HOME")
     if (cangjieHome.isSome()) {
         let home = cangjieHome.getOrThrow()
-        let runtimeDir = Path("${home}/runtime/lib/windows_x86_64_llvm")
+        let runtimeDir = Path("${home}/runtime/lib/windows_x86_64_cjnative")
         if (exists(runtimeDir) && exists(binDir)) {
             let runtimeCount = ArrayList<String>()
             let runtimeSkipped = ArrayList<String>()
@@ -901,6 +932,19 @@ Then copy the certificates to this directory:
     println("    logcj/            - Logging library")
     println("    opengauss/        - OpenGauss database driver")
     println("    blowfish/         - Blowfish encryption library")
+    println("    http_lib/         - HTTP/HTTPS/WebSocket/SSE unified library (0.0.26+, static, CJO only)")
+    println("    kaca_json/        - JSON parsing library (0.0.26+, static, CJO only)")
+    println("    jinguissl/        - TLS/SSL library (0.0.26+, static, CJO only)")
+    println("    jinguissl_core/   - TLS core library (0.0.26+, static, CJO only)")
+    println("    kaca_cookies/     - HTTP cookies library (0.0.26+, static, CJO only)")
+    println("    compress4cj/      - Compression library (0.0.26+, static, CJO only)")
+    println("    quic_cj/          - QUIC protocol library (0.0.26+, static, CJO only)")
+    println("    channel_cj/       - Channel communication library (0.0.26+, static, CJO only)")
+    println("    cos/              - Tencent COS SDK (0.0.26+, DLL + CJO)")
+    println("    pgsql/            - PostgreSQL driver (0.0.26+, CJO only)")
+    println("    cj_mail/          - Email library (0.0.26+, CJO only)")
+    println("    activemq4cj/      - ActiveMQ client (0.0.26+, CJO only)")
+    println("    hyperion/         - Hyperion toolkit (0.0.26+, CJO only)")
     println("    ssl/              - SSL certificates directory (empty, users provide their own)")
     println("    logs/             - Log output directory")
     println("    VERSION           - Version info")

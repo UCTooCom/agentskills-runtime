@@ -34,12 +34,13 @@ import magic.app.services.crontab.model.SchedulerStatus
 import magic.app.dao.uctoo.{CrontabDAO, CrontabLogDAO, CrontabTaskRegistryDAO}
 import std.convert.*
 import std.env.{getWorkingDirectory, getVariable}
+import std.fs.*
 import std.fs.Path
 import std.database.sql.DriverManager
 import f_orm.*
 import f_config.Config
 import f_orm.wrap.ORMConfig
-import opengauss.driver.PGDriver // 导入 PostgreSQL 驱动
+import pgsql.PostgresDriver // 导入 PostgreSQL 驱动
 import magic.core.agent.{AgentLoadManager, AgentLoader} // 导入 Agent 加载模块
 import magic.app.services.sync.SyncManager // 导入同步管理器
 import magic.app.services.sync.model.TriggerSource // 导入同步触发源
@@ -50,6 +51,31 @@ import magic.app.services.bridge.{WebSocketEventBridge, AgentRuntimeBridge} // �
 import magic.app.services.bridge.AgentPersistenceEventHandler // 导入持久化事件处理器
 import std.core.Duration
 
+/**
+ * 从 cjpm.toml 读取 package.version 字段，供健康检查/应用信息端点使用。
+ * 解析失败时返回默认值 "0.0.0"，避免阻塞 runtime 启动。
+ */
+func getVersionFromCjpm(): String {
+    let cjpmPath = Path("./cjpm.toml")
+    if (exists(cjpmPath)) {
+        try {
+            let contentBytes = File.readFrom(cjpmPath)
+            let content = String.fromUtf8(contentBytes)
+            let lines = content.split('\n')
+            for (line in lines) {
+                if (line.trimAscii().startsWith("version = ")) {
+                    let versionPart = line.trimAscii()["version = ".size..]
+                    let version = versionPart.trimAscii().replace("\"", "")
+                    return version
+                }
+            }
+        } catch (e: Exception) {
+            LogUtils.warn("Application", "Failed to read version from cjpm.toml: ${e.message}")
+        }
+    }
+    return "0.0.0"
+}
+
 public class Application {
     private var server: HTTPServer
     private var router: Router = Router()
@@ -59,7 +85,8 @@ public class Application {
     private let _skillManager: SkillManager
     private let _progressiveSkillLoader: ProgressiveSkillLoader
     private let _skillInstallPath: String
-    private let _chatModel: ChatModel
+    private var _chatModel: Option<ChatModel> = None
+    private var _chatModelError: Option<String> = None
     private var schedulerEngineInitialized: Bool = false
     private var _agentLoadManager: AgentLoadManager
     private let _requestTimeout: Duration  // 请求超时时间
@@ -72,99 +99,51 @@ public class Application {
     }
     
     public init(port: Int32, host: String, requestTimeout: Duration) {
-        eprintln("=== Application.init() called ===")
         logger = LoggerFactory.getInstance().getLogger("uctoo.app")
-        eprintln("=== Logger created ===")
         this._requestTimeout = requestTimeout
 
         let dbConfig = DatabaseConfig.fromEnv()
         let databaseUrl = dbConfig.url
-        eprintln("=== Database URL: ${databaseUrl} ===")
         LogUtils.info("Database URL: ${databaseUrl}")
         
         // 手动注册 PostgreSQL 驱动
         try {
-            eprintln("=== Registering PostgreSQL driver ===")
             let driver = DriverManager.getDriver("postgres")
             if (driver.isNone()) {
-                eprintln("=== PostgreSQL driver not found, registering manually ===")
-                // 导入 opengauss.driver 会自动注册驱动
-                // 但如果静态初始化没有执行，我们需要手动触发
-                let pgDriver = PGDriver("postgres")
+                let pgDriver = PostgresDriver()
                 DriverManager.register("postgres", pgDriver)
-                eprintln("=== PostgreSQL driver registered manually ===")
-            } else {
-                eprintln("=== PostgreSQL driver already registered ===")
             }
         } catch (e: Exception) {
-            eprintln("=== Failed to register PostgreSQL driver: ${e.message} ===")
-        }
-        
-        // 调试：检查 ORMConfig 是否正确读取配置
-        eprintln("=== Checking ORMConfig ===")
-        try {
-            let defaultDriver = ORMConfig.getDefaultDriver()
-            eprintln("=== ORMConfig.getDefaultDriver(): ${defaultDriver} ===")
-            
-            let driverNames = ORMConfig.getDriverNames()
-            eprintln("=== ORMConfig.getDriverNames(): ${driverNames.toArray()} ===")
-            
-            let url = ORMConfig.getUrl(driverName: "postgres")
-            eprintln("=== ORMConfig.getUrl(postgres): ${url} ===")
-            
-            let useThirdPartyPool = ORMConfig.getUseThirdPartyPool("postgres")
-            eprintln("=== ORMConfig.getUseThirdPartyPool(postgres): ${useThirdPartyPool} ===")
-            
-            let drivers = ORMConfig.getDrivers()
-            for (d in drivers) {
-                eprintln("=== Driver: ${d.name} ===")
-            }
-        } catch (e: Exception) {
-            eprintln("=== Failed to read ORMConfig: ${e.message} ===")
+            LogUtils.error("Failed to register PostgreSQL driver: ${e.message}")
         }
         
         // 使用 ORM.initialize() 初始化 ORM
         try {
-            eprintln("=== Attempting to initialize ORM ===")
             LogUtils.info("Attempting to initialize ORM")
-            
             ORM.initialize()
-            eprintln("=== ORM.initialize() completed ===")
             LogUtils.info("ORM initialized successfully")
-            
             // 测试ORM连接
-            eprintln("=== Testing ORM connection ===")
             let connection = ORM.connection()
-            eprintln("=== Successfully connected to database ===")
             LogUtils.info("Successfully connected to database")
             connection.close()
-            eprintln("=== ORM initialization completed successfully ===")
         } catch (e: Exception) {
-            eprintln("=== Failed to initialize ORM: ${e.message} ===")
             LogUtils.error("Failed to initialize ORM: ${e.message}")
             LogUtils.info("Database features will be disabled")
         }
         
         // Log ORM status after initialization
-        eprintln("=== ORM status after initialization ===")
         try {
             let testConnection = ORM.connection()
-            eprintln("=== ORM connection still works after initialization ===")
             testConnection.close()
         } catch (e: Exception) {
-            eprintln("=== ORM connection failed after initialization: ${e.message} ===")
+            LogUtils.warn("ORM connection failed after initialization: ${e.message}")
         }
-        eprintln("=== Creating DatabaseConnectionPool ===")
         dbPool = DatabaseConnectionPool.getInstance(dbConfig)
-        eprintln("=== DatabaseConnectionPool created ===")
 
         let cacheConfig = CacheConfig.fromEnv()
         cacheManager = CacheManager.getInstance(cacheConfig)
-        eprintln("=== CacheManager created ===")
 
-        eprintln("=== Creating CompositeSkillToolManager ===")
         _skillManager = CompositeSkillToolManager()
-        eprintln("=== CompositeSkillToolManager created ===")
 
         let currentDir = getWorkingDirectory().toString()
         let skillInstallPath = if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
@@ -179,7 +158,6 @@ public class Application {
         }
         _skillInstallPath = skillInstallPath
 
-        eprintln("=== Creating ProgressiveSkillLoader ===")
         let skillDirs = [
             skillInstallPath,
             "${currentDir}/src/examples"
@@ -189,19 +167,14 @@ public class Application {
             defaultSecurityPolicy: SecurityPolicy.default(),
             defaultResourceLimits: ResourceLimits.default()
         )
-        eprintln("=== ProgressiveSkillLoader created ===")
 
-        eprintln("=== Loading skills ===")
         try {
             let loadedSkills = _progressiveSkillLoader.loadSkillsToManager(_skillManager)
-            eprintln("=== Loaded ${loadedSkills.size} skills ===")
             LogUtils.info("Successfully loaded ${loadedSkills.size} skills from directories")
         } catch (ex: Exception) {
-            eprintln("=== Failed to load skills: ${ex.message} ===")
             LogUtils.error("Failed to load skills: ${ex.message}")
         }
 
-        eprintln("=== Configuring ChatModel ===")
         let modelConfigOpt = getVariable("MODEL_CONFIG")
         let modelProviderOpt = getVariable("MODEL_PROVIDER")
         let modelNameOpt = getVariable("MODEL_NAME")
@@ -225,12 +198,18 @@ public class Application {
             "stepfun:step-3"
         }
         LogUtils.info("Using chat model: ${modelName}")
-        eprintln("=== Creating ChatModel: ${modelName} ===")
-        _chatModel = ModelManager.createChatModel(modelName)
-        eprintln("=== ChatModel created ===")
+        _chatModel = None
+        _chatModelError = None
+        try {
+            _chatModel = Some(ModelManager.createChatModel(modelName))
+            LogUtils.info("Chat model created successfully")
+        } catch (e: Exception) {
+            _chatModelError = Some("${e.message}")
+            LogUtils.error("Chat model creation failed (framework continues with degraded AI): ${e.message}")
+            println("WARN: Chat model configuration invalid - AI features disabled until fixed. Error: ${e.message}")
+        }
 
         // 初始化并加载 Agent
-        eprintln("=== Initializing AgentLoadManager ===")
         let agentsDirs = [
             "${currentDir}/agents",
             "${currentDir}/src/agents",
@@ -243,24 +222,16 @@ public class Application {
         // 打印加载的主 Agent 信息
         match (_agentLoadManager.getMainAgent()) {
             case Some(mainAgent) =>
-                eprintln("=== Main Agent loaded: ${mainAgent.name} ===")
                 LogUtils.info("Main Agent loaded: ${mainAgent.name}, type: ${mainAgent.agentType.toString()}")
             case None =>
-                eprintln("=== No main agent found in agents.md ===")
                 LogUtils.warn("No main agent found in agents.md")
         }
 
-        eprintln("=== Creating HTTPServer ===")
         server = HTTPServer(port, host, _requestTimeout)
-        eprintln("=== HTTPServer created with timeout=${_requestTimeout.toSeconds()}s ===")
-        
-        eprintln("=== Setting up middlewares ===")
         setupMiddlewares()
-        eprintln("=== Setting up routes ===")
         setupRoutes()
         
         // 初始化同步管理器
-        eprintln("=== Initializing SyncManager ===")
         let agentBasePath = getVariable("SYNC_AGENT_BASE_PATH").getOrDefault({ => "./" })
         let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./.codeartsdoer/skills" })
         SyncManager.initialize(agentBasePath, skillBasePath)
@@ -268,10 +239,8 @@ public class Application {
         
         // 启动时同步 .env 配置到 config 表（同步执行，确保在服务就绪前完成）
         try {
-            eprintln("=== Starting config startup sync ===")
             let configSyncHandler = ConfigSyncHandler()
             let configSyncResult = configSyncHandler.startupSync()
-            eprintln("=== Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount} ===")
             LogUtils.info("Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount}")
             for (detail in configSyncResult.details) {
                 if (!detail.success) {
@@ -279,13 +248,11 @@ public class Application {
                 }
             }
         } catch (e: Exception) {
-            eprintln("=== Config startup sync failed: ${e.message} ===")
             LogUtils.error("Config startup sync failed: ${e.message}")
         }
         
         // 异步执行启动全量同步（不阻塞启动）
         spawn {
-            eprintln("=== Starting async initial sync ===")
             try {
                 let result = SyncManager.instance?.syncAll(TriggerSource.Startup)
                 match (result) {
@@ -297,10 +264,9 @@ public class Application {
             } catch (e: Exception) {
                 LogUtils.error("Initial sync failed: ${e.message}")
             }
-            eprintln("=== Async initial sync finished ===")
         }
         
-        eprintln("=== Application init complete ===")
+        LogUtils.info("Application init complete")
     }
     
     /// HTTPS构造函数
@@ -309,48 +275,36 @@ public class Application {
     }
     
     public init(port: Int32, host: String, certPath: String, keyPath: String, requestTimeout: Duration) {
-        eprintln("=== Application.init() with HTTPS called ===")
         logger = LoggerFactory.getInstance().getLogger("uctoo.app")
-        eprintln("=== Logger created ===")
         this._requestTimeout = requestTimeout
 
         let dbConfig = DatabaseConfig.fromEnv()
         let databaseUrl = dbConfig.url
-        eprintln("=== Database URL: ${databaseUrl} ===")
         LogUtils.info("Database URL: ${databaseUrl}")
         
         // 手动注册 PostgreSQL 驱动
         try {
-            eprintln("=== Registering PostgreSQL driver ===")
             let driver = DriverManager.getDriver("postgres")
             if (driver.isNone()) {
-                eprintln("=== PostgreSQL driver not found, registering manually ===")
-                let pgDriver = PGDriver("postgres")
+                let pgDriver = PostgresDriver()
                 DriverManager.register("postgres", pgDriver)
-                eprintln("=== PostgreSQL driver registered manually ===")
+                LogUtils.info("PostgreSQL driver registered manually")
             } else {
-                eprintln("=== PostgreSQL driver already registered ===")
+                LogUtils.info("PostgreSQL driver already registered")
             }
         } catch (e: Exception) {
-            eprintln("=== Failed to register PostgreSQL driver: ${e.message} ===")
+            LogUtils.error("Failed to register PostgreSQL driver: ${e.message}")
         }
         
         // 初始化ORM
         try {
-            eprintln("=== Attempting to initialize ORM ===")
             LogUtils.info("Attempting to initialize ORM")
-            
             ORM.initialize()
-            eprintln("=== ORM.initialize() completed ===")
             LogUtils.info("ORM initialized successfully")
-            
-            eprintln("=== Testing ORM connection ===")
             let connection = ORM.connection()
-            eprintln("=== Successfully connected to database ===")
             LogUtils.info("Successfully connected to database")
             connection.close()
         } catch (e: Exception) {
-            eprintln("=== Failed to initialize ORM: ${e.message} ===")
             LogUtils.error("Failed to initialize ORM: ${e.message}")
         }
         
@@ -412,10 +366,18 @@ public class Application {
             "stepfun:step-3"
         }
         LogUtils.info("Using chat model: ${modelName}")
-        _chatModel = ModelManager.createChatModel(modelName)
+        _chatModel = None
+        _chatModelError = None
+        try {
+            _chatModel = Some(ModelManager.createChatModel(modelName))
+            LogUtils.info("Chat model created successfully")
+        } catch (e: Exception) {
+            _chatModelError = Some("${e.message}")
+            LogUtils.error("Chat model creation failed (framework continues with degraded AI): ${e.message}")
+            println("WARN: Chat model configuration invalid - AI features disabled until fixed. Error: ${e.message}")
+        }
 
         // 初始化并加载 Agent
-        eprintln("=== Initializing AgentLoadManager ===")
         let agentsDirs = [
             "${currentDir}/agents",
             "${currentDir}/src/agents",
@@ -428,22 +390,18 @@ public class Application {
         // 打印加载的主 Agent 信息
         match (_agentLoadManager.getMainAgent()) {
             case Some(mainAgent) =>
-                eprintln("=== Main Agent loaded: ${mainAgent.name} ===")
                 LogUtils.info("Main Agent loaded: ${mainAgent.name}, type: ${mainAgent.agentType.toString()}")
             case None =>
-                eprintln("=== No main agent found in agents.md ===")
                 LogUtils.warn("No main agent found in agents.md")
         }
 
         // 使用HTTPS服务器
         server = HTTPServer(port, host, certPath, keyPath, _requestTimeout)
-        eprintln("=== HTTPServer created with timeout=${_requestTimeout.toSeconds()}s ===")
         
         setupMiddlewares()
         setupRoutes()
         
         // 初始化同步管理器
-        eprintln("=== Initializing SyncManager ===")
         let agentBasePath = getVariable("SYNC_AGENT_BASE_PATH").getOrDefault({ => "./" })
         let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./.codeartsdoer/skills" })
         SyncManager.initialize(agentBasePath, skillBasePath)
@@ -451,10 +409,8 @@ public class Application {
         
         // 启动时同步 .env 配置到 config 表（同步执行，确保在服务就绪前完成）
         try {
-            eprintln("=== Starting config startup sync (HTTPS) ===")
             let configSyncHandler = ConfigSyncHandler()
             let configSyncResult = configSyncHandler.startupSync()
-            eprintln("=== Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount} ===")
             LogUtils.info("Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount}")
             for (detail in configSyncResult.details) {
                 if (!detail.success) {
@@ -462,13 +418,11 @@ public class Application {
                 }
             }
         } catch (e: Exception) {
-            eprintln("=== Config startup sync failed: ${e.message} ===")
             LogUtils.error("Config startup sync failed: ${e.message}")
         }
         
         // 异步执行启动全量同步（不阻塞启动）
         spawn {
-            eprintln("=== Starting async initial sync ===")
             try {
                 let result = SyncManager.instance?.syncAll(TriggerSource.Startup)
                 match (result) {
@@ -480,10 +434,9 @@ public class Application {
             } catch (e: Exception) {
                 LogUtils.error("Initial sync failed: ${e.message}")
             }
-            eprintln("=== Async initial sync finished ===")
         }
         
-        eprintln("=== Application init complete ===")
+        LogUtils.info("Application init complete")
     }
 
     private func setupMiddlewares(): Unit {
@@ -563,19 +516,30 @@ public class Application {
         toolRoutes.register()
         LogUtils.info("Tool routes registered successfully")
         
-        // 注册WebSocket路由（需要特殊处理）
-        let wsChatController = WsChatController(_skillManager, _chatModel)
-        server.registerWebSocketRoute("/api/v1/uctoo/ws/chat", wsChatController.handleChat)
-        
-        // 注册 WebMCP 路由（支持前端 webmcp-sdk 通信）
-        let webmcpRoutes = WebMCPRoutes(router, _skillManager, _chatModel, _agentLoadManager)
-        webmcpRoutes.register()
-        LogUtils.info("WebMCP routes registered successfully")
-        
-        // 注册 AI 聊天路由（OpenAI 兼容 API）
-        let aiRoutes = AIRoutes(router, _skillManager, _chatModel)
-        aiRoutes.register()
-        LogUtils.info("AI routes registered successfully")
+        // 注册聊天相关路由（ChatModel 配置错误时跳过，仅禁用 AI 聊天功能，框架其余部分照常运行）
+        if (let Some(chatModel) <- _chatModel) {
+            // 注册WebSocket路由（需要特殊处理）
+            let wsChatController = WsChatController(_skillManager, chatModel)
+            server.registerWebSocketRoute("/api/v1/uctoo/ws/chat", wsChatController.handleChat)
+
+            // 注册 WebMCP 路由（支持前端 webmcp-sdk 通信）
+            let webmcpRoutes = WebMCPRoutes(router, _skillManager, chatModel, _agentLoadManager)
+            webmcpRoutes.register()
+            LogUtils.info("WebMCP routes registered successfully")
+
+            // 注册 WebMCP WebSocket 路由（需要特殊处理）
+            let webmcpController = webmcpRoutes.getController()
+            server.registerWebSocketRoute("/api/v1/uctoo/webmcp/mcp", webmcpController.handleConnection)
+            server.registerWebSocketRoute("/api/v1/webmcp/mcp", webmcpController.handleConnection)
+
+            // 注册 AI 聊天路由（OpenAI 兼容 API）
+            let aiRoutes = AIRoutes(router, _skillManager, chatModel)
+            aiRoutes.register()
+            LogUtils.info("AI routes registered successfully")
+        } else {
+            LogUtils.warn("Chat routes skipped (AI features disabled): invalid model configuration - fix MODEL_CONFIG/MODEL_PROVIDER/MODEL_NAME in .env and restart")
+            println("WARN: Chat routes skipped - AI features disabled until MODEL_CONFIG is fixed. Other framework features work normally.")
+        }
         
         // 注册同步管理路由
         let syncRoute = SyncRoute(router)
@@ -587,7 +551,8 @@ public class Application {
         aipRoute.register()
         LogUtils.info("AIP routes registered successfully")
         
-        // 注册健康检查和应用信息接口,todo:从cjpm.toml配置文件读取version版本号
+        // 注册健康检查和应用信息接口（version 从 cjpm.toml 读取）
+        let runtimeVersion = getVersionFromCjpm()
         router.get("/api/v1/health", { req, res =>
             var schedulerJson = "\"scheduler\":{\"running\":false}"
             match (SchedulerEngine.instance) {
@@ -597,11 +562,19 @@ public class Application {
                 case None =>
                     schedulerJson = "\"scheduler\":{\"running\":false,\"error\":\"not initialized\"}"
             }
-            res.status(200).json("{\"status\":\"ok\",\"version\":\"0.0.21\",${schedulerJson}}")
+            // 暴露 ChatModel 配置状态，供 web/PC 端检测大模型配置是否正确
+            var chatModelJson = "\"chatModel\":{\"available\":true}"
+            if (_chatModel.isNone()) {
+                let errMsg = _chatModelError.getOrDefault({ => "unknown error" })
+                // 转义 JSON 字符串中的特殊字符
+                let safeErrMsg = errMsg.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
+                chatModelJson = "\"chatModel\":{\"available\":false,\"error\":\"${safeErrMsg}\"}"
+            }
+            res.status(200).json("{\"status\":\"ok\",\"version\":\"${runtimeVersion}\",${schedulerJson},${chatModelJson}}")
         })
         // todo:从cjpm.toml配置文件读取系统信息
         router.get("/api/v1/info", { req, res =>
-            res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"0.0.21\",\"language\":\"cangjie\"}")
+            res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"${runtimeVersion}\",\"language\":\"cangjie\"}")
         })
         
         // 初始化调度引擎
@@ -699,54 +672,28 @@ main() {
     for (envPath in envPaths) {
         let result = AppConfig.env.load(envPath)
         if (!result.contains("does not exist")) {
-            eprintln("=== Loaded .env from: ${envPath} ===")
             break
         }
     }
 
     // 将 .env 中的 ORM 配置同步到 fountain 的 Config 中
-    eprintln("=== Syncing ORM config to fountain Config ===")
-    
-    // 从 .env 读取 ORM 配置
-    let ormDrivers = AppConfig.env["orm_drivers"].getOrDefault({ => "opengauss" })
-    let ormDefaultDriver = AppConfig.env["orm_defaultDriver"].getOrDefault({ => "opengauss" })
+    let ormDrivers = AppConfig.env["orm_drivers"].getOrDefault({ => "postgres" })
+    let ormDefaultDriver = AppConfig.env["orm_defaultDriver"].getOrDefault({ => "postgres" })
     let ormConnectionUrl = AppConfig.env["orm_connectionUrl"].getOrDefault({ => "postgresql://postgres:uctoo123@127.0.0.1:5432/nuanshou" })
-    let opengaussOrmConnectionUrl = AppConfig.env["opengauss_orm_connectionUrl"].getOrDefault({ => ormConnectionUrl })
+    let postgresOrmConnectionUrl = AppConfig.env["postgres_orm_connectionUrl"].getOrDefault({ => ormConnectionUrl })
     
     let ormConfigs: Array<(String, String)> = [
         ("orm_drivers", ormDrivers),
         ("orm_defaultDriver", ormDefaultDriver),
         ("orm_connectionUrl", ormConnectionUrl),
-        ("opengauss_orm_connectionUrl", opengaussOrmConnectionUrl)
+        ("postgres_orm_connectionUrl", postgresOrmConnectionUrl)
     ]
-    
-    eprintln("=== orm_drivers: ${ormDrivers} ===")
-    eprintln("=== orm_defaultDriver: ${ormDefaultDriver} ===")
-    eprintln("=== orm_connectionUrl: ${ormConnectionUrl} ===")
-    eprintln("=== opengauss_orm_connectionUrl: ${opengaussOrmConnectionUrl} ===")
     
     // 设置到 fountain 的 Config 中
     Config.set(ormConfigs)
-    eprintln("=== ORM config synced to fountain Config ===")
     
     // 刷新 ORMConfig
     ORMConfig.refresh {
-        eprintln("=== ORMConfig refreshed ===")
-    }
-
-    // 验证ORM配置是否加载
-    eprintln("=== Verifying ORM configuration ===")
-    match (AppConfig.env["orm_drivers"]) {
-        case Some(v) => eprintln("=== orm_drivers: ${v} ===")
-        case None => eprintln("=== orm_drivers: NOT SET ===")
-    }
-    match (AppConfig.env["orm_defaultDriver"]) {
-        case Some(v) => eprintln("=== orm_defaultDriver: ${v} ===")
-        case None => eprintln("=== orm_defaultDriver: NOT SET ===")
-    }
-    match (AppConfig.env["orm_connectionUrl"]) {
-        case Some(v) => eprintln("=== orm_connectionUrl: ${v} ===")
-        case None => eprintln("=== orm_connectionUrl: NOT SET ===")
     }
 
     AppConfig.logLevel = AppConfig.env["LOG_LEVEL"].getOrDefault({ => "debug" })
@@ -776,7 +723,6 @@ main() {
     } else {
         Duration.second * 300  // 默认300秒（5分钟），Agent执行技能需要更长时间
     }
-    eprintln("=== WEBMCP_REQUEST_TIMEOUT: ${requestTimeout.toSeconds()}s ===")
     
     // 检查是否启用HTTPS
     let backendUrlOpt = AppConfig.env["BACKEND_URL"]
@@ -804,15 +750,25 @@ main() {
             "./${keyFileName}"
         }
         
-        eprintln("=== Starting HTTPS server on ${host}:${port} ===")
-        eprintln("=== SSL Certificate: ${certPath} ===")
-        eprintln("=== SSL Private Key: ${keyPath} ===")
-        let app = Application(port, host, certPath, keyPath, requestTimeout)
-        app.start()
+        println("Starting HTTPS server on ${host}:${port}")
+        println("SSL Certificate: ${certPath}")
+        println("SSL Private Key: ${keyPath}")
+        try {
+            let app = Application(port, host, certPath, keyPath, requestTimeout)
+            app.start()
+        } catch (ex: Exception) {
+            println("FATAL: Application failed: ${ex.message}")
+            ex.printStackTrace()
+        }
     } else {
         // HTTP模式
-        eprintln("=== Starting HTTP server on ${host}:${port} ===")
-        let app = Application(port, host, requestTimeout)
-        app.start()
+        println("Starting HTTP server on ${host}:${port}")
+        try {
+            let app = Application(port, host, requestTimeout)
+            app.start()
+        } catch (ex: Exception) {
+            println("FATAL: Application failed: ${ex.message}")
+            ex.printStackTrace()
+        }
     }
 }

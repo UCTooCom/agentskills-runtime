@@ -1,12 +1,12 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_data  = {path = "../f_data", version = "1.0.45"}
-  f_http  = {path = "../f_http", version = "1.0.45"}
-  stdx = { path = "../../cangjie-stdx-windows-x64-1.0.0.1/windows_x86_64_llvm" }
+ ## stdx = { git = "https://gitcode.com/Cangjie/cangjie_stdx.git" }
+  charset4cj = { path = "../../charset4cj" }
+  f_base  = {path = "../f_base"}
+  f_data  = {path = "../f_data"}
+  f_http  = {path = "../f_http"}
 
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "HTTP客户端"

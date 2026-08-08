@@ -33,7 +33,7 @@ private func constructor(decl: Decl, beanCond: HashMap<String, Tokens>, valueCon
         case x: FuncDecl where x.isPublic() && x.identifier.value == 'init' =>
             argTokens(x.funcParams, beanCond, valueCond)
             setItem('constructor', 'init')
-        case x: FuncDecl where x.isPublic() && x.isStatic() && isGenericFunc(x) =>
+        case x: FuncDecl where x.isPublic() && x.isStatic() && x.isGenericDecl =>
             argTokens(x.funcParams, beanCond, valueCond)
             setItem('constructor', x.identifier.value)
         case x: PrimaryCtorDecl where x.isPublic() =>
@@ -50,13 +50,7 @@ private func constructor(decl: Decl, beanCond: HashMap<String, Tokens>, valueCon
             diagReport(ERROR, tokens, '${decl.identifier.value} must be a public constructor or public static func without generic parameter', '')
     }
 }
-private func isGenericFunc(decl: FuncDecl){
-    try{
-        decl.genericParam.parameters.size == 0
-    }catch(_){
-        false
-    }
-}
+
 private func argTokens(params: ArrayList<FuncParam>, beanCond: HashMap<String, Tokens>, valueCond: HashMap<String, Tokens>): Unit {
     var assigns = quote()
     var actualArgs = quote()

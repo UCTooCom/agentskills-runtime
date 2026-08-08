@@ -111,6 +111,19 @@ public class AgentMemoriesService {
             if (entity.deletedAt.isSome()) {
                 existingEntity.deletedAt = entity.deletedAt
             }
+            if (entity.sharing.size > 0) {
+                existingEntity.sharing = entity.sharing
+            }
+            existingEntity.accessCount = entity.accessCount
+            if (entity.sourceSession.isSome()) {
+                existingEntity.sourceSession = entity.sourceSession
+            }
+            if (entity.sourceAgent.isSome()) {
+                existingEntity.sourceAgent = entity.sourceAgent
+            }
+            if (entity.expiresAt.isSome()) {
+                existingEntity.expiresAt = entity.expiresAt
+            }
 
             
             // 设置更新时间和ID

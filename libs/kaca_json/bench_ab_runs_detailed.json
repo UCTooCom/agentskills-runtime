@@ -1,0 +1,107 @@
+﻿[
+    {
+        "group":  "compact",
+        "run":  1,
+        "current":  124857,
+        "other":  124361,
+        "ratio_pct":  -0.39725445910121504
+    },
+    {
+        "group":  "compact",
+        "run":  2,
+        "current":  124435,
+        "other":  122468,
+        "ratio_pct":  -1.5807449672519791
+    },
+    {
+        "group":  "compact",
+        "run":  3,
+        "current":  123541,
+        "other":  125297,
+        "ratio_pct":  1.4213904695607127
+    },
+    {
+        "group":  "compact",
+        "run":  4,
+        "current":  122755,
+        "other":  125721,
+        "ratio_pct":  2.4161948596798544
+    },
+    {
+        "group":  "compact",
+        "run":  5,
+        "current":  133146,
+        "other":  130093,
+        "ratio_pct":  -2.292971625133311
+    },
+    {
+        "group":  "pretty",
+        "run":  1,
+        "current":  145389,
+        "other":  146532,
+        "ratio_pct":  0.7861667663991101
+    },
+    {
+        "group":  "pretty",
+        "run":  2,
+        "current":  152686,
+        "other":  149304,
+        "ratio_pct":  -2.2150033401883595
+    },
+    {
+        "group":  "pretty",
+        "run":  3,
+        "current":  151432,
+        "other":  153711,
+        "ratio_pct":  1.504965925299806
+    },
+    {
+        "group":  "pretty",
+        "run":  4,
+        "current":  147854,
+        "other":  152205,
+        "ratio_pct":  2.9427678655971512
+    },
+    {
+        "group":  "pretty",
+        "run":  5,
+        "current":  149750,
+        "other":  159897,
+        "ratio_pct":  6.7759599332220422
+    },
+    {
+        "group":  "filter",
+        "run":  1,
+        "current":  47935,
+        "other":  47595,
+        "ratio_pct":  -0.70929383540210278
+    },
+    {
+        "group":  "filter",
+        "run":  2,
+        "current":  45144,
+        "other":  47765,
+        "ratio_pct":  5.8058656742867365
+    },
+    {
+        "group":  "filter",
+        "run":  3,
+        "current":  46481,
+        "other":  46718,
+        "ratio_pct":  0.50988575977282125
+    },
+    {
+        "group":  "filter",
+        "run":  4,
+        "current":  46639,
+        "other":  48380,
+        "ratio_pct":  3.7329273783743178
+    },
+    {
+        "group":  "filter",
+        "run":  5,
+        "current":  46396,
+        "other":  47463,
+        "ratio_pct":  2.2997672213121767
+    }
+]

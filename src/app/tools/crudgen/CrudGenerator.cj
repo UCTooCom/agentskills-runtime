@@ -1160,11 +1160,26 @@ public class CrudGenerator {
         variables.add("tableName", tableInfo.tableName)
         variables.add("className", tableInfo.className)
         variables.add("fieldMergeCode", buildFieldMergeCode(tableInfo))
+        variables.add("creatorCheckCode", buildCreatorCheckCode(tableInfo))
 
         let templatePath = "./src/app/tools/crudgen/templates/Service.cj.tpl"
         let template = loadTemplateContent(templatePath)
 
         return replaceVariablesInTemplate(template, variables)
+    }
+
+    private func buildCreatorCheckCode(tableInfo: TableInfo): String {
+        for (field in tableInfo.fields) {
+            if (field.columnName == "creator") {
+                let cjType = mapDataType(field.dataType, field.isNullable)
+                if (cjType.startsWith("Option<")) {
+                    return "if (entity.creator.isNone()) {\n                entity.creator = Some(creatorId)\n            }"
+                } else {
+                    return "if (entity.creator.isEmpty()) {\n                entity.creator = creatorId\n            }"
+                }
+            }
+        }
+        ""
     }
 
     /**

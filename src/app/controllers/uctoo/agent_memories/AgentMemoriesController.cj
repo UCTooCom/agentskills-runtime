@@ -578,6 +578,33 @@ public class AgentMemoriesController {
         if (let Some(deletedAt) <- map.get("deleted_at")) {
             // DateTime类型, 由数据库处理
         }
+        if (let Some(sharing) <- map.get("sharing")) {
+            let sharingStr = sharing as String
+            if (let Some(s) <- sharingStr) {
+                entity.sharing = s
+            }
+        }
+        if (let Some(accessCount) <- map.get("access_count")) {
+            let accessCountInt = accessCount as Int64
+            if (let Some(v) <- accessCountInt) {
+                entity.accessCount = Int32(v)
+            }
+        }
+        if (let Some(sourceSession) <- map.get("source_session")) {
+            let sourceSessionStr = sourceSession as String
+            if (let Some(s) <- sourceSessionStr) {
+                entity.sourceSession = Some<String>(s)
+            }
+        }
+        if (let Some(sourceAgent) <- map.get("source_agent")) {
+            let sourceAgentStr = sourceAgent as String
+            if (let Some(s) <- sourceAgentStr) {
+                entity.sourceAgent = Some<String>(s)
+            }
+        }
+        if (let Some(expiresAt) <- map.get("expires_at")) {
+            // DateTime类型, 由数据库处理
+        }
         return entity
     }
 
@@ -698,7 +725,7 @@ public class AgentMemoriesController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,agent_id,content,embedding_vector,scope,weight,tags,metadata,task_id,session_id,creator,created_at,updated_at,deleted_at\n")
+            sb.append("id,agent_id,content,embedding_vector,scope,weight,tags,metadata,task_id,session_id,creator,created_at,updated_at,deleted_at,sharing,access_count,source_session,source_agent,expires_at\n")
 
             // 写入数据行
             for (entity in entities) {
@@ -717,6 +744,12 @@ public class AgentMemoriesController {
                 sb.append("\"" + "${entity.createdAt.toString()}" + ",")
                 sb.append("\"" + "${entity.updatedAt.toString()}" + ",")
                 sb.append(if (let Some(v) <- entity.deletedAt) { "\"" + v.toString() + "\"," } else { "" })
+                sb.append("\"" + "${entity.sharing}" + ",")
+                sb.append("${entity.accessCount}")
+                sb.append(",")
+                sb.append(if (let Some(v) <- entity.sourceSession) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.sourceAgent) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.expiresAt) { "\"" + v.toString() + "\"," } else { "" })
                 sb.append("\n")
             }
 

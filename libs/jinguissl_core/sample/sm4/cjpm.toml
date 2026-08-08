@@ -1,0 +1,10 @@
+[package]
+  name = "sm4_sample"
+  cjc-version = "1.0.0"
+  version = "0.1.0"
+  output-type = "executable"
+  src-dir = "src/sm4_sample"
+  compile-option = "-Woff unused"
+
+[dependencies]
+jinguissl_core = { path = "../../" }

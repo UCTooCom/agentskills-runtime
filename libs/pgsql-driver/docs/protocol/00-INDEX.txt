@@ -1,0 +1,31 @@
+PostgreSQL Frontend/Backend Protocol — 官方文档原文（纯文本）
+================================================================================
+
+来源    : https://www.postgresql.org/docs/current/protocol.html
+版本    : PostgreSQL 18，文档第 54 章 “Frontend/Backend Protocol”
+协议版本: 3.0（StartupMessage 中当前为 3.2，见 54.7）
+抓取日期: 2026-06-22
+转换方式: 官方 HTML 正文（<div class="sect1">）经 pandoc 转为纯文本，去除站点导航
+
+文件说明
+--------------------------------------------------------------------------------
+postgresql-protocol-v18.txt              全部小节合并的单文件（推荐通读 / 检索）
+
+protocol-overview.txt                    54.1  概述（消息分帧、扩展查询等）
+protocol-flow.txt                        54.2  消息流（启动、查询、COPY、终止等）
+sasl-authentication.txt                  54.3  SASL 认证（SCRAM-SHA-256 / OAUTHBEARER）
+protocol-replication.txt                 54.4  流复制协议
+protocol-logical-replication.txt         54.5  逻辑流复制协议
+protocol-message-types.txt               54.6  消息基础数据类型（Intn / String / Byten）
+protocol-message-formats.txt             54.7  消息格式（各报文的字段布局）★实现核心
+protocol-error-fields.txt                54.8  Error / Notice 报文字段
+protocol-logicalrep-message-formats.txt  54.9  逻辑复制消息格式
+protocol-changes.txt                     54.10 自协议 2.0 以来的变更汇总
+
+实现建议（postgre_driver）
+--------------------------------------------------------------------------------
+最小可用客户端实现顺序：
+  1. 54.6 数据类型  -> 编解码原语（大端整数、C 字符串、定长字节）
+  2. 54.7 消息格式  -> StartupMessage / Query / 各响应报文的字节布局
+  3. 54.2 消息流    -> 连接启动、简单查询、扩展查询的状态机
+  4. 54.3 SASL      -> SCRAM-SHA-256（现代 PostgreSQL 默认认证方式）

@@ -16,6 +16,7 @@ limitations under the License.
 package f_mockdb
 
 import std.env.getStdOut
+import std.sync.AtomicOptionReference
 internal import std.reflect.*
 internal import std.collection.{HashMap, Map, ArrayList}
 internal import std.env.ConsoleWriter
@@ -25,13 +26,15 @@ internal let output = getStdOut()
 
 public class MOCKDB {
     private init(){}
-
-    private static let execution_ = ThreadLocal<() -> Unit>()
+    private static let EMPTY_EXECUTION = {_: String, _: ArrayList<Any> =>
+        output.writeln('EMPTY_EXECUTION')
+    }
+    private static var execution_ = AtomicOptionReference<Box<(String, ArrayList<Any>) -> Unit>>()
     private static let queryResultList_ = ThreadLocal<ArrayList<Array<Any>>>()
     private static let queryResultColumnInfos_ = ThreadLocal<ArrayList<ColumnInfo>>()
     private static let lastInsertId_ = ThreadLocal<Int64>()
     private static let rowCount_ = ThreadLocal<Int64>()
-    private static let toThrowOnExecuting_ = ThreadLocal<(String, ArrayList<Any>) -> Bool>()
+    private static let toThrowOnExecuting_ = ThreadLocal<Bool>()
     private static let metadata_ = ThreadLocal<Map<String, String>>()
     private static let toThrowOnBeginning_ = ThreadLocal<Bool>()
     private static let toThrowOnCommitting_ = ThreadLocal<Bool>()
@@ -41,7 +44,6 @@ public class MOCKDB {
     private static let toThrowOnSavingSavePoint_ = ThreadLocal<HashMap<String, Bool>>()
 
     static func clear(): Unit {
-        execution_.set(None)
         queryResultList_.set(None)
         queryResultColumnInfos_.set(None)
         lastInsertId_.set(None)
@@ -62,14 +64,14 @@ public class MOCKDB {
         }
     }
     /**
-     * 本函数会在MockConnection构造函数执行，可以在本函数执行本类的其他函数
+     * 本函数会在MockStatement的update和query函数执行，可以在本函数执行本类的其他函数
      */
-    public static mut prop execution: () -> Unit {
+    public static mut prop execution: (String, ArrayList<Any>) -> Unit {
         get(){
-            execution_.get() ?? {=>}
+            execution_.load()?.value ?? EMPTY_EXECUTION
         }
         set(value){
-            execution_.set(value)
+            execution_.store(Box<(String, ArrayList<Any>) -> Unit>(value))
         }
     }
     public static func addQueryResultRow(row: Array<Any>): Unit {
@@ -86,7 +88,7 @@ public class MOCKDB {
     }
     public static func addQueryResultColumnInfo(
         name!: String, nullable!: Bool, typeName!: String
-    ){
+    ): Unit {
         let info = MockColumnInfo(name, nullable, typeName)
         if(let Some(list) <- queryResultColumnInfos_.get()){
             list
@@ -117,9 +119,9 @@ public class MOCKDB {
             rowCount_.set(value)
         }
     }
-    public static mut prop toThrowOnExecuting: (String, ArrayList<Any>) -> Bool {
+    public static mut prop toThrowOnExecuting: Bool {
         get() {
-            toThrowOnExecuting_.get() ?? {_, _ => false}
+            toThrowOnExecuting_.get() ?? false
         }
         set(value){
             toThrowOnExecuting_.set(value)

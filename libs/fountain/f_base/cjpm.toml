@@ -1,7 +1,7 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
+  charset4cj = { path = "../../charset4cj" }
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.0.5"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "fountain的基本模块"
@@ -18,7 +18,6 @@
   authors = ["吴京润"]
 
 [profile.build]
-#  lto = "full"
   incremental = true
 
 [target]

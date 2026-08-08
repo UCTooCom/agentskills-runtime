@@ -1,0 +1,9 @@
+[package]
+  name = "sample_ssh"
+  version = "0.1.0"
+  cjc-version = "1.0.0"
+  src-dir = "src"
+  output-type = "executable"
+
+[dependencies]
+  jinguissl = { path = "../.." }

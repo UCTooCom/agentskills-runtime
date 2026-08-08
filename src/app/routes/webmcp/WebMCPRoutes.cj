@@ -19,6 +19,10 @@ public class WebMCPRoutes {
         this._controller = WebMCPController(skillManager, chatModel, agentLoadManager)
     }
 
+    public func getController(): WebMCPController {
+        return _controller
+    }
+
     /**
      * 注册所有 WebMCP 路由
      */

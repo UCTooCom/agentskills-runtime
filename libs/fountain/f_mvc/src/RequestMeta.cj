@@ -17,7 +17,11 @@ package f_mvc
 
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
+    private static let NOT_FOUND = NotFoundHandler()
+    private static let STATIC_RESOURCE_ROOT = MVCConfig.mvcStaticResourceRoot
+    private static let staticResourceBytes = ConcurrentHashMap<String, (DateTime, Array<Byte>)>()
     static let currentResponseStatus = ThreadLocal<UInt16>()
+
     static func setResponseStatus(status: HttpStatus) {
         currentResponseStatus.set(status.value)
     }
@@ -42,7 +46,26 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         public let method: RequestMethod,
         private let params!: RequestCondition = DummyRequestCondition.instance,
         private let headers!: RequestCondition = DummyRequestCondition.instance
-    ) {}
+    ) {
+        this.handle_ = {ctx =>
+            if(let Some(dotIdx) <- path.lastIndexOf('.') && let Some(bytes) <- loadStaticResource(path)){
+                let ext = path[dotIdx + 1 ..]
+                ctx.responseBuilder.status(HttpStatus.OK.value).header('Content-Type', match(ext){
+                    case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
+                    case 'json' => 'application/json'
+                    case 'js' => 'application/javascript'
+                    case 'htm' => 'text/html'
+                    case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
+                    case 'svg' => 'image/svg+xml'
+                    case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
+                    case _ => 'application/${ext}'
+                }).body(bytes)
+                return
+            }
+            log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')
+            NOT_FOUND.`handle`(ctx)
+        }
+    }
 
     public func compare(other: RequestMeta): Ordering {
         var cmp = path.compare(other.path)
@@ -64,10 +87,30 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     public func toString(): String {
         'path: ${path}; method: ${method}; consumes: ${consumes}; consumesSize: ${consumes.size}'
     }
-
-    private var handle_: (HttpContext) -> Unit = {
-        ctx: HttpContext => throw MVCException('Request was not handled')
+    private static func loadStaticResource(path: String): ?Array<Byte> {
+        staticResourceBytes.entryView(path){view =>
+            let p = if(path.startsWith('/')){
+                path[1..]
+            }else{
+                path
+            } |> STATIC_RESOURCE_ROOT.join
+            if(exists(p)){
+                try(file = File(p, Read)){
+                    let lastModified = file.info.lastModificationTime
+                    view.value = if(let Some((last, _)) <- view.value && last < lastModified){
+                        (lastModified, File.readFrom(p))
+                    }else if(view.value.isNone()){
+                        (lastModified, File.readFrom(p))
+                    }else{
+                        return
+                    }
+                }
+            }else{
+                view.value = None
+            }
+        }?[1]
     }
+    private var handle_: (HttpContext) -> Unit
 
     public func handle(ctx: HttpContext): Unit {
         handle_(ctx)
@@ -142,6 +185,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     case x: Array<Byte> => respond(x, ctx)
                     case _: Unit => ()
                     case x: ToData => respond(x, ctx)
+                    case x: Redirect => respond(x, ctx)
                     case _ =>
                         let request = ctx.request
                         log.warn {'fountain.mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
@@ -255,6 +299,11 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             }
         }
     }
+    private func respond(redirect: Redirect, ctx: HttpContext): Unit {
+        respond(ctx.request.method) {
+            ctx.responseBuilder.status(redirect.status.value).header('Location', redirect.location)
+        }
+    }
     private func respond(response: InputStream, ctx: HttpContext): Unit {
         respond(ctx.request.method) {
             populateResponseContentType(ctx)
@@ -273,6 +322,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             ctx.responseBuilder.body(response.unsafeBytes())
         }
     }
+    
     public func isMultipart(name: String) {
         args[name] is MultipartFormData
     }
@@ -426,7 +476,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 case x: String => return x
                 case x: ToString => return x.toString()
                 case x: Array<Byte> => return toBase64String(x)
+                case x: MultipartFile => return JsonString(x.toString()).toString()
                 case x: ToData => return JsonValue.tryFromData(x.toData()).toString()
+                case x: Data => return JsonValue.tryFromData(x).toString()
                 case x => x
             }
             TypeInfo.of(arg).toString()

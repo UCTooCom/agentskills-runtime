@@ -1,0 +1,13 @@
+[package]
+cjc-version = "1.0.5"
+name = "compress4cj"
+version = "0.1.0"
+output-type = "static"
+compile-option = "-Woff unused"
+description = "多格式压缩/解压库，支持 DEFLATE/zlib/gzip/brotli/bzip2/LZW"
+
+[profile.build]
+incremental = true
+
+[profile.test.build]
+compile-option = "-Woff unused"

@@ -1,0 +1,17 @@
+[package]
+  cjc-version = "1.1.3"
+  name = "sample_mtls_server"
+  version = "0.1.0"
+  output-type = "executable"
+  compile-option = "-Woff unused"
+  src-dir = "src"
+  target-dir = "target"
+
+[dependencies]
+  http_lib = { path = "../.." }
+  kaca_json = {git = "https://gitcode.com/changeden/kaca_json.git", branch="optz", output-type = "static"}
+  jinguissl = { git = "https://gitcode.com/changeden/jinguiSSL.git", branch="optz", output-type = "static" }
+  jinguissl_core = { git = "https://gitcode.com/CjKu/JinguiCore.git", output-type = "static" }
+  kaca_cookies = {git = "https://gitcode.com/cangjie_no_1/kaca_cookies.git", output-type = "static"}
+  compress4cj = {git = "https://gitcode.com/changeden/compress4cj.git", output-type = "static"}
+  quic_cj = {git = "https://gitcode.com/changeden/quic_cj.git", output-type = "static"}

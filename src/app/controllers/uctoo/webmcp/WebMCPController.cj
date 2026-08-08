@@ -11,7 +11,9 @@ import magic.core.model.ChatModel
 import magic.core.agent.{AgentDefinition, AgentLoadManager}
 import magic.log.LogUtils
 import magic.tool.webmcp.{SSEConnectionManager, PendingToolCallManager, FrontendToolRegistry, WebMCPToolContext}
-import stdx.net.http.{HttpContext, WebSocket, WebSocketFrameType, HttpHeaders}
+import http_lib.server.{WebSocketConn, ConnectionController, WebSocketOpcode}
+import http_lib.message.{HttpRequest as LibHttpRequest, HttpResponse as LibHttpResponse}
+import http_lib.core.HttpStatus
 import stdx.encoding.json.{JsonObject, JsonString, JsonBool, JsonValue, JsonArray, JsonInt}
 import std.time.DateTime
 import std.time.*
@@ -153,7 +155,24 @@ public class WebMCPController {
            .header("Access-Control-Allow-Headers", "*")
         
         try {
-            // 复用或创建协议处理器（基于 session 保持 Agent 会话状态连续性）
+            let (method, requestId) = parseMethodAndId(body)
+            if (method.startsWith("notifications/")) {
+                LogUtils.info("WebMCP notification early return: ${method}, skipping protocol initialization")
+                if (requestId.isSome()) {
+                    let resultObj = JsonObject()
+                    resultObj.put("success", JsonBool(true))
+                    resultObj.put("message", JsonString("Notification received"))
+                    let responseObj = JsonObject()
+                    responseObj.put("jsonrpc", JsonString("2.0"))
+                    responseObj.put("result", resultObj)
+                    responseObj.put("id", requestId.getOrThrow())
+                    res.status(200).json(responseObj.toString())
+                } else {
+                    res.status(204).send("")
+                }
+                return
+            }
+            
             let sessionId = "webmcp-default"
             // 从请求头或查询参数获取用户 ID（用于菜单数据查询）
             let userId = _extractUserId(req)
@@ -238,84 +257,116 @@ public class WebMCPController {
         return false
     }
     
-    /**
-     * 处理 WebSocket 连接（使用 HttpContext，直接处理）
-     */
-    public func handleConnection(ctx: HttpContext): Unit {
-        LogUtils.info("WebMCP WebSocket connection attempt from ${ctx.request.remoteAddr}")
-        
-        // 升级 HTTP 连接为 WebSocket
-        let websocket = WebSocket.upgradeFromServer(
-            ctx,
-            subProtocols: ArrayList<String>(["model-context-protocol"]),
-            userFunc: { _ =>
-                let headers = HttpHeaders()
-                headers.add("X-Connection-Type", "webmcp")
-                headers
+    private func parseMethodAndId(body: String): (String, ?JsonValue) {
+        try {
+            let jsonValue = JsonValue.fromStr(body)
+            if (jsonValue is JsonArray) {
+                let arr = jsonValue.asArray()
+                if (arr.size() > 0) {
+                    let item = arr.get(0)
+                    if (item.isSome() && item.getOrThrow() is JsonObject) {
+                        let obj = item.getOrThrow().asObject()
+                        let method = obj.get("method")
+                        let methodStr = if (method.isSome() && method.getOrThrow() is JsonString) {
+                            method.getOrThrow().asString().getValue()
+                        } else {
+                            ""
+                        }
+                        let requestId = obj.get("id")
+                        return (methodStr, requestId)
+                    }
+                }
+                return ("", None<JsonValue>)
+            } else if (jsonValue is JsonObject) {
+                let obj = jsonValue.asObject()
+                let method = obj.get("method")
+                let methodStr = if (method.isSome() && method.getOrThrow() is JsonString) {
+                    method.getOrThrow().asString().getValue()
+                } else {
+                    ""
+                }
+                let requestId = obj.get("id")
+                return (methodStr, requestId)
+            } else {
+                return ("", None<JsonValue>)
             }
-        )
-        
-        let sessionId = UUID.random().toString()
-        
-        LogUtils.info("WebMCP WebSocket connection established, sessionId: ${sessionId}")
-        
-        // 从请求头获取用户 ID（用于菜单数据查询）
-        let userId = _extractUserIdFromContext(ctx)
-        
-        // 创建协议处理器（使用从AGENTS.md加载的动态Agent）
-        let protocol = WebMCPProtocol(_skillManager, _chatModel, getMainAgentDef())
-        _initProtocolInfrastructure(protocol, sessionId, userId)
-        _sessions.add(sessionId, protocol)
-        
-        // 处理消息循环
-        handleMessageLoop(websocket, sessionId, protocol)
-        
-        // 清理会话
-        _sessions.remove(sessionId)
-        LogUtils.info("WebMCP WebSocket session closed: ${sessionId}")
+        } catch (_: Exception) {
+            return ("", None<JsonValue>)
+        }
+    }
+    
+    /**
+     * 处理 WebSocket 连接（使用 http_lib HttpRequest）
+     */
+    public func handleConnection(req: LibHttpRequest): LibHttpResponse {
+        LogUtils.info("WebMCP WebSocket connection attempt")
+
+        match (req.connection) {
+            case Some(conn) =>
+                let controller = ConnectionController(conn)
+                try {
+                    controller.upgradeToWebSocket(req)
+                } catch (ex: Exception) {
+                    return LibHttpResponse.text(HttpStatus.BAD_REQUEST, "WebSocket upgrade failed: ${ex.message}")
+                }
+
+                let wsConn = WebSocketConn(conn)
+                let sessionId = UUID.random().toString()
+
+                LogUtils.info("WebMCP WebSocket connection established, sessionId: ${sessionId}")
+
+                let userId = _extractUserIdFromRequest(req)
+
+                let protocol = WebMCPProtocol(_skillManager, _chatModel, getMainAgentDef())
+                _initProtocolInfrastructure(protocol, sessionId, userId)
+                _sessions.add(sessionId, protocol)
+
+                handleMessageLoop(wsConn, sessionId, protocol)
+
+                _sessions.remove(sessionId)
+                LogUtils.info("WebMCP WebSocket session closed: ${sessionId}")
+                return LibHttpResponse.empty(HttpStatus.OK)
+            case None =>
+                return LibHttpResponse.text(HttpStatus.INTERNAL_SERVER_ERROR, "Connection hijack not supported")
+        }
     }
 
     /**
      * 处理消息循环
      */
-    private func handleMessageLoop(websocket: WebSocket, sessionId: String, protocol: WebMCPProtocol): Unit {
+    private func handleMessageLoop(websocket: WebSocketConn, sessionId: String, protocol: WebMCPProtocol): Unit {
         var buffer = ""
-        
-        var frame = websocket.read()
+
+        var msgOpt = websocket.readMessage()
         while (true) {
-            match (frame.frameType) {
-                case WebSocketFrameType.TextWebFrame =>
-                    let message = String.fromUtf8(frame.payload)
-                    LogUtils.debug("WebMCP received text message: ${message}")
-                    buffer = buffer + message
-                    
-                    // 尝试处理完整消息
-                    buffer = processMessages(buffer, websocket, protocol)
-                
-                case WebSocketFrameType.BinaryWebFrame =>
-                    LogUtils.error("WebMCP received binary message (unsupported)")
-                    let errorBytes = "{\"error\": \"Binary messages not supported\"}\n".toArray()
-                    websocket.write(WebSocketFrameType.TextWebFrame, errorBytes)
-                
-                case WebSocketFrameType.CloseWebFrame =>
-                    LogUtils.info("WebMCP WebSocket close frame received")
-                    websocket.write(WebSocketFrameType.CloseWebFrame, frame.payload)
+            match (msgOpt) {
+                case Some(msg) =>
+                    if (msg.isText()) {
+                        let message = msg.text()
+                        LogUtils.debug("WebMCP received text message: ${message}")
+                        buffer = buffer + message
+                        buffer = processMessages(buffer, websocket, protocol)
+                    } else if (msg.isBinary()) {
+                        LogUtils.error("WebMCP received binary message (unsupported)")
+                        websocket.writeText("{\"error\": \"Binary messages not supported\"}\n")
+                    } else if (msg.isClose()) {
+                        LogUtils.info("WebMCP WebSocket close frame received")
+                        break
+                    } else if (msg.isPing()) {
+                        websocket.writePong(msg.data)
+                    }
+                case None =>
+                    LogUtils.error("WebMCP WebSocket connection closed")
                     break
-                
-                case WebSocketFrameType.PingWebFrame =>
-                    websocket.writePongFrame(frame.payload)
-                
-                case _ => 
-                    LogUtils.error("WebMCP received unknown frame type")
             }
-            frame = websocket.read()
+            msgOpt = websocket.readMessage()
         }
     }
 
     /**
      * 处理消息缓冲区中的完整消息
      */
-    private func processMessages(buffer: String, websocket: WebSocket, protocol: WebMCPProtocol): String {
+    private func processMessages(buffer: String, websocket: WebSocketConn, protocol: WebMCPProtocol): String {
         var content = buffer
         var pos: Int64 = 0
         
@@ -343,21 +394,18 @@ public class WebMCPController {
     /**
      * 处理单条消息
      */
-    private func processMessage(message: String, websocket: WebSocket, protocol: WebMCPProtocol): Unit {
+    private func processMessage(message: String, websocket: WebSocketConn, protocol: WebMCPProtocol): Unit {
         try {
             let response = protocol.handleMessage(message)
             LogUtils.debug("WebMCP sending response: ${response}")
-            
-            // 对于真正的通知（无 id），不发送响应（JSON-RPC 规范）
+
             if (!response.isEmpty()) {
-                let responseBytes = ("${response}\n").toArray()
-                websocket.write(WebSocketFrameType.TextWebFrame, responseBytes)
+                websocket.writeText("${response}\n")
             }
         } catch (e: Exception) {
             LogUtils.error("WebMCP message processing error: ${e.message}")
             let errorResponse = "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32603,\"message\":\"${e.message}\"}}\n"
-            let errorBytes = errorResponse.toArray()
-            websocket.write(WebSocketFrameType.TextWebFrame, errorBytes)
+            websocket.writeText(errorResponse)
         }
     }
 
@@ -627,14 +675,15 @@ public class WebMCPController {
     }
 
     /**
-     * 从 HttpContext 中提取用户 ID
-     * 由于 stdx.net.http HttpContext 不提供请求头访问，暂时返回空字符串
-     * 实际用户 ID 通过 WebSocket 消息传递
+     * 从 http_lib HttpRequest 中提取用户 ID
+     * 通过请求头获取用户 ID（用于菜单数据查询）
+     * 实际用户 ID 也可通过 WebSocket 消息传递
      */
-    private func _extractUserIdFromContext(ctx: HttpContext): String {
-        // stdx.net.http 的 HttpRequest 没有 header 方法
-        // 用户 ID 通过 WebSocket 消息传递，此处返回空字符串
-        return ""
+    private func _extractUserIdFromRequest(req: LibHttpRequest): String {
+        match (req.headers.get("x-user-id")) {
+            case Some(userId) => userId
+            case None => ""
+        }
     }
 
     /**

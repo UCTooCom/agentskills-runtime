@@ -25,7 +25,8 @@ public struct EnvWrapper {
 
     /**
      * Load the environment variables from a .env file.
-     * Environment variables that are already set will NOT be overwritten.
+     * .env 文件中的值会覆盖已存在的系统环境变量，
+     * 确保 .env 文件是配置的最终权威来源。
      */
     public func load(path: Path): String {
         if (!exists(path)) {
@@ -46,15 +47,9 @@ public struct EnvWrapper {
                     } else if (value.startsWith("'")) {
                         value = value.replace("'", "")
                     }
-                    // Only set if not already defined in environment
-                    let existingOpt = getEnv(key)
-                    if (existingOpt.isSome()) {
-                        let existingValue = existingOpt.getOrThrow()
-                        strBuilder.append("[ENV Skip] ${key} already set to: ${existingValue}\n")
-                    } else {
-                        strBuilder.append("[ENV Set] ${key}=${value}\n")
-                        setEnv(key, value)
-                    }
+                    // .env 文件值始终覆盖系统环境变量
+                    setEnv(key, value)
+                    strBuilder.append("[ENV Set] ${key}=${value}\n")
                 }
             }
         } catch (e: Exception) {

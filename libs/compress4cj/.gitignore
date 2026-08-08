@@ -1,0 +1,34 @@
+# 构建产物
+target/
+build/
+output/
+/.cjpm-history
+module-resolve.json
+module-lock.json
+
+# IDE 与本地工具目录
+/.vscode/
+/.idea/
+/.cache/
+/.agents/
+
+# 覆盖率与中间文件
+*.macrocall
+*.gcda
+*.gcno
+
+# 日志与临时文件
+*.log
+*.tmp
+*.temp
+/log/
+/report/
+/tmp/
+skills-lock.json
+
+# 常见系统文件
+.DS_Store
+Thumbs.db
+
+.mcp-cache/
+.claude/

@@ -45,7 +45,9 @@ public enum BeanDefCount <: ToString {
         }
     }
 }
-
+/**
+ * 以bean的类型作为条件
+ */
 public enum BeanDefType <: ToString {
     /**
      * 不判断bean类型
@@ -83,7 +85,7 @@ public enum BeanDefType <: ToString {
         }
     }
 
-    public func on(beanType: TypeInfo) {
+    public func on(beanType: TypeInfo): Bool {
         match (this) {
             case IgnoreType => true
             case Current(t) => TypeInfos.get(t) == beanType

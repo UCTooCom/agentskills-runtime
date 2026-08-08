@@ -1,0 +1,14 @@
+[package]
+  name = "quic_cj"
+  version = "0.1.0"
+  cjc-version = "1.0.5"
+  output-type = "static"
+  src-dir = "src/quic_cj"
+  compile-option = "-Woff unused -Woff parser"
+  license = "Apache-2.0"
+  description = "基于仓颉语言的 QUIC 传输协议实现（RFC 9000）"
+
+[dependencies]
+  jinguissl = { path = "../jinguissl", output-type = "static" }
+  jinguissl_core = { path = "../jinguissl_core", output-type = "static" }
+  channel_cj = { path = "../channel_cj", output-type = "static" }

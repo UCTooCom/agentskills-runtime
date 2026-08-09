@@ -29,6 +29,28 @@ AgentSkills Runtime is a runtime environment for the Agent Skills standard imple
   </tr>
 </table>
 
+### PC Desktop Client — Fastest Way to Get Started
+
+For most users who just want to run AgentSkills Runtime, **the fastest path is to install the PC desktop client** — no need to clone the source, set up the Cangjie toolchain, or configure a database. The desktop app bundles the Cangjie-language runtime kernel, an embedded PostgreSQL, and the web-admin management frontend into a single install-and-run experience.
+
+- **Repository**: <https://atomgit.com/UCToo/agentskills-runtime-pc>
+- **Tech stack**: Electron 42 + Vue 3 + Vite 8
+- **Version**: 0.1.0 · **App ID**: `com.uctoo.agentskills-runtime-pc` · **Product name**: AgentSkills Runtime
+- **What it does**: on first launch it auto-extracts the runtime, initializes PostgreSQL, generates the `.env` config, then brings up the PostgreSQL → runtime → web-admin service chain and lands you on the AI Builder homepage
+- **Extras**: registers the `agentskills://` custom protocol, supports auto-launch on boot, system tray, and auto-update via electron-updater
+
+**Steps**:
+
+1. Go to the releases page and download the installer for your platform: <https://atomgit.com/UCToo/agentskills-runtime-pc/releases>
+2. Windows users: double-click `AgentSkills Runtime-Windows-<version>-Installer.exe` to run the standard setup wizard, or download the `...-Portable.exe` no-install portable edition
+3. macOS users: download `AgentSkills Runtime-Mac-<version>-Installer.dmg`
+4. Linux users: download `AgentSkills Runtime-Linux-<version>.AppImage`
+5. After installation, launch the app. The first run auto-completes environment initialization, after which you'll land on the AI Builder homepage and can start using it
+
+> The auto-update URL is `https://atomgit.com/UCToo/agentskills-runtime-pc/releases/download/<version>/`. The client has electron-updater built in and will prompt you to upgrade when a new version is released.
+
+If you prefer to run the runtime kernel directly from source (e.g. for server deployment or secondary development), continue reading the Overview and Quick Start sections below.
+
 ## Overview
 
 AgentSkills Runtime is a comprehensive framework for building and executing AI agent skills. It provides a secure, portable, and intelligent runtime environment for AI agent tools that follow the agentskills standard. The framework is built on the Cangjie programming language and incorporates advanced features from the UCToo project architecture.

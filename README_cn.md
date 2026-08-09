@@ -29,6 +29,28 @@ AgentSkills Runtime 是一个基于仓颉编程语言实现的 Agent Skills 标�
   </tr>
 </table>
 
+### PC 端桌面客户端——最快上手方式
+
+对绝大多数只想"用起来"的用户，**最快的方式是安装 PC 端桌面客户端**，无需克隆源码、配置仓颉工具链或手动建库。桌面客户端把仓颉语言实现的 runtime 内核、内嵌 PostgreSQL、以及 web-admin 管理前端打包成一个"安装即用"的整体。
+
+- **开源地址**：<https://atomgit.com/UCToo/agentskills-runtime-pc>
+- **技术栈**：Electron 42 + Vue 3 + Vite 8
+- **当前版本**：0.1.0 · **应用 ID**：`com.uctoo.agentskills-runtime-pc` · **产品名**：AgentSkills Runtime
+- **客户端职责**：首次启动自动解压 runtime、初始化 PostgreSQL、生成 `.env` 配置；随后自动拉起 PostgreSQL → runtime → web-admin 服务链，进入 AI Builder 首页即可使用
+- **附加能力**：注册 `agentskills://` 自定义协议、支持开机自启与系统托盘、内置 electron-updater 自动更新
+
+**操作步骤**：
+
+1. 前往发布页下载对应平台安装包：<https://atomgit.com/UCToo/agentskills-runtime-pc/releases>
+2. Windows 用户双击 `AgentSkills Runtime-Windows-<version>-Installer.exe` 走标准安装向导，或下载 `...-Portable.exe` 免安装便携版
+3. macOS 用户下载 `AgentSkills Runtime-Mac-<version>-Installer.dmg`
+4. Linux 用户下载 `AgentSkills Runtime-Linux-<version>.AppImage`
+5. 安装完成后启动应用，首次运行会自动完成环境初始化，随后进入 AI Builder 首页即可使用
+
+> 自动更新地址：`https://atomgit.com/UCToo/agentskills-runtime-pc/releases/download/<version>/`，客户端内置 electron-updater，新版本发布后会自动提示升级。
+
+如果你希望直接从源码运行 runtime 内核（例如服务器部署或二次开发），请继续阅读下方的「概述」与「快速开始」章节。
+
 ## 概述
 
 AgentSkills Runtime 是一个全面的框架，用于构建和执行 AI 智能体技能。它为遵循 agentskills 标准的 AI 智能体工具提供了安全、便携和智能的运行时环境。该框架基于仓颉编程语言构建，并融合了UCToo项目架构的先进特性。

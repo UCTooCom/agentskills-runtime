@@ -70,6 +70,44 @@ The framework includes:
 
 Build a domestically developed and controllable AI agent skill runtime, promote the application of Agent Skills standards in the AI ecosystem, and construct an open, secure, and efficient AI-native application infrastructure. Aiming to enable AgentSkills to run anywhere.
 
+## Business Case & Value Proposition
+
+> **Competition Entry**: Financial Industry Agent Hackathon (2026/07/27 - 2026/08/08)
+> **Demo Video**: [Investment Research Assistant Demo Recording](./public/demo.mp4)
+> **Source Code**: https://atomgit.com/UCToo/agentskills-runtime
+> **Technical Docs**: This README (product docs + architecture design + core modules + performance data)
+
+### 4.1 Target Scenarios
+
+This work targets real financial industry business scenarios, using "Investment Research Assistant" as the typical application, automating the full pipeline: automated fetching → data cleaning → factor extraction → report generation → database persistence → daily investment brief:
+
+1. **Intelligent Investment Research & Daily Brief**: Automatically fetches multi-source data (market data, announcements, news), cleans and deduplicates, extracts key investment factors (valuation, financials, events, sentiment), generates structured daily investment briefs, writes company data to the `company` table and research reports to the `tasks` table, visualized through the aibuilder module.
+2. **Financial Industry Agent Infrastructure**: AgentSkills Runtime provides a standardized skill runtime environment (SKILL.md loading/validation, WASM sandbox, RBAC permissions, MCP/WebMCP integration, audit logs), enabling rapid development and secure operation of financial business Agents.
+3. **Financial Business System Integration**: Built on the Cangjie-language high-performance application server (HTTP/HTTPS, WebSocket, SSE), Agents seamlessly integrate with traditional financial ICT infrastructure.
+
+### 4.2 Target Customers
+
+| Customer Type | Typical Scenario | Value Proposition |
+|---------------|-----------------|-------------------|
+| Securities/Fund Research Depts | Daily investment brief, stock analysis, industry reports | Research production efficiency gains, standardized output |
+| Bank/Insurance Wealth Management | Client portfolio analysis, market news aggregation | Automated advisory content, expanded service coverage |
+| Fintech Companies | Agent application platform, research data services | Rapid business Agent delivery, reduced development costs |
+| Financial Regulators/Research Institutes | Market data monitoring, sentiment analysis | Compliance data retention, auditable traceability |
+| Developers/Open Source Community | Agent skill development, standard practices | Open standards, domestically controllable tech stack |
+
+### 4.3 Business Model
+
+1. **Open Source Community Edition (Free)**: AgentSkills Runtime is MIT-licensed, providing the complete skill runtime environment and the investment-research-assistant skill to attract developer ecosystem participation.
+2. **Enterprise Private Deployment (License)**: For financial institutions requiring private deployment with PostgreSQL, RBAC, audit logs, and domestic tech stack (Cangjie + Ascend computing), billed as annual License.
+3. **Cloud Service Subscription (SaaS)**: Managed Agent runtime platform and intelligent research service subscription, billed per seat/API usage.
+4. **Value-Added Services**: Industry skill customization, data source integration, deployment & operations, training and technical support.
+
+### 4.4 Demo Video
+
+https://atomgit.com/UCToo/agentskills-runtime/blob/main/public/demo.mp4
+
+> You can also [download the demo video](./public/demo.mp4) to watch locally.
+
 ## Architecture Design
 
 This implementation follows clean architecture principles with clear separation of concerns:

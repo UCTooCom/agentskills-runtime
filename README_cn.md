@@ -146,6 +146,12 @@ python3 scripts/save_report_to_db.py --report output/brief/2026-08-07.md
 
 **评审建议**：评委可先阅读 `comp.md` 对照赛事要求，再按 `spec.md → design.md → tasks.md` 顺序查阅工程文档理解设计链路；实际运行验证请参考 4.4 节"如何使用与复现"步骤，重点考察作品是否满足"金融场景、必须能跑、解决真问题"三个硬性要求，以及是否运行在昇腾 AI 算力底座之上。
 
+### 4.6 演示视频
+
+https://atomgit.com/UCToo/agentskills-runtime/blob/main/public/demo.mp4
+
+> 也可[下载演示视频](./public/demo.mp4)本地观看。
+
 ## 架构设计
 
 该实现遵循整洁架构原则，采用三层架构设计，具有清晰的关注点分离：

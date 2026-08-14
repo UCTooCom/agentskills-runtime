@@ -56,6 +56,7 @@ public class SkillCLI {
         match (command) {
             case "run" => executeRunCommand(subArgs)
             case "list" => executeListCommand(subArgs)
+            case "get-skill" => executeGetSkillCommand(subArgs)
             case "install" => executeInstallCommand(subArgs)
             case "uninstall" => executeUninstallCommand(subArgs)
             case "find" => executeFindCommand(subArgs)
@@ -89,6 +90,7 @@ public class SkillCLI {
         getStdOut().writeln("Commands:")
         getStdOut().writeln("  run <skill:tool> [args...]    Execute a skill tool with arguments")
         getStdOut().writeln("  list                          List all installed skills")
+        getStdOut().writeln("  get-skill <name> [--section s] Get skill full content (SKILL.md)")
         getStdOut().writeln("  install [options]             Install a skill from local path or Git repository")
         getStdOut().writeln("  uninstall <skill-name>        Uninstall a skill")
         getStdOut().writeln("  find <query>                  Semantic search for tools with usage examples")
@@ -168,7 +170,62 @@ public class SkillCLI {
      */
     private func executeListCommand(args: Array<String>): Unit {
         getStdOut().writeln("Listing installed skills...")
-        // In a real implementation, this would list of installed skills
+        let skills = _skillManager.availableSkills.values().toArray()
+        if (skills.isEmpty()) {
+            getStdOut().writeln("No skills installed.")
+            return
+        }
+        for (skill in skills) {
+            getStdOut().writeln("  - ${skill.name}: ${skill.description}")
+        }
+    }
+
+    /**
+     * Execute the get-skill command
+     * Usage: agentskills get-skill <name> [--section <section>]
+     */
+    private func executeGetSkillCommand(args: Array<String>): Unit {
+        if (args.size == 0) {
+            getStdOut().writeln("Usage: agentskills get-skill <name> [--section <section>]")
+            return
+        }
+
+        let skillName = args[0]
+        var section = ""
+
+        var i = 1
+        while (i < args.size) {
+            if (args[i] == "--section" && i + 1 < args.size) {
+                section = args[i + 1]
+                i += 2
+            } else {
+                i += 1
+            }
+        }
+
+        match (_skillManager.getSkill(skillName)) {
+            case Some(skill) =>
+                getStdOut().writeln("=== Skill: ${skill.name} ===")
+                getStdOut().writeln("Description: ${skill.description}")
+                if (let Some(license) <- skill.license) {
+                    getStdOut().writeln("License: ${license}")
+                }
+                if (let Some(compatibility) <- skill.compatibility) {
+                    getStdOut().writeln("Compatibility: ${compatibility}")
+                }
+                getStdOut().writeln("Path: ${skill.skillPath}")
+                getStdOut().writeln("---")
+                if (section.isEmpty()) {
+                    getStdOut().writeln(skill.instructions)
+                } else {
+                    getStdOut().writeln("(Section filter '${section}' - showing full content)")
+                    getStdOut().writeln(skill.instructions)
+                }
+            case None =>
+                getStdOut().writeln("Skill '${skillName}' not found.")
+                let available = _skillManager.availableSkills.keys().toArray()
+                getStdOut().writeln("Available skills: ${String.join(available, delimiter: ", ")}")
+        }
     }
 
     /**

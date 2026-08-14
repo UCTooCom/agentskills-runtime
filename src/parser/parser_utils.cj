@@ -73,9 +73,27 @@ public struct ParserUtils {
         var escaped = false
         for (idx in start..str.size) {
             let ch = str[idx]
-            if (ch == beginSymbol && !inString) {
+            if (escaped) {
+                // Current char is escaped by preceding backslash; skip it
+                escaped = false
+                continue
+            }
+            if (ch == b'\\') {
+                // Backslash escapes the next char
+                escaped = true
+                continue
+            }
+            if (ch == b'"') {
+                inString = !inString
+                continue
+            }
+            if (inString) {
+                // Inside a string literal; braces don't count
+                continue
+            }
+            if (ch == beginSymbol) {
                 numberOfBraces += 1
-            } else if (ch == endSymbol && !inString) {
+            } else if (ch == endSymbol) {
                 numberOfBraces -= 1
                 // Found the end of the JSON object
                 if (numberOfBraces == 0) {
@@ -88,10 +106,7 @@ public struct ParserUtils {
                         return None
                     }
                 }
-            } else if (ch == b'"' && !escaped) {
-                inString = !inString
             }
-            escaped = (ch == b'\\' && !escaped)
         }
         return None
     }
@@ -121,7 +136,14 @@ public struct ParserUtils {
             }
         }
         if (name.isEmpty()) {
-            throw ParserException("Failed to parse tool request: tool name is missing")
+            // v10 容错：agent 输出 dir /s /b 命令时 JSON 解析误判 /s 为工具名
+            // 校验 name 是否合法工具名（非 / 开头、非纯符号），不合法时返回明确错误而非误解析
+            // 错误信息含 JSON 原文，让 agent 据 ReAct 重试时能看到具体哪个字段缺失
+            throw ParserException("Failed to parse tool request: tool name is missing (expected one of name/function/tool, got JSON: ${json.toString()})")
+        }
+        // v10 容错：校验 name 是否合法工具名（非 / 开头、非纯符号），不合法时返回明确错误
+        if (name.startsWith("/") || name.startsWith("-")) {
+            throw ParserException("Failed to parse tool request: invalid tool name '${name}' (looks like a command flag, not a tool name). Check JSON structure, got JSON: ${json.toString()})")
         }
         // Heuristic: use a loop to try "arguments", "parameters", "argument", "parameter", and "args" in order
         var args: Option<JsonObject> = None
@@ -131,7 +153,7 @@ public struct ParserUtils {
                 return ToolRequest(name: name, args: args.getOrThrow())
             }
         }
-        throw ParserException("Failed to parse tool request: arguments are missing")
+        throw ParserException("Failed to parse tool request: arguments are missing (expected one of arguments/parameters/argument/parameter/args, tool name was: ${name})")
     }
 
     public static func extractToolRequest(str: String): ToolRequest {
@@ -155,7 +177,15 @@ public struct ParserUtils {
      * So, we use a heuristic method to extract the JSON string if failed.
      */
     public static func extractFirstJsonValue(str: String, goal!: ExtractGoal): JsonValue {
-        if (let Some(jsonStr) <- extractCode(str, "json", last: false)) {
+        // v9 容错：agent 输出 <action> {...} </action> 时 JSON 前后可能有空格/换行/全角空格
+        // 先 trim 首尾空白后再提取，避免 indexOf 找不到 { 报 "There is NO JSON output"
+        // v14 修复：去掉 .replace(" ", "") —— 它会删除 JSON 字符串值内部的空格
+        // 根因：agent 输出 "args": ["-c", "import requests; print('requests ok')"] 时
+        //   replace(" ", "") 把 "import requests; print('requests ok')" 变成 "importrequests;print('requestsok')"
+        //   导致 python -c 执行 NameError: name 'importrequests' is not defined
+        // trimAscii() 已去掉首尾 ASCII 空白；JSON 内部空格由解析器处理，不需全局替换
+        let trimmedStr = str.trimAscii()
+        if (let Some(jsonStr) <- extractCode(trimmedStr, "json", last: false)) {
             try {
                 LogUtils.trace("Extracted JSON string: `${jsonStr}`")
                 return JsonValue.fromStr(jsonStr)
@@ -165,7 +195,7 @@ public struct ParserUtils {
                 LogUtils.trace("Failed to parse the string as JSON: `${str}`; trying heuristic extraction")
             }
         }
-        if (let Some(jsonStr) <- extractFirstJsonWithHeuristic(str, goal: goal)) {
+        if (let Some(jsonStr) <- extractFirstJsonWithHeuristic(trimmedStr, goal: goal)) {
             LogUtils.trace("Extracted JSON string with heuristic: `${jsonStr}`")
             try {
                 return JsonValue.fromStr(jsonStr)

@@ -10,6 +10,7 @@ import magic.utils.readFile
 import magic.utils.removeIfExists
 import std.collection.HashMap
 import std.convert.*
+import std.env.getWorkingDirectory
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonArray}
 import std.fs.{File, Path, Directory, FileInfo, exists, OpenMode, rename}
 import std.io.StringWriter
@@ -66,22 +67,36 @@ public class FileReadTool <: NativeFuncTool {
             throw ToolException("Parameter 'path' is required")
         }
 
-        let path = Path(pathStr)
+        // 规范化路径：去除 agent 输出的过度转义（D:\\UCT → D:\UCT），并在相对路径时锚定到工作目录
+        // 与 DirectoryListTool.normalizePath 同源根因，避免 exists() 返回 false 导致读取空
+        let normalizedPathStr = DirectoryListTool.normalizePath(pathStr)
+        LogUtils.info("[FileReadTool] Reading file: ${pathStr}, normalized: ${normalizedPathStr}")
+
+        let path = Path(normalizedPathStr)
         if (!exists(path)) {
-            throw ToolException("File does not exist: ${pathStr}")
+            // 路径不存在时返回明确的错误信息，而非静默返回空内容
+            LogUtils.warn("[FileReadTool] File does not exist: ${normalizedPathStr} (original: ${pathStr})")
+            let errResult = JsonObject()
+            errResult.put("success", JsonString("false"))
+            errResult.put("path", JsonString(normalizedPathStr))
+            errResult.put("error", JsonString("File does not exist: ${normalizedPathStr}"))
+            errResult.put("working_directory", JsonString(getWorkingDirectory().toString()))
+            return errResult.toJsonString()
         }
 
         let withLineNumber = FileReadTool.extractBool(args, "withLineNumber", false)
-        
+
         let startLine = FileReadTool.extractInt(args, "startLine", 1)
-        let endLine = FileReadTool.extractInt(args, "endLine", Int64.Max)
-        
+        // v5 实测修复：endLine 默认值从 Int64.Max 改为 -1，与参数说明一致（-1 表示读到文件末尾）
+        // Int64.Max 可能导致仓颉 readFile 内部切片异常，静默返回空内容（投研脚本 127 行却返回 content="")
+        let endLine = FileReadTool.extractInt(args, "endLine", -1)
+
         let offset = FileReadTool.extractInt(args, "offset", 0)
         let limit = FileReadTool.extractInt(args, "limit", 0)
-        
+
         var finalStartLine = startLine
         var finalEndLine = endLine
-        
+
         if (offset > 0) {
             finalStartLine = offset + 1
             if (limit > 0) {
@@ -89,21 +104,88 @@ public class FileReadTool <: NativeFuncTool {
             }
         }
 
-        LogUtils.info("[FileReadTool] Reading file: ${pathStr}, withLineNumber: ${withLineNumber}, startLine: ${finalStartLine}, endLine: ${finalEndLine}")
+        LogUtils.info("[FileReadTool] Reading file: ${normalizedPathStr}, withLineNumber: ${withLineNumber}, startLine: ${finalStartLine}, endLine: ${finalEndLine}")
 
         try {
             let content = readFile(path, withLineNumber: withLineNumber, startLine: finalStartLine, endLine: finalEndLine)
-            
+
+            // v5 实测修复：读取后校验。若 content 为空但文件存在且大小 > 0，返回警告而非静默空
+            // 根因：Python 脚本含中文注释，可能非 UTF-8 编码，仓颉 readFile 解码失败但静默返回空
+            if (content.isEmpty()) {
+                try {
+                    let fileInfo = FileInfo(path)
+                    if (fileInfo.size > 0) {
+                        // v10 根治：编码 fallback，剥 UTF-8 BOM + 替换非法字符为 ?，避免投研链路断链
+                        // 根因：仓颉 readFile 按 UTF-8 解码，含 BOM（EF BB BF）或非法字节序列时静默返回空
+                        // 影响：agent file_read SKILL.md/COMPOSITION.yaml/README.md 噊返回空，无法渐进式加载 SOP
+                        try {
+                            let rawBytes = File.readFrom(path)
+                            var startIdx = 0
+                            // 剥离 UTF-8 BOM（EF BB BF 首三字节）
+                            if (rawBytes.size >= 3 && rawBytes[0] == 0xEF && rawBytes[1] == 0xBB && rawBytes[2] == 0xBF) {
+                                startIdx = 3
+                            }
+                            // 容错解码：UTF-8 失败则替换非法字符为 ?（0x3F）后返回非空
+                            let safeBytes = Array<Byte>(rawBytes.size - startIdx, { _ => 0 })
+                            var safeIdx = 0
+                            var i = startIdx
+                            while (i < rawBytes.size) {
+                                let b = rawBytes[i]
+                                if (b < 0x80) {
+                                    // ASCII 字符（0-127）直接保留
+                                    safeBytes[safeIdx] = b
+                                    safeIdx++
+                                } else {
+                                    // 非 ASCII 字符替换为 ?（0x3F），避免 UTF-8 解码失败
+                                    safeBytes[safeIdx] = 0x3F
+                                    safeIdx++
+                                }
+                                i++
+                            }
+                            let fallbackContent = String.fromUtf8(safeBytes[0..safeIdx])
+                            if (!fallbackContent.isEmpty()) {
+                                LogUtils.info("[FileReadTool] Encoding fallback succeeded for ${normalizedPathStr}, length: ${fallbackContent.size.toString()}")
+                                let result = JsonObject()
+                                result.put("success", JsonString("true"))
+                                result.put("path", JsonString(normalizedPathStr))
+                                result.put("content", JsonString(fallbackContent))
+                                result.put("lineCount", JsonString(fallbackContent.split("\n").size.toString()))
+                                result.put("encoding", JsonString("fallback: UTF-8 BOM stripped + non-ASCII replaced with ?"))
+                                return result.toJsonString()
+                            }
+                        } catch (fbEx: Exception) {
+                            LogUtils.warn("[FileReadTool] Encoding fallback also failed for ${normalizedPathStr}: ${fbEx.message}")
+                        }
+                        LogUtils.warn("[FileReadTool] File exists (size: ${fileInfo.size} bytes) but readFile returned empty, possible encoding issue: ${normalizedPathStr}")
+                        let warnResult = JsonObject()
+                        warnResult.put("success", JsonString("true"))
+                        warnResult.put("path", JsonString(normalizedPathStr))
+                        warnResult.put("content", JsonString(""))
+                        warnResult.put("lineCount", JsonString("0"))
+                        warnResult.put("warning", JsonString("File exists (size: ${fileInfo.size} bytes) but content is empty, possible encoding issue. Try withLineNumber=false or check file encoding (UTF-8 expected)."))
+                        return warnResult.toJsonString()
+                    }
+                } catch (_: Exception) {
+                    // FileInfo 失败时不影响主流程，继续返回空 content
+                }
+            }
+
             let result = JsonObject()
             result.put("success", JsonString("true"))
-            result.put("path", JsonString(pathStr))
+            result.put("path", JsonString(normalizedPathStr))
             result.put("content", JsonString(content))
             result.put("lineCount", JsonString(content.split("\n").size.toString()))
-            
+
             return result.toJsonString()
         } catch (ex: Exception) {
             LogUtils.error("[FileReadTool] Failed to read file: ${ex.message}")
-            throw ToolException("Failed to read file: ${ex.message}")
+            // v5 实测修复：返回明确错误而非抛异常，让 agent 能继续处理而非中断
+            let errResult = JsonObject()
+            errResult.put("success", JsonString("false"))
+            errResult.put("path", JsonString(normalizedPathStr))
+            errResult.put("error", JsonString("Failed to read file: ${ex.message}"))
+            errResult.put("working_directory", JsonString(getWorkingDirectory().toString()))
+            return errResult.toJsonString()
         }
     }
 
@@ -547,29 +629,40 @@ public class DirectoryListTool <: NativeFuncTool {
             throw ToolException("Parameter 'path' is required")
         }
 
-        let path = Path(pathStr)
+        // 规范化路径：去除 agent 输出的过度转义（D:\\UCT → D:\UCT），并在相对路径时锚定到工作目录
+        let normalizedPathStr = normalizePath(pathStr)
+        LogUtils.info("[DirectoryListTool] Input path: ${pathStr}, normalized: ${normalizedPathStr}")
+
+        let path = Path(normalizedPathStr)
         if (!exists(path)) {
-            throw ToolException("Directory does not exist: ${pathStr}")
+            // 路径不存在时返回明确的错误结构，而非静默抛异常被上层吞掉导致前端拿到空列表
+            LogUtils.warn("[DirectoryListTool] Directory does not exist: ${normalizedPathStr} (original: ${pathStr})")
+            let errResult = JsonObject()
+            errResult.put("success", JsonString("false"))
+            errResult.put("path", JsonString(normalizedPathStr))
+            errResult.put("error", JsonString("Directory does not exist: ${normalizedPathStr}"))
+            errResult.put("working_directory", JsonString(getWorkingDirectory().toString()))
+            return errResult.toJsonString()
         }
 
         let recursive = FileReadTool.extractBool(args, "recursive", false)
         let pattern = FileReadTool.extractString(args, "pattern")
 
-        LogUtils.info("[DirectoryListTool] Listing directory: ${pathStr}, recursive: ${recursive}, pattern: ${pattern}")
+        LogUtils.info("[DirectoryListTool] Listing directory: ${normalizedPathStr}, recursive: ${recursive}, pattern: ${pattern}")
 
         try {
             let entries = JsonArray()
             let fileInfo = FileInfo(path)
             
             if (!fileInfo.isDirectory()) {
-                throw ToolException("Path is not a directory: ${pathStr}")
+                throw ToolException("Path is not a directory: ${normalizedPathStr}")
             }
 
             DirectoryListTool.listDirectory(path, recursive, pattern, entries)
 
             let result = JsonObject()
             result.put("success", JsonString("true"))
-            result.put("path", JsonString(pathStr))
+            result.put("path", JsonString(normalizedPathStr))
             result.put("count", JsonString(entries.size().toString()))
             result.put("entries", entries)
 
@@ -578,6 +671,35 @@ public class DirectoryListTool <: NativeFuncTool {
             LogUtils.error("[DirectoryListTool] Failed to list directory: ${ex.message}")
             throw ToolException("Failed to list directory: ${ex.message}")
         }
+    }
+
+    /**
+     * 规范化路径输入，处理 agent 输出的过度转义和相对路径锚定。
+     *
+     * 根因：
+     * 1. agent 在 JSON 中输出的 Windows 路径常含双重反斜杠（D:\\UCT\\...），仓颉 Path 解析时
+     *    可能保留双反斜杠导致 exists() 返回 false。
+     * 2. 相对路径（如 skills）的解析基准不明确，需锚定到 runtime 工作目录。
+     */
+    public static func normalizePath(raw: String): String {
+        // v12 修复：统一路径分隔符，解决 Windows 反斜杠导致 directory_list 返回空
+        // 根因：agent 传入 skills/investment-research-assistant（正斜杠）或 D:\\UCT\\...（双反斜杠），
+        //       仓颉 Path 在 Windows 上对混合斜杠路径解析失败，exists() 返回 false
+        // 方案：将所有反斜杠统一为正斜杠（仓颉 Path 在 Windows 上支持正斜杠），去除重复斜杠
+        var p = raw.replace("\\", "/")
+        // 去除重复正斜杠
+        while (p.contains("//")) {
+            p = p.replace("//", "/")
+        }
+
+        // 相对路径锚定到工作目录：不含分隔符且非绝对路径时，前置工作目录
+        // Windows 绝对路径形如 C:/... 或 D:/...；POSIX 绝对路径以 / 开头；UNC 路径以 // 开头
+        let isAbsolute = (p.size >= 3 && p[0].isAsciiLetter() && p[1] == b':' && p[2] == b'/') || p.startsWith("/")
+        if (!isAbsolute) {
+            let wd = getWorkingDirectory().toString().replace("\\", "/")
+            p = wd + "/" + p
+        }
+        return p
     }
 
     protected static func listDirectory(

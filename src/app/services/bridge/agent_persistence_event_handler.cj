@@ -16,11 +16,11 @@ func reasonStr(reason: ?String): String {
 }
 
 func toJsonString(text: String): String {
-    "\"${text.replace("\"", "\\\"")}\""
+    "\"${text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n")}\""
 }
 
 func toJsonArrayString(text: String): String {
-    "[\"${text.replace("\"", "\\\"")}\"]"
+    "[\"${text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n")}\"]"
 }
 
 public class AgentPersistenceEventHandler {

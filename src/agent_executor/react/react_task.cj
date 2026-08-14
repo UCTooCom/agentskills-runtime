@@ -12,6 +12,20 @@ import magic.parser.{TagStreamParser, ParserException}
 import magic.utils.sleep2
 
 protected class ReactTask <: AgentTask {
+    /**
+     * v15: Buffer to collect reasoning_content (思维链) from all ReAct steps
+     * The LLM generates reasoning_content for each step, we collect all of them
+     * and forward to the frontend for display via setAnswerReason
+     */
+    private let _reasoningBuffer = StringBuilder("")
+
+    /**
+     * v15: Get the collected reasoning content for forwarding to execution info
+     */
+    protected prop reasoningContent: String {
+        get() { _reasoningBuffer.toString() }
+    }
+
     protected init(agent: Agent, request: AgentRequest) {
         super(agent, request)
 
@@ -49,6 +63,10 @@ protected class ReactTask <: AgentTask {
             case ReactStep.Answer(answer) =>
                 if (answer.thought != "") {
                     this.execution.addStep(MessageRole.Assistant, answer.thought, Tag.Thought)
+                }
+                // v15: Forward collected reasoning_content to execution info
+                if (_reasoningBuffer.size > 0) {
+                    this.execution.setAnswerReason(_reasoningBuffer.toString())
                 }
                 return answer.content
             case ReactStep.Failure(failureInfo) =>
@@ -121,7 +139,17 @@ protected class ReactTask <: AgentTask {
         // [Observation] ... [Observation],
         // so we truncate it with `stop` words.
         try {
-            let msg = this.chatLLM(this.execution.messages, stop: [Tag.Observation.open]).message
+            let chatResp = this.chatLLM(this.execution.messages, stop: [Tag.Observation.open])
+            let msg = chatResp.message
+            // v15: Collect reasoning_content (思维链) from each ReAct step
+            if (let Some(r) <- msg.reason) {
+                if (!r.isEmpty()) {
+                    if (_reasoningBuffer.size > 0) {
+                        _reasoningBuffer.append("\n\n")
+                    }
+                    _reasoningBuffer.append(r)
+                }
+            }
             return ReactStep.fromStr(msg.content)
         } catch (ex: Exception) {
             LogUtils.error(this.agent.name, ex.toString())
@@ -143,7 +171,18 @@ protected class ReactTask <: AgentTask {
         let messages = MessageList(
             ReactPromptUtils.buildReactSummarizePrompt(this)
         )
-        let msg = this.chatLLM(messages).message
+        let chatResp = this.chatLLM(messages)
+        let msg = chatResp.message
+        // v15: Collect reasoning from summarize step
+        if (let Some(r) <- msg.reason) {
+            if (!r.isEmpty()) {
+                if (_reasoningBuffer.size > 0) {
+                    _reasoningBuffer.append("\n\n")
+                }
+                _reasoningBuffer.append(r)
+                this.execution.setAnswerReason(_reasoningBuffer.toString())
+            }
+        }
         return Tag.extract(msg.content, Tag.Answer).getOrThrow({ =>
             AgentExecutionException("Chat model response has no answers")
         })
@@ -197,7 +236,7 @@ protected class ReactTask <: AgentTask {
         let asyncChatResp = agent.model.asyncCreate(
             ChatRequest(this.execution.messages, stop: [Tag.Observation.open])
         )
-        let parser = TagStreamParser(asyncChatResp.iter(withReason: false))
+        let parser = TagStreamParser(asyncChatResp.iter(withReason: true))
         return AsyncReactStep(parser)
     }
 

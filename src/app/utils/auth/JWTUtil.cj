@@ -86,6 +86,12 @@ public class JWTUtil {
      * @return 验证成功返回JWTPayload，失败返回None
      */
     public func verifyToken(token: String): Option<JWTPayload> {
+        // v12 修复：前置 null/空值检查，避免 "null" 字符串传入 verifier 导致错误日志噪音
+        // 根因：前端未登录时 Authorization header 为 "Bearer null"，token 解析为字符串 "null"
+        if (token.isEmpty() || token == "null" || token == "undefined") {
+            LogUtils.warn("verifyToken skipped: token is empty or literal 'null'/'undefined'")
+            return None<JWTPayload>
+        }
         try {
             // 使用jwt4cj验证token
             let verifier = JWT.require(Algorithm.HMAC256(secretKey))
@@ -106,7 +112,15 @@ public class JWTUtil {
             let result = JWTPayload(userId, sessionId, timestamp, expiry)
             Some<JWTPayload>(result)
         } catch (e: Exception) {
-            LogUtils.error("verifyToken failed: ${e.message}")
+            // v5 实测修复：完整输出 token 格式诊断信息，便于前端定位 token 截断/格式问题（日志 3 处 → 1 处）
+            // 仓颉不支持三元运算符，改用 if-else 表达式
+            let tokenParts = token.split(".")
+            let tokenPreview = if (token.size > 20) {
+                token[0..20] + "..."
+            } else {
+                token
+            }
+            LogUtils.error("verifyToken failed: ${e.message} (token parts: expected 3, got ${tokenParts.size}; first 20 chars: ${tokenPreview})")
             None<JWTPayload>
         }
     }

@@ -14,7 +14,7 @@ import magic.core.agent.{AgentRequest, AgentResponse}
 import magic.core.agent.AgentDefinition
 import magic.agent.memory.tiered.TieredMemory
 import magic.interaction.EventHandlerManager
-import magic.app.services.bridge.{AgentRuntimeBridge, CheckpointManager}
+import magic.app.services.bridge.{AgentRuntimeBridge, CheckpointManager, WebSocketSessionManager, SSEEventBridge}
 import magic.app.models.uctoo.AgentsPO
 import magic.app.services.uctoo.AgentsService
 import magic.tool.webmcp.{SSEConnectionManager, PendingToolCallManager, FrontendToolRegistry, FrontendToolDefinition, WebMCPToolContext, WebMCPToolHelper}
@@ -23,6 +23,8 @@ import magic.jsonable.TypeSchema
 import f_util.UUID
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
 import std.collection.{HashMap, ArrayList}
+
+import std.sync.AtomicBool
 
 /**
  * WebMCP 协议处理器
@@ -203,12 +205,13 @@ public class WebMCPProtocol {
      */
     public func injectMenuContextToAgent(): Unit {
         // 检查依赖是否就绪
+        // v5 实测修复：menuDataProvider/userId 未设置是配置缺失而非 bug，降级为 DEBUG 避免每次请求 WARN 噪声（日志 18 处）
         if (_menuDataProvider.isNone() || _userId.isEmpty()) {
-            LogUtils.warn("[WebMCPProtocol] Cannot inject menu context: menuDataProvider or userId not set")
+            LogUtils.debug("[WebMCPProtocol] Cannot inject menu context: menuDataProvider or userId not set (optional, skipped)")
             return
         }
         if (_agent.isNone()) {
-            LogUtils.warn("[WebMCPProtocol] Cannot inject menu context: agent not available")
+            LogUtils.debug("[WebMCPProtocol] Cannot inject menu context: agent not available (optional, skipped)")
             return
         }
 
@@ -354,6 +357,8 @@ public class WebMCPProtocol {
             return handleCloseSession(obj)
         } else if (method == "completion/complete") {
             return handleCompletionComplete(obj)
+        } else if (method == "skills/get_content") {
+            return handleSkillsGetContent(obj)
         } else if (method == "notifications/cancelled" || method == "notifications/progress" || method == "notifications/message" || method == "notifications/initialized") {
             // MCP 协议通知方法，不需要返回响应
             // notifications/cancelled: 取消请求通知
@@ -373,6 +378,14 @@ public class WebMCPProtocol {
      */
     private func handleNotification(method: String, obj: JsonObject): String {
         let requestId = obj.get("id")
+        
+        // 处理取消通知
+        if (method == "notifications/cancelled") {
+            if (!_sessionId.isEmpty()) {
+                WebSocketSessionManager.instance.cancelAgent(_sessionId)
+                LogUtils.info("WebMCP cancel notification processed for session: ${_sessionId}")
+            }
+        }
         
         // 如果有 requestId，说明是一个带响应的请求，返回成功响应
         if (requestId.isSome()) {
@@ -1210,6 +1223,8 @@ public class WebMCPProtocol {
 
         // 同步处理请求，返回完整响应
         var responseContent = "WebMCP server received your message."
+        // v9 全链路根治：外层声明 reasoningContentStr，被 SkillAwareAgent 分支和降级分支共用赋值，最终转发到 completion 独立字段
+        var reasoningContentStr = ""
 
         if (!userMessage.isEmpty()) {
             try {
@@ -1217,14 +1232,17 @@ public class WebMCPProtocol {
                 if (let Some(agent) <- _agent) {
                     LogUtils.info("WebMCPProtocol: agent name=${agent.name}, systemPrompt length=${agent.systemPrompt.size.toString()}")
 
-                    // 如果前端发送了 system 消息，则使用它覆盖 agent 的系统提示词
+                    // 合并系统提示词：前端 system 消息 + 后端技能知识库（含完整 instructions）
+                    let backendSkillPrompt = buildAgentSystemPrompt()
                     if (!systemMessage.isEmpty()) {
-                        LogUtils.info("WebMCPProtocol: using system message from frontend, length=${systemMessage.size.toString()}")
-                        agent.systemPrompt = systemMessage
+                        LogUtils.info("WebMCPProtocol: using system message from frontend, length=${systemMessage.size.toString()}, appending backend skill info")
+                        agent.systemPrompt = systemMessage + "\n\n" + backendSkillPrompt
                     } else if (agent.systemPrompt.isEmpty()) {
-                        let systemPrompt = buildAgentSystemPrompt()
-                        agent.systemPrompt = systemPrompt
-                        LogUtils.info("WebMCPProtocol: set fallback systemPrompt, length=${systemPrompt.size.toString()}")
+                        agent.systemPrompt = backendSkillPrompt
+                        LogUtils.info("WebMCPProtocol: set fallback systemPrompt, length=${backendSkillPrompt.size.toString()}")
+                    } else {
+                        // agent 已有系统提示词，追加技能知识库
+                        agent.systemPrompt = agent.systemPrompt + "\n\n" + backendSkillPrompt
                     }
 
                     // 加载历史上下文（用于多轮对话）
@@ -1249,9 +1267,43 @@ public class WebMCPProtocol {
 
                     // 创建 Agent 请求并处理
                     let agentRequest = AgentRequest(userMessage, conversation: conversation)
+
+                    // v13修复：启动progress定时器，定期发送SSE progress通知，防止前端超时
+                    // 根因：agent.chat同步执行ReAct循环可能耗时15分钟，前端resetTimeoutOnProgress需要progress通知才生效
+                    let stopProgress = AtomicBool(false)
+                    spawn {
+                        while (!stopProgress.load()) {
+                            sleep(Duration.second * 15)
+                            if (!stopProgress.load() && _sseConnectionManager.isSome()) {
+                                let sseMgr = _sseConnectionManager.getOrThrow()
+                                if (!_sessionId.isEmpty() && sseMgr.hasConnection(_sessionId)) {
+                                    sseMgr.pushMessage(_sessionId, "progress", "{\"progress\":1}")
+                                }
+                            }
+                        }
+                    }
+
+                    // v16 实时思维链：初始化SSEEventBridge，在ReAct执行过程中实时推送reasoning到SSE
+                    SSEEventBridge.instance.initialize(_sseConnectionManager, _sessionId)
+
                     let agentResponse = agent.chat(agentRequest)
+
+                    // v16 实时思维链：清理SSEEventBridge，停止推送
+                    SSEEventBridge.instance.clear()
+
+                    // 停止progress定时器
+                    stopProgress.store(true)
                     responseContent = agentResponse.content
                     LogUtils.debug("WebMCP completion response (via SkillAwareAgent): ${responseContent}")
+
+                    // v16 实时思维链：reasoning已在ReAct执行过程中通过SSEEventBridge实时推送到前端SSE
+                    // 此处只需提取reasoningContentStr供completion响应独立字段转发（前端降级分支使用）
+                    try {
+                        let answerMsg = agentResponse.execution.chatRound.answer
+                        if (let Some(r) <- answerMsg.reason) {
+                            reasoningContentStr = r
+                        }
+                    } catch (_: Exception) {}
 
                     // 异步同步 Agent 状态到数据库
                     spawn {
@@ -1265,6 +1317,12 @@ public class WebMCPProtocol {
                     let chatResponse = cm.create(request)
                     responseContent = chatResponse.message.content
                     LogUtils.debug("WebMCP completion response (direct model call): ${responseContent}")
+                    // v9 全链路根治：降级分支也提取 reasoning 到独立变量，供 completion 转发
+                    try {
+                        if (let Some(r) <- chatResponse.message.reason) {
+                            reasoningContentStr = r
+                        }
+                    } catch (_: Exception) {}
                 } else {
                     responseContent = "Error: Chat model not available"
                 }
@@ -1283,10 +1341,82 @@ public class WebMCPProtocol {
         completion.put("total", JsonInt(1))
         completion.put("hasMore", JsonBool(false))
 
+        // v9 全链路根治：转发 reasoning_content 到 completion 独立字段
+        // 根因：前端 _chatViaWebMCP 从 result.completion.values[0]（字符串）提取 reasoning_content 失败
+        //       因 values[0] 是纯文本 answer，不含 reasoning_content 字段
+        // 修复：把思维链内容作为 completion 的独立字段转发，前端从独立字段提取
+        // reasoningContentStr 已在上方降级分支或 SkillAwareAgent 分支填充（统一外层变量）
+        if (!reasoningContentStr.isEmpty()) {
+            completion.put("reasoning_content", JsonString(reasoningContentStr))
+        }
+
         let result = JsonObject()
         result.put("completion", completion)
 
         return createSuccessResponse(result, requestId)
+    }
+
+    /**
+     * 处理 skills/get_content 请求
+     * MCP 方法：获取技能完整内容
+     * 参数：name (技能名称), section (可选，章节)
+     */
+    private func handleSkillsGetContent(obj: JsonObject): String {
+        let requestId = obj.get("id")
+        LogUtils.info("WebMCP handling skills/get_content request")
+
+        var skillName = ""
+        var section = ""
+
+        let params = obj.get("params")
+        if (params.isSome()) {
+            let paramsVal = params.getOrThrow()
+            if (paramsVal is JsonObject) {
+                let paramsObj = paramsVal.asObject()
+                let nameOpt = paramsObj.get("name")
+                if (nameOpt.isSome()) {
+                    let nameVal = nameOpt.getOrThrow()
+                    if (nameVal is JsonString) {
+                        skillName = nameVal.asString().getValue()
+                    }
+                }
+                let sectionOpt = paramsObj.get("section")
+                if (sectionOpt.isSome()) {
+                    let sectionVal = sectionOpt.getOrThrow()
+                    if (sectionVal is JsonString) {
+                        section = sectionVal.asString().getValue()
+                    }
+                }
+            }
+        }
+
+        if (skillName.isEmpty()) {
+            return createErrorResponse("Parameter 'name' is required", requestId)
+        }
+
+        if (let Some(sm) <- _skillManager) {
+            match (sm.getSkill(skillName)) {
+                case Some(skill) =>
+                    let result = JsonObject()
+                    result.put("name", JsonString(skill.name))
+                    result.put("description", JsonString(skill.description))
+                    if (let Some(license) <- skill.license) {
+                        result.put("license", JsonString(license))
+                    }
+                    if (let Some(compatibility) <- skill.compatibility) {
+                        result.put("compatibility", JsonString(compatibility))
+                    }
+                    result.put("skill_path", JsonString(skill.skillPath))
+                    result.put("instructions", JsonString(skill.instructions))
+                    LogUtils.info("WebMCP skills/get_content: returned skill '${skillName}', instructions length=${skill.instructions.size.toString()}")
+                    return createSuccessResponse(result, requestId)
+                case None =>
+                    LogUtils.error("-WebMCP skills/get_content: skill '${skillName}' not found")
+                    return createErrorResponse("Skill '${skillName}' not found", requestId)
+            }
+        } else {
+            return createErrorResponse("SkillManager not available", requestId)
+        }
     }
 
     /**
@@ -1300,25 +1430,27 @@ public class WebMCPProtocol {
      */
     private func buildAgentSystemPrompt(): String {
         let skillInfoBuilder = StringBuilder()
-        skillInfoBuilder.append("你是一个智能助手，可以帮助用户完成各种任务。\n\n")
-        skillInfoBuilder.append("【重要说明】\n")
-        skillInfoBuilder.append("1. 你可以直接使用框架内置的 http_request 工具来发送 HTTP 请求。\n")
-        skillInfoBuilder.append("2. http_request 工具参数格式：\n")
-        skillInfoBuilder.append("   - method: HTTP 方法（GET、POST、PUT、DELETE）\n")
-        skillInfoBuilder.append("   - url: 完整的请求 URL\n")
-        skillInfoBuilder.append("   - headers: JSON 字符串格式的请求头（可选）\n")
-        skillInfoBuilder.append("   - body: JSON 字符串格式的请求体（可选，POST/PUT 需要）\n")
-        skillInfoBuilder.append("3. 当用户需要调用后端 API 时，请直接使用 http_request 工具。\n\n")
+        // v17: basePromptSection 已由 AGENTS.md 的 systemPrompt 提供，此处不再注入避免重复
 
-        // 添加后端技能信息
+        // 添加后端技能信息（仅 frontmatter，不注入正文 instructions）
+        // 遵循 agentskills 开放标准的三段渐进式加载：
+        //   第1段 frontmatter（此处注入）→ 第2段 get_skill_content 工具说明（此处注入）→ 第3段 完整内容（agent 按需调用工具获取）
         if (let Some(sm) <- _skillManager) {
             let skills = sm.availableSkills.values().toArray()
             if (!skills.isEmpty()) {
-                skillInfoBuilder.append("【已安装的技能知识库】\n")
+                // 第1段：仅注入 frontmatter（name + description），让 agent 知道有哪些技能可用
+                skillInfoBuilder.append("【已安装的技能知识库】\n以下技能可用，如需使用请先调用 get_skill_content 工具获取完整说明（SOP 步骤、脚本接口等）。\n\n")
                 for (skill in skills) {
-                    skillInfoBuilder.append("### " + skill.name + "\n")
-                    skillInfoBuilder.append(skill.description + "\n\n")
+                    skillInfoBuilder.append("- ")
+                    skillInfoBuilder.append(skill.name)
+                    skillInfoBuilder.append(": ")
+                    skillInfoBuilder.append(skill.description)
+                    skillInfoBuilder.append("\n")
+                    // 仅 frontmatter，不注入 instructions 正文
                 }
+                skillInfoBuilder.append("\n")
+
+                // v17: skillGuideSection 已迁至 AGENTS.md，此处不再注入
             }
         }
 

@@ -18,6 +18,7 @@ public class BuiltinToolsRegistry {
         registerSkillTools(toolManager)
         registerCodeGenTools(toolManager)
         registerCliTools(toolManager)
+
         
         LogUtils.info("[BuiltinToolsRegistry] All builtin tools registered successfully")
     }
@@ -64,9 +65,7 @@ public class BuiltinToolsRegistry {
         toolManager.addTool(WebFetchTool())
         LogUtils.info("[BuiltinToolsRegistry] Registered: WebFetchTool")
         
-        toolManager.addTool(FirecrawlTool())
-        LogUtils.info("[BuiltinToolsRegistry] Registered: FirecrawlTool")
-        
+
         LogUtils.info("[BuiltinToolsRegistry] Web tools registered")
     }
 
@@ -76,6 +75,9 @@ public class BuiltinToolsRegistry {
         
         toolManager.addTool(SkillPackagerTool())
         LogUtils.info("[BuiltinToolsRegistry] Registered: SkillPackagerTool")
+
+        toolManager.addTool(GetSkillContentTool())
+        LogUtils.info("[BuiltinToolsRegistry] Registered: GetSkillContentTool")
         
         LogUtils.info("[BuiltinToolsRegistry] Skill lifecycle tools registered")
     }
@@ -125,15 +127,18 @@ public class BuiltinToolsRegistry {
             DirectoryListTool.NAME,
             DirectoryCreateTool.NAME,
             WebFetchTool.NAME,
-            FirecrawlTool.NAME,
+
             SkillInitializerTool.NAME,
             SkillPackagerTool.NAME,
+            GetSkillContentTool.NAME,
             TemplateEngineTool.NAME,
             CodeSnippetGeneratorTool.NAME,
             CliTool.NAME,
             PythonExecutorTool.NAME,
             BrowserTool.NAME,
-            HttpServerTool.NAME
+            HttpServerTool.NAME,
+            SubAgentTool.NAME,
+            EvalRunnerTool.NAME
         ]
     }
 }

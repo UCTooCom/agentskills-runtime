@@ -26,6 +26,10 @@ public class ReactExecutor <: AgentExecutor {
                     return AgentResponse(AgentResponseStatus.Success, answer, execution: task.execution)
                 } else if (let Some(stopInfo) <- task.stopInfo) {
                     LogUtils.info("Task stopped: ${stopInfo.reason}")
+                    // v15: Forward collected reasoning_content even on early stop
+                    if (!task.reasoningContent.isEmpty()) {
+                        task.execution.setAnswerReason(task.reasoningContent)
+                    }
                     return AgentResponse(AgentResponseStatus.Success, stopInfo.result, execution: task.execution)
                 }
                 task.handleAgentStepEvent()

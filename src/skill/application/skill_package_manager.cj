@@ -180,15 +180,13 @@ public class SkillPackageManager {
         commit: Option<String>,
         skillSubpath: Option<String>
     ): SkillInstallResult {
-        eprintln("[installFromGit] Starting installation from Git: ${gitUrl}")
         LogUtils.info("[installFromGit] Starting installation from Git: ${gitUrl}")
-        
+
         var actualUrl = gitUrl
         var actualBranch = branch
         var subpath: Option<String> = skillSubpath
-        
+
         if (gitUrl.contains("/tree/") && gitUrl.startsWith("https://")) {
-            eprintln("[installFromGit] Parsing Git URL with subpath")
             LogUtils.info("[installFromGit] Parsing Git URL with subpath")
             let parsedUrl = GitManager.parseGitHubUrl(gitUrl)
             actualUrl = parsedUrl.repoUrl
@@ -198,39 +196,31 @@ public class SkillPackageManager {
             if (subpath.isNone()) {
                 subpath = parsedUrl.subpath
             }
-            eprintln("[installFromGit] Parsed: repo=${actualUrl}, branch=${actualBranch.getOrDefault({=>""})}, subpath=${subpath.getOrDefault({=>""})}")
             LogUtils.info("[installFromGit] Parsed: repo=${actualUrl}, branch=${actualBranch.getOrDefault({=>""})}, subpath=${subpath.getOrDefault({=>""})}")
         }
-        
+
         let gitRef: GitReference = if (commit.isSome()) {
-            eprintln("[installFromGit] Using commit reference")
             LogUtils.info("[installFromGit] Using commit reference")
             GitReferenceCommit(value: commit.getOrThrow())
         } else if (actualBranch.isSome()) {
-            eprintln("[installFromGit] Using branch reference: ${actualBranch.getOrThrow()}")
             LogUtils.info("[installFromGit] Using branch reference: ${actualBranch.getOrThrow()}")
             GitReferenceBranch(value: actualBranch.getOrThrow())
         } else if (tag.isSome()) {
-            eprintln("[installFromGit] Using tag reference: ${tag.getOrThrow()}")
             LogUtils.info("[installFromGit] Using tag reference: ${tag.getOrThrow()}")
             GitReferenceTag(value: tag.getOrThrow())
         } else {
-            eprintln("[installFromGit] Using default reference")
             LogUtils.info("[installFromGit] Using default reference")
             GitReferenceDefault()
         }
 
-        eprintln("[installFromGit] Cloning repository...")
         LogUtils.info("[installFromGit] Cloning repository...")
         let tempPath = _gitManager.cloneRepository(actualUrl, gitRef)
-        eprintln("[installFromGit] Cloned to: ${tempPath}")
         LogUtils.info("[installFromGit] Cloned to: ${tempPath}")
 
         // If a specific subpath is provided, install directly from that path
         if (subpath.isSome()) {
             let subpathValue = subpath.getOrThrow()
             let fullPath = Path(tempPath).join(subpathValue).toString()
-            eprintln("[installFromGit] Installing from specified subpath: ${fullPath}")
             LogUtils.info("[installFromGit] Installing from specified subpath: ${fullPath}")
             let result = installFromPath(fullPath, true)
             _cleanupTempDirectory(tempPath)
@@ -239,14 +229,11 @@ public class SkillPackageManager {
 
         // Check if this is a multi-skill repository
         let rootSkillMd = Path(tempPath).join("SKILL.md").toString()
-        eprintln("[installFromGit] Checking for SKILL.md at root: ${rootSkillMd}")
         LogUtils.info("[installFromGit] Checking for SKILL.md at root: ${rootSkillMd}")
         let rootSkillMdExists = exists(rootSkillMd)
-        eprintln("[installFromGit] Root SKILL.md exists: ${rootSkillMdExists}")
         LogUtils.info("[installFromGit] Root SKILL.md exists: ${rootSkillMdExists}")
-        
+
         if (rootSkillMdExists) {
-            eprintln("[installFromGit] Found SKILL.md at root, installing as single skill")
             LogUtils.info("[installFromGit] Found SKILL.md at root, installing as single skill")
             let result = installFromPath(tempPath, true)
             _cleanupTempDirectory(tempPath)
@@ -254,21 +241,17 @@ public class SkillPackageManager {
         }
 
         // No SKILL.md at root, scan for all SKILL.md files
-        eprintln("[installFromGit] No SKILL.md at root, scanning for skills in subdirectories...")
         LogUtils.info("[installFromGit] No SKILL.md at root, scanning for skills in subdirectories...")
         let allSkills = _findAllSkillsInDirectory(tempPath)
-        eprintln("[installFromGit] Found ${allSkills.size} skills in subdirectories")
         LogUtils.info("[installFromGit] Found ${allSkills.size} skills in subdirectories")
-        
+
         if (allSkills.size == 0) {
-            eprintln("[installFromGit] No SKILL.md found in repository")
             LogUtils.error("[installFromGit] No SKILL.md found in repository")
             _cleanupTempDirectory(tempPath)
             return SkillInstallResult.errorResult("No valid skill (SKILL.md) found in this repository")
         }
-        
+
         if (allSkills.size == 1) {
-            eprintln("[installFromGit] Found single skill in subdirectory, installing...")
             LogUtils.info("[installFromGit] Found single skill in subdirectory, installing...")
             let skillInfo = allSkills[0]
             let skillPath = Path(tempPath).join(skillInfo.relativePath).toString()
@@ -278,7 +261,6 @@ public class SkillPackageManager {
         }
 
         // Multiple skills found - return list for user selection
-        eprintln("[installFromGit] Found ${allSkills.size} skills in repository, returning list for user selection")
         LogUtils.info("[installFromGit] Found ${allSkills.size} skills in repository, returning list for user selection")
         _cleanupTempDirectory(tempPath)
         return SkillInstallResult.multiSkillRepoResult(allSkills)
@@ -1094,8 +1076,6 @@ public class GitManager {
         } else {
             Path(parentDir).join("temp").join("git-clone").toString()
         }
-        eprintln("[GitManager] skillInstallPath: ${skillInstallPath}")
-        eprintln("[GitManager] tempBaseDir: ${tempBaseDir}")
         LogUtils.info("[GitManager] skillInstallPath: ${skillInstallPath}, tempBaseDir: ${tempBaseDir}")
         return tempBaseDir
     }
@@ -1118,27 +1098,20 @@ public class GitManager {
      */
     public func cloneRepository(url: String, ref: GitReference): String {
         let tempPath = _generateTempPath()
-        eprintln("[GitManager] Cloning repository: ${url}")
-        eprintln("[GitManager] Target path: ${tempPath}")
         LogUtils.info("[GitManager] Cloning repository: ${url}")
         LogUtils.info("[GitManager] Target path: ${tempPath}")
-        
+
         try {
             let cloneResult = _executeClone(url, ref, tempPath)
-            
-            eprintln("[GitManager] Clone result: success=${cloneResult.success}, error=${cloneResult.error}")
-            
+
             if (!cloneResult.success) {
-                eprintln("[GitManager] Clone failed: ${cloneResult.error}")
                 LogUtils.error("[GitManager] Clone failed: ${cloneResult.error}")
                 throw GitException("Failed to clone repository: ${cloneResult.error}")
             }
-            
-            eprintln("[GitManager] Successfully cloned to: ${tempPath}")
+
             LogUtils.info("[GitManager] Successfully cloned to: ${tempPath}")
             return tempPath
         } catch (ex: Exception) {
-            eprintln("[GitManager] Exception during clone: ${ex.message}")
             LogUtils.error("[GitManager] Exception during clone: ${ex.message}")
             throw GitException("Failed to clone repository: ${ex.message}")
         }
@@ -1206,7 +1179,6 @@ public class GitManager {
      * Generate a unique temporary path for cloning
      */
     private func _generateTempPath(): String {
-        eprintln("[GitManager._generateTempPath] _tempBaseDir = ${_tempBaseDir}")
         LogUtils.info("[GitManager._generateTempPath] _tempBaseDir = ${_tempBaseDir}")
         let timestamp = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
         let randomSuffix = _randomString(6)

@@ -2,6 +2,7 @@ package magic.app.core.http
 
 import std.collection.ArrayList
 import std.collection.HashMap
+import http_lib.connection.Connection
 
 public enum HttpMethod <: ToString {
     | GET
@@ -87,6 +88,10 @@ public class HttpRequest {
     public var pathParams: HashMap<String, String> = HashMap<String, String>()
     public var queryParams: HashMap<String, String> = HashMap<String, String>()
     public var locals: HashMap<String, Any> = HashMap<String, Any>()
+
+    public var connection: ?Connection = None
+
+    public var takenOver: Bool = false
 
     private var bodyCache: ?String = None<String>
     

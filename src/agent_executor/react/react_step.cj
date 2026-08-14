@@ -91,8 +91,17 @@ protected enum ReactStep <: Hashable & Equatable<ReactStep> & ToString {
         match ((thought, Tag.extract(content, Tag.Action))) {
             case (_, Some(action)) =>
                 try {
-                    let toolCalls = if (Config.enableParallelToolCall) {
-                        ParserUtils.extractToolRequestArray(action)
+                    // v14 修复：agent 输出单个工具调用（JSON 对象）时，extractToolRequestArray 会误提取
+                    // 嵌套数组（如 args 字段的 ["-c", "..."]）导致 "-c" 被当成工具名报 "tool name is missing"
+                    // 修复：先检查 action 首字符，{ 走单个解析，[ 走数组解析；数组解析失败时 fallback 到单个
+                    let trimmedAction = action.trimAscii()
+                    let toolCalls = if (Config.enableParallelToolCall && trimmedAction.startsWith("[")) {
+                        try {
+                            ParserUtils.extractToolRequestArray(action)
+                        } catch (ex: ParserException) {
+                            LogUtils.info("Failed to parse as tool array, falling back to single tool request: ${ex.reason}")
+                            [ParserUtils.extractToolRequest(action)]
+                        }
                     } else {
                         [ParserUtils.extractToolRequest(action)]
                     }

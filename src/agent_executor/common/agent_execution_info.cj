@@ -36,6 +36,12 @@ public class AgentExecutionInfo <: AgentExecution {
     private var answer: Option<String> = None
 
     /**
+     * v15: The reasoning content (思维链) collected during agent execution
+     * Used to forward reasoning_content to the frontend for display
+     */
+    private var _answerReason: Option<String> = None
+
+    /**
      * Retrieved documents during execution
      */
     private let _retrievalInfo = ArrayList<RetrievalInfo>()
@@ -190,6 +196,14 @@ public class AgentExecutionInfo <: AgentExecution {
         this.answer = answer
     }
 
+    /**
+     * v15: Set the reasoning content (思维链) for the final answer
+     * Called by the agent executor to forward reasoning_content to the frontend
+     */
+    public func setAnswerReason(reason: String): Unit {
+        this._answerReason = Some(reason)
+    }
+
     protected func addRetrieval(query: String, retrieval: Retrieval): Unit {
         this.retrievalInfo.add(RetrievalInfo(query, retrieval))
     }
@@ -206,7 +220,7 @@ public class AgentExecutionInfo <: AgentExecution {
             let answer = this.answer.getOrThrow({ => AgentExecutionException("Answer is not set") })
             return ChatRound(
                 Message.user(req.question, image: req.image),
-                Message.assistant(answer),
+                Message.assistant(answer, reason: this._answerReason),
                 MessageList(steps)
             )
         }

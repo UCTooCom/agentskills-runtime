@@ -68,7 +68,8 @@ public class ChangeDetector {
                 }
             }
         } catch (e: Exception) {
-            LogUtils.error("ChangeDetector.detectAgentChanges failed: ${e.message}")
+            // v5 实测修复：identityStatus 为 None 等配置缺失是降级场景，降为 WARN 避免每次同步报 ERROR 噪声
+            LogUtils.warn("ChangeDetector.detectAgentChanges failed: ${e.message}")
         }
         return changes.toArray()
     }

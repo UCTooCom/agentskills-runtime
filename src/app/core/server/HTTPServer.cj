@@ -116,17 +116,12 @@ public class HTTPServer {
     }
 
     public func start() {
-        eprintln("=== HTTPServer.start() called ===")
         running = true
         logger.info("HTTP Server starting on ${host}:${port}")
-        eprintln("=== HTTP Server starting on ${host}:${port} ===")
 
-        eprintln("=== Creating http_lib Router ===")
         let libRouter = LibRouter()
 
-        eprintln("=== Registering routes ===")
         let allRoutes = router.getRoutes()
-        eprintln("=== Found ${allRoutes.size} routes to register ===")
         logger.info("Found ${allRoutes.size} routes to register")
 
         // 去重：多个 Route 文件的 register() 内部调用 registerCustomRoutes()，
@@ -146,10 +141,8 @@ public class HTTPServer {
             }
         }
         if (dupCount > 0) {
-            eprintln("=== Removed ${dupCount} duplicate routes ===")
             logger.info("Removed ${dupCount} duplicate routes")
         }
-        eprintln("=== Unique routes to register: ${routes.size} ===")
 
         let staticRoutes = ArrayList<Route>()
         let wildcardRoutes = ArrayList<Route>()
@@ -160,80 +153,48 @@ public class HTTPServer {
                 staticRoutes.add(route)
             }
         }
-        eprintln("=== Static routes: ${staticRoutes.size}, Wildcard routes: ${wildcardRoutes.size} ===")
+        logger.info("Static routes: ${staticRoutes.size}, Wildcard routes: ${wildcardRoutes.size}")
 
         for (route in staticRoutes) {
             try {
                 registerRouteOnLibRouter(libRouter, route)
             } catch (ex: Exception) {
-                eprintln("=== Failed to register route ${route.path}: ${ex.message} ===")
                 logger.error("Failed to register route ${route.path}: ${ex.message}")
             }
         }
-        eprintln("=== Static routes registered ===")
 
         for (route in wildcardRoutes) {
             try {
                 registerRouteOnLibRouter(libRouter, route)
             } catch (ex: Exception) {
-                eprintln("=== Failed to register route ${route.path}: ${ex.message} ===")
                 logger.error("Failed to register route ${route.path}: ${ex.message}")
-            }
-        }
-        eprintln("=== All app routes registered ===")
-
-        // 最终验证：对所有注册的关键路由进行二次验证
-        eprintln("=== FINAL VERIFICATION: checking key routes ===")
-        let verifyMethods = [
-            LibHttpMethod.GET, LibHttpMethod.POST, LibHttpMethod.PUT,
-            LibHttpMethod.DELETE, LibHttpMethod.PATCH
-        ]
-        let verifyPaths = [
-            "/api/v1/uctoo/tasks/public/home-stats",
-            "/api/v1/uctoo/webmcp/mcp",
-            "/api/v1/health",
-            "/api/v1/uctoo/tasks/public/1/10"
-        ]
-        for (vMethod in verifyMethods) {
-            for (vPath in verifyPaths) {
-                let vResult = libRouter.find(vMethod, vPath)
-                if (vResult.handler.isSome()) {
-                    eprintln("=== FINAL: ${vMethod} ${vPath} => FOUND ===")
-                }
             }
         }
 
         try {
             libRouter.get("/hello", { req: LibHttpRequest =>
-                eprintln("=== /hello handler called: method=${req.method}, path=${req.path}, url=${req.url} ===")
                 LibHttpResponse.json(LibHttpStatus.OK, "{\"message\":\"AgentSkills-runtime,Hello World\"}")
             })
-            eprintln("=== /hello route registered ===")
         } catch (ex: Exception) {
-            eprintln("=== Failed to register /hello: ${ex.message} ===")
+            logger.error("Failed to register /hello: ${ex.message}")
         }
 
         for ((wsPath, wsHandler) in _webSocketRoutes) {
             try {
-                eprintln("=== Registering WebSocket route: ${wsPath} ===")
                 libRouter.get(wsPath, wsHandler)
-                eprintln("=== WebSocket route registered: ${wsPath} ===")
             } catch (ex: Exception) {
-                eprintln("=== Failed to register WS route ${wsPath}: ${ex.message} ===")
+                logger.error("Failed to register WS route ${wsPath}: ${ex.message}")
             }
         }
 
         logger.info("All routes registered successfully")
 
-        eprintln("=== Creating HttpServerConfig ===")
         let config = HttpServerConfig()
         config.readTimeout = _requestTimeout
         config.writeTimeout = _requestTimeout
         config.idleTimeout = _requestTimeout
-        eprintln("=== HttpServerConfig created ===")
 
         if (isHttps) {
-            eprintln("=== Configuring TLS ===")
             match (_certPath) {
                 case Some(cert) =>
                     match (_keyPath) {
@@ -241,22 +202,14 @@ public class HTTPServer {
                             let tlsConfig = TlsConfig()
                             tlsConfig.serverCertPath = cert
                             tlsConfig.serverKeyPath = key
-                            // TLS 诊断日志：生产/正式环境必须关闭，避免大量 println 输出
-                            // 阻塞并发TLS握手协程，导致浏览器报 net::ERR_SSL_PROTOCOL_ERROR
                             tlsConfig.enableDiagnostics = false
-                            // 仅协商 HTTP/1.1，jinguissl TLS 实现暂不支持 HTTP/2 over TLS
                             tlsConfig.nextProtos = ["http/1.1"]
                             tlsConfig.autoLoadSystemCerts = true
                             config.tlsConfig = Some(tlsConfig)
-                            // HTTP/2 over TLS 需要 jinguissl 支持，当前仅用 HTTP/1.1
                             config.enableHttp2 = false
                             config.tcpNoDelay = true
                             config.autoCompress = true
-                            // 显式启用并发连接处理：每个连接独立协程，
-                            // 避免 accept() 循环被单个 TLS 握手阻塞，
-                            // 导致浏览器并行发起的多个连接排队超时
                             config.concurrent = true
-                            eprintln("=== TLS configured: cert=${cert}, key=${key}, http/1.1 only ===")
                         case None =>
                             logger.error("HTTPS server but key path not set")
                             throw Exception("HTTPS server requires key path")
@@ -266,16 +219,11 @@ public class HTTPServer {
                     throw Exception("HTTPS server requires cert path")
             }
         } else {
-            // HTTP 模式：禁用 HTTP/2 h2c 升级检测
-            // tryPeek 会消费 socket 字节，可能导致 HTTP/1.1 请求解析异常
             config.enableHttp2 = false
             config.tcpNoDelay = true
-            eprintln("=== HTTP mode: enableHttp2 disabled, tcpNoDelay enabled ===")
         }
 
-        eprintln("=== Creating LibHttpServer with handler ===")
         let routerHandler = libRouter.handler()
-        eprintln("=== Router handler created ===")
 
         // CORS 顶层包装层：在路由分发之前拦截 OPTIONS 预检请求
         // 原因：应用层 CORSMiddleware 只在路由匹配时执行，而 OPTIONS
@@ -294,7 +242,6 @@ public class HTTPServer {
             if (upgradeHeader.isSome() && upgradeHeader.getOrThrow() == "websocket") {
                 let wsHandlerOpt = _webSocketRoutes.get(req.path)
                 if (wsHandlerOpt.isSome()) {
-                    eprintln("=== WebSocket upgrade detected: ${req.path} ===")
                     let wsHandler = wsHandlerOpt.getOrThrow()
                     wsHandler(req)
                 } else {
@@ -317,27 +264,20 @@ public class HTTPServer {
         config.errorLog = { msg => logger.error("http: ${msg}") }
         let libServer = LibHttpServer(handler: handler, config: config)
         _libServer = Some(libServer)
-        eprintln("=== LibHttpServer created ===")
 
         logEndpoints()
 
         try {
             if (isHttps) {
-                eprintln("=== Calling listenAndServeTls on ${host}:${port} ===")
                 libServer.listenAndServeTls(host, UInt16(port))
-                eprintln("=== listenAndServeTls returned (server should block) ===")
             } else {
-                eprintln("=== Calling listenAndServe on ${host}:${port} ===")
                 libServer.listenAndServe(host, UInt16(port))
-                eprintln("=== listenAndServe returned (server should block) ===")
             }
         } catch (ex: Exception) {
-            eprintln("=== FATAL: Server failed to start: ${ex.message} ===")
             ex.printStackTrace()
             logger.error("Failed to start API server: ${ex.message}")
             throw ex
         }
-        eprintln("=== HTTPServer.start() exited normally ===")
     }
 
     private func handleCorsRequest(req: LibHttpRequest, routerHandler: LibHandler): LibHttpResponse {
@@ -360,16 +300,9 @@ public class HTTPServer {
             corsResp.headers.set("Access-Control-Allow-Headers", requestedHeaders)
             corsResp.headers.set("Access-Control-Max-Age", "86400")
             corsResp.headers.set("Vary", "Origin")
-            eprintln("=== CORS preflight: ${req.method} ${req.path}, requestedHeaders=${requestedHeaders} ===")
             corsResp
         } else {
-            if (req.path.contains("tasks") || req.path.contains("webmcp")) {
-                eprintln("=== DISPATCH: ${req.method} ${req.path} (host=${req.headers.get("Host")}) ===")
-            }
             let resp = routerHandler(req)
-            if (req.path.contains("tasks") || req.path.contains("webmcp")) {
-                eprintln("=== DISPATCH result: ${req.method} ${req.path} => status=${resp.status} ===")
-            }
             resp.headers.set("Access-Control-Allow-Origin", origin)
             resp.headers.set("Access-Control-Allow-Credentials", "true")
             resp.headers.set("Access-Control-Expose-Headers", "mcp-session-id, mcp-protocol-version, x-request-id, content-type")
@@ -387,25 +320,21 @@ public class HTTPServer {
         let log = logger
 
         let handler: LibHandler = { req: LibHttpRequest =>
-            eprintln("=== Handling request to ${routePath} ===")
-
             let appReq = convertRequest(req)
             let appRes = AppHttpResponse()
 
             try {
-                eprintln("=== Executing middleware chain ===")
                 let finalHandler = { =>
-                    eprintln("=== Executing final handler ===")
                     routeHandler(appReq, appRes)
                 }
                 chain.execute(appReq, appRes, finalHandler)
-                eprintln("=== Middleware chain completed ===")
 
-                let libRes = convertResponse(appRes)
-                eprintln("=== Response: status=${appRes.getStatusCode()}, bodySize=${appRes.getBody().size.toString()} ===")
-                libRes
+                if (appReq.takenOver) {
+                    LibHttpResponse.empty(LibHttpStatus.OK)
+                } else {
+                    convertResponse(appRes)
+                }
             } catch (ex: Exception) {
-                eprintln("=== Exception in handler: ${ex.message} ===")
                 ex.printStackTrace()
                 log.error("Error handling request: ${ex.message}")
                 LibHttpResponse.json(LibHttpStatus.INTERNAL_SERVER_ERROR,
@@ -418,16 +347,7 @@ public class HTTPServer {
         // normalizeRoutePath 曾错误地重命名 :param 参数名（如 :id → :p0），
         // 导致 req.pathParams 中的键名与应用层期望的不一致。
         let libMethod = convertToLibMethod(route.method)
-        // 诊断日志：记录 tasks/webmcp/health 相关路由的注册
-        if (routePath.contains("tasks") || routePath.contains("webmcp") || routePath.contains("health") || routePath.contains("home-stats")) {
-            eprintln("=== REG: method=${libMethod}, orig='${routePath}' ===")
-        }
         libRouter.handle(libMethod, routePath, handler)
-        // 注册后立即验证：对关键路由检查 find 结果
-        if (routePath.contains("tasks") || routePath.contains("webmcp") || routePath.contains("health")) {
-            let verifyResult = libRouter.find(libMethod, routePath)
-            eprintln("=== VERIFY: after register ${libMethod} ${routePath} => handler=${verifyResult.handler.isSome()}, tsr=${verifyResult.tsr} ===")
-        }
     }
 
     private func convertToLibMethod(method: HttpMethod): LibHttpMethod {
@@ -459,6 +379,8 @@ public class HTTPServer {
         }
 
         appReq.body = readRequestBody(req)
+
+        appReq.connection = req.connection
 
         for ((key, value) in req.pathParams) {
             appReq.pathParams[key] = value
@@ -497,12 +419,9 @@ public class HTTPServer {
             if (body.isEmpty()) {
                 return ""
             }
-            let previewLength = if (body.size > 200) { 200 } else { body.size }
-            eprintln("=== readRequestBody: got ${body.size} chars: [${body[0..previewLength]}] ===")
             return body
         } catch (ex: Exception) {
             logger.error("Error reading request body: ${ex.message}")
-            eprintln("=== readRequestBody exception: ${ex.message} ===")
             return ""
         }
     }

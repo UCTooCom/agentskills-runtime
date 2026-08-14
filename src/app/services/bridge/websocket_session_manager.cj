@@ -20,6 +20,8 @@ public class WebSocketSessionManager {
 
     private let pendingApprovals = ConcurrentHashMap<String, ApprovalWaiter>()
 
+    private let cancelFlags = ConcurrentHashMap<String, Bool>()
+
     public static prop instance: WebSocketSessionManager {
         get() {
             match (instance_) {
@@ -116,6 +118,22 @@ public class WebSocketSessionManager {
             case None =>
                 LogUtils.error("WebSocketSessionManager: no pending approval found for ${approvalId}")
         }
+    }
+
+    public func cancelAgent(sessionId: String): Unit {
+        cancelFlags.add(sessionId, true)
+        LogUtils.info("WebSocketSessionManager: cancel flag set for session ${sessionId}")
+    }
+
+    public func isCancelled(sessionId: String): Bool {
+        match (cancelFlags.get(sessionId)) {
+            case Some(v) => v
+            case None => false
+        }
+    }
+
+    public func clearCancelFlag(sessionId: String): Unit {
+        cancelFlags.remove(sessionId)
     }
 }
 

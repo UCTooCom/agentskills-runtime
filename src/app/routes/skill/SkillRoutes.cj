@@ -73,6 +73,11 @@ public class SkillRoutes {
         router.get("/api/v1/uctoo/skills/:id", { req, res =>
             handleGetSkillById(req, res)
         })
+
+        // GET /api/v1/uctoo/skills/:name/content - 获取技能完整内容
+        router.get("/api/v1/uctoo/skills/:name/content", { req, res =>
+            handleGetSkillContent(req, res)
+        })
         
         // POST /api/v1/uctoo/skills/add - 安装技能
         router.post("/api/v1/uctoo/skills/add", { req, res =>
@@ -198,6 +203,53 @@ public class SkillRoutes {
             }
         } catch (e: Exception) {
             LogUtils.error("[SkillRoutes] Error handling GET /skills/:id: ${e.message}")
+            res.status(500).json("{\"error\":\"Internal server error\"}")
+        }
+    }
+
+    /**
+     * 处理获取技能完整内容
+     * GET /api/v1/uctoo/skills/:name/content
+     */
+    private func handleGetSkillContent(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let skillNameOption = req.pathParam("name")
+            if (skillNameOption == None<String>) {
+                res.status(400).json("{\"error\":\"Skill name is required\"}")
+                return
+            }
+
+            let skillName = skillNameOption.getOrThrow()
+
+            if (let Some(skill) <- skillManager.getSkill(skillName)) {
+                let responseObj = JsonObject()
+                responseObj.put("name", JsonString(skill.name))
+                responseObj.put("description", JsonString(skill.description))
+                if (let Some(license) <- skill.license) {
+                    responseObj.put("license", JsonString(license))
+                }
+                if (let Some(compatibility) <- skill.compatibility) {
+                    responseObj.put("compatibility", JsonString(compatibility))
+                }
+                if (let Some(allowedTools) <- skill.allowedTools) {
+                    responseObj.put("allowed_tools", JsonString(allowedTools))
+                }
+                responseObj.put("skill_path", JsonString(skill.skillPath))
+                responseObj.put("instructions", JsonString(skill.instructions))
+
+                let metadataObj = JsonObject()
+                for ((key, value) in skill.metadata) {
+                    metadataObj.put(key, JsonString(value))
+                }
+                responseObj.put("metadata", metadataObj)
+
+                LogUtils.info("[SkillRoutes] GET /skills/${skillName}/content, instructions length=${skill.instructions.size.toString()}")
+                res.status(200).json(responseObj.toJsonString())
+            } else {
+                res.status(404).json("{\"error\":\"Skill '${skillName}' not found\"}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("[SkillRoutes] Error handling GET /skills/:name/content: ${e.message}")
             res.status(500).json("{\"error\":\"Internal server error\"}")
         }
     }

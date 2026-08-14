@@ -519,7 +519,7 @@ public class Application {
         // 注册聊天相关路由（ChatModel 配置错误时跳过，仅禁用 AI 聊天功能，框架其余部分照常运行）
         if (let Some(chatModel) <- _chatModel) {
             // 注册WebSocket路由（需要特殊处理）
-            let wsChatController = WsChatController(_skillManager, chatModel)
+            let wsChatController = WsChatController(_skillManager, chatModel, _agentLoadManager)
             server.registerWebSocketRoute("/api/v1/uctoo/ws/chat", wsChatController.handleChat)
 
             // 注册 WebMCP 路由（支持前端 webmcp-sdk 通信）

@@ -37,18 +37,28 @@ public class TieredMemory <: Memory {
     }
 
     override public func search(question: String): Array<String> {
+        // v13修复：分别try-catch shortMemory和databaseMemory，确保任一失败不影响另一个
+        // 根因：ShortMemory使用Config.defaultEmbeddingModel，未配置时抛出"Embedding model is not set"
+        // v12修复的databaseMemory降级逻辑因此从未执行（shortMemory先抛异常导致整体catch）
+        var memResults: Array<String> = []
         try {
-            let memResults = shortMemory.search(question)
-            if (memResults.size >= 5) {
-                return memResults
-            }
-            let dbResults = databaseMemory.search(question)
-            let merged = mergeDedup(memResults, dbResults)
-            return merged
+            memResults = shortMemory.search(question)
         } catch (e: Exception) {
-            LogUtils.error("TieredMemory.search failed: ${e.message}")
-            return []
+            LogUtils.warn("TieredMemory.search shortMemory failed (embedding not configured?): ${e.message}")
         }
+
+        if (memResults.size >= 5) {
+            return memResults
+        }
+
+        var dbResults: Array<String> = []
+        try {
+            dbResults = databaseMemory.search(question)
+        } catch (e: Exception) {
+            LogUtils.warn("TieredMemory.search databaseMemory failed: ${e.message}")
+        }
+
+        return mergeDedup(memResults, dbResults)
     }
 
     public func clear(): Unit {

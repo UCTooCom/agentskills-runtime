@@ -78,9 +78,56 @@ public class RequestParserService {
             let jsonObj = jsonValue.asObject()
             return parseJsonObject(jsonObj)
         } catch (e: Exception) {
-            LogUtils.error("RequestParserService", "Failed to parse filter JSON: ${e.message}")
+            // v12 修复：非标准 JSON 容错，尝试修复常见格式问题后重新解析
+            // 根因：前端/agent 传入的 filter 可能含单引号、尾部逗号等非标准 JSON 格式
+            let repaired = repairJson(filterStr)
+            if (repaired != filterStr) {
+                try {
+                    LogUtils.info("RequestParserService", "Retrying with repaired filter: ${repaired}")
+                    let jsonValue = JsonValue.fromStr(repaired)
+                    if (!(jsonValue is JsonObject)) {
+                        return None<CompositeCondition>
+                    }
+                    let jsonObj = jsonValue.asObject()
+                    return parseJsonObject(jsonObj)
+                } catch (e2: Exception) {
+                    LogUtils.warn("RequestParserService", "Repaired filter also failed: ${e2.message}")
+                }
+            }
+            // v5 实测修复：完整输出 filter 原文和长度，便于定位是哪个请求的 filter 非法（日志 2 处）
+            // 仓颉不支持三元运算符，改用 if-else 表达式
+            let filterPreview = if (filterStr.size > 200) {
+                filterStr[0..200] + "... (truncated, total ${filterStr.size} chars)"
+            } else {
+                filterStr
+            }
+            LogUtils.warn("RequestParserService", "Failed to parse filter JSON (non-fatal, returning empty filter): ${e.message}, filter preview: ${filterPreview}")
             return None<CompositeCondition>
         }
+    }
+    
+    /**
+     * v12/v13 修复：修复常见非标准 JSON 格式问题
+     * - 单引号替换为双引号
+     * - 去除尾部逗号
+     * - 去除控制字符
+     * - v13新增：去除BOM、前后空白
+     */
+    private func repairJson(raw: String): String {
+        var s = raw
+        // 去除前后空白
+        s = s.trimAscii()
+        // v13新增：去除BOM字符（UTF-8 BOM = \u{FEFF}）
+        if (s.startsWith("\u{FEFF}")) {
+            s = s[1..]
+        }
+        // 单引号替换为双引号（简单替换，不处理转义单引号）
+        s = s.replace("'", "\"")
+        // 去除尾部逗号：},} → }} 和 ],} → ]}
+        s = s.replace(",}", "}").replace(",]", "]")
+        // 去除控制字符（换行、制表符、回车）
+        s = s.replace("\n", "").replace("\r", "").replace("\t", "")
+        return s
     }
     
     /**

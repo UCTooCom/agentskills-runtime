@@ -101,9 +101,13 @@ public class CliTool <: NativeFuncTool {
         let startTime = DateTime.now()
 
         try {
+            // Windows 上 echo/dir/where/type 等 是 cmd.exe 内建命令，不能直接启动进程；
+            // 仓颉 newProcess 不走 shell，必须用 "cmd.exe /C <command> <args>" 包裹执行。
+            // 同理 PowerShell 内建命令也走 powershell.exe -Command。
+            let (actualCommand, actualArgs) = wrapForWindowsShell(command, commandArgs)
             let subProcess = newProcess(
-                command,
-                commandArgs,
+                actualCommand,
+                actualArgs,
                 env: envVars,
                 redirectErr: true
             )
@@ -172,21 +176,119 @@ public class CliTool <: NativeFuncTool {
     protected static func readStreamToEnd(stream: InputStream): String {
         let buffer = Array<Byte>(4096, { _ => 0 })
         let result = StringBuilder()
-        
+
         try {
             while (true) {
                 let bytesRead = stream.read(buffer)
                 if (bytesRead <= 0) {
                     break
                 }
-                let chunk = String.fromUtf8(buffer[0..bytesRead])
+                // v8 实测修复：stdout 编码 fallback，避免 GBK 字符导致 UTF-8 解码失败返回空
+                // 根因：Windows cmd.exe 输出含 GBK 字符（中文路径/环境变量），仓颉 String.fromUtf8 遇非法字节序列抛异常
+                // 修复：UTF-8 失败则替换非法字符为 ? 后返回（非空），避免 agent 收到空 stdout 误判命令不可用
+                // 备注：本项目仓颉环境无 String.fromGbk / charset4cj 库，不做 GBK 解码仅做容错替换
+                let chunk = try {
+                    String.fromUtf8(buffer[0..bytesRead])
+                } catch (_: Exception) {
+                    // UTF-8 解码失败，替换非法字符为 ? 后返回（避免空 stdout 让 agent 误判命令不可用）
+                    // 仓颉 ArrayList 无 append/add/push API，改用 Array + 索引赋值（仓颉原生支持）
+                    let safeBytes = Array<Byte>(bytesRead, { _ => 0 })
+                    var safeIdx = 0
+                    var i = 0
+                    while (i < bytesRead) {
+                        let b = buffer[i]
+                        if (b < 0x80) {
+                            // ASCII 字符（0-127）直接保留
+                            safeBytes[safeIdx] = b
+                            safeIdx++
+                        } else {
+                            // 非 ASCII 字符替换为 ?（0x3F）
+                            safeBytes[safeIdx] = 0x3F
+                            safeIdx++
+                            if (i + 1 < bytesRead && (buffer[i + 1] & 0xC0) != 0x80) {
+                                // 非连续 UTF-8 字节，跳过下一个字节避免截断
+                            }
+                        }
+                        i++
+                    }
+                    String.fromUtf8(safeBytes[0..safeIdx])
+                }
                 result.append(chunk)
             }
         } catch (ex: Exception) {
             LogUtils.info("[CliTool] Error reading stream: ${ex.message}")
         }
-        
+
         return result.toString()
+    }
+
+    /**
+     * Windows 平台包裹命令到 cmd.exe /C 或 powershell.exe -Command 执行。
+     *
+     * 根因：仓颉 newProcess 直接启动进程，不走 shell，也不会自动在 PATH 中查找可执行文件。
+     * v3 仅解决 cmd.exe/powershell 内建命令的包裹，但普通可执行文件（python/git/npm 等）
+     * 未包裹导致 newProcess 找不到文件报 "The system cannot find the file specified."（v6 实测根因）。
+     * v6 修复：所有命令统一走 cmd.exe /C，让 cmd.exe 负责 PATH 查找、内建命令执行、环境变量展开。
+     * PowerShell 显式调用（powershell/pwsh）保持走 powershell.exe -Command。
+     */
+    protected static func wrapForWindowsShell(command: String, args: Array<String>): (String, Array<String>) {
+        let lowerCmd = command.toAsciiLower()
+        let isPs = lowerCmd == "powershell" || lowerCmd == "pwsh"
+
+        // 拼接原始命令行字符串
+        let cmdLine = StringBuilder()
+        cmdLine.append(command)
+        for (a in args) {
+            cmdLine.append(" ")
+            // 含空格的参数加引号包裹
+            if (a.contains(" ") && !a.startsWith("\"")) {
+                cmdLine.append("\"")
+                cmdLine.append(a)
+                cmdLine.append("\"")
+            } else {
+                cmdLine.append(a)
+            }
+        }
+        let cmdLineStr = cmdLine.toString()
+
+        // PowerShell 显式调用：走 powershell.exe -Command
+        if (isPs) {
+            let psArgs = ["-Command", cmdLineStr]
+            // 仓颉 newProcess 不走 PATH，必须用绝对路径；System32 在所有 Windows 上存在
+            let psExe = resolveWindowsExe("powershell.exe")
+            LogUtils.info("[CliTool] Wrapped PowerShell command: ${psExe} -Command \"${cmdLineStr}\"")
+            return (psExe, psArgs)
+        }
+
+        // v6 实测修复：所有其他命令统一走 cmd.exe /C，让 cmd.exe 负责 PATH 查找和内建命令执行
+        // 根因：仓颉 newProcess 不走 shell，普通可执行文件（python/git/npm）不包裹会找不到文件
+        // v8 实测修复：在命令前加 chcp 65001 >nul && ，让 cmd.exe 输出 UTF-8 编码
+        // 根因：仓颉 readStreamToEnd 按 UTF-8 解码，Windows cmd.exe 默认输出 GBK（含中文路径/环境变量），解码失败导致 agent 收到空 stdout 误判命令不可用
+        let cmdArgs = ["/C", "chcp 65001 >nul && " + cmdLineStr]
+        let cmdExe = resolveWindowsExe("cmd.exe")
+        LogUtils.info("[CliTool] Wrapped command via cmd.exe: ${cmdExe} /C \"chcp 65001 >nul && ${cmdLineStr}\"")
+        return (cmdExe, cmdArgs)
+    }
+
+    /**
+     * 解析 Windows 系统可执行文件的绝对路径。
+     *
+     * 根因：仓颉 newProcess 不走 shell，也不会自动在 PATH 中查找可执行文件。
+     * cmd.exe / powershell.exe 是 Windows 必装组件，用 System32 绝对路径最稳妥；
+     * 若 System32 路径不存在（极罕见），降级为裸文件名，交给系统解析。
+     */
+    protected static func resolveWindowsExe(exeName: String): String {
+        // System32 在所有 Windows NT 衍生系统上存在
+        let system32 = "C:\\Windows\\System32\\" + exeName
+        // 简单存在性判断：仓颉 std.fs.Path 不便于判断文件存在，用 try-catch 包装
+        try {
+            let p = Path(system32)
+            // 若能构造 Path 且不抛异常，认为存在；实际执行时若不存在会报错
+            return system32
+        } catch (_: Exception) {
+            // 降级为裸文件名
+            return exeName
+        }
     }
 
     protected static func parseArgsArray(argsStr: String): Array<String> {

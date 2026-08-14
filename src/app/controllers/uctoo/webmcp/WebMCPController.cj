@@ -14,6 +14,7 @@ import magic.tool.webmcp.{SSEConnectionManager, PendingToolCallManager, Frontend
 import http_lib.server.{WebSocketConn, ConnectionController, WebSocketOpcode}
 import http_lib.message.{HttpRequest as LibHttpRequest, HttpResponse as LibHttpResponse}
 import http_lib.core.HttpStatus
+import http_lib.connection.Connection
 import stdx.encoding.json.{JsonObject, JsonString, JsonBool, JsonValue, JsonArray, JsonInt}
 import std.time.DateTime
 import std.time.*
@@ -619,7 +620,6 @@ public class WebMCPController {
     public func handleSSE(req: HttpRequest, res: HttpResponse): Unit {
         LogUtils.info("WebMCP SSE connection request received")
 
-        // 获取 sessionId
         let sessionIdOpt = req.queryParam("sessionId")
         if (sessionIdOpt.isNone()) {
             res.status(400)
@@ -629,27 +629,57 @@ public class WebMCPController {
         }
         let sessionId = sessionIdOpt.getOrThrow()
 
-        // 设置 SSE 响应头
-        res.status(200)
-           .header("Content-Type", "text/event-stream")
-           .header("Cache-Control", "no-cache")
-           .header("Connection", "keep-alive")
-        setCorsHeaders(req, res)
+        match (req.connection) {
+            case Some(conn) =>
+                let controller = ConnectionController(conn)
+                controller.write(unsafe { "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\nAccess-Control-Allow-Origin: *\r\n\r\n".rawData() })
+                req.takenOver = true
 
-        // 注册 SSE 连接到 SSEConnectionManager
-        // writer 函数：将消息写入 HTTP 响应流
-        _sseConnectionManager.registerConnection(sessionId, { message: String =>
-            res.send(message)
-        })
+                _sseConnectionManager.registerConnection(sessionId, { message: String =>
+                    try {
+                        conn.write(unsafe { message.rawData() })
+                        conn.flush()
+                    } catch (e: Exception) {
+                        LogUtils.warn("[WebMCPController] SSE write failed: ${e.message}")
+                    }
+                })
 
-        LogUtils.info("[WebMCPController] SSE connection registered: sessionId=${sessionId}")
+                LogUtils.info("[WebMCPController] SSE connection registered: sessionId=${sessionId}")
 
-        // 发送初始连接成功事件
-        let initEvent = "event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n"
-        res.send(initEvent)
+                conn.write(unsafe { "event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n".rawData() })
+                conn.flush()
 
-        // 注意：SSE 连接保持打开状态，由前端关闭或超时清理
-        // 实际实现中，这里需要保持连接不返回，具体取决于 HTTP 框架的流式响应支持
+                spawn {
+                    while (true) {
+                        sleep(Duration.second * 15)
+                        try {
+                            conn.write(unsafe { ": ping ${DateTime.now()}\n\n".rawData() })
+                            conn.flush()
+                        } catch (e: Exception) {
+                            LogUtils.info("[WebMCPController] SSE connection closed: sessionId=${sessionId}")
+                            _sseConnectionManager.removeConnection(sessionId)
+                            break
+                        }
+                    }
+                }
+
+            case None =>
+                LogUtils.warn("[WebMCPController] SSE connection not available, falling back to res.send")
+                res.status(200)
+                   .header("Content-Type", "text/event-stream")
+                   .header("Cache-Control", "no-cache")
+                   .header("Connection", "keep-alive")
+                setCorsHeaders(req, res)
+
+                _sseConnectionManager.registerConnection(sessionId, { message: String =>
+                    res.send(message)
+                })
+
+                LogUtils.info("[WebMCPController] SSE connection registered (fallback): sessionId=${sessionId}")
+
+                let initEvent = "event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n"
+                res.send(initEvent)
+        }
     }
 
     /**

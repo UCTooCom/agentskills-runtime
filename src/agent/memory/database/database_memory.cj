@@ -47,7 +47,26 @@ public class DatabaseMemory <: Memory {
             }
             return segments.toArray()
         } catch (e: Exception) {
-            LogUtils.error("DatabaseMemory.search failed: ${e.message}")
+            // v12 修复：Embedding model 未设置时降级为数据库 CRUD 查询（最近 N 条记录）
+            // 根因：searchByContent 依赖 Embedding 语义搜索，未配置 Embedding model 时抛异常
+            LogUtils.warn("DatabaseMemory.search failed (embedding), falling back to CRUD: ${e.message}")
+            return searchRecent(5)
+        }
+    }
+
+    /**
+     * v12 修复：降级查询，直接从数据库读取最近 N 条记录（不依赖 Embedding）
+     */
+    public func searchRecent(limit: Int64): Array<String> {
+        try {
+            let (results, _) = memoriesService.findByAgentIdAndScope(agentId, scope, 1, limit)
+            let segments = ArrayList<String>()
+            for (po in results) {
+                segments.add(po.content)
+            }
+            return segments.toArray()
+        } catch (e: Exception) {
+            LogUtils.error("DatabaseMemory.searchRecent failed: ${e.message}")
             return []
         }
     }

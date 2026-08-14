@@ -47,7 +47,7 @@ public class CheckpointManager {
 
     public func loadLatestCheckpoint(agentId: String): Option<Array<Message>> {
         try {
-            let (records, total) = contextsService.getListWithFilter(1, 1, "agent_id='${agentId}'", "created_at DESC")
+            let (records, total) = contextsService.getListWithFilter(1, 1, "created_at DESC", "agent_id='${agentId}'")
             if (records.isEmpty()) {
                 return None
             }
@@ -78,7 +78,7 @@ public class CheckpointManager {
 
     public func listCheckpoints(agentId: String, page: Int64, pageSize: Int64): (ArrayList<AgentContextsPO>, Int64) {
         try {
-            contextsService.getListWithFilter(Int32(page), Int32(pageSize), "agent_id='${agentId}'", "created_at DESC")
+            contextsService.getListWithFilter(Int32(page), Int32(pageSize), "created_at DESC", "agent_id='${agentId}'")
         } catch (_: Exception) {
             (ArrayList<AgentContextsPO>(), 0)
         }

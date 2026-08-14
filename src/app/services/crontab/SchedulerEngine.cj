@@ -84,6 +84,16 @@ public class SchedulerEngine {
     }
 
     public func loadAllActiveTasks(): Unit {
+        // ConcurrentHashMap 没有 clear() 方法，先收集键再逐个删除
+        let keysToRemove = ArrayList<String>()
+        for ((k, _) in runningTasks) {
+            keysToRemove.add(k)
+        }
+        for (k in keysToRemove) {
+            runningTasks.remove(k)
+        }
+        LogUtils.info("SchedulerEngine", "启动时清理runningTasks（孤儿任务清理）")
+
         match (crontabDAO) {
             case Some(dao) =>
                 try {
@@ -106,7 +116,8 @@ public class SchedulerEngine {
                                 if (isOnce && hasSuccessfulLog(task.id)) { continue }
 
                                 if (!validateCronExpression(task.cron)) {
-                                    LogUtils.error("SchedulerEngine", "CRON表达式不合法, 跳过: ${task.name}, cron=${task.cron}")
+                                    // v5 实测修复：cron 非法时降级为 WARN（配置错误而非系统故障），避免每次 tick 报 ERROR 噪声
+                                    LogUtils.warn("SchedulerEngine", "CRON表达式不合法, 跳过: ${task.name}, cron=${task.cron}")
                                     continue
                                 }
 
@@ -267,7 +278,13 @@ public class SchedulerEngine {
                         runningTasks.remove(crontabId)
 
                     case None =>
-                        LogUtils.error("SchedulerEngine", "任务不存在: ${crontabId}")
+                        // 孤儿任务：数据库中已不存在，从调度器移除避免重复报错
+                        match (ticktock) {
+                            case Some(tk) =>
+                                tk.removeTask("crontab:${crontabId}")
+                                LogUtils.warn("SchedulerEngine", "移除孤儿任务（数据库中不存在）: ${crontabId}")
+                            case None => ()
+                        }
                 }
             case None =>
                 LogUtils.error("SchedulerEngine", "CrontabDAO未初始化")
@@ -282,7 +299,9 @@ public class SchedulerEngine {
                 log.usedTime = usedTime
                 log.errorMessage = truncateOutput(errorMessage, maxLength: 2000)
                 log.status = if (success) { 1 } else { 0 }
+                log.creator = crontab.creator
                 log.startTime = Some(DateTime.now())
+                log.endTime = Some(DateTime.now())
                 log.triggerType = Some(triggerTypeToString(triggerType))
                 log.retryAttempt = Some(retryAttempt)
                 log.executorType = Some(executorType)

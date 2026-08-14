@@ -134,6 +134,12 @@ public class Logger {
     }
     
     public func addAppender(appender: LogAppender): Logger {
+        mutex.lock()
+        try {
+            appenders.add(appender)
+        } finally {
+            mutex.unlock()
+        }
         return this
     }
     

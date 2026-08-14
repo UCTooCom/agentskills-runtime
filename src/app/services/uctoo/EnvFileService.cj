@@ -41,17 +41,13 @@ public class EnvFileService {
 
     public func getEnvFilePath(): String {
         let envFilePath = getEnv("ENV_FILE_PATH")
-        eprintln("=== [EnvFileService] getEnv('ENV_FILE_PATH') = ${envFilePath} ===")
         if (let Some(path) <- envFilePath) {
             if (!path.isEmpty()) {
-                eprintln("=== [EnvFileService] using ENV_FILE_PATH: ${path} ===")
                 return path
             }
         }
         let workDir = getWorkingDirectory()
-        let resolvedPath = "${workDir.toString()}/.env"
-        eprintln("=== [EnvFileService] using workDir path: ${resolvedPath} ===")
-        resolvedPath
+        "${workDir.toString()}/.env"
     }
 
     public func parseEnvFile(content: String): ArrayList<EnvLine> {
@@ -106,28 +102,19 @@ public class EnvFileService {
         try {
             let rawContent = File.readFrom(path)
             let content = String.fromUtf8(rawContent)
-            eprintln("=== [EnvFileService] readAllEnvValues: file size=${rawContent.size}, content length=${content.size} ===")
             LogUtils.info("EnvFileService", "Read .env file content, size: ${content.size}")
             let lines = parseEnvFile(content)
-            var kvCount = 0
             for (line in lines) {
                 if (line.isKeyValue()) {
                     if (let Some(k) <- line.key) {
                         if (let Some(v) <- line.value) {
                             result.add(k, v)
-                            kvCount++
-                            if (kvCount <= 3) {
-                                let displayVal = if (v.size > 30) { v[0..30] + "..." } else { v }
-                                eprintln("=== [EnvFileService] parsed: ${k}=${displayVal} ===")
-                            }
                         }
                     }
                 }
             }
-            eprintln("=== [EnvFileService] total parsed key-value pairs: ${kvCount} ===")
             LogUtils.info("EnvFileService", "Parsed ${result.size} key-value pairs from .env file")
         } catch (e: Exception) {
-            eprintln("=== [EnvFileService] readAllEnvValues FAILED: ${e.message} ===")
             LogUtils.error("EnvFileService", "Failed to read env file: ${e.message}")
         }
         result
@@ -249,11 +236,9 @@ public class EnvFileService {
     public func envFileExists(path: String): Bool {
         try {
             let content = File.readFrom(path)
-            eprintln("=== [EnvFileService] envFileExists: file readable at ${path}, size=${content.size} ===")
             LogUtils.info("EnvFileService", ".env file exists at: ${path}")
             true
         } catch (e: Exception) {
-            eprintln("=== [EnvFileService] envFileExists: file NOT readable at ${path}, error: ${e.message} ===")
             LogUtils.warn("EnvFileService", ".env file not found or unreadable at: ${path}, error: ${e.message}")
             false
         }

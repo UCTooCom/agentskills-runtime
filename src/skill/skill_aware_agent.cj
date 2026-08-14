@@ -10,7 +10,7 @@ import magic.core.tool.{ToolManager, ToolParameter}
 import magic.core.memory.Memory
 import magic.interaction.EventHandlerManager
 import magic.jsonable.TypeSchema
-import magic.tool.{SimpleToolManager, BuiltinToolsRegistry}
+import magic.tool.{SimpleToolManager, BuiltinToolsRegistry, GetSkillContentTool}
 import magic.core.skill.SkillManager
 import magic.log.LogUtils
 import stdx.encoding.json.JsonObject
@@ -52,6 +52,7 @@ public class SkillAwareAgent <: BaseAgent {
         LogUtils.info("Registering built-in tools")
         try {
             BuiltinToolsRegistry.registerAll(_toolManager)
+            GetSkillContentTool.setSkillManager(_skillManagerVar)
             LogUtils.info("All builtin tools registered via BuiltinToolsRegistry")
         } catch (ex: Exception) {
             LogUtils.error("Failed to register builtin tools: ${ex.message}")

@@ -262,6 +262,10 @@ public class HttpTool <: AbsTool {
             let errorJson = JsonObject()
             errorJson.put("success", JsonString("false"))
             errorJson.put("error", JsonString(ex.message))
+            // 针对底层 chunked 解析失败，给出可操作的替代建议
+            if (ex.message.contains("chunk terminator") || ex.message.contains("chunked")) {
+                errorJson.put("suggestion", JsonString("该数据源的 HTTP chunked 响应格式不兼容，请改用技能目录下的 scripts/*.py 脚本（通过 python_execute 工具）获取数据。"))
+            }
             return ToolResponse(errorJson.toJsonString())
         }
     }

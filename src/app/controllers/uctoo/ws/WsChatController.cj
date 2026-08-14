@@ -24,6 +24,10 @@ import magic.log.LogUtils
 import magic.jsonable.JsonUtils
 import magic.app.services.bridge.WebSocketSessionManager
 import magic.app.services.ws_support.{WebSocketSession, WebSocketMessage}
+import magic.core.agent.{AgentDefinition, AgentLoadManager}
+import magic.app.services.uctoo.AgentsService
+import magic.model.ModelManager
+// v17: prompt_config.cj 已废弃删除，系统提示词由 AGENTS.md 统一管理
 
 // Helper function
 func _getJsonString(jsonObj: JsonObject, key: String, defaultValue: String): String {
@@ -35,30 +39,87 @@ public class WsChatController {
     private let _skillManager: SkillManager
     private let _chatModel: ChatModel
     private let _agent: SkillAwareAgent
+    private var _agentId: String = ""
+    private let _agentLoadManager: AgentLoadManager
     private let _sessions: HashMap<String, WebSocketSession>
     private let _sessionsMutex: Mutex
     private var _sessionCounter: Int64 = 0
     // 存储前端注册的工具（会话级别的）
     private var _frontendTools: ArrayList<JsonObject> = ArrayList<JsonObject>()
 
-    public init(skillManager: SkillManager, chatModel: ChatModel) {
+    public init(skillManager: SkillManager, chatModel: ChatModel, agentLoadManager: AgentLoadManager) {
         _skillManager = skillManager
         _chatModel = chatModel
+        _agentLoadManager = agentLoadManager
         _sessions = HashMap<String, WebSocketSession>()
         _sessionsMutex = Mutex()
         _sessionCounter = 0
 
         let executor = ReactExecutor()
-        let memory = TieredMemory(agentId: "ws-skill-assistant")
-        _agent = SkillAwareAgent(
-            skillManager: skillManager,
-            model: chatModel,
-            executor: executor,
-            name: "Skill Assistant",
-            description: "An intelligent assistant that can use skills to help users",
-            memory: Some(memory),
-            eventHandlerManager: Some(EventHandlerManager.global)
-        )
+
+        // v17: 从 AGENTS.md 动态加载主 Agent 定义（与 WebMCPProtocol.cj 一致的加载机制）
+        let mainAgentDef = agentLoadManager.getMainAgent()
+        if (let Some(def) <- mainAgentDef) {
+            let systemPrompt = def.systemPrompt
+            let agentName = def.name
+            let modelName = if (let Some(m) <- def.model) { m } else { "deepseek" }
+            let agentModel = if (modelName.contains(":")) {
+                ModelManager.createChatModel(modelName)
+            } else {
+                chatModel
+            }
+
+            // 查数据库是否已存在同名 agent，复用 UUID
+            let agentsService = AgentsService()
+            let (agentList, _) = agentsService.getListWithFilter(1, 1, "", "{\"name\":{\"equals\":\"${def.name}\"}}")
+            if (agentList.size > 0) {
+                _agentId = agentList[0].id
+                LogUtils.info("WsChatController: resolved agent UUID=${_agentId} for ${def.name} from agents table (systemPrompt from AGENTS.md, length=${systemPrompt.size.toString()})")
+            } else {
+                // 数据库不存在，通过 AgentRuntimeBridge 创建并持久化
+                let bridge = AgentRuntimeBridge.instance
+                let createResult = bridge.createRuntimeAgent(def)
+                if (createResult.success) {
+                    let runtimeIds = bridge.getAllRuntimeAgentIds()
+                    for (id in runtimeIds) {
+                        if (let Some(agent) <- bridge.getRuntimeAgent(id)) {
+                            if (agent.name == def.name) {
+                                _agentId = id
+                                break
+                            }
+                        }
+                    }
+                }
+                LogUtils.info("WsChatController: agent ${def.name} not found in DB, created via AgentRuntimeBridge, UUID=${_agentId}")
+            }
+
+            let memory = TieredMemory(agentId: _agentId)
+            _agent = SkillAwareAgent(
+                skillManager: skillManager,
+                model: agentModel,
+                executor: executor,
+                name: agentName,
+                description: def.description,
+                systemPrompt: systemPrompt,
+                memory: Some(memory),
+                eventHandlerManager: Some(EventHandlerManager.global)
+            )
+            LogUtils.info("WsChatController: created agent from AGENTS.md: name=${agentName}, UUID=${_agentId}, systemPrompt length=${systemPrompt.size.toString()}")
+        } else {
+            // 降级：AGENTS.md 未找到主 Agent 定义，使用硬编码默认值
+            LogUtils.warn("WsChatController: no main agent found in AGENTS.md, using fallback hardcoded agent")
+            _agentId = "ws-skill-assistant"
+            let memory = TieredMemory(agentId: _agentId)
+            _agent = SkillAwareAgent(
+                skillManager: skillManager,
+                model: chatModel,
+                executor: executor,
+                name: "Skill Assistant",
+                description: "An intelligent assistant that can use skills to help users",
+                memory: Some(memory),
+                eventHandlerManager: Some(EventHandlerManager.global)
+            )
+        }
     }
 
     /**
@@ -172,6 +233,7 @@ public class WsChatController {
 
             match (messageType) {
                 case "chat" => _handleChatMessage(session, jsonObj)
+                case "cancel" => _handleCancelMessage(session, jsonObj)
                 case "execute_skill" => _handleSkillExecution(session, jsonObj)
                 case "list_skills" => _handleListSkills(session)
                 case "ping" => _handlePing(session)
@@ -198,6 +260,12 @@ public class WsChatController {
             return
         }
 
+        if (WebSocketSessionManager.instance.isCancelled(session.sessionId)) {
+            WebSocketSessionManager.instance.clearCancelFlag(session.sessionId)
+            _sendErrorMessage(session, "Request cancelled before execution")
+            return
+        }
+
         LogUtils.info("Processing chat message: ${content}")
 
         let sessionContext = SessionContext.getInstance()
@@ -212,7 +280,7 @@ public class WsChatController {
                 let msg = AgentMessagesPO()
                 msg.fromAgentId = None<String>
                 msg.messageType = "user"
-                msg.content = Some("\"${content.replace("\"", "\\\"")}\"")
+                msg.content = Some("\"${content.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n")}\"")
                 msg.status = Some(1)
                 msg.creator = None<String>
                 let createResult = messagesService.create(msg, "user")
@@ -225,8 +293,13 @@ public class WsChatController {
         }
 
         try {
-            let systemPrompt = _buildAgentSystemPrompt()
-            _agent.systemPrompt = systemPrompt
+            // v17: systemPrompt 已由 AGENTS.md 在构造函数中加载，此处追加后端技能知识和前端工具信息
+            let backendSkillPrompt = _buildAgentSystemPrompt()
+            if (_agent.systemPrompt.isEmpty()) {
+                _agent.systemPrompt = backendSkillPrompt
+            } else {
+                _agent.systemPrompt = _agent.systemPrompt + "\n\n" + backendSkillPrompt
+            }
 
             let agentRequest = AgentRequest(content)
             let agentResponse = _agent.chat(agentRequest)
@@ -243,6 +316,18 @@ public class WsChatController {
             let responsePayload = JsonObject()
             responsePayload.put("content", JsonString(responseContent))
             responsePayload.put("role", JsonString("assistant"))
+            // 传递思维链（reasoning_content）到前端
+            // v10 根治：前端 _chatViaWebMCP 提取的字段名是 reasoning_content（非 reasoning），字段名不匹配导致思维链不显示
+            // 同时转发 reasoning 和 reasoning_content 两个字段，兼容前端已有的提取逻辑
+            try {
+                let answerMsg = agentResponse.execution.chatRound.answer
+                if (let Some(r) <- answerMsg.reason) {
+                    if (!r.isEmpty()) {
+                        responsePayload.put("reasoning", JsonString(r))
+                        responsePayload.put("reasoning_content", JsonString(r))
+                    }
+                }
+            } catch (_: Exception) {}
 
             let message = WebSocketMessage("chat_response", responsePayload, (DateTime.now() - DateTime.UnixEpoch).toMilliseconds())
             session.sendMessage(message)
@@ -255,15 +340,8 @@ public class WsChatController {
     private func _buildAgentSystemPrompt(): String {
         let skills = _skillManager.availableSkills.values().toArray()
         let skillInfoBuilder = StringBuilder()
-        skillInfoBuilder.append("你是一个智能助手，可以帮助用户完成各种任务。\n\n")
-        skillInfoBuilder.append("【重要说明】\n")
-        skillInfoBuilder.append("1. 你可以直接使用框架内置的 http_request 工具来发送 HTTP 请求。\n")
-        skillInfoBuilder.append("2. http_request 工具参数格式：\n")
-        skillInfoBuilder.append("   - method: HTTP 方法（GET、POST、PUT、DELETE）\n")
-        skillInfoBuilder.append("   - url: 完整的请求 URL\n")
-        skillInfoBuilder.append("   - headers: JSON 字符串格式的请求头（可选）\n")
-        skillInfoBuilder.append("   - body: JSON 字符串格式的请求体（可选，POST/PUT 需要）\n")
-        skillInfoBuilder.append("3. 当用户需要调用后端 API 时，请直接使用 http_request 工具。\n\n")
+        // v17: 基础提示词已由 AGENTS.md 的 systemPrompt 提供（构造函数中动态加载），
+        // 此处只构建后端技能知识和前端工具信息，在调用时追加到 agent.systemPrompt
 
         // 添加前端页面工具信息
         if (!_frontendTools.isEmpty()) {
@@ -325,11 +403,16 @@ public class WsChatController {
         }
 
         if (!skills.isEmpty()) {
-            skillInfoBuilder.append("【已安装的技能知识库】\n")
+            // 第1段：仅注入 frontmatter（name + description），不注入正文 instructions
+            // 遵循 agentskills 开放标准的三段渐进式加载
+            skillInfoBuilder.append("【已安装的技能知识库】\n以下技能可用，如需使用请先调用 get_skill_content 工具获取完整说明（SOP 步骤、脚本接口等）。\n\n")
             for (skill in skills) {
-                skillInfoBuilder.append("### ${skill.name}\n")
-                skillInfoBuilder.append("${skill.description}\n\n")
+                skillInfoBuilder.append("- ${skill.name}: ${skill.description}\n")
+                // 仅 frontmatter，不注入 instructions 正文
             }
+            skillInfoBuilder.append("\n")
+
+            // v17: skillGuideSection 已迁至 AGENTS.md，此处不再注入
         }
 
         return skillInfoBuilder.toString()
@@ -527,6 +610,19 @@ public class WsChatController {
         payload.put("timestamp", JsonInt((DateTime.now() - DateTime.UnixEpoch).toMilliseconds()))
 
         let message = WebSocketMessage("pong", payload, (DateTime.now() - DateTime.UnixEpoch).toMilliseconds())
+        session.sendMessage(message)
+    }
+
+    private func _handleCancelMessage(session: WebSocketSession, jsonObj: JsonObject): Unit {
+        LogUtils.info("Received cancel request from session: ${session.sessionId}")
+        
+        WebSocketSessionManager.instance.cancelAgent(session.sessionId)
+        
+        let payload = JsonObject()
+        payload.put("status", JsonString("cancelled"))
+        payload.put("timestamp", JsonInt((DateTime.now() - DateTime.UnixEpoch).toMilliseconds()))
+        
+        let message = WebSocketMessage("cancel_response", payload, (DateTime.now() - DateTime.UnixEpoch).toMilliseconds())
         session.sendMessage(message)
     }
 

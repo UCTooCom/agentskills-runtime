@@ -32,8 +32,9 @@ public class AgentLoader {
      */
     public func loadAgentsFromDir(dir: String): Array<AgentDefinition> {
         // 首先检查路径是否存在
+        // v5 实测修复：目录不存在是正常行为（项目无自定义 Agent 时 src/agents 和 agents 均不存在），降级为 DEBUG 避免每次启动报 ERROR 噪声（日志 2 处）
         if (!exists(dir)) {
-            LogUtils.error("[AgentLoader] Path not found: ${dir}")
+            LogUtils.debug("[AgentLoader] Path not found, skipped (optional directory): ${dir}")
             return []
         }
         

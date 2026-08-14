@@ -5,7 +5,7 @@ package magic.skill
 
 import magic.core.skill.{Skill, SkillManager}
 import magic.core.tool.{Tool, ToolFilter, ToolManager}
-import magic.tool.{SimpleToolManager, BuiltinToolsRegistry}
+import magic.tool.{SimpleToolManager, BuiltinToolsRegistry, GetSkillContentTool}
 import std.collection.{HashMap, ArrayList}
 import magic.log.LogUtils
 @When[cjc_version < "1.0.0"]
@@ -61,6 +61,7 @@ public class CompositeSkillToolManager <: SkillManager & ToolManager {
         _skillSecurityPolicies = HashMap<String, SecurityPolicy>()
         _skillResourceLimits = HashMap<String, ResourceLimits>()
         _skillCapabilities = HashMap<String, ArrayList<Capability>>()
+        GetSkillContentTool.setSkillManager(this)
         LogUtils.info("[CompositeSkillToolManager] Initialized with builtin tools registered")
     }
 

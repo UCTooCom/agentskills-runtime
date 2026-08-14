@@ -85,8 +85,8 @@ public class Message <: ToString & FromJsonValue<Message> & ToJsonValue {
         Message(MessageRole.System, content, name: "System")
     }
 
-    public static func assistant(content: String, name!: String = "Assistant"): Message {
-        Message(MessageRole.Assistant, content, name: name)
+    public static func assistant(content: String, name!: String = "Assistant", reason!: Option<String> = None): Message {
+        Message(MessageRole.Assistant, content, name: name, reason: reason)
     }
 
     public static func user(content: String, image!: Option<String> = None): Message {

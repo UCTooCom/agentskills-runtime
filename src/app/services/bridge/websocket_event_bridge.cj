@@ -67,6 +67,12 @@ public class WebSocketEventBridge {
                 data.put("completionTokens", JsonInt(usage.completionTokens))
                 data.put("totalTokens", JsonInt(usage.totalTokens))
             }
+            // 传递思维链（reasoning_content）到前端
+            if (let Some(reason) <- evt.chatResponse.message.reason) {
+                if (!reason.isEmpty()) {
+                    data.put("reasoning", JsonString(reason))
+                }
+            }
             pushEvent(evt.agent.name, data)
         }
         manager.addHandler(h4)

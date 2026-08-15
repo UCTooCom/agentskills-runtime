@@ -19,7 +19,8 @@ steps:
     depends_on:
       - fetch-data
     input:
-      input_file: "${fetch-data.output}/raw/${input.date}.json"
+      # v8 修复：fetch 的 outdir 已含 raw，路径模板不再追加 raw（原 `${fetch-data.output}/raw/...` 会产生双重 raw）
+      input_file: "${fetch-data.output}/${input.date}.json"
       outdir: "output/clean"
 
   - name: extract-factors
@@ -28,16 +29,20 @@ steps:
     depends_on:
       - clean-data
     input:
-      input_file: "${clean-data.output}/clean/${input.date}.json"
+      input_file: "${clean-data.output}/${input.date}.json"
       outdir: "output/factors"
 
   - name: generate-report
-    step_type: llm
+    step_type: script
+    script: scripts/generate_report.py
     depends_on:
       - extract-factors
     input:
-      factors_path: "${extract-factors.output}/factors/${input.date}.json"
-      prompt: "基于要素数据生成每日投资简报，按公司输出：一句话结论、行情概览、核心看点、风险提示、数据来源与免责声明。仅供技术交流，不构成投资建议。"
+      # v17修复：extract-factors.output 已是 output/factors，不再追加 /factors（原会产生 output/factors/factors/...）
+      factors: "${extract-factors.output}/${input.date}.json"
+      outdir: "output/brief"
+    # v9 修复：step_type 从 llm 改为 script，优先用 scripts/generate_report.py（人工已验证可正确生成预期产出物）
+    # 脚本内部已封装 LLM 调用与降级模板化简报逻辑，仅环境不具备才降级用 runtime 大模型
 
   - name: persist-report
     step_type: script
@@ -45,8 +50,9 @@ steps:
     depends_on:
       - generate-report
     input:
-      report: "${generate-report.output}/brief/${input.date}.md"
-      factors: "${extract-factors.output}/factors/${input.date}.json"
+      # v17修复：generate-report.output 已是 output/brief，不再追加 /brief（原会产生 output/brief/brief/...）
+      report: "${generate-report.output}/${input.date}.md"
+      factors: "${extract-factors.output}/${input.date}.json"
       sql_only: "${input.sql_only}"
 
   - name: output-brief
@@ -54,4 +60,4 @@ steps:
     depends_on:
       - persist-report
     input:
-      brief_dir: "${generate-report.output}/brief"
+      brief_dir: "${generate-report.output}"

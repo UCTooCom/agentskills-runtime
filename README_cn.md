@@ -132,6 +132,20 @@ python3 scripts/extract_factors.py --input output/clean/2026-08-07.json
 python3 scripts/save_report_to_db.py --report output/brief/2026-08-07.md
 ```
 
+#### 参考资源（一次完整运行流程与产出物）
+
+如需查阅 `investment-research-assistant` 技能一次完整运行的实际流程日志、工作产出物和 SDD 开发工程目录，请参考以下位置：
+
+| 资源 | 路径 | 说明 |
+|------|------|------|
+| 运行流程日志 | `logs/agentskills-runtime.log` | runtime 端完整记录技能六步 SOP 的执行链路、工具调用、大模型 reasoning 思维链事件、报错与降级过程 |
+| 启动日志 | `logs/runtime_start.log` | runtime 服务启动过程日志（含 MCP/WebMCP/SSE 监听初始化、技能加载、权限与数据库连接） |
+| Web 控制台日志 | `logs/web_console.md` | web 端对话窗口的实际运行交互记录（含思维链动态显示、取消聊天等前端行为） |
+| 技能工作产出 | `skills/investment-research-assistant/output/` | 技能六步 SOP 的实际产出物目录：`raw/`（原始抓取 JSON）、`clean/`（清洗后 JSON）、`factors/`（要素 JSON）、`brief/`（投资简报 Markdown）、`sql/`（落库 SQL） |
+| SDD 工程目录 | `.codeartsdoer/specs/fintech-agent-hackathon/` | 规范驱动开发（SDD）的完整工程文档：赛事要求、需求规格、技术设计、任务清单、迭代优化分析报告（`optimization-report.md`）与实施方案（`optimization-plan.md`） |
+
+> **迭代优化说明**：`optimization-report.md` 与 `optimization-plan.md` 按每一轮实测迭代追加章节（当前至 V17），完整记录每轮实测发现的根因、日志证据、修复方案与验证清单，是理解技能演进历程和复现修复过程的核心参考。
+
 ### 4.5 规范驱动开发方法论（评审指南）
 
 本作品严格遵循**规范驱动开发（Specification-Driven Development）**方法论，全流程按"需求规格 → 技术设计 → 任务清单 → 编码落地 → 验证发布"的规范链路交付，全部工程文档位于 `.codeartsdoer/specs/fintech-agent-hackathon/` 目录：

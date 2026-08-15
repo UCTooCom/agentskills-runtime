@@ -253,7 +253,9 @@ public class HttpServer {
                                 handleHttp1ConnectionOverConnection(tlsConn)
                             }
                         } catch (e: Exception) {
-                            logError("TLS handler error: ${e.message}")
+                            if (!e.message.contains("TLS read timed out") && !e.message.contains("TLS connection closed")) {
+                                logError("TLS handler error: ${e.message}")
+                            }
                             try { client.close() } catch (_: Exception) {}
                         }
                     }
@@ -268,7 +270,9 @@ public class HttpServer {
                     }
                 }
             } catch (e: Exception) {
-                logError("TLS accept error: ${e.message}")
+                if (!e.message.contains("TLS read timed out") && !e.message.contains("TLS connection closed")) {
+                    logError("TLS accept error: ${e.message}")
+                }
                 try { client.close() } catch (_: Exception) {}
             }
         }
@@ -307,7 +311,10 @@ public class HttpServer {
                 sendErrorResponseOverConnection(conn, HttpStatus.BAD_REQUEST, message: e.message)
         activeConnectionCount.fetchSub(1); return
             } catch (e: Exception) {
-                logError("readHttpRequestFromConnection error: ${e.message}")
+                // TLS握手超时和连接关闭是常见网络行为（浏览器预连接、健康检查探针等），不记录为ERROR
+                if (!e.message.contains("TLS read timed out") && !e.message.contains("TLS connection closed")) {
+                    logError("readHttpRequestFromConnection error: ${e.message}")
+                }
         activeConnectionCount.fetchSub(1); return
             }
             // 头部读取后恢复读取超时
@@ -846,7 +853,9 @@ public func close(): Unit {
                     sendErrorResponse(conn, HttpStatus.BAD_REQUEST, message: e.message)
                     return
                 } catch (e: Exception) {
-                    logError("readHttpRequestWithPrefix error: ${e.message}")
+                    if (!e.message.contains("TLS read timed out") && !e.message.contains("TLS connection closed")) {
+                        logError("readHttpRequestWithPrefix error: ${e.message}")
+                    }
                     return
                 }
             } else {
@@ -856,7 +865,9 @@ public func close(): Unit {
                     sendErrorResponse(conn, HttpStatus.BAD_REQUEST, message: e.message)
                     return
                 } catch (e: Exception) {
-                    logError("readHttpRequest error: ${e.message}")
+                    if (!e.message.contains("TLS read timed out") && !e.message.contains("TLS connection closed")) {
+                        logError("readHttpRequest error: ${e.message}")
+                    }
                     return
                 }
             }

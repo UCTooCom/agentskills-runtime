@@ -85,6 +85,20 @@ This work targets real financial industry business scenarios, using "Investment 
 2. **Financial Industry Agent Infrastructure**: AgentSkills Runtime provides a standardized skill runtime environment (SKILL.md loading/validation, WASM sandbox, RBAC permissions, MCP/WebMCP integration, audit logs), enabling rapid development and secure operation of financial business Agents.
 3. **Financial Business System Integration**: Built on the Cangjie-language high-performance application server (HTTP/HTTPS, WebSocket, SSE), Agents seamlessly integrate with traditional financial ICT infrastructure.
 
+#### Reference Resources (A Complete Run Flow & Outputs)
+
+To inspect the actual run-flow logs, working outputs, and SDD engineering directory of the `investment-research-assistant` skill, refer to the following locations:
+
+| Resource | Path | Description |
+|----------|------|-------------|
+| Run-flow log | `logs/agentskills-runtime.log` | Runtime-side complete record of the skill's six-step SOP execution chain, tool invocations, LLM reasoning/thinking-chain events, errors, and fallback processes |
+| Startup log | `logs/runtime_start.log` | Runtime service startup log (MCP/WebMCP/SSE listener init, skill loading, permissions, and database connections) |
+| Web console log | `logs/web_console.md` | Actual interaction records of the web chat window (thinking-chain dynamic display, cancel-chat, and other frontend behaviors) |
+| Skill working outputs | `skills/investment-research-assistant/output/` | Actual outputs of the six-step SOP: `raw/` (raw fetched JSON), `clean/` (cleaned JSON), `factors/` (factor JSON), `brief/` (investment brief Markdown), `sql/` (DB-persistence SQL) |
+| SDD engineering directory | `.codeartsdoer/specs/fintech-agent-hackathon/` | Full Specification-Driven Development engineering docs: competition requirements, requirement specs, technical design, task lists, iterative optimization analysis reports (`optimization-report.md`) and implementation plans (`optimization-plan.md`) |
+
+> **Iteration note**: `optimization-report.md` and `optimization-plan.md` append a new chapter per real-test iteration (currently through V17), fully recording each round's root causes, log evidence, fix plans, and verification checklists — the core reference for understanding the skill's evolution and reproducing the fix process.
+
 ### 4.2 Target Customers
 
 | Customer Type | Typical Scenario | Value Proposition |

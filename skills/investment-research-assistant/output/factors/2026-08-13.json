@@ -1,0 +1,56 @@
+{
+  "date": "2026-08-13",
+  "companies": [
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "market_factors": {
+        "close_price": 13.5529,
+        "change_pct": 0.0092,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    },
+    {
+      "code": "300750",
+      "name": "宁德时代",
+      "market_factors": {
+        "close_price": 3.963,
+        "change_pct": 0.006,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    },
+    {
+      "code": "002594",
+      "name": "比亚迪",
+      "market_factors": {
+        "close_price": 0.8971,
+        "change_pct": -0.0077,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    }
+  ]
+}

@@ -55,7 +55,11 @@ def call_llm(prompt: str) -> str:
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
         with urllib.request.urlopen(req, timeout=120) as r:
             data = json.loads(r.read().decode("utf-8"))
-    return data["choices"][0]["message"]["content"]
+    # v8 修复：LLM 返回异常结构时用 .get 链兜底，避免 IndexError/KeyError
+    choices = data.get("choices") or []
+    if not choices:
+        raise ValueError("LLM 返回空 choices")
+    return choices[0].get("message", {}).get("content", "")
 
 
 def build_template_brief(factors_data: dict) -> str:
@@ -90,7 +94,10 @@ def build_template_brief(factors_data: dict) -> str:
 def main():
     parser = argparse.ArgumentParser(description="生成每日投资简报")
     parser.add_argument("--factors", required=True, help="要素 JSON")
-    parser.add_argument("--outdir", default="output/brief", help="输出目录")
+    # v17修复：--outdir 默认值改为基于脚本所在目录的绝对路径，避免 cwd 不一致导致相对路径写到了别处
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _default_outdir = os.path.normpath(os.path.join(_script_dir, "..", "output", "brief"))
+    parser.add_argument("--outdir", default=_default_outdir, help="输出目录")
     args = parser.parse_args()
 
     with open(args.factors, encoding="utf-8") as f:

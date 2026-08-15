@@ -1,0 +1,69 @@
+{
+  "date": "2026-08-13",
+  "companies": [
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "quotes": {
+        "code": "600519",
+        "name": "贵州茅台",
+        "price": 13.5529,
+        "change_pct": 0.0092,
+        "volume": 3235348,
+        "amount": 4376205567.0,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 13.596,
+        "low": 13.37,
+        "open": 13.38,
+        "prev_close": 13.43
+      },
+      "news": [],
+      "raw_news_count": 0
+    },
+    {
+      "code": "300750",
+      "name": "宁德时代",
+      "quotes": {
+        "code": "300750",
+        "name": "宁德时代",
+        "price": 3.963,
+        "change_pct": 0.006,
+        "volume": 24429304,
+        "amount": 9665143597.03,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 3.9939,
+        "low": 3.9104,
+        "open": 3.9304,
+        "prev_close": 3.9393
+      },
+      "news": [],
+      "raw_news_count": 0
+    },
+    {
+      "code": "002594",
+      "name": "比亚迪",
+      "quotes": {
+        "code": "002594",
+        "name": "比亚迪",
+        "price": 0.8971,
+        "change_pct": -0.0077,
+        "volume": 22665355,
+        "amount": 2039695173.43,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 0.907,
+        "low": 0.897,
+        "open": 0.9037,
+        "prev_close": 0.9041
+      },
+      "news": [],
+      "raw_news_count": 0
+    }
+  ],
+  "cleaned_at": null
+}

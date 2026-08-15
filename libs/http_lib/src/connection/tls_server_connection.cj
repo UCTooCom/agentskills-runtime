@@ -485,8 +485,8 @@ public class TlsServerConnection <: AbstractConnection & Connection {
             let n = tcpConn.read(buf, offset + received, length - received)
             if (n <= 0) {
                 if (n == 0) {
-                    if (DateTime.now() - startTime > Duration.second * 30) {
-                        throw TlsException("TLS read timed out after 30s")
+                    if (DateTime.now() - startTime > Duration.second * 60) {
+                        throw TlsException("TLS read timed out after 60s")
                     }
                     continue
                 }

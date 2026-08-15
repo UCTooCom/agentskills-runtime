@@ -190,10 +190,6 @@ public class Router {
                 trees[method] = Node()
             }
             trees[method].addRoute(normalizedPath, handler)
-            // 诊断日志：对关键路由输出
-            if (path.contains("hello") || path.contains("health") || path.contains("tasks/public/home-stats")) {
-                eprintln("[Router.handle] method=${method}, path='${path}', normalized='${normalizedPath}', root.path='${trees[method].path}', root.indices='${trees[method].indices}', children=${trees[method].children.size}")
-            }
         }
         this
     }
@@ -210,13 +206,8 @@ public class Router {
     }
 
     private func findLocked(method: HttpMethod, path: String): HandlerResult {
-        // 诊断日志：记录查找过程
-        let diagFind = path.contains("health") || path.contains("tasks") || path.contains("webmcp")
         match (trees.get(method)) {
             case Some(root) =>
-                if (diagFind) {
-                    eprintln("[findLocked] method=${method}, path='${path}', root.path='${root.path}', root.indices='${root.indices}', children=${root.children.size}, maxParams=${root.maxParams}, wildChild=${root.wildChild}")
-                }
                 // 根据树的参数深度决定是否延迟分配 ParamMap：
                 // maxParams == 0 表示此 HTTP 方法树下全是静态路由，
                 // 不会匹配到任何路径参数，因此完全跳过 ParamMap
@@ -226,9 +217,6 @@ public class Router {
                     let setParam = {key, value => pm.set(key, value)}
                     let (handler, tsr) = root.findRoute(path, Some(setParam))
                     let params = pm.build()
-                    if (diagFind) {
-                        eprintln("[findLocked] findRoute result: handler=${handler.isSome()}, tsr=${tsr}")
-                    }
                     if (handler.isSome()) {
                         return HandlerResult(handler: handler, params: params, tsr: tsr)
                     }
@@ -238,9 +226,6 @@ public class Router {
                 } else {
                     // 全静态路由树 —— 无需 ParamMap
                     let (handler, tsr) = root.findRoute(path, None)
-                    if (diagFind) {
-                        eprintln("[findLocked] findRoute result: handler=${handler.isSome()}, tsr=${tsr}")
-                    }
                     if (handler.isSome()) {
                         return HandlerResult(handler: handler, params: HashMap<String, String>(), tsr: tsr)
                     }
@@ -249,9 +234,6 @@ public class Router {
                     }
                 }
             case None =>
-                if (diagFind) {
-                    eprintln("[findLocked] method=${method} NOT in trees! trees.size=${trees.size}")
-                }
                 ()
         }
         // 检查组子路由器
@@ -274,22 +256,15 @@ public class Router {
      */
     public func findByHost(method: HttpMethod, path: String, host: String): HandlerResult {
         synchronized(rwLock.readLock) {
-            // 诊断：检查虚拟主机路由
-            let diag = path.contains("tasks") || path.contains("webmcp") || path.contains("health")
             // 先检查主机专用路由器
             match (hostRouters.get(host)) {
                 case Some(hostRouter) =>
-                    if (diag) {
-                        eprintln("[findByHost] hostRouter found for '${host}', delegating...")
-                    }
                     let result = hostRouter.findLocked(method, path)
                     if (result.handler.isSome() || result.tsr) {
                         return result
                     }
                 case None =>
-                    if (diag) {
-                        eprintln("[findByHost] no hostRouter for '${host}', falling back to default")
-                    }
+                    ()
             }
             // 回退到默认路由 + 分组
             findLocked(method, path)
@@ -375,11 +350,6 @@ public class Router {
                 case None => ""
             }
             let result = this.findByHost(req.method, req.path, host)
-
-            // 诊断日志：路由匹配结果
-            if (result.handler.isNone()) {
-                eprintln("[Router] No route found: method=${req.method}, path=${req.path}, host=${host}")
-            }
 
             // 尾部斜杠重定向
             if (result.tsr && result.handler.isNone()) {

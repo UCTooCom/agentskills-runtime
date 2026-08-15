@@ -24,23 +24,49 @@ def clean_value(v):
         return v
 
 
+def clean_raw(v):
+    """v11新增：不归一化，直接转 float（用于 PE/PB 等本身就是倍数的字段）"""
+    if v is None:
+        return None
+    try:
+        return round(float(v), 4)
+    except (TypeError, ValueError):
+        return v
+
+
+def clean_market_cap(v):
+    """v11新增：市值归一化，东财返回元，转为亿元"""
+    if v is None:
+        return None
+    try:
+        return round(float(v) / 100000000.0, 4)
+    except (TypeError, ValueError):
+        return v
+
+
 def clean_quote(q: dict) -> dict:
     if not q:
         return {}
+    # v17修复：新浪源返回的price/change_pct已是真实值，不应再/100
+    # 东财源返回的price放大100倍（分→元），需要/100
+    source = (q.get("source") or "").lower()
+    is_sina = "sina" in source
+    # 价格类字段：东财/100，新浪不处理
+    clean_price = clean_raw if is_sina else clean_value
     return {
         "code": q.get("code"),
         "name": q.get("name"),
-        "price": clean_value(q.get("price")),
-        "change_pct": clean_value(q.get("change_pct")),
+        "price": clean_price(q.get("price")),
+        "change_pct": clean_price(q.get("change_pct")),
         "volume": q.get("volume"),
         "amount": q.get("amount"),
-        "pe": clean_value(q.get("pe")),
-        "pb": clean_value(q.get("pb")),
-        "market_cap": clean_value(q.get("market_cap")),
-        "high": clean_value(q.get("high")),
-        "low": clean_value(q.get("low")),
-        "open": clean_value(q.get("open")),
-        "prev_close": clean_value(q.get("prev_close")),
+        "pe": clean_price(q.get("pe")),
+        "pb": clean_price(q.get("pb")),
+        "market_cap": clean_market_cap(q.get("market_cap")),
+        "high": clean_price(q.get("high")),
+        "low": clean_price(q.get("low")),
+        "open": clean_price(q.get("open")),
+        "prev_close": clean_price(q.get("prev_close")),
     }
 
 
@@ -76,17 +102,33 @@ def clean_records(raw: dict) -> dict:
 
 
 def main():
+    # v13修复：以脚本所在目录为基准，不依赖工作目录
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    skill_root = os.path.dirname(script_dir)  # skills/investment-research-assistant/
+
     parser = argparse.ArgumentParser(description="清洗抓取数据")
     parser.add_argument("--input", required=True, help="原始数据 JSON")
-    parser.add_argument("--outdir", default="output/clean", help="输出目录")
+    parser.add_argument("--outdir", default=None, help="输出目录（默认: {skill_root}/output/clean）")
     args = parser.parse_args()
 
-    with open(args.input, encoding="utf-8") as f:
+    # v13修复：未指定outdir时，用skill_root/output/clean绝对路径
+    outdir = args.outdir if args.outdir else os.path.join(skill_root, "output", "clean")
+    outdir = os.path.normpath(outdir)
+
+    # v13修复：如果input是相对路径，尝试用skill_root/output/raw解析
+    input_path = args.input
+    if not os.path.isabs(input_path) and not os.path.exists(input_path):
+        candidate = os.path.join(skill_root, "output", "raw", os.path.basename(input_path))
+        if os.path.exists(candidate):
+            input_path = candidate
+    input_path = os.path.normpath(input_path)
+
+    with open(input_path, encoding="utf-8") as f:
         raw = json.load(f)
 
     cleaned = clean_records(raw)
-    os.makedirs(args.outdir, exist_ok=True)
-    out_file = os.path.join(args.outdir, os.path.basename(args.input))
+    os.makedirs(outdir, exist_ok=True)
+    out_file = os.path.join(outdir, os.path.basename(input_path))
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(cleaned, f, ensure_ascii=False, indent=2)
 

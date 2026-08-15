@@ -47,8 +47,8 @@ def split_report_by_company(report_md: str) -> list:
 
 
 def esc(s: str) -> str:
-    """SQL 字符串转义"""
-    return (s or "").replace("'", "''")
+    """SQL 字符串转义（单引号 + 反斜杠）"""
+    return (s or "").replace("\\", "\\\\").replace("'", "''")
 
 
 def build_company_upsert_sql(company_name: str, factors: dict) -> str:
@@ -93,9 +93,16 @@ def build_task_insert_sql(company_name: str, report_content: str, factors: dict)
     task_id = str(uuid.uuid4())
     tags = json.dumps(["investment-research", "daily-brief"], ensure_ascii=False)
     report_date = (factors.get("date", "") if factors else "") or datetime.now().strftime("%Y-%m-%d")
+    # v11修复：按当前 section 公司名匹配 factors.companies 中的 code，不再始终取 companies[0]
+    company_code = ""
+    if factors and factors.get("companies"):
+        for comp in factors["companies"]:
+            if comp.get("name", "") == company_name:
+                company_code = comp.get("code", "")
+                break
     extra = json.dumps({
         "report_date": report_date,
-        "code": (factors.get("companies") or [{}])[0].get("code", "") if factors and factors.get("companies") else "",
+        "code": company_code,
     }, ensure_ascii=False)
     title = f"每日投资简报 - {company_name}"
     return (
@@ -120,7 +127,10 @@ def main():
     parser.add_argument("--report", required=True, help="简报 Markdown 文件")
     parser.add_argument("--factors", default=None, help="要素 JSON（可选）")
     parser.add_argument("--sql-only", action="store_true", help="仅生成 SQL 文件不直连数据库")
-    parser.add_argument("--outdir", default="output/sql", help="SQL 输出目录")
+    # v17修复：--outdir 默认值改为基于脚本所在目录的绝对路径，避免 cwd 不一致导致相对路径写到了别处
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _default_outdir = os.path.normpath(os.path.join(_script_dir, "..", "output", "sql"))
+    parser.add_argument("--outdir", default=_default_outdir, help="SQL 输出目录")
     parser.add_argument("--db-url", default=os.environ.get("DATABASE_URL", ""), help="数据库连接串")
     args = parser.parse_args()
 

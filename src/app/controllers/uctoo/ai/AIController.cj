@@ -41,7 +41,7 @@ public class AIController {
             name: "AI API Assistant",
             description: "An intelligent assistant for OpenAI-compatible API",
             memory: Some(memory),
-            eventHandlerManager: Some(EventHandlerManager.global)
+            eventHandlerManager: None // v22修复：不再传 global，避免 agent_op 三层分发中 agent 层与 global 层重复触发（reasoning 推送两次）
         )
     }
 

@@ -29,7 +29,10 @@ public class SseMCPServer <: AbsMCPServer {
             match (req.connection) {
                 case Some(conn) =>
                     let controller = ConnectionController(conn)
-                    controller.write(unsafe { "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n".rawData() })
+                    // v18修复：去掉裸写的 Transfer-Encoding: chunked 头，改用 Connection: close 裸字节流
+                    // 根因：原裸写 chunked 头但后续 conn.write()+flush() 从不按 chunked 分块格式封装，
+                    //       浏览器解析时遇到裸 SSE 字节 → 非法分块 → net::ERR_INVALID_CHUNKED_ENCODING
+                    controller.write(unsafe { "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n".rawData() })
                     req.takenOver = true
 
                     let uuid = randomString(size: 12)

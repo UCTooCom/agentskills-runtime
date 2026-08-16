@@ -65,7 +65,7 @@ public class Config {
      * The optional values are "error", "info", and "debug"; case-insensitive.
      */
     private static var _logLevel = "error"
-    private static var VALID_LOG_LEVELS = ["error", "info", "debug", "trace"]
+    private static var VALID_LOG_LEVELS = ["error", "warn", "info", "debug", "trace"]
 
     /**
      * Available log levels:

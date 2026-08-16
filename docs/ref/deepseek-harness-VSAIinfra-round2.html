@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agentskills-runtime 对比 deepseek-harness 第二轮深度分析报告</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a2e;
+  --fg-light: #4a4a68;
+  --accent: #2563eb;
+  --accent-light: #dbeafe;
+  --border: #e2e8f0;
+  --code-bg: #f8fafc;
+  --table-stripe: #f7f9fc;
+  --green: #16a34a;
+  --green-bg: #dcfce7;
+  --orange: #ea580c;
+  --orange-bg: #fed7aa;
+  --red: #dc2626;
+  --red-bg: #fee2e2;
+  --purple: #7c3aed;
+  --purple-bg: #ede9fe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.8;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+h1 {
+  font-size: 1.8em;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--fg);
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 12px;
+}
+h2 {
+  font-size: 1.4em;
+  font-weight: 700;
+  margin-top: 48px;
+  margin-bottom: 16px;
+  color: var(--fg);
+  padding-left: 12px;
+  border-left: 4px solid var(--accent);
+}
+h3 {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin-top: 32px;
+  margin-bottom: 12px;
+  color: var(--fg);
+}
+h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin-top: 20px;
+  margin-bottom: 8px;
+  color: var(--fg-light);
+}
+p { margin-bottom: 14px; }
+ul, ol { margin-bottom: 14px; padding-left: 28px; }
+li { margin-bottom: 6px; }
+blockquote {
+  border-left: 4px solid var(--accent);
+  background: var(--accent-light);
+  padding: 12px 20px;
+  margin: 16px 0;
+  border-radius: 0 8px 8px 0;
+  color: var(--fg);
+}
+blockquote p { margin-bottom: 4px; }
+code {
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 0.9em;
+  color: var(--accent);
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+pre code {
+  background: none;
+  padding: 0;
+  color: var(--fg);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 0.92em;
+}
+th {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--accent);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: var(--table-stripe); }
+.meta {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 32px;
+  font-size: 0.9em;
+  color: var(--fg-light);
+}
+.meta p { margin-bottom: 4px; }
+hr {
+  border: none;
+  border-top: 2px solid var(--border);
+  margin: 40px 0;
+}
+strong { color: var(--fg); font-weight: 700; }
+.toc {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 28px;
+  margin-bottom: 32px;
+}
+.toc h3 { margin-top: 0; color: var(--accent); }
+.toc ol { padding-left: 24px; }
+.toc a { color: var(--accent); text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+.highlight-box {
+  border-radius: 8px;
+  padding: 12px 20px;
+  margin: 16px 0;
+}
+.highlight-green { background: var(--green-bg); border-left: 4px solid var(--green); }
+.highlight-orange { background: var(--orange-bg); border-left: 4px solid var(--orange); }
+.highlight-purple { background: var(--purple-bg); border-left: 4px solid var(--purple); }
+.section-break {
+  text-align: center;
+  margin: 40px 0;
+  color: var(--border);
+  letter-spacing: 8px;
+}
+.footer {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 2px solid var(--border);
+  font-size: 0.88em;
+  color: var(--fg-light);
+}
+</style>
+</head>
+<body>
+
+<h1>agentskills-runtime 对比 deepseek-harness 第二轮深度分析报告</h1>
+
+<div class="meta">
+<p><strong>分析日期：</strong>2026-08-16</p>
+<p><strong>分析前提：</strong>本报告基于架构师反馈与补充材料，在"假设 agentskills-runtime 已落地沙箱、插件等规划能力"的前提下，对两个项目进行理念层面的全面对比。</p>
+<p><strong>新增参考材料：</strong>架构师系列文章（5篇）、演讲PPT（2份）、<code>.codeartsdoer/specs</code> SDD工程文档、北航CangjieBench论文、Hao好聊趋势DSH深度分析、互联网DSH路线图信息</p>
+</div>
+
+<div class="toc">
+<h3>目录</h3>
+<ol>
+<li><a href="#s1">分析背景与方法论修正</a></li>
+<li><a href="#s2">理念差异：双驱动战斗机 vs 高性能发动机</a></li>
+<li><a href="#s3">安全与权限体系：行为入口控制 vs 沙箱兜底</a></li>
+<li><a href="#s4">插件机制：AI驱动智能插件 vs 一切皆插件</a></li>
+<li><a href="#s5">自进化路径：生态级进化飞轮 vs 运行时可逆元编程</a></li>
+<li><a href="#s6">存量系统升级：UMI渐进式路径 vs 破坏式创新</a></li>
+<li><a href="#s7">AI生产力公式与代码生成实证</a></li>
+<li><a href="#s8">工程成熟度与路线图对比</a></li>
+<li><a href="#s9">AI治理视角</a></li>
+<li><a href="#s10">综合对比矩阵</a></li>
+<li><a href="#s11">结论</a></li>
+</ol>
+</div>
+
+<!-- ===== 一 ===== -->
+<h2 id="s1">一、分析背景与方法论修正</h2>
+
+<h3>1.1 第一轮报告的不足</h3>
+<p>第一轮报告的主要问题在于：仅阅读了 <code>docs/</code> 目录的部分文档便开始撰写，未深入 <code>.codeartsdoer/specs/</code> 等 SDD 工程目录中与实际代码吻合度更高的文档来源。这导致对 agentskills-runtime 的能力评估存在偏差——既低估了已实现能力的深度（如 RBAC 统一权限体系、UMI 分布式数据总线、crudgen 确定性代码生成工具链、多 Agent 协作 DSL 等），也未能充分理解安全沙箱未落地的设计合理性。</p>
+
+<h3>1.2 第二轮分析方法论</h3>
+<table>
+<tr><th>材料类型</th><th>具体内容</th><th>价值</th></tr>
+<tr><td>架构师文章</td><td>《人工智能软件工程方法论》(2025.11)</td><td>确立"AI生产力=AI IDE+大模型+AI驱动开发框架"三位一体新基建理论</td></tr>
+<tr><td>架构师文章</td><td>《只需免费AI就能用仓颉开发强大Agent》(2025.12)</td><td>实证大模型通用能力可生成高质量仓颉代码，提出专用语言多Agent协作架构</td></tr>
+<tr><td>架构师文章</td><td>《仓颉智能体框架设计哲学》(2026.04)</td><td>系统阐述AI驱动开发框架理念，发布继prompt/context/harness后的新一代Agent范式</td></tr>
+<tr><td>架构师演讲</td><td>WAIC 2026 主题演讲 (2026.07)</td><td>向业界展示 agentskills-runtime 开源项目</td></tr>
+<tr><td>SDD工程文档</td><td><code>.codeartsdoer/specs/goai2026/gap-analysis.md</code></td><td>详尽的能力盘点、差距分析与夺冠需求规划</td></tr>
+<tr><td>学术验证</td><td>北航 CangjieBench 论文 (2026.08, ESEM 2026)</td><td>定量验证架构师9个月前的定性分析——语法约束使GPT-5仓颉代码pass@1从4.3%提升至53.8%</td></tr>
+<tr><td>DSH深度分析</td><td>《DeepSeek的Harness，有一套新世界观》(Hao好聊趋势)</td><td>揭示DSH背后的RHI理论、组合泛化世界观、与Agentic RL/GRPO的深层联系</td></tr>
+<tr><td>DSH路线图</td><td>互联网多源信息</td><td>DSH的五大核心能力规划、模型与Harness共同进化方向</td></tr>
+</table>
+
+<h3>1.3 "假设已落地"的分析框架</h3>
+<p>架构师明确提出：<strong>"如果我们有足够资源，已经实现了沙箱、插件等的落地方案"</strong>——本报告在此前提下进行对比，同时如实标注当前实现状态与规划目标的差异。这不是对现实的美化，而是对设计愿景的严肃评估。</p>
+
+<!-- ===== 二 ===== -->
+<h2 id="s2">二、理念差异：双驱动战斗机 vs 高性能发动机</h2>
+
+<h3>2.1 核心隐喻</h3>
+<p>架构师提出了一个精准的隐喻来概括两个项目的理念差异：</p>
+<blockquote>
+<p>AI驱动开发框架的出发点是将软件系统作为整体来考量，研究的是如何建造<strong>双驱动战斗机</strong>。而harness的出发点是以大模型作为核心，研究的是如何打造<strong>高性能发动机</strong>。</p>
+</blockquote>
+
+<table>
+<tr><th>维度</th><th>AI驱动开发框架 (agentskills-runtime)</th><th>Harness Engineering (deepseek-harness)</th></tr>
+<tr><td>设计原点</td><td><strong>软件系统整体</strong>：先有完备的生产框架，AI是叠加层</td><td><strong>大模型核心</strong>：Harness是包裹LLM的操作系统</td></tr>
+<tr><td>核心问题</td><td>如何让软件系统有机融合AI能力，实现整体进化</td><td>如何让大模型更高效、更安全地执行任务</td></tr>
+<tr><td>无AI时</td><td>仍是完备的服务提供方（CRUD+权限+同步+调度）</td><td>几乎无用（只剩CLI壳）</td></tr>
+<tr><td>AI角色</td><td>增强器：在确定性基础设施上叠加推理/判断/创造</td><td>核心：所有智能来源于模型，Harness是脚手架</td></tr>
+<tr><td>终极目标</td><td>软件系统自进化 → AGI</td><td>模型与Harness共同进化 → AGI</td></tr>
+</table>
+
+<h3>2.2 "确定性优先，AI增强"原则</h3>
+<p>架构师在《人工智能软件工程方法论》中从软件本质特性出发建立了认知基础：</p>
+<ul>
+<li><strong>确定性</strong>（传统软件）：给定相同输入产生一致输出，是调试、验证和可靠性的基石</li>
+<li><strong>不确定性</strong>（AI/大模型）：输出具有概率性和不可解释性</li>
+<li><strong>不可判定性</strong>：图灵停机问题划定根本边界，AI无法实现全面自我解释与验证</li>
+</ul>
+<p>由此得出核心原则：<strong>凡是可确定性实现的逻辑（CRUD、权限、同步、调度），用代码实现；凡是需要推理/判断/创造的逻辑，由AI驱动。两者分层协作而非替代。</strong></p>
+
+<h3>2.3 Harness Engineering 的世界观</h3>
+<p>根据Hao好聊趋势的深度分析，DSH背后的理论世界观可以概括为：</p>
+<blockquote>
+<p>Harness 是<strong>组合泛化器</strong>（Compositional Generalizer）——把巨大连续任务世界重新表示成由少数高层动作组成的组合空间，把陌生大任务拆成模型已会的局部动作（Locally In-Distribution, LID）。</p>
+</blockquote>
+<p>MIT CSAIL论文的核心洞见：大模型后训练的问题在于"哪里不行补哪里"，但现实世界任务组合几乎无穷，每增加一种组合都要重新训练模型代价巨大。好的Harness把第一次见到的完整任务，转换成已经会做的局部动作+一种新的组合方式。</p>
+
+<div class="highlight-box highlight-purple">
+<p><strong>两种世界观的本质差异：</strong></p>
+<ul>
+<li><strong>AI驱动开发框架</strong>：确定性框架是骨架，AI是血肉——骨架提供结构安全底线，血肉提供智能适应性</li>
+<li><strong>DSH</strong>：Harness是神经系统，模型是大脑——神经系统负责信息路由和组合，大脑负责推理</li>
+</ul>
+</div>
+
+<h3>2.4 "不可变基础设施"的安全哲学</h3>
+<p>架构师提出了一个深刻的安全视角：</p>
+<blockquote>
+<p>一些不可变软件基础设施保持不可变一定程度上是更安全和稳健的，也许这部分不可变软件基础设施就是<strong>兜底AI安全可控的最后底线</strong>。</p>
+</blockquote>
+<p>这与DSH的"一切皆插件、无特权核心"理念形成鲜明对比。DSH的Cordis Runtime只提供6种基础操作，其余全部可替换——包括Agent Loop、会话日志、沙箱、审批策略等安全关键组件。</p>
+
+<!-- ===== 三 ===== -->
+<h2 id="s3">三、安全与权限体系：行为入口控制 vs 沙箱兜底</h2>
+
+<h3>3.1 两种安全范式</h3>
+<table>
+<tr><th>安全维度</th><th>agentskills-runtime</th><th>deepseek-harness</th></tr>
+<tr><td>安全策略</td><td><strong>行为入口控制</strong>：Agent拥有帐号，受RBAC约束，与人类用户权限体系一致</td><td><strong>沙箱兜底</strong>：工具执行在沙箱内，能力缝隙做deny/ask门控</td></tr>
+<tr><td>核心假设</td><td>Agent像人类一样使用软件，受相同权限约束</td><td>Agent可能以hack方式使用软件，需沙箱隔离</td></tr>
+<tr><td>权限粒度</td><td>API级、CLI级、工具级，统一RBAC管理</td><td>工具执行管道级（pre-execute/execute/post-execute）</td></tr>
+<tr><td>安全底线</td><td>不可变基础设施（RBAC、审计、JWT认证）</td><td>Cordis Runtime（6种基础操作不可替换）</td></tr>
+<tr><td>沙箱角色</td><td>补充层：在行为入口控制之上叠加隔离</td><td>必须层：没有沙箱就无法安全运行</td></tr>
+</table>
+
+<h3>3.2 为什么 harness 必须依赖沙箱</h3>
+<blockquote>
+<p>目前大部分harness都必须依赖沙箱的原因，是由于他们放任大模型以hack系统的方式在使用软件，以及在进行软件开发，所以必须有沙箱进行安全兜底。</p>
+</blockquote>
+<p>DSH的设计理念是让Agent可以自由地操作文件系统、执行命令、编写代码——这本质上赋予了Agent"超级用户"级别的系统访问权限，因此必须有沙箱进行隔离。而agentskills-runtime的设计理念是让Agent像人类用户一样通过API接口使用软件——Agent只能调用它被授权的API，就像人类用户只能访问自己权限范围内的功能一样。</p>
+
+<h3>3.3 "假设已落地"的安全体系</h3>
+<pre><code>agentskills-runtime 安全体系（假设已落地）：
+
+第一层：RBAC统一权限体系（已实现）
+  ├── Agent帐号与人类用户一致的权限分配
+  ├── API/CLI/工具的细粒度权限控制
+  ├── 敏感操作二次确认（HITL三级事件处理）
+  └── JWT认证 + 审计日志
+
+第二层：WASM安全沙箱（规划中，假设已落地）
+  ├── 技能脚本在WASM隔离环境中执行
+  ├── 能力型访问控制（Capability-based Access Control）
+  ├── 资源配额管理（CPU/内存/时间限制）
+  └── 敏感操作门控
+
+第三层：不可变安全基础设施（设计哲学）
+  ├── 核心权限/审计/认证组件不可被AI替换
+  ├── 安全关键路径用确定性代码保障
+  └── 作为AI安全可控的最后底线</code></pre>
+
+<div class="highlight-box highlight-green">
+<p><strong>关键差异</strong>：agentskills-runtime的安全策略是"防御纵深"——从行为入口到执行环境多层控制；DSH的安全策略是"执行隔离"——在工具执行层做强隔离。前者更适合企业级应用场景，后者更适合软件开发场景。</p>
+</div>
+
+<h3>3.4 资源约束下的优先级决策</h3>
+<blockquote>
+<p>缺少资源的创业者需要在短期可实现与长期目标间取得良好平衡。不完备的沙箱会是系统整体可运行的卡点，还是以整体可运行为前提推进安排开发优先级。</p>
+</blockquote>
+
+<!-- ===== 四 ===== -->
+<h2 id="s4">四、插件机制：AI驱动智能插件 vs 一切皆插件</h2>
+
+<h3>4.1 架构师的"神经系统"隐喻</h3>
+<blockquote>
+<p>如果将软件比作生命体，那么传统插件只是相当于连接了血管、骨骼这些机械结构，但是没有连接神经系统。我规划的插件希望插件本身也具有AI驱动的能力，就是用skills的机制让插件也可以<strong>连接上神经系统</strong>。</p>
+</blockquote>
+
+<table>
+<tr><th>插件代际</th><th>特征</th><th>类比</th></tr>
+<tr><td>第一代：傻插件</td><td>机械连接，被动响应</td><td>连接血管、骨骼</td></tr>
+<tr><td>第二代：可配置插件</td><td>参数化配置，有限自适应</td><td>连接肌肉组织</td></tr>
+<tr><td>第三代：AI驱动智能插件</td><td>内置Skills机制，具备AI能力</td><td>连接神经系统</td></tr>
+</table>
+
+<h3>4.2 agentskills-runtime 的插件规划</h3>
+<ol>
+<li><strong>插件与Skills融合</strong>：复用skills中的scripts目录作为插件载体</li>
+<li><strong>确定性插件模板</strong>：像crudgen从数据库生成标准CRUD模块一样，用确定性模板生成插件初始代码</li>
+<li><strong>注释系统区分可编程区域</strong>：确保每个插件可由AICoding自动化生成和进化，不影响整体运行</li>
+<li><strong>插件本身具备AI驱动能力</strong>：插件不只是机械接口，而是通过Skills机制连接"神经系统"</li>
+</ol>
+
+<h3>4.3 DSH的插件机制分析</h3>
+<p>DSH的"一切皆插件"是一种更彻底的插件化方案，基于Cordis框架实现时空可组合性。DSH的插件是否实现了等价的"连接神经系统"能力？从分析来看：</p>
+<ul>
+<li>DSH的插件可以包含完整的Agent Loop、工具系统、LLM适配器——插件本身可以具备AI能力</li>
+<li>DSH的extensions包允许Agent实时检视/挂载/卸载自身运行的插件——具有"自感知"特征</li>
+<li>但DSH的插件更多是"可替换的组件"而非"具备AI驱动能力的智能体"——价值在于可组合性和可进化性</li>
+</ul>
+
+<h3>4.4 技术栈对插件机制的影响</h3>
+<table>
+<tr><th>维度</th><th>仓颉（静态语言）</th><th>TypeScript（动态语言）</th></tr>
+<tr><td>类型安全</td><td>编译时类型检查，运行时安全</td><td>运行时类型检查，需strict模式</td></tr>
+<tr><td>插件加载</td><td>需预编译或WASM组件模型</td><td>可动态require/import</td></tr>
+<tr><td>热重载</td><td>静态语言天然不支持</td><td>动态语言天然支持</td></tr>
+<tr><td>AI代码生成</td><td>需专用语言多Skills协作</td><td>大模型训练数据丰富</td></tr>
+</table>
+<p>DSH选择TypeScript+Cordis，能实现运行时动态加载/卸载插件。agentskills-runtime选择仓颉静态语言，插件机制必然更偏向"编译时确定+运行时配置"的模式。两种路径各有优劣，不存在唯一正确答案。</p>
+
+<h3>4.5 WebMCP实证：插件与Skills融合的可实现性验证（架构师补充）</h3>
+<p>架构师补充了一个重要实证：2026年3月W3C发布了<strong>WebMCP协议体验版</strong>。agentskills-runtime配套的web项目（<code>apps/web-admin/web</code>）中已实现<strong>WebMCP + WebAgent + WebSkills</strong>机制，将Web应用声明成技能（Skill），使Agent可以直接操作Web应用。</p>
+<p>这个实证具有双重印证意义：</p>
+<ol>
+<li><strong>印证插件与Skills融合机制的可行性</strong>：Web应用被声明为技能后，Agent即可操作它——这正是"智能插件连接神经系统"理念的已落地形态。后续实现agentskills-runtime正式插件机制时，可吸纳DSH插件机制中已验证的成果（如可逆副作用、显式依赖管理）。</li>
+<li><strong>印证行为入口安全控制的理念</strong>：WebMCP正是采用大模型/Agent与人类使用行为对齐的方式使用Web应用——Agent像人类用户一样通过Web应用的前端入口（受应用自身权限体系约束）进行操作，而非绕过前端直接hack系统底层。这再次验证了"在行为入口处控制权限和安全"（RBAC前置）优于"放任操作+沙箱兜底"的设计选择。</li>
+</ol>
+<table>
+<tr><th>插件形态</th><th>连接层次</th><th>AI驱动能力</th><th>安全控制方式</th></tr>
+<tr><td>传统插件</td><td>血管、骨骼（机械结构）</td><td>无</td><td>接口层静态权限</td></tr>
+<tr><td>DSH插件（Cordis）</td><td>可替换组件+自感知</td><td>可包含Agent Loop</td><td>沙箱隔离+可逆副作用</td></tr>
+<tr><td><strong>WebMCP+WebSkills（已实证）</strong></td><td>神经系统（技能声明）</td><td>Agent直接操作Web应用</td><td>行为入口RBAC（与人对齐）</td></tr>
+<tr><td>agentskills-runtime智能插件（规划）</td><td>神经系统+确定性模板</td><td>插件自身AI驱动+可AICoding进化</td><td>RBAC+模板生成+注释隔离</td></tr>
+</table>
+
+<!-- ===== 五 ===== -->
+<h2 id="s5">五、自进化路径：生态级进化飞轮 vs 运行时可逆元编程</h2>
+
+<h3>5.1 两种自进化范式</h3>
+<table>
+<tr><th>维度</th><th>agentskills-runtime</th><th>deepseek-harness</th></tr>
+<tr><td>进化范围</td><td><strong>生态级</strong>：跨进程、社区协作、版本化分发</td><td><strong>运行时级</strong>：单进程内、即时、可逆</td></tr>
+<tr><td>进化机制</td><td>skill-creator生成SOP技能→技能市场分发→cangjie-coder重构→crudgen循环迭代</td><td>extensions包让Agent实时检视Cordis运行时、定义并运行动态插件包</td></tr>
+<tr><td>可逆性</td><td>通过版本控制和回滚实现</td><td>通过Cordis可逆副作用实现（卸载即回滚）</td></tr>
+<tr><td>进化评估</td><td>定性为主（北航团队后续定量验证）</td><td>定量导向（RHI论文、Reward Assignment、GRPO优化）</td></tr>
+</table>
+
+<h3>5.2 DSH的RHI理论前沿</h3>
+<p>根据Hao好聊趋势的深度分析，DSH的自进化理论基础是RHI（Recursive Harness Self-Improvement），当前学术界存在三大困境：</p>
+<ol>
+<li><strong>进化什么</strong>（表示问题）：DSH的答案是"一切皆插件"——把Harness切成有稳定语义、可独立干预、可撤销的离散单元</li>
+<li><strong>怎么进化</strong>（组合问题）：UC Berkeley研究证实"无固定Harness在所有场景稳定最好"</li>
+<li><strong>如何递归</strong>（学习问题）：Harness-R1论文训练了9B Harness Engineer模型实现嵌套元学习</li>
+</ol>
+<p>DSH的核心价值在于：通过可回退效应和显式依赖的插件，为Agentic RL提供了更稳定的实验状态和更清楚的干预边界——这让GRPO等group-relative方法在Agent环境中的"公平比较"成为可能。</p>
+
+<h3>5.3 agentskills-runtime的进化飞轮</h3>
+<pre><code>agentskills-runtime 自进化飞轮：
+
+  skill-creator → 生成SOP技能
+       ↓
+  技能市场分发（去中心化）
+       ↓
+  cangjie-coder重构适配（专用语言多Skills编排协作）
+       ↓
+  crudgen循环迭代（确定性代码生成）
+       ↓
+  回到runtime运行 → 收集反馈
+       ↓
+  skill-curator审查/归档/优化
+       ↓
+  （回到skill-creator，进化飞轮继续）</code></pre>
+
+<p>关键特征：确定性代码生成（crudgen）确保进化基底高质量；专用语言多Skills编排协作确保AI能力聚焦推理和创造；社区协作让进化不依赖单一进程；skill-curator机制提供自动质量管控。</p>
+
+<div class="highlight-box highlight-green">
+<p><strong>互补性</strong>：DSH的运行时自进化更适合快速实验、A/B测试、实时适应特定任务；agentskills-runtime的生态级进化更适合长期积累、社区协作、企业级生产。两者并非互斥。</p>
+</div>
+
+<!-- ===== 六 ===== -->
+<h2 id="s6">六、存量系统升级：UMI渐进式路径 vs 破坏式创新</h2>
+
+<h3>6.1 UMI架构：渐进式+AI升级的可行路径</h3>
+<blockquote>
+<p>UMI就是在分布式系统间一致性同步数据的设计规范，可以看作是对Restful架构的一个有益补充，Restful只约定了"通信"没有约定"编码"，UMI补充约定了"编码"。利用数据库的机制，在分布式系统间垫了一层统一的ORM层并在模型层中集成了通信，虽然增加了一些代码量，但是获得了幂等和一致的SQL算法等特性，可以形成<strong>可编程的分布式数据总线</strong>。</p>
+</blockquote>
+
+<pre><code>存量系统（MySQL/PostgreSQL/Oracle/...）
+        │
+        ▼
+  UMI ORM层（可编程分布式数据总线）
+        │
+        ├── 从数据库结构自动生成全套CRUD代码（crudgen）
+        ├── 前后端模型自动同构（crudweb）
+        ├── AI Agent通过MCP Server适配器接入（uctoo_api_mcp_server）
+        └── 渐进式+AI升级，无需重写存量系统</code></pre>
+
+<p>架构师已实证的案例：某客户项目复用原有MySQL数据库70多张表和几百万条历史数据，通过UMI适配实现从APP到小程序的迁移，同时叠加AI Agent能力。</p>
+
+<h3>6.2 两种路径的汇合点</h3>
+<blockquote>
+<p>deepseek-harness更偏向于采用了一种破坏式创新的方案，也许通过一切皆插件的堆叠演进，也能实现传统开发框架的所有能力，最终和AI驱动开发框架理念在某个软件形态的中间地带汇合。</p>
+</blockquote>
+<p>两种路径的汇合点可能出现在：DSH向下沉淀确定性能力（已有54个工具、记忆系统等框架组件）；agentskills-runtime向上增加可组合性（规划的插件+Skills融合机制）。实现路径的选择与资源禀赋密切相关。</p>
+
+<!-- ===== 七 ===== -->
+<h2 id="s7">七、AI生产力公式与代码生成实证</h2>
+
+<h3>7.1 AI生产力三位一体公式</h3>
+<blockquote>
+<p>AI生产力 = AI IDE + 大模型 + AI驱动开发框架</p>
+</blockquote>
+<p>三者缺一不可，但当前业界的主要资源和关注点集中在AI IDE和大模型上，明显忽略了AI驱动开发框架的重要作用。核心洞见：<strong>当前AI辅助开发生成的代码绝大部分属于传统软件范畴（确定性特性的软件），用包含概率的AI来生成所有代码是大材小用。</strong></p>
+
+<h3>7.2 仓颉代码生成的实证验证</h3>
+<p>架构师在2025年12月实证了：不增训、不微调，仅用大模型通用能力+合理工作流程，就能生成符合仓颉编程语言规范的代码。<strong>北航团队2026年8月的CangjieBench论文定量验证了这一思路：</strong></p>
+<table>
+<tr><th>方法</th><th>GPT-5 pass@1</th><th>Token消耗</th></tr>
+<tr><td>直接生成</td><td>4.3%</td><td>低</td></tr>
+<tr><td>语法约束生成</td><td><strong>53.8%</strong> (+1149%)</td><td>~2,795</td></tr>
+<tr><td>RAG（代码检索）</td><td>31.3%</td><td>中</td></tr>
+<tr><td>Agent（自主查阅+编码）</td><td><strong>77.6%</strong></td><td>~391,745 (140x)</td></tr>
+</table>
+<p>北航论文的结论"简单任务用语法约束，复杂任务切Agent"与架构师9个月前提出的"专用语言多Agent/多Skills协作"思路完全一致。</p>
+
+<h3>7.3 crudgen的进化历程</h3>
+<table>
+<tr><th>版本</th><th>方案</th><th>结果</th></tr>
+<tr><td>V1</td><td>自然语言描述生成</td><td>一塌糊涂，总有微小差异</td></tr>
+<tr><td>V2</td><td>模板+脚本替换</td><td>仍不准确，引入不确定性</td></tr>
+<tr><td>V3</td><td>确定性命令行工具</td><td><strong>100%准确，零token消耗</strong></td></tr>
+</table>
+<p>这个案例完美诠释了"确定性优先，AI增强"原则：crudgen负责确定性代码生成（100%准确），cangjie-coder技能负责AI驱动的代码优化和胶水代码生成。</p>
+
+<!-- ===== 八 ===== -->
+<h2 id="s8">八、工程成熟度与路线图对比</h2>
+
+<h3>8.1 当前状态对比</h3>
+<table>
+<tr><th>维度</th><th>agentskills-runtime</th><th>deepseek-harness</th></tr>
+<tr><td>版本</td><td>v0.0.24</td><td>开发者预览（v0.1）</td></tr>
+<tr><td>开发模式</td><td>全年无休+免费token极限开发</td><td>DeepSeek团队专职开发</td></tr>
+<tr><td>工程质量</td><td>SDD规范驱动，架构清晰但部分模块为脚手架</td><td>单文件100%覆盖率门禁，双语文档，doc-sync门禁</td></tr>
+<tr><td>社区热度</td><td>国内开源社区，AtomGit+GitHub双平台</td><td>2天9.5万star，社区插件涌现</td></tr>
+<tr><td>产品化</td><td>管理后台+PC桌面客户端+金融黑客松参赛</td><td>Web UI+CLI+Profile/Bundle/Patch配置体系</td></tr>
+</table>
+
+<h3>8.2 DSH的路线图</h3>
+<ol>
+<li><strong>模型与Harness共同进化</strong>：利用DeepSeek-V4模型特性，实现深度适配</li>
+<li><strong>五大核心能力</strong>：智能上下文管理、长期记忆系统、完整工具编排、多子Agent协同、自进化能力</li>
+<li><strong>从API服务商到数字劳动力平台</strong>：按"完成任务"而非"消耗Token"定价</li>
+<li><strong>Plugin Store生态</strong>：已内置100+插件，预留Plugin Store</li>
+<li><strong>RHI研究前沿</strong>：为Agentic RL提供更稳定的实验状态</li>
+</ol>
+
+<h3>8.3 agentskills-runtime的路线图</h3>
+<p>根据<code>.codeartsdoer/specs/goai2026/gap-analysis.md</code>：</p>
+<ul>
+<li><strong>P0</strong>：AgentTeams分层架构、DAG编排引擎、执行证据链、AI驱动开发全流程Demo、技能组合引擎、SDD技能集、全栈代码生成闭环、cangjie-coder agents子目录、专用语言多Skills编排协作</li>
+<li><strong>P1</strong>：记忆持久化、技能自进化闭环(Curator)、协同技能集、Agent Kanban、测试脚本动态生成、WASM安全沙箱落地</li>
+<li><strong>长期</strong>：插件与Skills融合机制、记忆提供者插件体系、RepoMap代码库智能、Agent动态生成</li>
+</ul>
+
+<h3>8.4 资源禀赋与路径选择</h3>
+<blockquote>
+<p>实现路径的选择不同，也和两方的各自资源有必然的联系。</p>
+</blockquote>
+<p>DSH背靠DeepSeek（估值数百亿美元），可选择"先做理论框架、再做产品"的路径。agentskills-runtime是独立开源项目，必须选择"先做可用产品、再做理论深化"的路径。两种路径都是合理的。</p>
+
+<!-- ===== 九 ===== -->
+<h2 id="s9">九、AI治理视角</h2>
+
+<h3>9.1 从Agentic Profile框架看两个项目</h3>
+<p>结合Google DeepMind在Nature发表的"Agentic Profiles for Effective AI Governance"论文，两个项目在四个治理维度上的表现：</p>
+<table>
+<tr><th>治理维度</th><th>agentskills-runtime</th><th>deepseek-harness</th></tr>
+<tr><td>自主性(Autonomy)</td><td>中：Agent受RBAC约束，行为入口受控</td><td>高：Agent可自由操作文件系统、执行命令</td></tr>
+<tr><td>效能(Efficacy)</td><td>中：确定性代码生成+AI增强，因果影响可控</td><td>高：完整工具链+沙箱执行，因果影响范围大</td></tr>
+<tr><td>目标复杂度(GC)</td><td>中高：支持DAG编排、多Agent协作、全栈代码生成</td><td>高：支持多子Agent协同、复杂任务分解</td></tr>
+<tr><td>通用性(Generality)</td><td>中：聚焦企业级应用+国产技术栈</td><td>高：通用Agent框架，多模型支持</td></tr>
+</table>
+<p>DeepMind论文的核心洞见"更强的Agent不一定需要更多治理，关键在于能力类型对应的治理方式"——支持了agentskills-runtime的安全设计选择：通过RBAC在行为入口控制权限是一种与Agent能力类型匹配的治理方式。</p>
+<p><strong>分层监管的补充澄清（架构师反馈）</strong>：不能简单说"agentskills-runtime实现了智能体互联国标就更合规"。agentskills-runtime对国标同样是分层实现的——Agent只在本地运行时不涉及智能体互联国标；如果要互联对接，就应遵循国标。这种"按能力与部署范围分层适用监管"的思路，与Agentic Profile框架"按能力类型匹配治理方式"的理念一致：治理强度应与Agent实际的能力维度和部署边界对齐，而非一刀切。</p>
+
+<h3>9.2 AI全球治理话语权：从跟跑到定义（架构师补充背景）</h3>
+<ol>
+<li><strong>WAIC 2026的主题即AI全球治理</strong>。开幕式主席主旨发言提出四点意见：坚持开放共赢驱动创新发展、强化风险意识确保安全可控、鼓励包容并蓄促进文明互鉴、倡导和衷共济完善全球治理。agentskills-runtime的实践（全链路国产自主可控、RBAC安全可控、渐进式+AI升级）与四点意见高度契合——项目本质上是在AIAgent领域用国产技术定义新时代的技术话语权，类似芯片制造领域"韬定律"以"时间缩微"替代"几何缩微"、打破以制程定义先进芯片的话语权垄断。</li>
+<li><strong>Agentic Profile论文的话语权意涵</strong>。该论文发表在Nature、具有很强的学术影响力，客观上是在参与乃至争夺AI治理的国际话语权。对应的，中国也应有自己的可量化、可落地、分层级的AI治理体系。agentskills-runtime的分层RBAC治理、WebMCP行为对齐、不可变基础设施兜底等实践，正是这种可落地治理体系的工程化样本。</li>
+<li><strong>OpenClaw安全事件的先验印证</strong>。架构师2026年3月7日发表《AgentSkills最佳实践》，呼吁监管层封禁不安全的OpenClaw——当时与热捧OpenClaw的氛围格格不入，但3月8日人民日报和工信部等主管部门即发文提示OpenClaw安全风险。这印证了"安全可控地发展AI"不仅是政策要求，也是可预判的技术规律：放任Agent以hack系统方式操作的路线终将触碰监管红线，而行为入口受控、与人类使用行为对齐的路线具备监管友好的先天结构。</li>
+<li><strong>治理维度的双向输出</strong>。DeepMind的四维框架为治理提供了共同语言，DSH也发表了相关论文。agentskills-runtime的探索成果同样具备论文化潜力——需要从高水平技术博客规范化为正式论文，在Agent治理框架、Agent定义、软件自进化能力的定量评估、AI全球治理等方面输出成果。AI驱动开发框架（软件系统整体视角）与一切皆插件（模型核心视角）在治理理念上殊途同归。</li>
+</ol>
+
+<h3>9.3 人机共生的终极形态</h3>
+<blockquote>
+<p>目前无论我们的AI驱动开发框架还是deepseek-harness的一切皆插件都还是<strong>人类主导的软件实现方案</strong>，包括但不限于软件架构、标准、协议、通信方式甚至是编程语言等都还是人类主导设计。人类还从来没有资源多到可以让AI自己从零设计数字世界的终极方案。</p>
+</blockquote>
+<p>这个观察指向了一个根本性命题：当前的AI Agent基础设施都是<strong>人类为AI设计的脚手架</strong>，而非AI自己设计的原生方案。DSH在"让AI自己进化软件架构"这条路上走得更远；agentskills-runtime更注重人类架构师的顶层设计+AI的执行能力。两者都尚未达到"AI自己从零设计数字系统"的终极形态。</p>
+
+<!-- ===== 十 ===== -->
+<h2 id="s10">十、综合对比矩阵</h2>
+
+<h3>10.1 假设能力已落地的完整对比</h3>
+<table>
+<tr><th>对比维度</th><th>agentskills-runtime（假设已落地）</th><th>deepseek-harness</th></tr>
+<tr><td><strong>设计理念</strong></td><td>双驱动战斗机：软件系统整体考量</td><td>高性能发动机：大模型核心</td></tr>
+<tr><td><strong>无AI可用性</strong></td><td>完备生产框架（CRUD+权限+同步+调度）</td><td>几乎无用</td></tr>
+<tr><td><strong>安全策略</strong></td><td>RBAC行为入口控制+WASM沙箱+不可变基础设施</td><td>Cordis Runtime+真实沙箱+能力缝隙门控</td></tr>
+<tr><td><strong>插件机制</strong></td><td>AI驱动智能插件（Skills融合+确定性模板生成）</td><td>一切皆插件（Cordis时空可组合+可逆副作用）</td></tr>
+<tr><td><strong>自进化</strong></td><td>生态级飞轮（skill-creator→市场→curator循环）</td><td>运行时RHI（可逆元编程+GRPO优化）</td></tr>
+<tr><td><strong>存量系统升级</strong></td><td>UMI渐进式路径（ORM数据总线+MCP适配）</td><td>破坏式创新（插件堆叠演进）</td></tr>
+<tr><td><strong>代码生成</strong></td><td>确定性优先（crudgen 100%准确+AI胶水代码）</td><td>AI优先（模型生成+工具辅助）</td></tr>
+<tr><td><strong>技术栈</strong></td><td>仓颉（静态、国产、高性能）</td><td>TypeScript（动态、生态丰富）</td></tr>
+<tr><td><strong>多Agent协作</strong></td><td>AgentTeams分层+DAG编排+协同技能</td><td>子Agent委派+Kanban+并行编排</td></tr>
+<tr><td><strong>技能系统</strong></td><td>SKILL.md一等公民+国标互联+技能市场</td><td>轻量能力族+插件生态</td></tr>
+<tr><td><strong>标准合规</strong></td><td>GB/Z 185国标+AgentSkills标准+MCP</td><td>AgentSkills标准+MCP</td></tr>
+<tr><td><strong>理论基础</strong></td><td>AI驱动开发框架（架构师原创范式）</td><td>Cordis时空可组合性+RHI理论</td></tr>
+<tr><td><strong>终极目标</strong></td><td>软件系统自进化→人机共生→AGI</td><td>模型与Harness共同进化→AGI</td></tr>
+</table>
+
+<h3>10.2 核心差异化总结</h3>
+
+<div class="highlight-box highlight-green">
+<p><strong>agentskills-runtime 的独特优势：</strong></p>
+<ol>
+<li><strong>双驱动架构</strong>：无AI时仍是完备生产框架，所有harness类项目不具备的</li>
+<li><strong>UMI渐进式升级</strong>：海量存量数字系统的+AI升级改造路径</li>
+<li><strong>确定性代码生成</strong>：crudgen的100%准确率+零token消耗</li>
+<li><strong>国产自主可控</strong>：仓颉语言+全链路国产技术栈</li>
+<li><strong>企业级安全</strong>：RBAC统一权限体系+Agent受控于人类一致的权限约束</li>
+<li><strong>标准合规</strong>：GB/Z 185智能体互联国标</li>
+<li><strong>专用语言多Skills编排协作</strong>：已实证的仓颉代码生成方案</li>
+</ol>
+</div>
+
+<div class="highlight-box highlight-purple">
+<p><strong>deepseek-harness 的独特优势：</strong></p>
+<ol>
+<li><strong>理论硬核</strong>：Cordis时空可组合性论文+RHI理论前沿</li>
+<li><strong>运行时可组合性</strong>：一切皆插件+可逆副作用+显式依赖管理</li>
+<li><strong>真实安全沙箱</strong>：bwrap/Landlock/Seatbelt后端真实落地</li>
+<li><strong>工程质量极高</strong>：100%覆盖率门禁+运行时不变量断言+doc-sync门禁</li>
+<li><strong>自进化基础</strong>：为Agentic RL/GRPO提供稳定实验状态和干预边界</li>
+<li><strong>社区生态</strong>：2天9.5万star+插件涌现+Plugin Store</li>
+<li><strong>模型协同</strong>：与DeepSeek-V4模型深度适配</li>
+</ol>
+</div>
+
+<!-- ===== 十一 ===== -->
+<h2 id="s11">十一、结论</h2>
+
+<h3>11.1 两种基因答案的深层理解</h3>
+<p>经过第二轮深度分析，对两个项目的理解从"设计基因相反"深化为"<strong>同一终极目标的两条正交路径</strong>"：</p>
+<ul>
+<li><strong>agentskills-runtime</strong>：从确定性软件系统出发，向内叠加AI能力，建造"双驱动战斗机"——确定性框架提供安全骨架和可靠基底，AI提供智能适应性。路径特征是<strong>渐进式、整体性、企业级友好</strong>。</li>
+<li><strong>deepseek-harness</strong>：从AI模型核心出发，向外沉淀确定性能力，打造"高性能发动机"——Harness作为模型与外部世界之间的组合泛化器，通过插件化实现可进化性。路径特征是<strong>破坏式、模块化、研究前沿</strong>。</li>
+</ul>
+<p>两者不是"谁取代谁"的关系，而是<strong>同一问题的两种基因答案</strong>，最终可能在某个中间地带汇合。</p>
+
+<h3>11.2 对架构师建议</h3>
+<ol>
+<li><strong>坚持双驱动差异化叙事</strong>：这是agentskills-runtime最核心的差异化——所有harness类项目在无AI时都无法运行，这是理念层面的根本优势。</li>
+<li><strong>UMI是杀手锏</strong>：世界上已有海量存量数字系统需要+AI升级，UMI渐进式路径是DSH无法复制的独特价值。</li>
+<li><strong>安全叙事调整</strong>：不要将"沙箱未落地"视为缺陷，而应定位为"设计优先级决策"——RBAC行为入口控制是第一道防线，沙箱是补充层。</li>
+<li><strong>插件机制可借鉴DSH</strong>：Footprint Ladder决策阶梯、可逆副作用概念、定量评估方法值得参考。</li>
+<li><strong>RHI理论值得关注</strong>：DSH背后的RHI理论前沿（特别是Harness-R1的嵌套元学习）可能为agentskills-runtime的自进化机制提供思路。</li>
+<li><strong>北航论文是背书</strong>：CangjieBench论文定量验证了架构师9个月前的定性分析，应在对外叙事中引用。</li>
+</ol>
+
+<h3>11.3 终极思考</h3>
+<blockquote>
+<p>AI还没有自己设计该如何最大化发挥AI原生能力，人类从大量AI原生的方案中择优选择，也许那才是超出人类架构师想象的终极方案。</p>
+</blockquote>
+<p>无论是AI驱动开发框架还是一切皆插件，都是人类架构师为AI设计的脚手架。真正的AI原生数字系统，可能需要AI自己来设计——这或许才是通往AGI的终极路径。在此之前，我们能做的，是构建尽可能好的脚手架，为那一天的来临做好准备。</p>
+
+<div class="section-break">· · ·</div>
+
+<h3>附录C：第二轮分析新增参考资料</h3>
+
+<h4>架构师系列文章与演讲</h4>
+<ol>
+<li>《人工智能软件工程方法论》(2025.11) — mp.weixin.qq.com/s/woq7c8cxvr8TYv1NkNH17A</li>
+<li>《只需免费AI就能用仓颉开发强大Agent》(2025.12) — mp.weixin.qq.com/s/jcUVuj7bLs9DaHLhol4-Hg</li>
+<li>《仓颉智能体框架设计哲学》(2026.04) — mp.weixin.qq.com/s/bLxSXDP_nU1_xTGFIun7-w</li>
+<li>《继harness后的新一代Agent范式--AI驱动开发框架》(2026.04) — 本地docx文件</li>
+<li>WAIC 2026 主题演讲《采用国产编程语言的新型AIAgent开源项目》(2026.07) — 本地pptx文件</li>
+<li>仓颉社区workshop分享PPT (2025.12) — 本地pptx文件</li>
+<li>《AgentSkills最佳实践》(2026.03) — mp.weixin.qq.com/s/i8fLma9i6UB5oxtYzmmg2w （呼吁封禁不安全的OpenClaw，次日获人民日报与工信部发文印证）</li>
+</ol>
+
+<h4>协议与工程实证</h4>
+<ol start="8">
+<li>W3C WebMCP协议体验版 (2026.03) — web-admin中WebMCP+WebAgent+WebSkills机制的实现印证插件/Skills融合可行性与行为入口安全理念</li>
+</ol>
+
+<h4>学术论文与验证</h4>
+<ol start="9">
+<li>北航CangjieBench论文 (2026.08, ESEM 2026) — mp.weixin.qq.com/s/9kdDowEj33bOeD5t7JfHGQ</li>
+<li>Google DeepMind "Agentic Profiles for Effective AI Governance" (Nature, 2026.08)</li>
+<li>MIT CSAIL "Language model harnesses are compositional generalizers" (2026.07)</li>
+<li>UC Berkeley "Automated Discovery Has No Universally Superior Harness" (2026.07)</li>
+<li>Harness-R1 论文 (2026.08)</li>
+</ol>
+
+<h4>DSH分析与路线图</h4>
+<ol start="14">
+<li>《DeepSeek的Harness，有一套新世界观｜Hao好聊趋势》— mp.weixin.qq.com/s/zm0m1YKbAWvO-b_YdPJGZQ</li>
+<li>SoloSoft DSH分析 — solosoft.dev/post/deepseek-harness-everything-is-a-plugin</li>
+<li>DSH未来发展方向分析 — 今日头条等多源信息</li>
+</ol>
+
+<h4>SDD工程文档</h4>
+<ol start="17">
+<li><code>.codeartsdoer/specs/goai2026/gap-analysis.md</code> — GOAI差距分析与夺冠需求规划</li>
+<li><code>.codeartsdoer/specs/goai2026/comp.md</code> — GOAI赛道要求</li>
+<li><code>.codeartsdoer/specs/goai2026/design-review.md</code> — 设计评审</li>
+<li><code>.codeartsdoer/specs/goai2026/decomposition-plan.md</code> — 分解计划</li>
+</ol>
+
+<div class="footer">
+<p>第二轮分析报告由 WorkBuddy 基于架构师反馈、系列文章、SDD工程文档、学术论文、业界分析等多源材料综合生成。本报告在"假设agentskills-runtime已落地规划能力"的前提下进行理念层面的全面对比，同时如实标注当前实现状态。2026-08-16 第二次更新：新增WebMCP实证（§4.5）、分层监管澄清与AI全球治理话语权背景（§9.1-9.2）。</p>
+<p>生成时间：2026-08-16（v2 更新）</p>
+</div>
+
+</body>
+</html>

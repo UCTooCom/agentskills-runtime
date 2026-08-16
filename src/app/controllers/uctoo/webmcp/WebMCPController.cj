@@ -193,13 +193,16 @@ public class WebMCPController {
             let isStream = parseStreamFlag(body)
             
             if (isStream) {
-                // 流式响应：使用分块传输编码
+                // 流式响应：v18修复去掉裸写 Transfer-Encoding: chunked 头
+                // 根因：裸写 chunked 头但 res.send() 单次发送完整 JSON，浏览器按 chunked 解析时遇到非法分块
+                //       → net::ERR_INVALID_CHUNKED_ENCODING（与 SSE /sse 端点同型根因）
+                // 修复：改用 Connection: close 让浏览器按"读到连接关闭即响应结束"的裸字节流模式解析，
+                //       避免分块编码校验失败。真正流式需用 SSE /sse 端点的 conn.write()+flush() 裸字节流。
                 LogUtils.info("WebMCP streaming response requested")
                 res.status(200)
                    .header("Content-Type", "application/json")
-                   .header("Transfer-Encoding", "chunked")
-                   .header("Connection", "keep-alive")
-                
+                   .header("Connection", "close")
+
                 // 使用异步方式处理流式响应
                 spawn {
                     let response = protocol.handleMessage(body)
@@ -632,7 +635,13 @@ public class WebMCPController {
         match (req.connection) {
             case Some(conn) =>
                 let controller = ConnectionController(conn)
-                controller.write(unsafe { "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\nAccess-Control-Allow-Origin: *\r\n\r\n".rawData() })
+                // v18修复：去掉裸写的 Transfer-Encoding: chunked 头，改用 SSE 标准的裸 keep-alive 字节流
+                // 根因：原裸写 chunked 头但后续 conn.write()+flush() 从不按 chunked 分块格式封装
+                //       （每块需 \r\n<块大小>\r\n 前缀 + \r\n 后缀，结束需 0\r\n\r\n），
+                //       浏览器按 chunked 解析时遇到裸 SSE 字节 → 非法分块 → net::ERR_INVALID_CHUNKED_ENCODING
+                // 修复：SSE 是无限流，不应声明 chunked（除非每块手动封装）。改用 Connection: close 让
+                //       浏览器按"读到连接关闭即响应结束"的裸字节流模式解析，避免分块编码校验失败。
+                controller.write(unsafe { "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n".rawData() })
                 req.takenOver = true
 
                 _sseConnectionManager.registerConnection(sessionId, { message: String =>
@@ -665,14 +674,17 @@ public class WebMCPController {
 
             case None =>
                 LogUtils.warn("[WebMCPController] SSE connection not available, falling back to res.send")
+                // v18修复：fallback 分支同样不声明 chunked，且只 send 一次完整响应避免重复写头/分块
                 res.status(200)
                    .header("Content-Type", "text/event-stream")
                    .header("Cache-Control", "no-cache")
-                   .header("Connection", "keep-alive")
+                   .header("Connection", "close")
                 setCorsHeaders(req, res)
 
+                // fallback 无法劫持连接做无限流，只能返回单次初始事件；后续实时事件依赖主分支的 conn.write()
+                LogUtils.warn("[WebMCPController] SSE fallback: connection not hijackable, real-time events will not be pushed (use main branch instead)")
                 _sseConnectionManager.registerConnection(sessionId, { message: String =>
-                    res.send(message)
+                    LogUtils.info("[WebMCPController] SSE fallback register (events will not be delivered without hijackable connection): ${message}")
                 })
 
                 LogUtils.info("[WebMCPController] SSE connection registered (fallback): sessionId=${sessionId}")

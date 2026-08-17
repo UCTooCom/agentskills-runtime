@@ -1,0 +1,56 @@
+{
+  "date": "2026-08-15",
+  "companies": [
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "market_factors": {
+        "close_price": 1341.99,
+        "change_pct": -0.98,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    },
+    {
+      "code": "000858",
+      "name": "五 粮 液",
+      "market_factors": {
+        "close_price": 73.75,
+        "change_pct": -1.82,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    },
+    {
+      "code": "300750",
+      "name": "宁德时代",
+      "market_factors": {
+        "close_price": 393.93,
+        "change_pct": -0.6,
+        "pe": 21.05,
+        "pb": 4.89,
+        "market_cap": 18225.7817,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    }
+  ]
+}

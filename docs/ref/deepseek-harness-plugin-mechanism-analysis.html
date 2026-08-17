@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek Harness 插件机制深度分析 — 与 agentskills-runtime 的对比研究</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --card: #ffffff;
+      --border: #e0e0e0;
+      --primary: #1a73e8;
+      --primary-light: #e8f0fe;
+      --danger: #d93025;
+      --danger-light: #fce8e6;
+      --success: #188038;
+      --success-light: #e6f4ea;
+      --warning: #e37400;
+      --warning-light: #fef7e0;
+      --text: #202124;
+      --text-secondary: #5f6368;
+      --code-bg: #f1f3f4;
+      --highlight: #fff8e1;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.8;
+      padding: 0;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #1a237e 0%, #1565c0 50%, #0277bd 100%);
+      color: white;
+      padding: 48px 0 40px;
+      text-align: center;
+    }
+    .header h1 { font-size: 2rem; margin-bottom: 12px; font-weight: 700; }
+    .header .subtitle { font-size: 1.1rem; opacity: 0.9; }
+    .header .meta { font-size: 0.85rem; opacity: 0.7; margin-top: 16px; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+
+    .toc {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 40px;
+    }
+    .toc h2 { font-size: 1.2rem; margin-bottom: 16px; color: var(--primary); }
+    .toc ol { padding-left: 20px; }
+    .toc li { margin-bottom: 6px; }
+    .toc a { color: var(--primary); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .toc .sub { padding-left: 20px; list-style-type: disc; }
+
+    section { margin-bottom: 48px; }
+
+    h2 {
+      font-size: 1.5rem;
+      color: var(--text);
+      border-bottom: 3px solid var(--primary);
+      padding-bottom: 8px;
+      margin-bottom: 24px;
+    }
+    h3 {
+      font-size: 1.2rem;
+      color: var(--primary);
+      margin: 28px 0 14px;
+    }
+    h4 {
+      font-size: 1.05rem;
+      color: var(--text);
+      margin: 20px 0 10px;
+    }
+
+    p { margin-bottom: 14px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+
+    .callout {
+      border-left: 4px solid;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 20px 0;
+    }
+    .callout-insight {
+      background: var(--primary-light);
+      border-color: var(--primary);
+    }
+    .callout-warning {
+      background: var(--warning-light);
+      border-color: var(--warning);
+    }
+    .callout-danger {
+      background: var(--danger-light);
+      border-color: var(--danger);
+    }
+    .callout-success {
+      background: var(--success-light);
+      border-color: var(--success);
+    }
+    .callout strong { display: block; margin-bottom: 4px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.92rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th {
+      background: var(--primary);
+      color: white;
+      font-weight: 600;
+    }
+    tr:nth-child(even) { background: #f8f9fa; }
+    tr:hover { background: var(--primary-light); }
+
+    code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      font-size: 0.88em;
+    }
+
+    pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 16px 0;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+    .kw { color: #cba6f7; }
+    .str { color: #a6e3a1; }
+    .cm { color: #6c7086; font-style: italic; }
+    .fn { color: #89b4fa; }
+    .tp { color: #f9e2af; }
+    .op { color: #89dceb; }
+
+    .diagram {
+      background: #f8f9fa;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-right: 6px;
+    }
+    .tag-dsh { background: #e8f5e9; color: #2e7d32; }
+    .tag-rt { background: #e3f2fd; color: #1565c0; }
+    .tag-cj { background: #fff3e0; color: #e65100; }
+    .tag-ts { background: #fce4ec; color: #c62828; }
+
+    ul { padding-left: 22px; margin-bottom: 14px; }
+    li { margin-bottom: 6px; }
+
+    .quote {
+      border-left: 4px solid var(--primary);
+      padding: 14px 20px;
+      margin: 20px 0;
+      background: var(--primary-light);
+      border-radius: 0 8px 8px 0;
+      font-style: italic;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 32px 0;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+      margin-top: 48px;
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 16px; }
+      .header { padding: 32px 16px; }
+      .header h1 { font-size: 1.5rem; }
+      pre { padding: 12px; font-size: 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="container">
+    <h1>DeepSeek Harness 插件机制深度分析</h1>
+    <div class="subtitle">与 agentskills-runtime 的对比研究 — 插件编排、可观测性、安全性与语言选型</div>
+    <div class="meta">2026-08-18 | 基于 DSH 源码 + SDD 文档 + 对比分析报告</div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- 目录 -->
+<div class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#ch1">DSH 插件机制：傻瓜式还是智能式？</a></li>
+    <li><a href="#ch2">大模型如何知道怎样使用 DSH 的插件？</a>
+      <ul class="sub">
+        <li><a href="#ch2-1">工具 Schema 注入</a></li>
+        <li><a href="#ch2-2">System Prompt 引导段落</a></li>
+        <li><a href="#ch2-3">三种呈现模式</a></li>
+        <li><a href="#ch2-4">运行时上下文注入</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch3">插件如何协作串联成工作流？</a>
+      <ul class="sub">
+        <li><a href="#ch3-1">Agent Loop 隐式串联</a></li>
+        <li><a href="#ch3-2">Workflow 元工具</a></li>
+        <li><a href="#ch3-3">Subagent 委派</a></li>
+        <li><a href="#ch3-4">Code Mode 程序化串联</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch4">Skill 机制如何编排和使用插件？</a></li>
+    <li><a href="#ch5">Agent 行为的可观测性和可审计性</a>
+      <ul class="sub">
+        <li><a href="#ch5-1">Append-Only 事件溯源</a></li>
+        <li><a href="#ch5-2">工具执行五阶段管线</a></li>
+        <li><a href="#ch5-3">系统提示词版本化审计</a></li>
+        <li><a href="#ch5-4">Code Mode 子调用审计</a></li>
+        <li><a href="#ch5-5">人机审批闭环</a></li>
+        <li><a href="#ch5-6">实时 UI 事件流</a></li>
+        <li><a href="#ch5-7">OpenTelemetry 导出</a></li>
+        <li><a href="#ch5-8">防护性机制汇总</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch6">安全模型对比：DSH vs agentskills-runtime</a>
+      <ul class="sub">
+        <li><a href="#ch6-1">DSH 是否在增强模型的 hack 能力？</a></li>
+        <li><a href="#ch6-2">DSH 的七层安全机制</a></li>
+        <li><a href="#ch6-3">根本性张力分析</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch7">编程语言选型对 Agent 安全性的影响</a>
+      <ul class="sub">
+        <li><a href="#ch7-1">AOT 编译 vs JIT 动态性</a></li>
+        <li><a href="#ch7-2">类型系统对比</a></li>
+        <li><a href="#ch7-3">空安全</a></li>
+        <li><a href="#ch7-4">访问控制与反射限制</a></li>
+        <li><a href="#ch7-5">unsafe 边界</a></li>
+        <li><a href="#ch7-6">继承控制</a></li>
+        <li><a href="#ch7-7">并发安全</a></li>
+        <li><a href="#ch7-8">系统性对比全景</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch8">大模型能否绕过安全防线？</a>
+      <ul class="sub">
+        <li><a href="#ch8-1">动态语言的结构性绕过路径</a></li>
+        <li><a href="#ch8-2">DSH 防线的实质阻力</a></li>
+        <li><a href="#ch8-3">静态语言的结构性消除</a></li>
+        <li><a href="#ch8-4">仓颉路线的残余风险</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch9">结论与社会工程学攻击面</a></li>
+  </ol>
+</div>
+
+<!-- ==================== 第一章 ==================== -->
+<section id="ch1">
+  <h2>一、DSH 插件机制：傻瓜式还是智能式？</h2>
+
+  <div class="callout callout-insight">
+    <strong>结论先行</strong>
+    DSH 的插件设计哲学是 <b>AI-First</b>——它不是在写死流程让插件按固定顺序执行，而是让大模型自己决定何时调用哪个插件、怎样组合。这一点与 agentskills-runtime 的「确定性优先」设计形成鲜明对比。DSH 通过<b>三种约束机制</b>让大模型在自由度与可控性之间取得平衡。
+  </div>
+</section>
+
+<!-- ==================== 第二章 ==================== -->
+<section id="ch2">
+  <h2>二、大模型如何知道怎样使用 DSH 的插件？</h2>
+  <p>DSH 通过<b>四层信息注入</b>让 LLM 理解和使用插件：</p>
+
+  <h3 id="ch2-1">第 1 层：工具 Schema（Function Calling 定义）</h3>
+  <p>每个插件通过 <code>defineTool()</code> 注册时，会提供结构化的 JSON Schema 描述：</p>
+<pre><code><span class="fn">ctx.tools.register</span>(<span class="fn">defineTool</span>({
+  <span class="str">name</span>: <span class="str">'read'</span>,
+  <span class="str">description</span>: <span class="str">'Read a UTF-8 text file and return line-numbered content.'</span>,
+  <span class="str">parameters</span>: {
+    file_path: { <span class="str">type</span>: <span class="str">'string'</span>, <span class="str">required</span>: <span class="kw">true</span>, <span class="str">description</span>: <span class="str">'...'</span> },
+    offset:    { <span class="str">type</span>: <span class="str">'number'</span>, <span class="str">description</span>: <span class="str">'...'</span> },
+  },
+  <span class="str">output</span>: { schema: { <span class="str">type</span>: <span class="str">'string'</span> }, ... },
+  <span class="kw">async</span> <span class="fn">execute</span>(args, exec) { <span class="cm">/* ... */</span> },
+}))</code></pre>
+  <p>这些 Schema 在 LLM 请求时通过 <code>SystemPrompt.assemble()</code> 收集、排序，注入为 function calling 定义。</p>
+
+  <h3 id="ch2-2">第 2 层：System Prompt 引导段落</h3>
+  <p>每个插件在注册时，会同时向系统提示词注入一段<b>使用指引</b>：</p>
+<pre><code><span class="fn">ctx.systemPrompt.section</span>({
+  <span class="str">name</span>: <span class="str">'tool:read'</span>,
+  <span class="str">order</span>: <span class="op">100</span>,
+  <span class="str">text</span>: <span class="str">'Use the read tool — not shell commands like cat — to inspect text files.'</span>,
+})</code></pre>
+  <p>这告诉模型<b>什么时候该用、什么时候不该用</b>这个工具，而不只是告诉它有什么工具。</p>
+
+  <h3 id="ch2-3">第 3 层：三种呈现模式（Presentation Mode）</h3>
+  <table>
+    <tr><th>模式</th><th>模型看到的</th><th>适用场景</th></tr>
+    <tr><td><b>Native</b></td><td>所有工具的完整 Function Calling Schema</td><td>模型能力强、工具数量少</td></tr>
+    <tr><td><b>Code</b></td><td>仅暴露 <code>run_code</code> 一个工具 + 生成的 TS/Python SDK 声明</td><td>工具多、需要模型写程序串联调用</td></tr>
+    <tr><td><b>Both</b></td><td>同时暴露 Native Schema + Code SDK</td><td>混合策略</td></tr>
+  </table>
+
+  <h3 id="ch2-4">第 4 层：运行时上下文注入</h3>
+  <p><code>RuntimeContext</code> 在每步动态注入当前时间、工作目录、agent 身份等快照，以 user-role 消息形式发送。</p>
+</section>
+
+<!-- ==================== 第三章 ==================== -->
+<section id="ch3">
+  <h2>三、插件如何协作串联成工作流？</h2>
+  <p>DSH 有<b>三种工作流串联机制</b>，从简单到复杂：</p>
+
+  <h3 id="ch3-1">机制 1：Agent Loop 隐式串联（最常用）</h3>
+  <p><code>ReactLoopAgent</code> 的核心循环：</p>
+  <div class="diagram">turn → step → LLM 推理 → tool_calls → 执行工具 → 结果回传 → 下一步 step → ...</div>
+  <p>模型在每一步看到所有前序工具的执行结果，然后决定下一步调用什么。<b>串联逻辑完全在模型的"头脑"中</b>，不靠硬编码流程。</p>
+
+  <h3 id="ch3-2">机制 2：Workflow 元工具（显式编排）</h3>
+  <p><code>tool-workflow</code> 是一个<b>元工具</b>，让模型编写 JavaScript 编排脚本：</p>
+<pre><code><span class="cm">// 模型生成的 workflow 脚本</span>
+<span class="kw">const</span> results = <span class="kw">await</span> <span class="fn">parallel</span>([
+  () => <span class="fn">agent</span>(<span class="str">'搜索前端 bug'</span>),
+  () => <span class="fn">agent</span>(<span class="str">'搜索后端 bug'</span>),
+])
+<span class="kw">const</span> report = <span class="kw">await</span> <span class="fn">agent</span>(<span class="str">'合并分析'</span>, { context: results })
+<span class="fn">log</span>(report)</code></pre>
+  <p>编排原语：<code>agent()</code> 派生子 Agent、<code>pipeline()</code> 多阶段流水线、<code>parallel()</code> 并发+屏障同步。</p>
+
+  <h3 id="ch3-3">机制 3：Subagent 委派（分治协作）</h3>
+  <ul>
+    <li><b>subagent</b>（spawn）：创建独立会话的子 Agent，有自己的上下文和工具集</li>
+    <li><b>subagent_fork</b>（fork）：从当前上下文分叉，共享父 Agent 的对话历史</li>
+  </ul>
+
+  <h3 id="ch3-4">机制 4：Code Mode 程序化串联</h3>
+  <p>在 Code 模式下，模型写完整代码在沙箱中调用工具 SDK：</p>
+<pre><code><span class="cm">// 模型生成的代码</span>
+<span class="kw">const</span> files = <span class="kw">await</span> tools.<span class="fn">glob</span>({ pattern: <span class="str">'**/*.ts'</span> })
+<span class="kw">for</span> (<span class="kw">const</span> f <span class="kw">of</span> files) {
+  <span class="kw">const</span> content = <span class="kw">await</span> tools.<span class="fn">read</span>({ file_path: f })
+  <span class="kw">if</span> (content.<span class="fn">includes</span>(<span class="str">'deprecated'</span>)) {
+    <span class="kw">await</span> tools.<span class="fn">edit</span>({ file_path: f, ... })
+  }
+}</code></pre>
+</section>
+
+<!-- ==================== 第四章 ==================== -->
+<section id="ch4">
+  <h2>四、Skill 机制如何编排和使用插件？</h2>
+
+  <div class="card">
+    <h4>Skill 的本质</h4>
+    <p>Skill 是 <b>Markdown 指令文档</b>（SKILL.md），不是可执行插件。它包含 YAML 前置元数据（<code>name</code>、<code>description</code>）和详细的使用指南、最佳实践。</p>
+  </div>
+
+  <h3>Skill 的调用流程</h3>
+  <div class="diagram">1. 模型看到 skill 目录，判断需要 → 调用 skill(name)
+2. ctx.skills.get(name) 加载完整 SKILL.md
+3. exec.deferContext() 将 SKILL.md 全文注入为 user 消息
+4. 模型阅读指令 → 按照指令调用各种工具执行操作</div>
+
+  <div class="callout callout-insight">
+    <strong>关键理解</strong>
+    Skill 不直接调用插件/工具，它<b>教会模型怎样组合使用工具</b>。模型读取 Skill 后，获得了新的"做事方法"，然后用已有的工具去执行。
+  </div>
+
+  <h3>Skill 与 Plugin 的关系</h3>
+  <div class="diagram">┌──────────────────────────────────────────────────┐
+│                    Skill (知识层)                  │
+│  SKILL.md: "如何开发 Cordis 插件"                  │
+│  → 告诉模型步骤、最佳实践、注意事项                   │
+└─────────────────────┬────────────────────────────┘
+                      │ 模型阅读后理解方法论
+                      ▼
+┌──────────────────────────────────────────────────┐
+│                 Plugin/Tool (执行层)               │
+│  read / write / edit / shell / grep / ...         │
+│  → 模型按照 Skill 教的方法调用这些工具               │
+└──────────────────────────────────────────────────┘</div>
+
+  <h3>与 agentskills-runtime SDD 的对比</h3>
+  <table>
+    <tr><th>维度</th><th><span class="tag tag-dsh">DSH</span>（智能式）</th><th><span class="tag tag-rt">agentskills-runtime</span>（确定性优先 + AI 增强）</th></tr>
+    <tr><td>编排决策者</td><td>大模型实时推理</td><td>PluginManager 按生命周期状态机驱动</td></tr>
+    <tr><td>工具发现</td><td>Schema 注入 prompt + SDK 生成</td><td><code>@Plugin</code> 注解 + 反射发现 + <code>plugins.yaml</code> 配置</td></tr>
+    <tr><td>协作方式</td><td>Agent Loop 隐式串联 + Workflow 脚本</td><td>EventBus waterfall/emit 事件链</td></tr>
+    <tr><td>Skill 角色</td><td>教模型怎么用工具的知识文档</td><td><code>SKILL.md</code> 自动注册 + <code>SkillBridge</code> 双向桥接</td></tr>
+    <tr><td>安全控制</td><td>工具级 restrict filter + approval seam</td><td>RBAC 行为入口控制 + 沙箱兜底</td></tr>
+    <tr><td>进化方式</td><td>生态级进化飞轮（社区贡献 → 市场分发）</td><td>自进化闭环（skill-creator → 市场 → cangjie-coder → crudgen）</td></tr>
+  </table>
+</section>
+
+<!-- ==================== 第五章 ==================== -->
+<section id="ch5">
+  <h2>五、Agent 行为的可观测性和可审计性</h2>
+
+  <div class="callout callout-insight">
+    <strong>核心设计哲学</strong>
+    DSH 采用 Event-Sourcing 架构——所有行为都是不可变事件，会话日志是唯一事实来源。大模型的编排虽然由推理驱动，但每一步推理的输入、输出、决策、执行结果全部被记录。
+  </div>
+
+  <h3 id="ch5-1">5.1 Append-Only 事件溯源</h3>
+  <p>整个会话是一个<b>只追加的事件日志</b>，定义了 <b>42 种事件类型</b>：</p>
+  <table>
+    <tr><th>事件类别</th><th>事件类型</th><th>记录内容</th></tr>
+    <tr><td>轮次生命周期</td><td><code>turn/start</code>、<code>turn/end</code></td><td>开始/结束原因（completed/aborted/error/max-tokens/interrupted）</td></tr>
+    <tr><td>步骤边界</td><td><code>step/start</code>、<code>step/end</code></td><td>每步 = 一次模型调用 + 工具执行</td></tr>
+    <tr><td>用户输入</td><td><code>user/message</code></td><td>用户消息、注入的上下文、目标续传</td></tr>
+    <tr><td>模型输出</td><td><code>assistant/chunk</code>、<code>assistant/message</code></td><td>原始流式块 + 组装后的完整消息 + token 用量</td></tr>
+    <tr><td>工具调用</td><td><code>tool/call</code>、<code>tool/result</code></td><td>工具名、原始参数、callId、执行结果、错误信息</td></tr>
+    <tr><td>请求快照</td><td><code>request/header</code>、<code>request/context</code></td><td>完整系统提示词 + 工具 Schema + LLM 配置</td></tr>
+    <tr><td>审批</td><td><code>approval/asked</code>、<code>approval/decided</code></td><td>每次人机交互审批的完整问答对</td></tr>
+    <tr><td>代码模式</td><td><code>tool/code-dispatch</code>、<code>tool/code-dispatch-start</code></td><td>代码中每个子工具调用的父子关系、参数、结果</td></tr>
+    <tr><td>目标/任务</td><td><code>goal/change</code>、<code>todo/write</code></td><td>目标状态变迁、任务清单全量快照</td></tr>
+  </table>
+
+  <h3 id="ch5-2">5.2 工具执行五阶段管线</h3>
+  <div class="diagram">tools/pre-execute    → 允许 / 拒绝 / 请求人工审批
+        ↓
+  Monotonic Guards   → 单调守卫（只能拒绝，不能放行）
+        ↓
+tools/execute        → 环绕拦截（超时、重试、指标采集）
+        ↓
+tools/post-execute   → 接受 / 替换结果 / 阻止（转为错误）
+        ↓
+tools/result         → 冻结后的只读观测（观测者异常被隔离）</div>
+  <p>每一个工具调用，<b>不管是否执行成功</b>，都经过了完整的管线。<code>tools/result</code> 阶段执行前，execution 对象已被 <code>Object.freeze()</code> 冻结。</p>
+
+  <h3 id="ch5-3">5.3 系统提示词版本化审计</h3>
+  <p>通过 <code>request/header</code> 事件记录<b>每一次发送给模型的完整系统提示词</b>：完整渲染后 system prompt 文本、所有可见工具的 Schema 定义、LLM 配置。变更原因标记：<code>initial</code>（首次）、<code>resume</code>（恢复）、<code>change</code>（变更）。</p>
+
+  <h3 id="ch5-4">5.4 Code Mode 子调用审计</h3>
+  <ul>
+    <li><b>每次子调用独立记录</b>：<code>tool/code-dispatch-start</code>（开始）+ <code>tool/code-dispatch</code>（完成），带有父 callId 和子 callId</li>
+    <li><b>子调用走同一个管线</b>：经历完整的 pre-execute → post-execute 管线</li>
+    <li><b>日志溢出控制</b>：<code>tools/code-dispatch-log</code> 水瀑事件允许对过大结果进行整形</li>
+    <li><b>中止传播</b>：代码执行结束时，<code>AbortController</code> 触发中止所有未完成子调用</li>
+  </ul>
+
+  <h3 id="ch5-5">5.5 人机审批闭环</h3>
+  <ul>
+    <li>每次审批产生 <code>approval/asked</code> + <code>approval/decided</code> 配对事件，必须在一个 turn 内闭合</li>
+    <li>支持策略切换：<code>ask</code>（委托给回答者）或 <code>never</code>（自动拒绝）</li>
+    <li>当前审批策略注入系统提示词，模型提前知道哪些操作需要审批</li>
+    <li>回答者异常时 <b>fail-closed</b>（默认拒绝）</li>
+  </ul>
+
+  <h3 id="ch5-6">5.6 实时 UI 事件流</h3>
+  <p><b>Mux Stream</b>（会话聚合流）：session/event、approval/requested、session/queue、session/jobs、session/projection。</p>
+  <p><b>Host Stream</b>（主机级流）：会话增删、状态变更、工作区变更、agent 错误。</p>
+  <p>传输层支持 SSE 和 WebSocket。</p>
+
+  <h3 id="ch5-7">5.7 OpenTelemetry 导出</h3>
+  <p><code>SessionTelemetryBackend</code> 将事件导出为 OTel 标准格式，支持脱敏水瀑（导出前挂载脱敏规则），三种模式：<code>FULL</code>（实时）、<code>FEEDBACK_ONLY</code>（按需）、<code>DISABLED</code>。</p>
+
+  <h3 id="ch5-8">5.8 防护性机制汇总</h3>
+  <table>
+    <tr><th>机制</th><th>作用</th></tr>
+    <tr><td>Monotonic Guards</td><td>只能拒绝不能放行的守卫，全局+作用域链评估</td></tr>
+    <tr><td>Tool Restriction</td><td>按作用域 allow/deny 工具白黑名单，链式交集</td></tr>
+    <tr><td>Repeat Tool Reminder</td><td>检测连续相同工具调用，在阈值 [3,5,8] 次注入纠正上下文</td></tr>
+    <tr><td>Timeout Policy</td><td>环绕 tools/execute 强制执行超时</td></tr>
+    <tr><td>Invariant Diagnostics</td><td>包级不变量注册表，违反时抛出带包归属的 InvariantError</td></tr>
+    <tr><td>Crash Recovery</td><td>加载时检测未闭合 turn，补全合成闭合事件</td></tr>
+  </table>
+
+  <h3>可观测性架构全景</h3>
+  <div class="diagram">┌──────────────────────────────────────────────────────────────┐
+│                    Agent Loop (ReactLoop)                      │
+│  turn/start → step/start → request/header → assistant/chunk   │
+│  → tool/call → tool/result → step/end → turn/end              │
+└────────────────────────┬─────────────────────────────────────┘
+                         │ 每个动作 append SessionEvent
+                         ▼
+┌──────────────────────────────────────────────────────────────┐
+│              Session Event Log (Append-Only)                   │
+│  42 种事件类型 × 单调 seq × Unix 时间戳                        │
+│  JSONL(Zstd) / SQLite 持久化 + 崩溃恢复                       │
+└───────┬──────────┬───────────────┬──────────────┬────────────┘
+        │          │               │              │
+        ▼          ▼               ▼              ▼
+   Session     Session        OpenTelemetry    UI Mux
+   Stats       Query          Export           Stream
+   (实时指标)  (事件溯源查询)  (OTel标准)     (SSE/WS实时)</div>
+</section>
+
+<!-- ==================== 第六章 ==================== -->
+<section id="ch6">
+  <h2>六、安全模型对比：DSH vs agentskills-runtime</h2>
+
+  <h3 id="ch6-1">6.1 DSH 是否在增强模型的"hack"能力？</h3>
+
+  <div class="callout callout-warning">
+    <strong>某种程度上说，是的——但这是有意为之的设计哲学</strong>
+    DSH 给大模型的能力确实更接近"一个拥有系统级权限的黑客"，而非"一个通过规范接口操作系统的用户"。
+  </div>
+
+  <table>
+    <tr><th>维度</th><th><span class="tag tag-rt">agentskills-runtime</span> 的理念</th><th><span class="tag tag-dsh">DSH</span> 的做法</th></tr>
+    <tr><td><b>身份</b></td><td>模型与人类共享 RBAC 账号，以"用户身份"行动</td><td>模型是"LLM OS 的内核"，以系统级身份行动</td></tr>
+    <tr><td><b>权限入口</b></td><td>行为入口处控制（API 网关、Controller 鉴权）</td><td>工具级 restrict/guard + 审批缝</td></tr>
+    <tr><td><b>操作方式</b></td><td>通过规范的业务接口（CRUD Service）</td><td>直接读写文件系统 + shell 命令 + 写代码执行</td></tr>
+    <tr><td><b>串联逻辑</b></td><td>确定性流程编排</td><td>模型实时推理 + 自写程序</td></tr>
+    <tr><td><b>可预测性</b></td><td>行为路径可枚举</td><td>行为路径不可枚举</td></tr>
+    <tr><td><b>代码生成</b></td><td>内置代码片段生成工具（已设计，待完善）</td><td><code>run_code</code> 让模型写完整程序并执行</td></tr>
+    <tr><td><b>权限申请</b></td><td>大模型可自行申请权限，走 RBAC 流程</td><td>模型以系统级身份行动，无"申请"概念</td></tr>
+    <tr><td><b>行级数据权限</b></td><td>已有设计，可控制到数据行级别</td><td>工具级 restrict（粗粒度）</td></tr>
+    <tr><td><b>人在回路</b></td><td>权限申请 → 人工复核 → 审批，全流程可审计</td><td>approval seam，仅限预设的高危操作</td></tr>
+  </table>
+
+  <div class="quote">
+    架构师的核心洞察：与其在模型犯错后多层拦截，不如<b>从一开始就不给模型犯错的机会</b>。让模型通过规范的 CRUD Service 接口操作——就像人类开发者一样——而不是给模型 shell 权限让它自己想办法。<br><br>
+    不是不给模型高自由度，而是高自由度行为必须经过权限申请和人工审批的闭环。这比"完全不给"更灵活，比"完全放开"更安全。
+  </div>
+
+  <h3 id="ch6-2">6.2 DSH 的七层安全机制</h3>
+
+  <div class="card">
+    <h4>第 1 层：作用域隔离（Scope Isolation）</h4>
+    <p>子 Agent 只能看到和访问其作用域内的工具。<code>ToolRuntime.restrict()</code> 的白黑名单在作用域链上<b>交集生效</b>。权限只能缩小，不能放大。</p>
+  </div>
+
+  <div class="card">
+    <h4>第 2 层：单调守卫（Monotonic Guards）</h4>
+    <p>守卫是<b>只能拒绝、不能放行</b>的同步检查。一个拒绝就是最终拒绝，没有任何机制可以绕过。实例：<code>repeat-tool-reminder</code> 检测模型连续调用相同工具 [3, 5, 8] 次时注入纠正上下文。</p>
+  </div>
+
+  <div class="card">
+    <h4>第 3 层：人机审批缝（Approval Seam）</h4>
+    <p><code>tools/pre-execute</code> 的 <code>ask</code> 决策不是模型可以自己回答的——它挂起执行等待外部人类输入。审批产生不可跳过、不可伪造的配对事件。</p>
+  </div>
+
+  <div class="card">
+    <h4>第 4 层：工具结果的后验拦截（Post-Execute）</h4>
+    <p>即使工具执行完成，<code>tools/post-execute</code> 仍可 block（阻止结果回传）、replace（替换/过滤内容）、attach additionalContexts（注入纠正上下文）。</p>
+  </div>
+
+  <div class="card">
+    <h4>第 5 层：沙箱执行隔离（Code Runtime）</h4>
+    <p><code>run_code</code> 的代码在隔离的 CodeRuntime 中执行：Worker Thread 或 E2E 远程沙箱。子调用走完整管线，运行级 AbortController 中止未完成的子调用。</p>
+  </div>
+
+  <div class="card">
+    <h4>第 6 层：不可变审计日志（Event Sourcing）</h4>
+    <p>42 种事件类型的 append-only 日志确保模型每次"思考"、"行动"、"学习"都被不可变记录，不可篡改。</p>
+  </div>
+
+  <div class="card">
+    <h4>第 7 层：超时与错误容错</h4>
+    <p><code>timeout-policy</code> 强制工具超时、<code>agent/request-error</code> 水瀑允许重试、上下文溢出时自动紧急压缩。</p>
+  </div>
+
+  <h3 id="ch6-3">6.3 根本性张力分析</h3>
+
+  <div class="callout callout-danger">
+    <strong>安全层越多 = 能力越强但攻击面越大</strong>
+    <p>DSH 让模型可以 <code>write</code> 任意文件、执行 <code>shell</code> 命令、<b>编写并执行代码</b>——这些能力本身就是攻击面。七层防线是<b>事后拦截</b>，而 agentskills-runtime 的 RBAC 入口控制是<b>事前收窄</b>。</p>
+  </div>
+
+  <div class="quote">
+    用一个类比：<br>
+    <b>agentskills-runtime</b> 像"只给员工开放他需要的系统入口，其他门都锁上"<br>
+    <b>DSH</b> 像"给员工所有门的钥匙，但每个门口都配了保安和摄像头"
+  </div>
+
+  <table>
+    <tr><th></th><th><span class="tag tag-rt">agentskills-runtime</span></th><th><span class="tag tag-dsh">DSH</span></th></tr>
+    <tr><td>对模型的态度</td><td>不信任，收窄能力</td><td>有限信任，多层兜底</td></tr>
+    <tr><td>安全策略</td><td>事前防御（attack surface reduction）</td><td>纵深防御（defense in depth）</td></tr>
+    <tr><td>风险偏好</td><td>保守但可预测</td><td>激进但能力更强</td></tr>
+    <tr><td>适合场景</td><td>生产环境、企业应用、合规场景</td><td>开发者工具、研究环境、高自主 Agent</td></tr>
+    <tr><td>失效模式</td><td>模型想做但做不了（能力不足）</td><td>模型做了不该做的（安全事件）</td></tr>
+    <tr><td>安全保证</td><td>强（行为空间有界）</td><td>弱但有补偿（审计完整）</td></tr>
+  </table>
+</section>
+
+<!-- ==================== 第七章 ==================== -->
+<section id="ch7">
+  <h2>七、编程语言选型对 Agent 安全性的影响</h2>
+
+  <div class="callout callout-insight">
+    <strong>核心论点</strong>
+    DSH 用 TypeScript，agentskills-runtime 用仓颉。这个选型差异带来的安全影响远超表面——<b>防线的位置不同</b>：DSH 的防线主要在运行时，agentskills-runtime 的防线前移到了编译期和架构层。
+  </div>
+
+  <h3 id="ch7-1">7.1 编译模型：AOT 确定性 vs JIT 动态性</h3>
+
+  <div class="diagram"><span class="tag tag-cj">仓颉</span> 插件的代码路径：
+源码(.cj) → cjc 编译 → LLVM IR → 原生二进制(.so/.dll) → PackageInfo.load() 加载
+每一步都是静态确定的，运行时不会凭空出现新代码
+
+<span class="tag tag-ts">TypeScript</span> 的代码路径：
+源码(.ts) → tsc 编译 → .js → Node.js 运行时解释/JIT 执行
+                              ↑ 运行时可以动态生成并执行新代码</div>
+
+  <table>
+    <tr><th>场景</th><th><span class="tag tag-cj">仓颉</span></th><th><span class="tag tag-ts">TypeScript/JS</span></th></tr>
+    <tr><td>运行时注入任意代码</td><td>不可能（无 eval）</td><td>可能（eval, Function, vm）</td></tr>
+    <tr><td>动态修改已加载模块</td><td>不可能（AOT 编译后不可变）</td><td>可能（prototype/monkey patching）</td></tr>
+    <tr><td>运行时生成并执行新代码</td><td>不可能</td><td>DSH 的 run_code 正是利用这一点</td></tr>
+    <tr><td>代码审计的可信度</td><td>编译产物 = 源码的忠实翻译</td><td>运行时行为可能与静态分析不一致</td></tr>
+  </table>
+
+  <h3 id="ch7-2">7.2 类型系统：编译期铁律 vs 运行时契约</h3>
+
+<pre><code><span class="cm">// 仓颉：这段代码不通过编译，不是"可能出错"，是"根本不存在"</span>
+<span class="kw">let</span> x: <span class="tp">Int64</span> = <span class="str">"hello"</span>  <span class="cm">// 编译错误</span>
+
+<span class="cm">// Option 类型强制处理缺失值，不存在空指针</span>
+<span class="kw">let</span> name: <span class="tp">?String</span> = <span class="tp">None</span>
+<span class="kw">let</span> len = name.size  <span class="cm">// 编译错误：Option&lt;String&gt; 没有 size 属性</span>
+<span class="cm">// 必须先解包：</span>
+<span class="kw">match</span> (name) {
+    <span class="kw">case</span> <span class="tp">Some</span>(n) => n.size
+    <span class="kw">case</span> <span class="tp">None</span>  => <span class="op">0</span>
+}</code></pre>
+
+<pre><code><span class="cm">// TypeScript：类型可以被绕过</span>
+<span class="kw">let</span> x: <span class="tp">number</span> = <span class="str">"hello"</span> <span class="kw">as</span> <span class="tp">any</span>  <span class="cm">// 通过！</span>
+<span class="kw">let</span> obj: <span class="tp">any</span> = <span class="fn">JSON.parse</span>(input)  <span class="cm">// any 可以调用任何方法</span>
+<span class="cm">// @ts-ignore 可以跳过任何类型检查</span></code></pre>
+
+  <table>
+    <tr><th>维度</th><th><span class="tag tag-cj">仓颉</span></th><th><span class="tag tag-ts">TypeScript</span></th></tr>
+    <tr><td>类型安全</td><td>编译时保证，运行时不可能违反</td><td>开发时辅助，运行时可被绕过</td></tr>
+    <tr><td>插件接口契约</td><td>编译时验证，不满足接口的插件<b>无法编译</b></td><td>类型不匹配可以 <code>as any</code> 绕过</td></tr>
+    <tr><td>模型生成的代码</td><td>如果类型不对，<b>编译失败</b></td><td>类型错误可能在运行时才暴露</td></tr>
+  </table>
+
+  <h3 id="ch7-3">7.3 空安全：消灭十亿美元错误</h3>
+  <p>仓颉<b>没有 null</b>。缺失值必须用 <code>Option&lt;T&gt;</code> 表达，编译器强制处理。大模型生成的代码经常遗漏边界条件检查——在 TypeScript 中可能导致运行时崩溃，在仓颉中编译器会拒绝这种代码。</p>
+
+  <h3 id="ch7-4">7.4 访问控制：四级可见性 + 反射限制</h3>
+  <table>
+    <tr><th>修饰符</th><th>本文件</th><th>包+子包</th><th>模块</th><th>全局</th></tr>
+    <tr><td><code>private</code></td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+    <tr><td><code>internal</code>（默认！）</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td></tr>
+    <tr><td><code>protected</code></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td><code>public</code></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+  </table>
+  <p>关键设计：<b>默认是 <code>internal</code></b>（安全默认）。<b>反射只能访问 <code>public</code> 成员</b>——模型通过反射探索插件时，天然被限制在 public API 表面。对比 JavaScript：<code>Object.getOwnPropertyNames()</code> 可以枚举所有属性。</p>
+
+  <h3 id="ch7-5">7.5 <code>unsafe</code> 边界：危险操作的显式标记</h3>
+<pre><code><span class="cm">// 仓颉：调用 FFI 函数必须在 unsafe 块中</span>
+<span class="kw">let</span> r = rand()  <span class="cm">// ❌ 编译错误</span>
+<span class="kw">let</span> r = <span class="kw">unsafe</span> { rand() }  <span class="cm">// ✅ 显式标记不安全操作</span></code></pre>
+  <p>创造了<b>可审计的危险操作边界</b>。代码审查工具或 lint 规则可自动标记包含 <code>unsafe</code> 的代码片段，触发更严格的审批流程。TypeScript 中，<code>fs.readFile()</code> 和 <code>child_process.exec()</code> 在安全性上没有语言级区分。</p>
+
+  <h3 id="ch7-6">7.6 继承控制：限制扩展的攻击面</h3>
+<pre><code><span class="cm">// 仓颉：类默认封闭</span>
+<span class="kw">class</span> <span class="tp">UserService</span> { ... }           <span class="cm">// 不可继承</span>
+<span class="kw">open class</span> <span class="tp">PluginBase</span> { ... }       <span class="cm">// 允许继承</span>
+<span class="kw">sealed class</span> <span class="tp">FrameworkCore</span> { ... }  <span class="cm">// 仅同包可继承</span></code></pre>
+  <p>大模型无法通过继承篡改框架核心行为。TypeScript 中任何类都可以被继承和方法覆盖。</p>
+
+  <h3 id="ch7-7">7.7 并发安全</h3>
+  <p>仓颉的 <code>synchronized</code> 和 <code>Atomic</code> 原语提供编译器级别的正确性保证。TypeScript 的单线程模型虽避免了传统并发问题，但 DSH 的多 worker 模式和子进程编排引入了进程级并发风险。</p>
+
+  <h3 id="ch7-8">7.8 系统性对比全景</h3>
+  <table>
+    <tr><th>维度</th><th><span class="tag tag-dsh">DSH</span> (TypeScript)</th><th><span class="tag tag-rt">agentskills-runtime</span> (仓颉)</th></tr>
+    <tr><td>运行时能力</td><td>eval / Function / dynamic import / run_code 沙箱</td><td>AOT 编译，无动态代码生成，插件必须预编译</td></tr>
+    <tr><td>类型安全</td><td>可选，可绕过 (any)</td><td>编译时铁律，不可绕过</td></tr>
+    <tr><td>空安全</td><td>undefined/null 存在</td><td>Option&lt;T&gt;，无 null</td></tr>
+    <tr><td>访问控制</td><td>运行时全可见</td><td>4 级可见性 + 反射受限</td></tr>
+    <tr><td>危险操作标记</td><td>无语言级区分</td><td>unsafe 显式标记</td></tr>
+    <tr><td>安全策略</td><td>纵深防御 (7层拦截) + 事后审计</td><td>编译期+运行时+RBAC + 人在回路</td></tr>
+    <tr><td>模型自由度</td><td>高 (shell+代码+工具)</td><td>受控 (RBAC申请+代码生成+审批)</td></tr>
+  </table>
+
+  <div class="callout callout-success">
+    <strong>核心洞察：防线的位置不同</strong>
+    <p>DSH 的防线主要在<b>运行时</b>——模型先行动，7 层机制在运行中拦截、记录、审计。<br>
+    agentskills-runtime 的防线前移到了<b>编译期和架构层</b>——模型还没行动，语言类型系统、AOT 编译、访问控制、RBAC 入口就已经收窄了行为空间。</p>
+  </div>
+
+  <table>
+    <tr><th>失效模式</th><th><span class="tag tag-dsh">DSH</span></th><th><span class="tag tag-rt">agentskills-runtime</span></th></tr>
+    <tr><td>模型犯错时</td><td>运行时拦截 → 可能已产生副作用</td><td>编译失败 / RBAC 拒绝 → 错误不会产生副作用</td></tr>
+    <tr><td>防线被绕过时</td><td>攻击面大（shell+code+文件系统）</td><td>攻击面小（受控接口+RBAC 边界）</td></tr>
+    <tr><td>审计能力</td><td>强（完整事件溯源）</td><td>中等（数据库日志+审批记录）</td></tr>
+    <tr><td>恢复成本</td><td>可能较高（运行时副作用已发生）</td><td>较低（多数错误在部署前被阻断）</td></tr>
+  </table>
+</section>
+
+<!-- ==================== 第八章 ==================== -->
+<section id="ch8">
+  <h2>八、大模型能否绕过安全防线？</h2>
+
+  <h3 id="ch8-1">8.1 动态语言的结构性绕过路径</h3>
+  <p>如果模型"想"绕过防线，JavaScript/TypeScript 运行时确实提供了<b>结构性的绕过路径</b>：</p>
+
+  <div class="card">
+    <h4>路径 1：原型链污染</h4>
+<pre><code><span class="cm">// 如果模型构造了这样的参数：</span>
+<span class="kw">const</span> malicious = <span class="fn">JSON.parse</span>(<span class="str">'{"__proto__": {"isAdmin": true}}'</span>)
+<span class="kw">await</span> tools.<span class="fn">someTool</span>(malicious)
+<span class="cm">// 如果框架做了深拷贝或对象合并，可能污染 Object.prototype</span></code></pre>
+    <p>原型链污染是 JavaScript 独有的攻击面。在仓颉中，类默认 <code>closed</code>，<code>internal</code> 成员对反射不可见，这个攻击面<b>根本不存在</b>。</p>
+  </div>
+
+  <div class="card">
+    <h4>路径 2：动态代码构造</h4>
+<pre><code><span class="kw">const</span> code = <span class="str">`
+  const data = JSON.parse(input);
+  const handler = new Function(data.payload);
+  handler();
+`</span></code></pre>
+    <p>V8 沙箱逃逸漏洞（CVE-2023-2033、CVE-2024-0519 等）证明：<b>只要运行时允许动态代码执行，就存在理论上的逃逸路径</b>。仓颉没有 <code>eval</code>、没有 <code>new Function</code>——代码必须在编译时存在。</p>
+  </div>
+
+  <div class="card">
+    <h4>路径 3：运行时元编程</h4>
+<pre><code><span class="cm">// 模型修改 Cordis 框架本身的行为</span>
+<span class="kw">const</span> originalRegister = ctx.tools.register
+ctx.tools.register = <span class="kw">function</span>(tool) {
+  <span class="kw">delete</span> tool.restrictions  <span class="cm">// 绕过 restrict filter</span>
+  <span class="kw">return</span> originalRegister.<span class="fn">call</span>(<span class="kw">this</span>, tool)
+}</code></pre>
+    <p>JavaScript 的<b>一切皆可变</b>特性意味着框架自身的防护逻辑也可以被模型在运行时篡改。TypeScript 的 <code>readonly</code> 只是编译时标注。</p>
+  </div>
+
+  <div class="card">
+    <h4>路径 4：利用动态 import 加载外部代码</h4>
+<pre><code><span class="cm">// 动态加载未经审查的模块</span>
+<span class="kw">const</span> maliciousPlugin = <span class="kw">await</span> <span class="fn">import</span>(<span class="str">'data:text/javascript,'</span> + encodedPayload)</code></pre>
+    <p>Node.js 支持运行时动态导入任意模块。仓颉的 <code>PackageInfo.load()</code> 只能加载预编译的 <code>.so/.dll</code>，且只能访问 <code>public</code> 成员。</p>
+  </div>
+
+  <h3 id="ch8-2">8.2 DSH 防线的实质阻力</h3>
+  <ul>
+    <li><b>沙箱隔离是真实的</b>：Worker Thread / E2E 远程沙箱提供了真实资源隔离。V8 沙箱逃逸是零日漏洞级别攻击，不是概率采样能做到的</li>
+    <li><b>审批缝是强制的</b>：<code>ask</code> 决策不是模型可以自己回答的——由独立 <code>UserApprovalService</code> 产生</li>
+    <li><b>事件溯源不可篡改</b>：绕过行为本身也被记录为事件</li>
+    <li><b>概率系统不等于攻击者</b>：模型不太可能自主发现精确内存布局的沙箱逃逸漏洞，更可能走"社会工程学"路线</li>
+  </ul>
+
+  <h3 id="ch8-3">8.3 静态语言的结构性消除</h3>
+
+  <div class="diagram"><span class="tag tag-ts">动态语言</span> 的攻击面 = 运行时动态性本身
+                    ↓
+         eval / Function / import()
+         原型链 / monkey patching
+         动态类型转换 (as any)
+         反射访问所有成员
+                    ↓
+         这些都是合法的运行时行为
+         防线必须在运行时拦截它们
+                    ↓
+         拦截 = 和绕过玩猫鼠游戏
+
+<span class="tag tag-cj">静态语言</span> 的"防线" = 语言本身
+                    ↓
+         没有 eval / 没有动态 import
+         类默认封闭 / 反射只看 public
+         类型不匹配 = 编译失败
+         unsafe 块显式标记
+                    ↓
+         这些行为在语言层面不存在
+         不需要"拦截"，因为不可能发生
+                    ↓
+         防线 = 语言规范
+         绕过 = 需要编译器/运行时漏洞</div>
+
+  <div class="callout callout-insight">
+    <strong>本质区别</strong>
+    <p>在 JavaScript 中，绕过防线只需要<b>利用语言的合法特性</b>（门没锁）<br>
+    在仓颉中，绕过防线需要<b>发现编译器或运行时的漏洞</b>（需要撬锁）<br>
+    难度差异是数量级的。</p>
+  </div>
+
+  <h3 id="ch8-4">8.4 仓颉路线的残余风险</h3>
+
+  <div class="callout callout-warning">
+    <strong>仓颉不是绝对安全</strong>
+    <ul>
+      <li><b>L2 动态加载的边界风险</b>：<code>PackageInfo.load()</code> 加载的 .so 文件运行在同一进程空间，恶意 .so 理论上可通过 C FFI（<code>unsafe</code> 块）绕过访问控制。WASM 沙箱规划在 v1.1+</li>
+      <li><b>逻辑绕过</b>：通过合法 public API 逐步收集信息组合出敏感数据；通过有说服力的申请理由获取不该有的权限；多个"无害" CRUD 操作组合出破坏性行为</li>
+      <li><b>人因风险</b>：RBAC + 审批闭环依赖人类做出正确判断，疲劳、疏忽或社工可导致防线形同虚设</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 第九章 ==================== -->
+<section id="ch9">
+  <h2>九、结论与社会工程学攻击面</h2>
+
+  <table>
+    <tr><th>问题</th><th>回答</th></tr>
+    <tr><td>模型能否利用动态语言特性绕过防线？</td><td><b>理论上可以，实践上受限</b>。合法的语言特性（eval、原型链、动态 import、反射全访问）提供了结构性绕过路径，但沙箱隔离、审批缝、事件溯源构成实质阻力。</td></tr>
+    <tr><td>仓颉能否完全消除绕过？</td><td><b>不能消除，但能消除最大的一类</b>。技术绕过（利用运行时动态性）被结构性消除；逻辑绕过（合法 API 的组合滥用）仍然存在。</td></tr>
+    <tr><td>核心差异是什么？</td><td>动态语言中，绕过是<b>利用合法特性</b>（门没锁）；静态语言中，绕过需要<b>发现漏洞</b>（需要撬锁）。</td></tr>
+  </table>
+
+  <div class="quote">
+    动态语言给了模型"做坏事"的能力，然后靠运行时防线阻止它；静态语言从一开始就没有给模型这个能力。<br><br>
+    前者是猫鼠游戏——猫必须永远比老鼠快；后者是改变游戏规则——老鼠需要进化出新的器官才能玩这个游戏。
+  </div>
+
+  <div class="callout callout-success">
+    <strong>社会工程学是更大的攻击面</strong>
+    <p>技术防线越坚固，人的判断就越成为关键一环。无论是 DSH 的 7 层运行时防线还是 agentskills-runtime 的编译期+RBAC+人在回路，都无法完全抵御精心构造的社会工程学攻击——通过看似合理的工具调用链逐步扩大权限，或者通过有说服力的权限申请理由获取不该有的权限。</p>
+    <p>这是所有 AI Agent 系统共同面临的挑战，与编程语言选型无关。</p>
+  </div>
+
+  <h3>agentskills-runtime 架构师选择的深层理由</h3>
+  <div class="quote">
+    与其给大模型所有钥匙再配七个保安，不如一开始就只给它需要的钥匙，然后用编译器确保钥匙不能被复制。
+  </div>
+
+  <p>仓颉的七项语言级安全特性为 agentskills-runtime 带来了独特的安全红利：</p>
+  <ol>
+    <li><b>AOT 编译</b>消除了运行时动态代码注入的整个攻击面</li>
+    <li><b>静态类型</b>充当模型生成代码的第二道防线</li>
+    <li><b>Option 类型</b>消灭了模型最常犯的空指针错误</li>
+    <li><b>访问控制 + 反射限制</b>将模型的"视野"限制在 public API</li>
+    <li><b><code>unsafe</code> 标记</b>让危险操作可审计、可拦截</li>
+    <li><b><code>sealed</code> 类</b>阻止模型通过继承篡改框架核心</li>
+    <li><b>RBAC + 行级数据权限 + 人在回路</b>在架构层完成权限闭环</li>
+  </ol>
+  <p>这七点叠加在一起，构成了一个<b>语言级 × 架构级的纵深防御体系</b>。防线不只在运行时，更在编译时和设计时。</p>
+</section>
+
+<div class="footer">
+  <p>本文档基于 DeepSeek Harness 源码分析、agentskills-runtime SDD 文档及对比研究报告综合生成</p>
+  <p>项目目录：<code>apps/agentskills-runtime</code> | 生成日期：2026-08-18</p>
+</div>
+
+</div>
+</body>
+</html>

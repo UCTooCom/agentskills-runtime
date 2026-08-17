@@ -252,21 +252,6 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
   - `timeout` (可选): 超时时间,默认30000ms
   - `maxContentLength` (可选): 最大内容长度,默认1MB
 
-#### FirecrawlTool
-- **名称**: `firecrawl`
-- **权限**: `/api/v1/tools/web/firecrawl`
-- **敏感级别**: 中 (2)
-- **功能**: 使用Firecrawl API进行网页爬取
-- **参数**:
-  - `action` (必填): 操作类型(search/scrape/map/crawl)
-  - `query` (必填): 搜索查询或URL
-  - `apiKey` (可选): API密钥
-- **配置**:
-  ```ini
-  FIRECRAWL_API_KEY=your_api_key
-  FIRECRAWL_API_URL=https://api.firecrawl.dev
-  ```
-
 ---
 
 ### 2.3 技能工具组 (skill)
@@ -288,6 +273,15 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
 - **参数**:
   - `path` (必填): 技能路径
   - `output` (必填): 输出文件路径
+
+#### GetSkillContentTool
+- **名称**: `get_skill_content`
+- **权限**: `/api/v1/tools/skill/content`
+- **敏感级别**: 低 (1)
+- **功能**: 获取技能完整内容（SKILL.md）
+- **参数**:
+  - `name` (必填): 技能名称
+  - `section` (可选): 章节名称
 
 ---
 
@@ -328,6 +322,79 @@ AgentSkills Runtime v2.0 提供了完整的内置工具集,支持三种调用方
   - `command` (必填): 命令内容
   - `confirm` (必填): 确认执行,必须为true
 - **安全限制**: 危险命令会被拦截
+
+#### PythonExecutorTool
+- **名称**: `python_execute`
+- **权限**: `/api/v1/tools/cli/python`
+- **敏感级别**: 中 (2)
+- **功能**: 执行Python脚本
+- **参数**:
+  - `script` (必填): 脚本路径或代码
+  - `args` (可选): 参数列表
+
+---
+
+### 2.6 高级工具组 (advanced)
+
+#### BrowserTool
+- **名称**: `browser`
+- **权限**: `/api/v1/tools/advanced/browser`
+- **敏感级别**: 中 (2)
+- **功能**: 浏览器自动化操作
+- **参数**:
+  - `action` (必填): 操作类型(navigate/click/input/screenshot等)
+  - `url` (可选): 导航URL
+  - `selector` (可选): 元素选择器
+
+#### HttpServerTool
+- **名称**: `http_server`
+- **权限**: `/api/v1/tools/advanced/http_server`
+- **敏感级别**: 高 (3)
+- **功能**: 启动/管理本地HTTP服务器
+- **参数**:
+  - `action` (必填): 操作类型(start/stop/request)
+  - `port` (可选): 端口号
+
+#### SubAgentTool
+- **名称**: `sub_agent`
+- **权限**: `/api/v1/tools/advanced/sub_agent`
+- **敏感级别**: 中 (2)
+- **功能**: 创建和调用子Agent执行子任务
+- **参数**:
+  - `agentId` (必填): 子Agent ID
+  - `task` (必填): 子任务描述
+  - `parameters` (可选): 任务参数
+
+#### EvalRunnerTool
+- **名称**: `eval_runner`
+- **权限**: `/api/v1/tools/advanced/eval`
+- **敏感级别**: 中 (2)
+- **功能**: 运行评估测试
+- **参数**:
+  - `testId` (必填): 测试ID
+  - `testType` (可选): 测试类型
+
+---
+
+### 2.7 文件扩展工具组 (fs)
+
+#### FileCopyTool
+- **名称**: `file_copy`
+- **权限**: `/api/v1/tools/fs/copy`
+- **敏感级别**: 中 (2)
+- **功能**: 复制文件或目录
+- **参数**:
+  - `src` (必填): 源路径
+  - `dst` (必填): 目标路径
+
+#### FileMoveTool
+- **名称**: `file_move`
+- **权限**: `/api/v1/tools/fs/move`
+- **敏感级别**: 中 (2)
+- **功能**: 移动/重命名文件或目录
+- **参数**:
+  - `src` (必填): 源路径
+  - `dst` (必填): 目标路径
 
 ---
 
@@ -498,13 +565,13 @@ curl -X POST https://javatoarktsapi.uctoo.com/api/v1/tools/http_request \
 
 ## 七、工具总数
 
-当前版本共提供 **19个** 内置工具:
-- 文件工具: 7个 (file_read, file_write, file_edit, file_delete, file_search, directory_list, directory_create)
-- 网络工具: 3个 (http_request, web_fetch, firecrawl)
-- 技能工具: 2个 (skill_initializer, skill_packager)
+当前版本共提供 **22个** 内置工具:
+- 文件工具: 9个 (file_read, file_write, file_edit, file_delete, file_copy, file_move, file_search, directory_list, directory_create)
+- 网络工具: 2个 (http_request, web_fetch)
+- 技能工具: 3个 (skill_initializer, skill_packager, get_skill_content)
 - 代码生成工具: 2个 (template_engine, code_snippet_generator)
-- CLI工具: 1个 (cli_execute)
-- WebMCP工具: 4个
+- CLI工具: 2个 (cli_execute, python_execute)
+- 高级工具: 4个 (browser, http_server, sub_agent, eval_runner)
 
 ---
 

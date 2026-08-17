@@ -1,0 +1,80 @@
+{
+  "date": "2026-08-15",
+  "companies": [
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "quotes": {
+        "code": "600519",
+        "name": "贵州茅台",
+        "price": 1341.99,
+        "change_pct": -0.98,
+        "volume": 2985315,
+        "amount": 4024065608.0,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 1359.0,
+        "low": 1338.14,
+        "open": 1355.0,
+        "prev_close": 1355.29,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "000858",
+      "name": "五 粮 液",
+      "quotes": {
+        "code": "000858",
+        "name": "五 粮 液",
+        "price": 73.75,
+        "change_pct": -1.82,
+        "volume": 36023341,
+        "amount": 2670378468.45,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 75.03,
+        "low": 73.7,
+        "open": 75.01,
+        "prev_close": 75.12,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "300750",
+      "name": "宁德时代",
+      "quotes": {
+        "code": "300750",
+        "name": "宁德时代",
+        "price": 39393,
+        "change_pct": -60,
+        "volume": 159302,
+        "amount": 6305785416.58,
+        "pe": 2105,
+        "pb": 489,
+        "market_cap": 1822578172241.67,
+        "high": 40099,
+        "low": 39368,
+        "open": 39500,
+        "prev_close": 39630,
+        "source": "eastmoney"
+      },
+      "news": [],
+      "error": null
+    }
+  ],
+  "sources": [
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news"
+  ],
+  "fetched_at": "2026-08-15T21:16:40.976513"
+}

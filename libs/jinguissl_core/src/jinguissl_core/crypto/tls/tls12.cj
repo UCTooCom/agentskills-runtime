@@ -409,10 +409,6 @@ public func tls12DeriveSecretsFromEcdhe(
     let scalarBytes = privateKey.scalar.toBytesBE()
     let pubXBytes = peerPublicKey.x.toBytesBE()
     let pubYBytes = peerPublicKey.y.toBytesBE()
-    println("[TLS12-PRF] serverScalar (${scalarBytes.size} bytes): ${toHex(scalarBytes)}")
-    println("[TLS12-PRF] clientPubKey.x (${pubXBytes.size} bytes): ${toHex(pubXBytes)}")
-    println("[TLS12-PRF] clientPubKey.y (${pubYBytes.size} bytes): ${toHex(pubYBytes)}")
-    println("[TLS12-PRF] premasterSecret (${preMasterSecret.size} bytes): ${toHex(preMasterSecret)}")
     tls12DeriveSecretsFromPreMaster(preMasterSecret, clientRandom, serverRandom, keyLen: keyLen, ivLen: ivLen)
 }
 

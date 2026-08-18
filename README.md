@@ -27,6 +27,12 @@ AgentSkills Runtime is a runtime environment for the Agent Skills standard imple
     <td><img src="./docs/assets/org.png" alt="Organization" width="480"/></td>
     <td><img src="./docs/assets/tokenDashboard.png" alt="Token Dashboard" width="480"/></td>
   </tr>
+  <tr>
+    <td align="center" colspan="2"><b>Investment Research Assistant Demo</b></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="./public/demo.gif" alt="Investment Research Assistant Demo" width="480"/></td>
+  </tr>
 </table>
 
 ### PC Desktop Client — Fastest Way to Get Started

@@ -27,6 +27,12 @@ AgentSkills Runtime 是一个基于仓颉编程语言实现的 Agent Skills 标�
     <td><img src="./docs/assets/org.png" alt="Organization" width="480"/></td>
     <td><img src="./docs/assets/tokenDashboard.png" alt="Token Dashboard" width="480"/></td>
   </tr>
+  <tr>
+    <td align="center" colspan="2"><b>智能投研助理 Demo 演示</b></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="./public/demo.gif" alt="智能投研助理 Demo 演示" width="480"/></td>
+  </tr>
 </table>
 
 ### PC 端桌面客户端——最快上手方式

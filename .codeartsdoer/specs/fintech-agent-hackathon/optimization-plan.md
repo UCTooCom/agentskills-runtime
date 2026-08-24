@@ -4323,3 +4323,8 @@ clean_price = clean_raw if is_sina else clean_value  # 新浪不 /100，东财 /
 - [ ] **V17-3**：WebMCPProtocol 和 WsChatController 的系统提示词正确生成（技能列表正常显示）
 
 > **注意**：V17-3 涉及仓颉代码修改，需人工在单独 cmd 环境执行 `cjpm build` 编译验证。V17-1 涉及前端 TypeScript，需重新构建 web 产物。
+
+---
+---
+
+> **【编码损坏章节已重建】** 以下原乱码章节（原第 4329~4741 行，V18 迭代实施方案）因编码损坏（UTF-8 中文被错误按 GBK 解码），已完整重建并另存为本目录下的 `optimization-plan-v18-rebuilt.md`。请直接阅读新文档获取 V18 完整方案内容。

@@ -1037,13 +1037,13 @@ src/pkg.cj (magic)
           → src/skill/plugins/{name}/scripts/models/{Table}PO.cj
 ```
 
-每一级目录都有 `pkg.cj` 占位文件，cjpm 会递归扫描到最底层的 `.cj` 源码文件。**关键点**：仓颉的包名用 `.` 分隔，与目录路径一致——`magic.skill.plugins.entitygen.scripts.models` 对应 `src/skill/plugins/entitygen/scripts/models/` 目录。
+每一级目录都有 `pkg.cj` 占位文件，cjpm 会递归扫描到最底层的 `.cj` 源码文件。**关键点**：仓颉的包名用 `.` 分隔，与目录路径一致——`magic.skill.plugins.entity.scripts.models` 对应 `src/skill/plugins/entity/scripts/models/` 目录。
 
 **import 路径**：插件模块间引用通过标准 import：
 ```cangjie
-import magic.skill.plugins.entitygen.scripts.models.EntityPO
-import magic.skill.plugins.entitygen.scripts.dao.EntityDAO
-import magic.skill.plugins.entitygen.scripts.services.EntityService
+import magic.skill.plugins.entity.scripts.models.EntityPO
+import magic.skill.plugins.entity.scripts.dao.EntityDAO
+import magic.skill.plugins.entity.scripts.services.EntityService
 ```
 
 **跨插件引用**（依赖声明）：通过 `plugin.yaml` 中的 `dependencies` 声明，编译时 build.cj 钩子校验依赖目录存在。
@@ -1102,7 +1102,7 @@ public class ModuleRouteAnnotation {
     basePath: "/api/v1/uctoo/entity",
     table: "entity",
     database: "uctoo",
-    controllerClass: "magic.skill.plugins.entitygen.scripts.controllers.EntityController"
+    controllerClass: "magic.skill.plugins.entity.scripts.controllers.EntityController"
 ]
 public class EntityRoute {
     public func register(router: Router, controller: Any): Unit { ... }
@@ -1177,7 +1177,7 @@ release/
 │   ├── logs/
 │   └── plugins/                      # 插件清单目录（新增）
 │       ├── plugin_manifest.json      # 插件注册清单
-│       ├── entitygen/
+│       ├── entity/
 │       │   └── plugin.yaml           # 插件元信息
 │       ├── aip/
 │       │   └── plugin.yaml
@@ -1260,7 +1260,7 @@ release/
 - `AutoRouteConfig.cj` 保留，仅注册核心路由
 
 **阶段二（v0.2 模块迁移验证）**：
-- 选一个非核心模块（如 `entity` 表）迁移到 `skill/plugins/entitygen/scripts/`
+- 选一个非核心模块（如 `entity` 表）迁移到 `skill/plugins/entity/scripts/`
 - 验证编译、路由注册、API 响应全链路
 - 适配 crudgen 输出到 `skill/plugins/` 目录
 - 适配 package_release 打包插件产物
@@ -1312,8 +1312,8 @@ release/
 
 ```
 skills/
-└── entitygen/                 # 技能完整地在一个目录里
-    ├── cjpm.toml              # 独立包声明（name = "skill_entitygen"）
+└── entity/                    # 技能完整地在一个目录里
+    ├── cjpm.toml              # 独立包声明（name = "skill_entity"）
     ├── SKILL.md
     ├── plugin.yaml
     ├── templates/ assets/ references/   # 数据资产（不编译）
@@ -1323,7 +1323,7 @@ skills/
             ├── models/ dao/ services/ controllers/ routes/
 ```
 
-根 cjpm.toml 只需追加一行 `skill_entitygen = { path = "./skills/entitygen" }`（可由 skill-creator / find-skills 技能自动化，或由 build.cj pre-build 钩子扫描 skills/*/cjpm.toml 自动写入）。
+根 cjpm.toml 只需追加一行 `skill_entity = { path = "./skills/entity" }`（可由 skill-creator / find-skills 技能自动化，或由 build.cj pre-build 钩子扫描 skills/*/cjpm.toml 自动写入）。
 
 - 优点：技能物理完整（SKILL.md + 代码 + 清单同目录）；独立版本化、独立编译缓存；与 libs/ 生态模型完全一致；最接近 npm/cordis 的插件包模型，为未来独立分发（git clone 即安装）铺路；"一切皆技能"在物理目录层面成立。
 - **代价（必须诚实指出）**：cjpm 依赖是单向的——技能插件包**不能 import 根包 magic**。当前 Controller/Route 基类、Plugin 接口、事件总线都在 magic 包内，必须先把插件面向的稳定 API（Plugin SPI、@Plugin 注解、Controller/Route 基类、PluginEventBus 接口）抽取为独立基础包（如 `libs/plugin-spi`），根包和技能插件包都依赖它。这是一次真正的架构重构，但方向与 npm 生态完全一致——插件依赖独立发布的 API 包，而非宿主本体。反射发现（ClassTypeInfo.get 按包名跨包查类型）在链接后同样有效，路由动态注册方案（附7.4）不受影响。
@@ -1399,12 +1399,12 @@ SDD 三份文档（`.codeartsdoer/specs/plugin-system/`）已按全部研究文�
 - design.md v2：新增 §2.5 plugin.yaml 清单格式、§2.6 框架与插件代码位置（magic.plugin vs magic.plugins.{name}）、§2.7 目录结构与 build-sync/独立包分期、§2.8 双轨路由设计、§2.10 Cordis 六语义对照自检；接口清单补 ModuleRouteAnnotation / PluginRouteScanner。
 - tasks.md v2：任务 17 项按四阶段重排——阶段一（v0.5）：PS-T001~T009、T011、T014（@ModuleRoute+PluginRouteScanner，双轨验证入阶段一）；阶段二（v0.6）：T010、T013（crudgen 插件输出）、T015（build-sync 构建钩子）、T016（package_release 适配）；阶段三（v0.7~v0.9）：T017（plugin-spi 抽取，硬前置）、T012（L2 动态库原型）。
 
-#### 附7.9.6 v2.1 修订：agent_skills 表复核、skills 同步机制兼容性、plugigen 决策（2026-08-18）
+#### 附7.9.6 v2.1 修订：agent_skills 表复核、skills 同步机制兼容性、plugingen 决策（2026-08-18）
 
 **1. agent_skills 表复核结论：无必须 DDL 变更。** 该表 54 列已具备承载插件技能元数据的全部常用字段（name/version/dependencies JSON/install_path/source_path/runtime_status/scripts_dir_exists/extra_metadata JSON）。插件机制不新建表，但**读写这一张既有表**：PluginState 五态回写 runtime_status；plugin.yaml 特有信息（entry 类全名、tables）合并进 extra_metadata，无需加列。可选拓展（is_plugin 过滤列）留待插件市场阶段按需 ALTER TABLE。
 
 **2. 存量 skills 双向同步机制天然兼容，零改动。** 现有机制（SyncManager + AgentSkillSyncHandler：文件→库按 SKILL.md 解析、source_path 为唯一标识、库→文件只回写 SKILL.md）对插件目录的 SKILL.md 无差别同步，无需修改即工作。插件态回写由**新建 PluginSyncBridge**（src/plugin/，订阅 EventBus 生命周期事件，单向内存→库，回写失败只降级记日志不阻断插件）承担——存量 sync 代码零改动，符合存量冻结红线。反向红线：plugin.yaml 永不被数据库侧覆盖。
 
-**3. crudgen/crudweb 保留不重构，插件生成另建 plugigen。** 原方案"crudgen 新增插件输出模式"取消——crudgen/crudweb 完整保留为**宿主代码通道**（未来宿主功能新增/迭代仍生成到 src/app + 追加 AutoRouteConfig；"只减不增"红线约束的是插件化新业务能力，不约束宿主自身演进）。插件形态生成由**新建 plugigen** 承担（架构同构：TemplateEngine + templates/，位置 src/plugin/tools/plugingen/，从 db_info 读表结构或 --blank 生成 skills/{name}/ 三维一体）。两条生成通道并行独立、模板互不依赖。PS-T013 已改写为 plugigen（1.5 天），新增 PS-T018 PluginSyncBridge（1 天，阶段二）。
+**3. crudgen/crudweb 保留不重构，插件生成另建 plugingen。** 原方案"crudgen 新增插件输出模式"取消——crudgen/crudweb 完整保留为**宿主代码通道**（未来宿主功能新增/迭代仍生成到 src/app + 追加 AutoRouteConfig；"只减不增"红线约束的是插件化新业务能力，不约束宿主自身演进）。插件形态生成由**新建 plugingen** 承担（架构同构：TemplateEngine + templates/，位置 src/plugin/tools/plugingen/，从 db_info 读表结构或 --blank 生成 skills/{name}/ 三维一体）。两条生成通道并行独立、模板互不依赖。PS-T013 已改写为 plugingen（1.5 天），新增 PS-T018 PluginSyncBridge（1 天，阶段二）。
 
 

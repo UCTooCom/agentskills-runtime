@@ -89,13 +89,6 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
         }
     }
 
-    @When[os == "HarmonyOS"]
-    public static prop current: OS {
-        get() {
-            HarmonyOS
-        }
-    }
-
     @When[os != "Windows"]
     public prop nextLine: String {
         get() {

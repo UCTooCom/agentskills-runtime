@@ -40,6 +40,21 @@ public class AgentRuntimeBridge {
 
     public func createRuntimeAgent(definition: AgentDefinition): APIResult<BaseAgent> {
         try {
+            // 先检查数据库是否已有同名 agent，避免创建重复记录
+            let (existingAgents, _) = agentsService.getListWithFilter(1, 1, "", "{\"name\":{\"equals\":\"${definition.name}\"}}")
+            if (existingAgents.size > 0) {
+                // 已存在同名记录，复用并更新
+                let existingPO = existingAgents[0]
+                let agentId = existingPO.id
+                let agent = buildAgentFromDefinition(definition)
+                runtimeAgents.add(agentId, agent)
+                let po = mapDefinitionToPO(definition, agentId)
+                po.status = Some(0)
+                agentsService.update(agentId, po)
+                LogUtils.info("AgentRuntimeBridge: updated existing agent '${definition.name}' (id=${agentId}) instead of creating duplicate")
+                return APIResult<BaseAgent>(agent)
+            }
+            // 不存在同名记录，创建新记录
             let agentId = UUID.random().toString()
             let agent = buildAgentFromDefinition(definition)
             runtimeAgents.add(agentId, agent)

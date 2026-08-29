@@ -46,7 +46,7 @@ internal import std.sync.Monitor
 internal import std.sync.Mutex
 internal import std.time.DateTime
 internal import stdx.net.tls.TlsClientConfig
-internal import stdx.net.tls.TlsException
+internal import stdx.net.tls.common.TlsException
 internal import stdx.net.tls.TlsSocket
 internal import hyperion.buffer.ArrayByteBuffer
 internal import hyperion.buffer.ArrayByteBufferAllocator

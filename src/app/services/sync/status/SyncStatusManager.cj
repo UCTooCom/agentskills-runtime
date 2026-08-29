@@ -123,6 +123,87 @@ public class SyncStatusManager {
         }
     }
 
+    /**
+     * 按 sourcePath 更新 agent_skills 同步状态。
+     * SyncManager / RetryManager 传的 entityId 是 sourcePath（文件路径），不是 UUID，
+     * 必须先按 sourcePath 找行再 update，避免 "无效的类型 uuid 输入语法" 错误。
+     * 找不到行时返回 false（新技能首次同步时 insert 还未发生，属正常场景，不打 ERROR）。
+     */
+    public func updateAgentSkillSyncStatusBySourcePath(sourcePath: String, status: String): Bool {
+        mutex.lock()
+        try {
+            let skillsDAO = ORM.executor() as AgentSkillsDAO
+            if (let Some(dao) <- skillsDAO) {
+                let found = this.findAgentSkillBySourcePath(dao, sourcePath)
+                if (let Some(skill) <- found) {
+                    skill.syncStatus = Some(status)
+                    skill.lastSyncAt = Some(DateTime.now())
+                    dao.updateAgentSkills(skill)
+                    return true
+                }
+            }
+            return false
+        } catch (e: Exception) {
+            LogUtils.error("SyncStatusManager.updateAgentSkillSyncStatusBySourcePath failed: ${e.message}")
+            return false
+        } finally {
+            mutex.unlock()
+        }
+    }
+
+    /**
+     * 按 sourcePath 更新 agents 同步状态（与 updateAgentSkillSyncStatusBySourcePath 同构）。
+     */
+    public func updateAgentSyncStatusBySourcePath(sourcePath: String, status: String): Bool {
+        mutex.lock()
+        try {
+            let agentsDAO = ORM.executor() as AgentsDAO
+            if (let Some(dao) <- agentsDAO) {
+                let found = this.findAgentBySourcePath(dao, sourcePath)
+                if (let Some(agent) <- found) {
+                    agent.syncStatus = Some(status)
+                    agent.lastSyncAt = Some(DateTime.now())
+                    dao.updateAgents(agent)
+                    return true
+                }
+            }
+            return false
+        } catch (e: Exception) {
+            LogUtils.error("SyncStatusManager.updateAgentSyncStatusBySourcePath failed: ${e.message}")
+            return false
+        } finally {
+            mutex.unlock()
+        }
+    }
+
+    private func findAgentSkillBySourcePath(dao: AgentSkillsDAO, sourcePath: String): Option<AgentSkillsPO> {
+        let skills = dao.listAllAgentSkills()
+        for (skill in skills) {
+            match (skill.sourcePath) {
+                case Some(sp) =>
+                    if (sp == sourcePath) {
+                        return Some(skill)
+                    }
+                case None => ()
+            }
+        }
+        return None
+    }
+
+    private func findAgentBySourcePath(dao: AgentsDAO, sourcePath: String): Option<AgentsPO> {
+        let agents = dao.listAllAgents()
+        for (agent in agents) {
+            match (agent.sourcePath) {
+                case Some(sp) =>
+                    if (sp == sourcePath) {
+                        return Some(agent)
+                    }
+                case None => ()
+            }
+        }
+        return None
+    }
+
     public func getAgentSummary(): SyncStatusSummary {
         let summary = SyncStatusSummary()
         try {
@@ -213,6 +294,18 @@ public class SyncStatusManager {
         return updateAgentSyncStatus(id, "error")
     }
 
+    public func markAgentPendingBySourcePath(sourcePath: String): Bool {
+        return updateAgentSyncStatusBySourcePath(sourcePath, "pending")
+    }
+
+    public func markAgentSyncedBySourcePath(sourcePath: String): Bool {
+        return updateAgentSyncStatusBySourcePath(sourcePath, "synced")
+    }
+
+    public func markAgentErrorBySourcePath(sourcePath: String): Bool {
+        return updateAgentSyncStatusBySourcePath(sourcePath, "error")
+    }
+
     public func markAgentSkillPending(id: String): Bool {
         return updateAgentSkillSyncStatus(id, "pending")
     }
@@ -223,5 +316,17 @@ public class SyncStatusManager {
 
     public func markAgentSkillError(id: String): Bool {
         return updateAgentSkillSyncStatus(id, "error")
+    }
+
+    public func markAgentSkillPendingBySourcePath(sourcePath: String): Bool {
+        return updateAgentSkillSyncStatusBySourcePath(sourcePath, "pending")
+    }
+
+    public func markAgentSkillSyncedBySourcePath(sourcePath: String): Bool {
+        return updateAgentSkillSyncStatusBySourcePath(sourcePath, "synced")
+    }
+
+    public func markAgentSkillErrorBySourcePath(sourcePath: String): Bool {
+        return updateAgentSkillSyncStatusBySourcePath(sourcePath, "error")
     }
 }

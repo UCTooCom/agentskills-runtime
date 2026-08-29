@@ -17,7 +17,7 @@
   f_regex  = {path = "../f_regex"}
   f_util  = {path = "../f_util"}
 [package]
-  cjc-version = "1.0.5"
+  cjc-version = "1.1.3"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "MVC"

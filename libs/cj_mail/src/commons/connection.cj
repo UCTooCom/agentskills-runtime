@@ -5,6 +5,7 @@ import std.net.*
 import std.io.*
 import std.time.*
 import stdx.net.tls.*
+import stdx.net.tls.common.*
 import stdx.compress.zlib.*
 import cj_mail.exception.*
 
@@ -206,7 +207,7 @@ public func defaultTlsConnect(host: String, port: UInt16): MailConnection {
     socket.connect()
     let tls = try {
         var config = TlsClientConfig()
-        config.domain = host
+        config.serverName = Some(host)
         config.verifyMode = TrustAll
         TlsSocket.client(socket, clientConfig: config)
     } catch (e: Exception) {

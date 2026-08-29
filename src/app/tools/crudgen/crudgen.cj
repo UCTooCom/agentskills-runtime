@@ -8,6 +8,8 @@ import f_config.Config
 import f_orm.wrap.ORMConfig
 import std.database.sql.DriverManager
 import pgsql.PostgresDriver
+import std.fs.{Path, File, exists}
+import std.regex.Regex
 
 /**
  * CRUD代码生成器命令行工具
@@ -28,7 +30,39 @@ import pgsql.PostgresDriver
 main(args: Array<String>) {
     println("CRUD Generator starting...")
     println("Args: ${args}")
-    
+
+    // 加载 .env 环境变量（orm_* 数据源配置来源）
+    // 与 plugingen/main.cj 启动流程一致：读取 .env → Config.set → ORMConfig.refresh → ORM.initialize
+    // 否则 ORMConfig.getDefaultDriver() 为空，ORM.executor() 抛 "default datasource is not specified"
+    let envPaths = [Path("./.env"), Path("../.env")]
+    var envMap = HashMap<String, String>()
+    var envLoaded = false
+    for (envPath in envPaths) {
+        if (let Some(map) <- loadEnvFile(envPath)) {
+            println("已加载 .env: ${envPath}")
+            envMap = map
+            envLoaded = true
+            break
+        }
+    }
+    if (!envLoaded) {
+        println("警告: 未找到可用的 .env 文件，将使用默认/系统环境变量中的 orm_* 配置")
+    }
+
+    // 将 .env 中的 ORM 配置显式同步到 fountain 的 Config 中
+    let ormDrivers = envGetOrDefault(envMap, "orm_drivers", "postgres")
+    let ormDefaultDriver = envGetOrDefault(envMap, "orm_defaultDriver", "postgres")
+    let ormConnectionUrl = envGetOrDefault(envMap, "orm_connectionUrl", "")
+    let postgresOrmConnectionUrl = envGetOrDefault(envMap, "postgres_orm_connectionUrl", ormConnectionUrl)
+    Config.set([
+        ("orm_drivers", ormDrivers),
+        ("orm_defaultDriver", ormDefaultDriver),
+        ("orm_connectionUrl", ormConnectionUrl),
+        ("postgres_orm_connectionUrl", postgresOrmConnectionUrl)
+    ])
+    ORMConfig.refresh {
+    }
+
     // 初始化ORM和数据库连接
     if (!initializeORM()) {
         println("错误: 无法初始化数据库连接")
@@ -182,4 +216,52 @@ func initializeORM(): Bool {
         println("初始化失败: ${e.message}")
         return false
     }
+}
+
+/**
+ * 轻量解析 .env 文件（不引入 magic.config 依赖）
+ *
+ * 行级 KEY=VALUE 解析，支持行尾注释与成对引号剥离，
+ * 解析行为对齐 magic.config.EnvWrapper.load 的正则规则。
+ *
+ * @param path .env 文件路径
+ * @return 成功返回键值表；文件不存在或读取失败返回 None
+ */
+func loadEnvFile(path: Path): Option<HashMap<String, String>> {
+    if (!exists(path)) {
+        return None<HashMap<String, String>>
+    }
+    let map = HashMap<String, String>()
+    try {
+        let content = String.fromUtf8(File.readFrom(path))
+        let regex = Regex("^\\s*([\\w.]+)\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^#]*)\\s*(?:#.*)?$")
+        for (line in content.split("\n")) {
+            if (let Some(md) <- regex.find(line, group: true)) {
+                let key = md.matchString(1).trimAscii()
+                var value = md.matchString(2).trimAscii()
+                if (value.startsWith("\"")) {
+                    value = value.replace("\"", "")
+                } else if (value.startsWith("'")) {
+                    value = value.replace("'", "")
+                }
+                if (!key.isEmpty()) {
+                    map[key] = value
+                }
+            }
+        }
+        return Some(map)
+    } catch (_: Exception) {
+        println("警告: 读取 ${path} 失败，忽略该文件")
+        return None<HashMap<String, String>>
+    }
+}
+
+/**
+ * 从 .env 键值表读取配置，缺省时返回默认值
+ */
+func envGetOrDefault(map: HashMap<String, String>, key: String, dft: String): String {
+    if (let Some(v) <- map.get(key)) {
+        return v
+    }
+    return dft
 }

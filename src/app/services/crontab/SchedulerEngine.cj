@@ -15,6 +15,7 @@ import magic.app.services.crontab.executor.builtin.{BuiltinTaskHandler, Database
 import magic.app.services.crontab.misfire.{MisfireManager, MisfireAction}
 import magic.app.services.crontab.retry.RetryManager
 import magic.app.services.crontab.log.AsyncLogWriter
+import magic.app.services.sync.job.SyncScanJob
 
 public class SchedulerEngine {
     private static var instance_: Option<SchedulerEngine> = None<SchedulerEngine>
@@ -141,6 +142,12 @@ public class SchedulerEngine {
                             totalTaskCount = totalCount
                             activeTaskCount = activeCount
                             LogUtils.info("SchedulerEngine", "加载任务完成: 总计${totalCount}, 启用${activeCount}")
+
+                            // 注册内置定时任务（不依赖 crontab 表，代码硬编码）
+                            // PS-T018: SyncScanJob 定时扫描 skills/ 目录，触发 file→db 全量同步
+                            // 此前 SyncScanJob 继承 CronTicktockTask 但无注册点，导致定时扫描从未运行
+                            ticktockInstance.addOrReplaceTask(SyncScanJob())
+                            LogUtils.info("SchedulerEngine", "内置定时任务注册完成: sync-periodic-scan (cron='0 0 */5 * * *')")
                         case None =>
                             LogUtils.error("SchedulerEngine", "Ticktock初始化失败")
                     }

@@ -1,7 +1,8 @@
 package cos.http
 
 import stdx.net.http.*
-import stdx.net.tls.{TlsClientConfig, CertificateVerifyMode}
+import stdx.net.tls.TlsClientConfig
+import stdx.net.tls.common.CertificateVerifyMode
 import std.core.Duration
 import std.collection.{HashMap, ArrayList}
 import std.io.StringReader
@@ -39,7 +40,7 @@ public class CosHttpClient {
                 case Some(b) => b
                 case None => ""
             }
-            tlsConfig.domain = "${bucketDomain}.cos.${region}.myqcloud.com"
+            tlsConfig.serverName = Some("${bucketDomain}.cos.${region}.myqcloud.com")
             tlsConfig.verifyMode = TrustAll
             cb.tlsConfig(tlsConfig)
         }

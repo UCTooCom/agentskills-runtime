@@ -39,15 +39,20 @@ public class AgentSyncHandler <: SyncHandler {
     }
 
     public func syncFromFileSystem(sourcePath: String, context: SyncContext): SyncResult {
-        statusManager.markAgentPending(context.entityId)
+        // entityId 在 file->db 方向是 sourcePath（文件路径），必须用 BySourcePath 版本更新状态，
+        // 否则将路径字符串传入 findAgentsById 会触发 "无效的类型 uuid 输入语法"。
+        let normalizedId = ChangeDetector().normalizePath(context.entityId)
+        statusManager.markAgentPendingBySourcePath(normalizedId)
         try {
             let fullPath = buildFilePath(sourcePath)
             if (!exists(fullPath)) {
+                statusManager.markAgentErrorBySourcePath(normalizedId)
                 return SyncResult(false, entityType, context.entityId, SyncStatus.Error, "File not found: ${fullPath}")
             }
             let loader = AgentLoader(basePath_)
             let definitionOpt = loader.loadAgentFromFile(Path(fullPath))
             if (definitionOpt.isNone()) {
+                statusManager.markAgentErrorBySourcePath(normalizedId)
                 return SyncResult(false, entityType, context.entityId, SyncStatus.Error, "Failed to parse agent from file: ${fullPath}")
             }
             let definition = definitionOpt.getOrThrow()
@@ -63,16 +68,28 @@ public class AgentSyncHandler <: SyncHandler {
             if (let Some(dao) <- agentsDAO) {
                 if (existingPO.isSome()) {
                     dao.updateAgents(po)
-                    LogUtils.info("AgentSyncHandler: updated agent '${po.name}' from file")
+                    LogUtils.info("AgentSyncHandler: updated agent '${po.name}' from file (matched by sourcePath)")
                 } else {
-                    let newId = dao.insertAgents(po)
-                    LogUtils.info("AgentSyncHandler: inserted agent '${po.name}' with id ${newId}")
+                    // sourcePath 未匹配，尝试通过 name 查找已有记录
+                    // 逻辑上应该更新 AGENTS.md 中的 name 和 agents 表 name 一致的数据
+                    // 而不是新创建相同 name 的数据
+                    match (findAgentByName(dao, definition.name)) {
+                        case Some(existingByName) =>
+                            // 找到同名记录，更新它（包括 sourcePath）
+                            po.id = existingByName.id
+                            dao.updateAgents(po)
+                            LogUtils.info("AgentSyncHandler: updated agent '${po.name}' from file (matched by name, existing id=${existingByName.id})")
+                        case None =>
+                            // 既无 sourcePath 匹配也无 name 匹配，插入新记录
+                            let newId = dao.insertAgents(po)
+                            LogUtils.info("AgentSyncHandler: inserted agent '${po.name}' with id ${newId}")
+                    }
                 }
             }
-            statusManager.markAgentSynced(context.entityId)
+            statusManager.markAgentSyncedBySourcePath(normalizedSourcePath)
             return SyncResult(true, entityType, context.entityId, SyncStatus.Synced, "Synced from file: ${normalizedSourcePath}")
         } catch (e: Exception) {
-            statusManager.markAgentError(context.entityId)
+            statusManager.markAgentErrorBySourcePath(normalizedId)
             LogUtils.error("AgentSyncHandler.syncFromFileSystem failed: ${e.message}")
             return SyncResult(false, entityType, context.entityId, SyncStatus.Error, e.message)
         }
@@ -92,7 +109,8 @@ public class AgentSyncHandler <: SyncHandler {
                         let content = buildAgentMarkdown(definition)
                         let fullPath = buildFilePath(sourcePath)
                         writeToFile(fullPath, content)
-                        statusManager.markAgentSynced(entityId)
+                        // 用 sourcePath（文件路径）更新状态，避免把路径当 UUID 传入 findAgentsById
+                        statusManager.markAgentSyncedBySourcePath(sourcePath)
                         LogUtils.info("AgentSyncHandler: synced agent '${po.name}' to file")
                         return SyncResult(true, entityType, entityId, SyncStatus.Synced, "Synced to file: ${sourcePath}")
                     }
@@ -101,7 +119,10 @@ public class AgentSyncHandler <: SyncHandler {
             }
             return SyncResult(false, entityType, entityId, SyncStatus.Error, "Agent not found: ${entityId}")
         } catch (e: Exception) {
-            statusManager.markAgentError(entityId)
+            // syncToFileSystem 入参 entityId 理论上是 UUID，但 SyncInterceptor 从 DAO 返回值
+            // 提取的 entityId 可能是路径字符串。用 BySourcePath 版本更新状态，
+            // 即使 entityId 是路径也不会触发 "无效的类型 uuid 输入语法" 错误。
+            statusManager.markAgentErrorBySourcePath(entityId)
             LogUtils.error("AgentSyncHandler.syncToFileSystem failed: ${e.message}")
             return SyncResult(false, entityType, entityId, SyncStatus.Error, e.message)
         }
@@ -201,6 +222,21 @@ public class AgentSyncHandler <: SyncHandler {
                             return Some(agent)
                         }
                     case None => ()
+                }
+            }
+            return None
+        } catch (_: Exception) {
+            return None
+        }
+    }
+
+    /// 通过 name 查找已有 agent 记录（避免创建重复的同名记录）
+    private func findAgentByName(dao: AgentsDAO, name: String): Option<AgentsPO> {
+        try {
+            let agents = dao.listAllAgents()
+            for (agent in agents) {
+                if (agent.name == name) {
+                    return Some(agent)
                 }
             }
             return None

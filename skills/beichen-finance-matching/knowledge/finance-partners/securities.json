@@ -1,0 +1,87 @@
+{
+  "file": "securities",
+  "partners": [
+    {
+      "partner_no": "SC-001",
+      "type": "securities",
+      "name": "首创证券",
+      "strength_domains": [
+        "股权融资",
+        "债券承销",
+        "资产证券化",
+        "数据资产证券化"
+      ],
+      "service_count": 6,
+      "avg_cycle_days": 10,
+      "products": [
+        {
+          "name": "股权融资(IPO/再融资/定增/可转债)",
+          "type": "投行(股权)",
+          "amount": "视企业情况",
+          "term": "-",
+          "guarantee": "-",
+          "target": "各行业企业(重点科技类)",
+          "purpose": [
+            "股权融资",
+            "上市辅导"
+          ]
+        },
+        {
+          "name": "并购重组",
+          "type": "投行(股权)",
+          "amount": "视企业情况",
+          "term": "-",
+          "guarantee": "-",
+          "target": "有产业整合需求企业",
+          "purpose": [
+            "并购"
+          ]
+        },
+        {
+          "name": "公司债券/企业债券承销",
+          "type": "投行(债权)",
+          "amount": "视企业情况",
+          "term": "-",
+          "guarantee": "-",
+          "target": "地方国企/融资租赁/基础设施企业",
+          "purpose": [
+            "直接融资"
+          ]
+        },
+        {
+          "name": "ABS资产证券化",
+          "type": "投行(债权)",
+          "amount": "视企业情况",
+          "term": "-",
+          "guarantee": "基础资产",
+          "target": "有可证券化基础资产企业",
+          "purpose": [
+            "资产证券化"
+          ]
+        },
+        {
+          "name": "数据资产证券化",
+          "type": "投行(债权)",
+          "amount": "视企业情况",
+          "term": "-",
+          "guarantee": "数据资产",
+          "target": "有可确权数据资产国企",
+          "purpose": [
+            "资产证券化"
+          ]
+        },
+        {
+          "name": "直投股权投资",
+          "type": "股权",
+          "amount": "视企业情况",
+          "term": "-",
+          "guarantee": "-",
+          "target": "拟申报北交所等资本市场企业",
+          "purpose": [
+            "股权融资"
+          ]
+        }
+      ]
+    }
+  ]
+}

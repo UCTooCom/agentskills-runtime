@@ -1,0 +1,69 @@
+name: beichen-finance-matching
+description: 金融匹配智能体 —— 需求建档、机构匹配、方案生成、材料包、SOP 跟踪、落库全流程（北辰命题"金融服务体系化"SOP）
+version: 1.0.0
+
+# 组合步骤：全流程编排（需求建档 → 机构匹配 → 方案生成 → 材料包 → 跟踪 → 落库）
+steps:
+  - name: collect-need
+    step_type: script
+    script: scripts/collect_financing_need.py
+    depends_on: []
+    input:
+      company: "${input.company}"
+      amount: "${input.amount}"
+      purpose: "${input.purpose}"
+      term: "${input.term}"
+      guarantee: "${input.guarantee}"
+
+  - name: match-finance
+    step_type: script
+    script: scripts/match_finance.py
+    depends_on:
+      - collect-need
+    input:
+      need: "${collect-need.output}"
+      topn: "${input.topn}"
+
+  - name: generate-plan
+    step_type: script
+    script: scripts/generate_finance_plan.py
+    depends_on:
+      - match-finance
+    input:
+      need: "${collect-need.output}"
+      matches: "${match-finance.output}"
+
+  - name: build-dossier
+    step_type: script
+    script: scripts/build_dossier.py
+    depends_on:
+      - generate-plan
+    input:
+      need: "${collect-need.output}"
+      partner: "${input.partner}"
+
+  - name: track-service
+    step_type: script
+    script: scripts/track_service.py
+    depends_on:
+      - generate-plan
+    input:
+      case_id: "${input.case_id}"
+
+  - name: persist-result
+    step_type: script
+    script: scripts/save_to_db.py
+    depends_on:
+      - track-service
+    input:
+      need: "${collect-need.output}"
+      plan: "${generate-plan.output}"
+      tracking: "${track-service.output}"
+      sql_only: "${input.sql_only}"
+
+  - name: output-result
+    step_type: output
+    depends_on:
+      - persist-result
+    input:
+      plans_dir: "${generate-plan.output}"

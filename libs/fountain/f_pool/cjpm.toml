@@ -3,13 +3,12 @@
   f_exception  = {path = "../f_exception"}
   f_log  = {path = "../f_log"}
 [package]
-  cjc-version = "1.0.5"
+  cjc-version = "1.1.3"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "a pool implementation"
   link-option = ""
   name = "f_pool"
-  organization="fountain"
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""

@@ -30,15 +30,11 @@ protected struct JsonUtils {
     }
 
     public static func buildJsonArray(items: Array<String>): JsonArray {
-        return JsonArray(
-            items |> map { v => (JsonString(v) as JsonValue).getOrThrow() } |> collectArray
-        )
+        return JsonArray(items.map { v => (JsonString(v) as JsonValue).getOrThrow() })
     }
 
     public static func buildJsonArray<T>(items: Array<T>): JsonArray where T <: JsonValue {
-        return JsonArray(
-            items |> map { v => (v as JsonValue).getOrThrow() } |> collectArray
-        )
+        return JsonArray(items.map { v => (v as JsonValue).getOrThrow() })
     }
 
     public static func appendJsonObject(obj: JsonObject, items: Array<(String, String)>): JsonObject {
@@ -168,10 +164,8 @@ protected struct JsonUtils {
     }
 
     public static func toFloatArray(j: JsonArray): Array<Float64> {
-        return j.getItems() |>
-            map { item: JsonValue =>
-                JsonUtils.toFloat(item).getOrThrow()
-            } |>
-            collectArray
+        return j.getItems().map { item: JsonValue =>
+            JsonUtils.toFloat(item).getOrThrow()
+        }.toArray()
     }
 }

@@ -1,0 +1,25 @@
+{
+  "case_id": "FC-20260829-5033BE",
+  "company_name": "北京北辰实业有限公司",
+  "current_stage": 2,
+  "history": [
+    {
+      "stage": 1,
+      "name": "资料提交与审核",
+      "started_at": "2026-08-29",
+      "due_date": "2026-08-31",
+      "owner": "",
+      "status": "completed",
+      "completed_at": "2026-08-29"
+    },
+    {
+      "stage": 2,
+      "name": "方案制定与洽谈",
+      "started_at": "2026-08-29",
+      "due_date": "2026-08-31",
+      "owner": "张工",
+      "status": "in_progress"
+    }
+  ],
+  "overdue": false
+}

@@ -169,11 +169,12 @@ onUnmounted(() => cleanupPageTool?.())
       </template>
     </div>
     <div class="recycle-bin-switch">
+      <span class="recycle-bin-label">{{ $t('menu.recyclingBin') }}</span>
       <TinySwitch
         v-model="isRecycleBin"
         :show-text="true"
-        :checked-text="'回收站'"
-        :unchecked-text="'回收站'"
+        :checked-text="$t('menu.recyclingBin')"
+        :unchecked-text="$t('menu.recyclingBin')"
         @change="handleRecycleBinChange"
       />
     </div>

@@ -108,17 +108,13 @@ extend<T> Array<T> <: FromJsonValue<Array<T>> where T <: FromJsonValue<T> {
         let jsArr = JsonUtils.asJsonArray(json).getOrThrow({
                 => JsonableException("Convert to Array error. Value: ${json.toJsonString()}")
         })
-        return jsArr.getItems() |>
-               map { item: JsonValue => T.fromJsonValue(item) } |>
-               collectArray
+        return jsArr.getItems().map { item: JsonValue => T.fromJsonValue(item) }.toArray()
     }
 }
 
 extend<T> Array<T> <: ToJsonValue where T <: ToJsonValue {
     public func toJsonValue(): JsonValue {
-        return JsonArray(
-            this |> map<T, JsonValue>({ value: T => value.toJsonValue() }) |> collectArray
-        )
+        return JsonArray(this.map<JsonValue>({ value: T => value.toJsonValue() }))
     }
 }
 
@@ -135,20 +131,14 @@ extend<T> ArrayList<T> <: FromJsonValue<ArrayList<T>> where T <: FromJsonValue<T
         let jsArr = JsonUtils.asJsonArray(json).getOrThrow({
                 => JsonableException("Convert to ArrayList error. Value: ${json.toJsonString()}")
         })
-        let arr = jsArr.getItems() |>
-                  map { item: JsonValue => T.fromJsonValue(item) } |>
-                  collectArray
+        let arr = jsArr.getItems().map { item: JsonValue => T.fromJsonValue(item) }.toArray()
         return ArrayList<T>(arr)
     }
 }
 
 extend<T> ArrayList<T> <: ToJsonValue where T <: ToJsonValue {
     public func toJsonValue(): JsonValue {
-        return JsonArray(
-            this.iterator() |>
-            map { value: T => value.toJsonValue() } |>
-            collectArray
-        )
+        return JsonArray(this.toArray().map { value: T => value.toJsonValue() })
     }
 }
 

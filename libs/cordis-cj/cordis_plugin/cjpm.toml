@@ -1,0 +1,36 @@
+[package]
+  cjc-version = "1.1.3"
+  name = "cordis_plugin"
+  organization = "ystyle"
+  description = "Cordis 动态组合框架插件 SDK"
+  version = "0.1.0"
+  target-dir = ""
+  script-dir = ""
+  output-type = "static"
+  compile-option = ""
+  override-compile-option = ""
+  link-option = ""
+  include = ["src"]
+  license = ["MIT"]
+  repository = "https://atomgit.com/ystyle/cordis-cj.git"
+  authors = ["ystyle"]
+
+[dependencies]
+  "ystyle::cordis_core" = { path = "../cordis_core" }
+  "ystyle::jsonrpc" = { path = "../../jsonrpc" }
+  "jsonvalue" = { path = "../../jsonvalue" }
+
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["../../cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}", "${OHOS_CANGJIE_STDX_PATH}"]
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}", "${OHOS_CANGJIE_STDX_PATH}"]

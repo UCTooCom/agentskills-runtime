@@ -1,0 +1,51 @@
+name: beichen-policy-assistant
+description: 产业政策智能体 —— 企业画像、政策匹配、适配报告、申报任务全流程（北辰命题"政策赋能精准化"SOP）
+version: 1.0.0
+
+# 组合步骤：全流程编排（企业画像 → 政策匹配 → 报告生成 → 落库呈现）
+# 注：init 与 update 为独立维护能力，不在本主流程内（由运营侧单独触发）
+steps:
+  - name: build-profile
+    step_type: script
+    script: scripts/build_enterprise_profile.py
+    depends_on: []
+    input:
+      company: "${input.company}"
+      outdir: "output/profiles"
+
+  - name: match-policy
+    step_type: script
+    script: scripts/match_policy.py
+    depends_on:
+      - build-profile
+    input:
+      profile: "${build-profile.output}/${input.company_slug}.json"
+      topn: "${input.topn}"
+
+  - name: generate-report
+    step_type: script
+    script: scripts/generate_policy_report.py
+    depends_on:
+      - match-policy
+    input:
+      profile: "${build-profile.output}/${input.company_slug}.json"
+      matches: "${match-policy.output}/${input.company_slug}-${input.date}.json"
+      outdir: "output/reports"
+
+  - name: persist-report
+    step_type: script
+    script: scripts/save_to_db.py
+    depends_on:
+      - generate-report
+    input:
+      profile: "${build-profile.output}/${input.company_slug}.json"
+      report: "${generate-report.output}/${input.company_slug}-${input.date}.md"
+      matches: "${match-policy.output}/${input.company_slug}-${input.date}.json"
+      sql_only: "${input.sql_only}"
+
+  - name: output-result
+    step_type: output
+    depends_on:
+      - persist-report
+    input:
+      reports_dir: "${generate-report.output}"

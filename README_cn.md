@@ -1,7 +1,7 @@
 # AgentSkills Runtime ：AI驱动开发框架
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.25-blue.svg)](https://github.com/UCTooCom/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.27-blue.svg)](https://github.com/UCTooCom/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## 项目简介
@@ -77,6 +77,26 @@ AgentSkills Runtime 是一个全面的框架，用于构建和执行 AI 智能�
 打造国产自主可控的 AI 智能体技能运行时，推动 Agent Skills 标准在AI生态中的落地应用，构建开放、安全、高效的 AI 原生应用基础设施。旨在让 AgentSkills 能够在任何地方运行。
 
 ## 落地案例与价值说明书 (Business Case & Value Proposition)
+
+### shenicest黑客松提交
+
+**最终提交清单：**
+
+- 软件应用赛道：北辰商管 北⾠产业云社区命题
+- 作品名称：AgentSkills-runtime采用仓颉编程语言的国产AIAgent
+- 作品 Slogan：以中国智慧，筑全球智联，共建AI时代新质生产力
+- 作品描述：采用全栈自研的AgentSkills-runtime（简称asr）新一代AI驱动开发框架，开发了北辰产业云社区完整的解决方案。本次参赛主要完成的开发产物如下：1）更新asr v0.0.27版本，发布了一切皆技能的插件系统，对标deepseek-harness的一切皆插件方案，asr的插件系统更加智能，并且具有强安全、高性能、原生智能，以及更加适用于企业级客户的确定性设计理念。2）针对北辰产业云社区需求，开发了线上供需对接官网子系统。3）针对北辰产业云社区需求的政策赋能精准化和⾦融服务体系化两个课题，开发了产业政策智能体和⾦融匹配智能体。实现了入驻企业智能化对接产业需求和金融服务。
+- 项目图片：（待补充）
+- GitHub 代码仓库（设置 Topic 为 `#shenicest-fission`）：
+  1. AI驱动开发框架 https://atomgit.com/UCToo/agentskills-runtime
+  2. shenicest黑客松规范驱动开发文档 `apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon`
+  3. 北辰政策助手 `apps/agentskills-runtime/skills/beichen-policy-assistant`
+  4. 北辰金融对接 `apps/agentskills-runtime/skills/beichen-finance-matching`
+  5. 供需对接官网 https://atomgit.com/UCToo/web-admin
+- 项目文档（项目背景、目标用户、技术栈、创新点、团队分工、开发过程及后续计划等）：`apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon/shenicest项目文档-AgentSkills-runtime.docx`
+- 作品演示视频：[北辰政策助手 Demo 录屏](./public/beichen_demo.mp4)
+- 可直接体验项目的链接（可选）：https://demo.uctoo.com
+- 知乎文章：《重大更新，一切皆技能的插件系统》 https://zhuanlan.zhihu.com/p/2077145055673037317
 
 > **参赛作品**：金融行业应用 Agent 黑客松（2026/07/27 - 2026/08/08）
 > **演示视频**：[智能投研助理 Demo 录屏](./public/demo.mp4)
@@ -581,8 +601,8 @@ AgentSkills Runtime 内置了两个代码生成工具，可从数据库表结构
 # 生成指定表的后端 CRUD 模块
 cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db <数据库名> --table <表名>"
 
-# 示例：生成 uctoo 数据库 point_transactions 表的后端模块
-cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db uctoo --table point_transactions"
+# 示例：生成 uctoo 数据库 feedback 表的后端模块
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db uctoo --table feedback"
 
 # 生成指定数据库所有表的后端 CRUD 模块
 cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--db uctoo --all"
@@ -608,9 +628,9 @@ cjpm run --skip-build --name magic.app.tools.crudgen --run-args="--help"
 # 生成指定表的前端 Web 页面
 cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db <数据库名> --table <表名>"
 
-# 示例：生成 uctoo 数据库 point_transactions 表的前端页面
-cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --table point_transactions"
-
+# 示例：生成 uctoo 数据库 feedback 表的前端页面
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --table feedback"
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --table codelabs"
 # 生成指定数据库所有表的前端 Web 页面
 cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --all"
 
@@ -634,6 +654,285 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--help"
 # Web CRUD 代码输出根目录（crudweb 会自动追加 /web/src/ 子目录）
 WEB_CRUD_OUTPUT_DIR=D:\path\to\web-admin
 ```
+
+#### plugingen - 插件生成器（插件轨）
+
+`plugingen` 是与 `crudgen` 同构的确定性生成工具，但产物落在**插件轨**而非宿主轨：它从 `db_info` 读取表结构，按"三维一体"插件目录规范生成 `skills/{name}/`（SKILL.md + plugin.yaml + scripts/cj/ 五层 CRUD + 插件入口）。新能力一律以插件形态交付，不再向 `src/app` 与 `AutoRouteConfig.cj` 追加代码。
+
+> **crudgen vs plugingen 选型**：
+> - **crudgen**：生成**宿主模块**到 `src/app/`，自动追加 `AutoRouteConfig.cj`——面向存量冻结的宿主本体（只减不增通道）。
+> - **plugingen**：生成**插件**到 `skills/{name}/`，经 `build.cj` 的 build-sync（PS-T015）同步到 `src/plugins/{name}/` 参与编译，包名 `magic.plugins.{name}`——面向未来新插件（双轨并存的插件轨）。
+
+```bash
+# 表驱动：从 db_info 读表结构，生成五层 CRUD 插件到 skills/{name}/
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args="--name <插件名> --db <数据库名> --table <表名>"
+
+# 示例：生成 uctoo 数据库 feedback 表的 CRUD 插件（插件名与表名相同）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args="--name feedback --db uctoo --table feedback"
+
+# 空白骨架：仅生成 SKILL.md + plugin.yaml + 包占位 + 插件入口（跳过表结构）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args="--name mytool --blank"
+
+# 查看帮助信息
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args="--help"
+```
+
+**选项**：
+
+| 选项 | 说明 |
+|------|------|
+| `--name <插件名>` | 插件唯一名（必填）。小写字母/数字/下划线，连字符自动转下划线。 |
+| `--db <数据库名>` | 表驱动模式：数据库名（读 `db_info` 表结构）。 |
+| `--table <表名>` | 表驱动模式：表名。 |
+| `--blank` | 生成空白插件骨架（跳过表结构）。 |
+| `--help`, `-h` | 显示帮助。 |
+
+**生成内容**（产物在 `skills/{name}/`）：
+
+| 产物 | 路径 | 说明 |
+|------|------|------|
+| 技能定义 | `skills/{name}/SKILL.md` | SkillEngine 资产，不编译 |
+| 插件清单 | `skills/{name}/plugin.yaml` | 插件静态元数据（name/version/entry/tables/routes） |
+| 包占位 | `skills/{name}/scripts/cj/pkg.cj` | 仓颉包声明 `package magic.plugins.{name}` |
+| PO 层 | `skills/{name}/scripts/cj/{ClassName}PO.cj` | 持久化对象 |
+| DAO 层 | `skills/{name}/scripts/cj/{ClassName}DAO.cj` | 数据访问 |
+| Service 层 | `skills/{name}/scripts/cj/{ClassName}Service.cj` | 业务逻辑 |
+| Controller 层 | `skills/{name}/scripts/cj/{ClassName}Controller.cj` | 控制器 |
+| Route 层 | `skills/{name}/scripts/cj/{ClassName}Route.cj` | 路由（`@ModuleRoute` 注解） |
+| 插件入口 | `skills/{name}/scripts/cj/{ClassName}Plugin.cj` | `@Plugin` 注解，`onLoad` 接线 Service→Controller |
+
+同时自动追加宿主加载清单条目到 `config/plugins.yaml`（含 `name`/`className`/`enabled`/`order`/`routeClass`/`config`）。
+
+**自动生成菜单权限节点**（与 crudgen 一致）：
+
+生成代码文件后，plugingen 会自动向 `permissions` 表写入三级菜单结构，并向 `i18` 表插入多语言 title，web 管理后台据此渲染菜单：
+
+```
+database（根菜单）
+└── database.{dbName}（数据库菜单）
+    └── database.{dbName}.{tableName}（表菜单，component 指向 database/{dbName}/{tableName}/index）
+```
+
+- **幂等**：节点已存在则跳过；被软删除则恢复（`deleted_at = NULL`）；不存在则创建。
+- **i18 多语言**：表节点插入后，按 `locale`（如 `menu.database.uctoo.feedback`）向 `i18` 表写入 title 记录。
+- **菜单可见性**：生成后需在 web 管理后台为对应角色分配该菜单权限，或由管理员账号直接查看。
+
+> 注：plugingen 仅在**表驱动模式**（`--db` + `--table`）下生成菜单权限节点；`--blank` 空白骨架模式不涉及数据库表，不生成菜单。
+
+**后续步骤**（build-sync 自动衔接）：
+
+1. **`cjpm build`**：`build.cj` 的 pre-build 钩子自动把 `skills/{name}/scripts/cj/` 同步到 `src/plugins/{name}/`（产物不入库，见 `.gitignore`），并扫描 `plugin.yaml` 的 `entry`/`routes` 类名生成 `src/plugins/generated_anchors.cj`（L1 反射锚点，确保静态链接保留插件类）。
+2. **启动宿主**：`PluginManager` 按 `config/plugins.yaml` 加载插件，`PluginRouteScanner` 运行时反射注册路由（`@ModuleRoute` → `ClassTypeInfo.get` → `ConstructorInfo.apply` → `register(router, controller)`）。
+3. **零框架改动上线**：新插件上线无需修改 `main.cj` 或 `AutoRouteConfig.cj`，build-sync 的锚点机制自动覆盖。
+
+> **依赖校验**：build-sync 在同步前对 `plugin.yaml` 的 `dependencies` 做轻量 warn 级校验（缺失 `skills/{dep}/` 目录时打印 WARN），硬校验由运行期 `PluginLoader` 承担。
+
+### 一切皆技能：插件系统完整指南
+
+AgentSkills Runtime 遵循"**一切皆技能**"的设计哲学——所有新能力一律以插件形态交付，不再向 `src/app` 与 `AutoRouteConfig.cj` 追加代码。插件系统分四个阶段演进：
+
+| 阶段 | 版本 | 晋级门槛 | 状态 |
+|------|------|---------|------|
+| 一：插件框架核心 | v0.5 | 集成测试全绿，存量功能回归无损 | ✅ 完成 |
+| 二：增量插件化就位 | v0.6 | 第一个真实新插件不经框架代码修改上线 | ✅ 验证通过 |
+| 三：L2 动态加载 | v0.7~v0.9 | 不重编宿主装上一个新插件 | ✅ 完成 |
+| 四：插件市场 | v1.0/v1.1 | 第三方可独立发布插件 | ⏳ 规划中 |
+
+#### 插件系统架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    宿主（magic.app）                         │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐ │
+│  │PluginManager│  │PluginRoute   │  │SkillBridge         │ │
+│  │ (生命周期)  │  │Scanner(路由) │  │ (技能融合)         │ │
+│  └──────┬──────┘  └──────┬───────┘  └─────────┬──────────┘ │
+│         │                │                     │            │
+│  ┌──────▼──────┐  ┌──────▼───────┐  ┌─────────▼──────────┐ │
+│  │PluginLoader │  │PluginEventBus│  │ServiceRegistry      │ │
+│  │ (反射加载)  │  │ (事件总线)   │  │ (服务注册表)        │ │
+│  └──────┬──────┘  └──────────────┘  └────────────────────┘ │
+│         │                                                    │
+│  ┌──────▼──────┐                                            │
+│  │PluginDylib  │  ← L2 动态库加载（PS-T012）               │
+│  │Loader       │                                            │
+│  └─────────────┘                                            │
+└─────────────────────────────────────────────────────────────┘
+                    ↕ plugin_spi 契约
+┌─────────────────────────────────────────────────────────────┐
+│              插件包（magic.plugins.{name}）                  │
+│  @PluginAnnotation + @ModuleRouteAnnotation                  │
+│  独立 cjpm 包 → libskill_{name}.so → 闭源分发              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 插件开发方式
+
+**方式一：plugingen 表驱动生成（推荐）**
+
+```bash
+# 从 db_info 读表结构，生成五层 CRUD 插件到 skills/{name}/
+cjpm run --skip-build --name magic.plugin.tools.plugingen \
+  --run-args="--name <插件名> --db <数据库名> --table <表名>"
+
+# 示例：生成 uctoo 数据库 feedback 表的 CRUD 插件
+cjpm run --skip-build --name magic.plugin.tools.plugingen \
+  --run-args="--name feedback --db uctoo --table feedback"
+```
+
+**方式二：空白骨架手工开发**
+
+```bash
+# 生成空白插件骨架（仅 SKILL.md + plugin.yaml + 包占位 + 插件入口）
+cjpm run --skip-build --name magic.plugin.tools.plugingen \
+  --run-args="--name mytool --blank"
+```
+
+生成后在 `skills/mytool/scripts/cj/` 下添加业务代码，经 build-sync 参与编译。
+
+**插件三维一体结构**：
+
+| 维度 | 产物 | 说明 |
+|------|------|------|
+| Service | `{ClassName}Service.cj` | 业务逻辑，经 ServiceRegistry 类型安全轨暴露 |
+| Skill | `SKILL.md` | SkillEngine 资产，经 SkillBridge 自动注册 |
+| Route | `{ClassName}Route.cj` | `@ModuleRouteAnnotation` 声明式路由，经 PluginRouteScanner 反射注册 |
+
+#### 插件加载机制
+
+**L1 反射加载**（阶段一~二，存量轨）：
+- `ClassTypeInfo.get(全限定名)` → `findAnnotation<PluginAnnotation>()` → `ConstructorInfo.apply` 实例化
+- build-sync 同步 `skills/{name}/scripts/cj/` → `src/plugins/{name}/` 参与宿主编译
+- `generated_anchors.cj` 反射锚点防 LTO 裁剪
+
+**L2 动态库加载**（阶段三，插件轨）：
+- 插件独立 cjpm 包编译为 `libskill_{name}.so`（`output-type = "dynamic"`）
+- `PluginDylibLoader.loadFromDylib(libPath, pluginName)` 动态加载
+- 复用 fountain `App.run()` 管线：`PackageInfo.load` → `BeanFactory.afterRegistered()` → `getList<Plugin>()`
+- **不重编宿主装上一个新插件**——阶段三晋级门槛达成
+
+#### 插件发布方式
+
+**workspace 成员模式**（方案 A，阶段三 L2 动态库加载）：
+
+插件作为宿主 cjpm workspace 的独立成员，编译为动态库（`output-type = "dynamic"`），宿主通过 fountain 的 `PackageInfo.load` 管线动态加载。
+
+1. **生成插件**：`plugingen --name entity --db uctoo --table entity`
+   - 自动生成 `skills/entity/cjpm.toml`（workspace 成员配置）
+   - 自动追加宿主 `cjpm.toml` 的 `[workspace] members`
+   - 自动追加 `config/plugins.yaml` 加载清单条目
+2. **独立编译**：`cd skills/entity && cjpm build`，产出 `target/release/libskill_entity.so`
+3. **分发单元**：`plugin.yaml` 是分发单元清单（含 `name`/`version`/`entry`/`dylib`/`tables`/`routes`）
+4. **闭源分发**：plugin-spi 依赖最小化（仅仓颉标准库 + cangjie-stdx），插件可以动态库形式闭源分发
+5. **宿主加载**：宿主侧 `config/plugins.yaml` 声明插件条目，`PluginDylibLoader` 动态加载
+
+**独立插件目录结构**（以 entity 为例）：
+
+```
+skills/entity/
+├── cjpm.toml          # workspace 成员配置（name="skill_entity"，output-type="dynamic"）
+├── plugin.yaml        # 分发单元清单（含 dylib: libskill_entity.so）
+├── SKILL.md           # 技能描述（SkillEngine 资产）
+└── src/               # 源码目录（符合 cjpm 包结构规范，src-dir="src"）
+    ├── pkg.cj         # 包占位（package skill_entity）
+    ├── EntityPO.cj    # 持久化对象
+    ├── EntityDAO.cj   # 数据访问
+    ├── EntityService.cj    # 业务逻辑
+    ├── EntityController.cj # 控制器
+    ├── EntityRoute.cj      # 路由（@ModuleRouteAnnotation）
+    └── EntityPlugin.cj     # 插件入口（@PluginAnnotation）
+```
+
+**宿主 cjpm.toml workspace 配置**：
+
+```toml
+[workspace]
+  members = ["./skills/entity", "./skills/feedback"]
+```
+
+新插件加入：在 `members` 列表追加 `"./skills/{name}"`（plugingen 自动完成）。
+
+#### 插件卸载方式
+
+**pluginuninstall CLI 工具**（PS-T019/PS-T020）：
+
+```bash
+# 卸载插件（从 plugins.yaml 移除条目 + 提示运行态卸载）
+cjpm run --skip-build --name magic.plugin.tools.pluginuninstall \
+  --run-args="--name entity"
+
+# 同时删除插件目录
+cjpm run --skip-build --name magic.plugin.tools.pluginuninstall \
+  --run-args="--name entity --purge"
+
+# 指定配置文件路径
+cjpm run --skip-build --name magic.plugin.tools.pluginuninstall \
+  --run-args="--name entity --config ./config/plugins.yaml"
+```
+
+**卸载流程**：
+1. 从 `plugins.yaml` 精确移除指定插件条目（向前回溯注释/空行，向后删除到下一个条目）
+2. 提示运行态卸载（CLI 工具不直接调用 PluginManager.deactivate，需重启宿主或使用 Agent 工具 `plugin_deactivate`）
+3. 可选删除插件目录（`--purge`，递归删除）
+
+**运行态卸载**（Agent 工具）：
+- `plugin_deactivate(name)` → `PluginManager.deactivate(name)`
+- 卸载后五维度清理：路由清理、事件订阅清理、注册表清理、服务注销清理、isolation 验证
+
+#### 插件系统核心组件
+
+| 组件 | 文件 | 职责 |
+|------|------|------|
+| PluginManager | `src/plugin/plugin_manager.cj` | 插件生命周期编排器（load → onLoad → onActivate → 注册 → 技能注册） |
+| PluginLoader | `src/plugin/plugin_loader.cj` | L1 反射加载器（ClassTypeInfo.get → findAnnotation → ConstructorInfo.apply） |
+| PluginDylibLoader | `src/plugin/plugin_dylib_loader.cj` | L2 动态库加载器（PackageInfo.load → BeanFactory.afterRegistered → getList<Plugin>） |
+| PluginRouteScanner | `src/plugin/plugin_route_scanner.cj` | 插件路由运行时注册器（双轨路由的插件轨） |
+| PluginEventBus | `libs/plugin-spi/src/plugin_event_bus.cj` | 插件协作事件总线（emit 广播 + waterfall 链式 + ConcurrentHashMap 并发控制） |
+| ServiceRegistry | `libs/plugin-spi/src/service_registry.cj` | 服务注册表（方案 B 完整委托 BeanFactory） |
+| PluginSyncBridge | `src/plugin/plugin_sync_bridge.cj` | 插件运行态同步桥（订阅 PluginEventBus 事件 → 回写 agent_skills 表） |
+| plugin-spi | `libs/plugin-spi/` | 插件 SPI 契约包（依赖最小化，支持独立编译为动态库） |
+
+#### plugin-spi 抽取（PS-T017 方案 B）
+
+插件契约自 `magic.plugin` 迁入独立包 `plugin_spi`（`libs/plugin-spi/`），采用**方案 B 完整委托 + 转发模式**：
+
+- **plugin-spi 依赖最小化**：仅依赖仓颉标准库（std.*）+ cangjie-stdx（stdx.*），不依赖 http_lib/magic.log/fountain
+- **ServiceRegistry 委托 BeanFactory**：方案 B 完整委托，复用 fountain BeanFactory 的 getList<T>/getFirst<T> 泛型查找
+- **PluginEventBus 优化并发控制**：ConcurrentHashMap 替代 HashMap+Mutex，复用 fountain f_concurrent 的并发模式
+- **转发模式**：`src/plugin/spi_reexport.cj` 的 `public import plugin_spi.{Plugin, ...}` 让存量 `import magic.plugin.{Plugin, ...}` 的使用方零改动
+
+**plugin-spi 包结构**：
+
+```
+libs/plugin-spi/
+├── cjpm.toml          # 独立 cjpm 包配置（output-type="dynamic"）
+└── src/
+    ├── plugin.cj              # Plugin 接口（getName/onLoad/onActivate/onDeactivate/onUnload）
+    ├── plugin_annotation.cj   # @PluginAnnotation 注解
+    ├── plugin_context.cj      # PluginContext（生命周期载体 + onCleanup 清理栈）
+    ├── plugin_event_bus.cj    # PluginEventBus（ConcurrentHashMap 并发控制）
+    ├── service_registry.cj    # ServiceRegistry（委托 BeanFactory）
+    ├── module_route_annotation.cj  # @ModuleRouteAnnotation 注解
+    └── plugin_types.cj        # PluginState/PluginError/LoadResult 等类型
+```
+
+#### 插件系统验收标准
+
+**阶段三晋级门槛达成**：
+- ✅ plugin-spi 抽取（方案 B + 转发模式，依赖最小化，支持独立编译为动态库）
+- ✅ L2 动态库加载原型（`PluginDylibLoader`，复用 fountain App.run() 管线）
+- ✅ pluginuninstall 工具（与 plugingen 同构，YAML 条目精确移除 + 递归删除）
+- ✅ build-sync 双轨（存量轨 `src/app/` + 插件轨 `skills/{name}/` → `src/plugins/{name}/`）
+- ✅ plugingen 升级（模板 import 升级为 plugin_spi，生成插件与最新插件机制一致）
+- ✅ 卸载回归验证（`testUninstallRegression` 5 维度 13 断言：路由/事件/注册表/服务/isolation）
+
+**卸载回归验证五维度**（PS-T021 `testUninstallRegression`）：
+
+1. **路由清理**：`routeClassNames()` 不再包含已卸载插件的 routeClass
+2. **事件订阅清理**：`PluginEventBus.unsubscribeAll(name)` 后该插件的事件订阅全部移除
+3. **注册表清理**：`registryRef().get(name)` 返回 None
+4. **服务注销清理**：`services().getService<T>()` 返回 None
+5. **isolation 验证**：卸载 doc-helper 不影响其他插件
 
 #### 通用模块开发流程
 

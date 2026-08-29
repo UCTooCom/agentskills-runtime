@@ -1,0 +1,23 @@
+[workspace]
+  members = ["cordis_core", "cordis_host", "cordis_plugin", "cordis_examples", "cordis_tests"]
+  build-members = ["cordis_core", "cordis_host", "cordis_plugin", "cordis_examples", "cordis_tests"]
+  test-members = ["cordis_core", "cordis_host", "cordis_plugin", "cordis_examples", "cordis_tests"]
+  compile-option = ""
+  override-compile-option = ""
+  link-option = ""
+  target-dir = ""
+
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}", "${OHOS_CANGJIE_STDX_PATH}"]
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}", "${OHOS_CANGJIE_STDX_PATH}"]

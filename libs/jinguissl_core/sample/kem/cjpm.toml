@@ -1,6 +1,6 @@
 [package]
   name = "kem_sample"
-  cjc-version = "1.0.0"
+  cjc-version = "1.1.3"
   version = "0.1.0"
   output-type = "executable"
   src-dir = "src/kem_sample"

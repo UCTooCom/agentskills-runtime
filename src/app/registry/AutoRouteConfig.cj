@@ -264,7 +264,7 @@ public class AutoRouteConfig {
         ))
         
         // Entity 路由
-        registry.add(RouteEntry(
+   /*     registry.add(RouteEntry(
             "entity",
             "/api/v1/uctoo/entity",
             10,
@@ -275,7 +275,7 @@ public class AutoRouteConfig {
                 let route = EntityRoute(router, controller)
                 route.register()
             }
-        ))
+        ))*/
         
         // OperateLog 路由
         registry.add(RouteEntry(
@@ -316,7 +316,6 @@ public class AutoRouteConfig {
                 let controller = CrontabTaskRegistryController(service)
                 let route = CrontabTaskRegistryRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -331,7 +330,6 @@ public class AutoRouteConfig {
                 let controller = CrontabLogController(service)
                 let route = CrontabLogRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -348,7 +346,6 @@ public class AutoRouteConfig {
                 let controller = CrontabController(service, schedulerService, logService)
                 let route = CrontabRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -363,7 +360,6 @@ public class AutoRouteConfig {
                 let controller = DbConnectionController(service)
                 let route = DbConnectionRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -422,7 +418,6 @@ public class AutoRouteConfig {
                 let controller = PermissionsController(service)
                 let route = PermissionsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
         
@@ -608,7 +603,6 @@ public class AutoRouteConfig {
                 let controller = AgentKanbanTasksController(service)
                 let route = AgentKanbanTasksRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -623,7 +617,6 @@ public class AutoRouteConfig {
                 let controller = SkillUsageStatsController(service)
                 let route = SkillUsageStatsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -638,7 +631,6 @@ public class AutoRouteConfig {
                 let controller = AgentLoopTuningConfigsController(service)
                 let route = AgentLoopTuningConfigsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -653,7 +645,6 @@ public class AutoRouteConfig {
                 let controller = AgentLoopMetricsController(service)
                 let route = AgentLoopMetricsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -668,7 +659,6 @@ public class AutoRouteConfig {
                 let controller = AgentVerificationRecordsController(service)
                 let route = AgentVerificationRecordsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -683,7 +673,6 @@ public class AutoRouteConfig {
                 let controller = AgentGroupMembersController(service)
                 let route = AgentGroupMembersRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -699,7 +688,6 @@ public class AutoRouteConfig {
                 let controller = CompositionExecutionsController(service)
                 let route = CompositionExecutionsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -714,7 +702,6 @@ public class AutoRouteConfig {
                 let controller = SkillCompositionsController(service)
                 let route = SkillCompositionsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -729,7 +716,6 @@ public class AutoRouteConfig {
                 let controller = VerificationEvidencesController(service)
                 let route = VerificationEvidencesRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -744,7 +730,6 @@ public class AutoRouteConfig {
                 let controller = ExecutionEvidencesController(service)
                 let route = ExecutionEvidencesRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -759,7 +744,6 @@ public class AutoRouteConfig {
                 let controller = OrchestrationStepsController(service)
                 let route = OrchestrationStepsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -774,7 +758,6 @@ public class AutoRouteConfig {
                 let controller = OrchestrationPlansController(service)
                 let route = OrchestrationPlansRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -790,7 +773,6 @@ public class AutoRouteConfig {
                 let controller = ConfigController(service)
                 let route = ConfigRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -805,7 +787,6 @@ public class AutoRouteConfig {
                 let controller = AipDiscoveryCacheController(service)
                 let route = AipDiscoveryCacheRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -820,7 +801,6 @@ public class AutoRouteConfig {
                 let controller = AipServiceConfigController(service)
                 let route = AipServiceConfigRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -835,7 +815,6 @@ public class AutoRouteConfig {
                 let controller = AipInteractionMessageController(service)
                 let route = AipInteractionMessageRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -850,7 +829,6 @@ public class AutoRouteConfig {
                 let controller = AipInteractionTaskController(service)
                 let route = AipInteractionTaskRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -865,7 +843,6 @@ public class AutoRouteConfig {
                 let controller = AipInteractionSessionController(service)
                 let route = AipInteractionSessionRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -880,7 +857,6 @@ public class AutoRouteConfig {
                 let controller = AipAgentDescriptionController(service)
                 let route = AipAgentDescriptionRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -895,7 +871,6 @@ public class AutoRouteConfig {
                 let controller = AipAgentCredentialController(service)
                 let route = AipAgentCredentialRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -910,7 +885,6 @@ public class AutoRouteConfig {
                 let controller = AipAgentIdentityController(service)
                 let route = AipAgentIdentityRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -925,7 +899,6 @@ public class AutoRouteConfig {
                 let controller = PointTransactionsController(service)
                 let route = PointTransactionsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -940,7 +913,6 @@ public class AutoRouteConfig {
                 let controller = TaskSettlementsController(service)
                 let route = TaskSettlementsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -955,7 +927,6 @@ public class AutoRouteConfig {
                 let controller = UserScoreController(service)
                 let route = UserScoreRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -970,7 +941,6 @@ public class AutoRouteConfig {
                 let controller = MessagesController(service)
                 let route = MessagesRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -985,7 +955,6 @@ public class AutoRouteConfig {
                 let controller = UserHasTasksController(service)
                 let route = UserHasTasksRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1000,7 +969,6 @@ public class AutoRouteConfig {
                 let controller = UserHasCompanyController(service)
                 let route = UserHasCompanyRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1015,7 +983,6 @@ public class AutoRouteConfig {
                 let controller = TasksController(service)
                 let route = TasksRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1030,7 +997,6 @@ public class AutoRouteConfig {
                 let controller = CompanyController(service)
                 let route = CompanyRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1045,7 +1011,6 @@ public class AutoRouteConfig {
                 let controller = SmsLogController(service)
                 let route = SmsLogRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1060,7 +1025,6 @@ public class AutoRouteConfig {
                 let controller = AttachmentsController(service)
                 let route = AttachmentsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1075,7 +1039,6 @@ public class AutoRouteConfig {
                 let controller = EventHandlersController(service)
                 let route = EventHandlersRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1090,7 +1053,6 @@ public class AutoRouteConfig {
                 let controller = UsageQuotasController(service)
                 let route = UsageQuotasRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1105,7 +1067,6 @@ public class AutoRouteConfig {
                 let controller = RetrieversController(service)
                 let route = RetrieversRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1120,7 +1081,6 @@ public class AutoRouteConfig {
                 let controller = AgentApprovalsController(service)
                 let route = AgentApprovalsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1135,7 +1095,6 @@ public class AutoRouteConfig {
                 let controller = AgentExecutorsController(service)
                 let route = AgentExecutorsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1150,7 +1109,6 @@ public class AutoRouteConfig {
                 let controller = AgentGroupsController(service)
                 let route = AgentGroupsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1165,7 +1123,6 @@ public class AutoRouteConfig {
                 let controller = ModelPricingController(service)
                 let route = ModelPricingRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1180,7 +1137,6 @@ public class AutoRouteConfig {
                 let controller = LlmUsageLogsController(service)
                 let route = LlmUsageLogsRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1195,7 +1151,6 @@ public class AutoRouteConfig {
                 let controller = AgentMemoriesController(service)
                 let route = AgentMemoriesRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 
@@ -1210,7 +1165,6 @@ public class AutoRouteConfig {
                 let controller = SyncLogController(service)
                 let route = SyncLogRoute(router, controller)
                 route.register()
-                route.registerCustomRoutes()
             }
         ))
 

@@ -1,6 +1,6 @@
 [package]
 vendor = "Beijing Baolande Software Corporation"
-cjc-version ="1.0.0"
+cjc-version = "1.1.3"
 compile-option ="-g -O0"
 description ="ActiveMQ Client: bytes_message_example"
 link-option =""

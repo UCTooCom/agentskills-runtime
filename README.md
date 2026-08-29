@@ -1,7 +1,7 @@
 # AgentSkills Runtime
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.20-blue.svg)](https://github.com/uctoo/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.27-blue.svg)](https://github.com/uctoo/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## Project Introduction
@@ -77,6 +77,26 @@ The framework includes:
 Build a domestically developed and controllable AI agent skill runtime, promote the application of Agent Skills standards in the AI ecosystem, and construct an open, secure, and efficient AI-native application infrastructure. Aiming to enable AgentSkills to run anywhere.
 
 ## Business Case & Value Proposition
+
+### Submission
+
+**Final Submission Checklist:**
+
+- Software Application Track: Beichen Commercial Management — Beichen Industrial Cloud Community Challenge
+- Work Name: AgentSkills-runtime — Domestic AI Agent Using Cangjie Programming Language
+- Slogan: With Chinese wisdom, build global intelligence connectivity, co-create new productive forces in the AI era
+- Work Description: Using the fully self-developed AgentSkills-runtime (ASR) next-generation AI-driven development framework, we developed a complete solution for the Beichen Industrial Cloud Community. The main deliverables for this competition include: 1) Updated ASR to v0.0.27, releasing the "everything is a skill" plugin system, benchmarked against deepseek-harness's "everything is a plugin" approach — ASR's plugin system is more intelligent with strong security, high performance, native intelligence, and deterministic design principles more suitable for enterprise customers. 2) Developed an online supply-demand matching portal subsystem for the Beichen Industrial Cloud Community. 3) Developed the Industrial Policy Assistant and Finance Matching Agent for the two key challenges of "precision policy empowerment" and "systematized financial services", enabling resident enterprises to intelligently match industrial needs and financial services.
+- Project Images: (to be supplemented)
+- GitHub Repositories (set Topic to `#shenicest-fission`):
+  1. AI-Driven Development Framework: https://atomgit.com/UCToo/agentskills-runtime
+  2. shenicest Hackathon SDD Docs: `apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon`
+  3. Beichen Policy Assistant: `apps/agentskills-runtime/skills/beichen-policy-assistant`
+  4. Beichen Finance Matching: `apps/agentskills-runtime/skills/beichen-finance-matching`
+  5. Supply-Demand Portal: https://atomgit.com/UCToo/web-admin
+- Project Documentation (background, target users, tech stack, innovation, team division, development process, and follow-up plans): `apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon/shenicest项目文档-AgentSkills-runtime.docx`
+- Demo Video: [beichen policy assistant Demo Recording](./public/beichen_demo.mp4)
+- Live Demo Link (optional): https://demo.uctoo.com
+- Zhihu Article: "Major Update: Everything is a Skill Plugin System" https://zhuanlan.zhihu.com/p/2077145055673037317
 
 > **Competition Entry**: Financial Industry Agent Hackathon (2026/07/27 - 2026/08/08)
 > **Demo Video**: [Investment Research Assistant Demo Recording](./public/demo.mp4)
@@ -602,6 +622,285 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--help"
 # Web CRUD code output root directory (crudweb automatically appends /web/src/ subdirectory)
 WEB_CRUD_OUTPUT_DIR=D:\path\to\web-admin
 ```
+
+#### plugingen - Plugin Generator (Plugin Track)
+
+`plugingen` is a deterministic generation tool isomorphic to `crudgen`, but its output lands on the **plugin track** rather than the host track: it reads the table structure from `db_info` and generates the "three-in-one" plugin directory `skills/{name}/` (SKILL.md + plugin.yaml + scripts/cj/ five-layer CRUD + plugin entry). New capabilities are delivered exclusively in plugin form — no new code is appended to `src/app` or `AutoRouteConfig.cj`.
+
+> **crudgen vs plugingen selection**:
+> - **crudgen**: generates **host modules** into `src/app/` and auto-appends `AutoRouteConfig.cj` — targets the frozen host body (reduce-only channel).
+> - **plugingen**: generates **plugins** into `skills/{name}/`, synced to `src/plugins/{name}/` via `build.cj`'s build-sync (PS-T015) for compilation, package name `magic.plugins.{name}` — targets future new plugins (plugin track of the dual-track coexistence).
+
+```bash
+# Table-driven: read table structure from db_info, generate five-layer CRUD plugin to skills/{name}/
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args="--name <plugin_name> --db <database> --table <table_name>"
+
+# Example: generate a CRUD plugin for the feedback table in the uctoo database (plugin name equals table name)
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args="--name feedback --db uctoo --table feedback"
+
+# Blank skeleton: generate only SKILL.md + plugin.yaml + package placeholder + plugin entry (skip table structure)
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args="--name mytool --blank"
+
+# View help information
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args="--help"
+```
+
+**Options**:
+
+| Option | Description |
+|--------|-------------|
+| `--name <plugin_name>` | Plugin unique name (required). Lowercase letters/digits/underscores; hyphens auto-converted to underscores. |
+| `--db <database>` | Table-driven mode: database name (reads `db_info` table structure). |
+| `--table <table_name>` | Table-driven mode: table name. |
+| `--blank` | Generate a blank plugin skeleton (skip table structure). |
+| `--help`, `-h` | Show help. |
+
+**Generated content** (artifacts in `skills/{name}/`):
+
+| Artifact | Path | Description |
+|----------|------|-------------|
+| Skill definition | `skills/{name}/SKILL.md` | SkillEngine asset, not compiled |
+| Plugin manifest | `skills/{name}/plugin.yaml` | Plugin static metadata (name/version/entry/tables/routes) |
+| Package placeholder | `skills/{name}/scripts/cj/pkg.cj` | Cangjie package declaration `package magic.plugins.{name}` |
+| PO layer | `skills/{name}/scripts/cj/{ClassName}PO.cj` | Persistent object |
+| DAO layer | `skills/{name}/scripts/cj/{ClassName}DAO.cj` | Data access |
+| Service layer | `skills/{name}/scripts/cj/{ClassName}Service.cj` | Business logic |
+| Controller layer | `skills/{name}/scripts/cj/{ClassName}Controller.cj` | Controller |
+| Route layer | `skills/{name}/scripts/cj/{ClassName}Route.cj` | Route (`@ModuleRoute` annotation) |
+| Plugin entry | `skills/{name}/scripts/cj/{ClassName}Plugin.cj` | `@Plugin` annotation, `onLoad` wires Service→Controller |
+
+It also auto-appends a host loading manifest entry to `config/plugins.yaml` (containing `name`/`className`/`enabled`/`order`/`routeClass`/`config`).
+
+**Auto-generating menu permission nodes** (consistent with crudgen):
+
+After generating the code files, plugingen automatically writes a three-level menu structure to the `permissions` table and inserts multilingual titles into the `i18` table. The web admin backend renders menus based on this data:
+
+```
+database (root menu)
+└── database.{dbName} (database menu)
+    └── database.{dbName}.{tableName} (table menu, component points to database/{dbName}/{tableName}/index)
+```
+
+- **Idempotent**: existing nodes are skipped; soft-deleted nodes are restored (`deleted_at = NULL`); non-existent nodes are created.
+- **i18 multilingual**: after the table node is inserted, a title record is written to the `i18` table keyed by `locale` (e.g., `menu.database.uctoo.feedback`).
+- **Menu visibility**: after generation, assign the menu permission to the corresponding role in the web admin backend, or view it directly with an admin account.
+
+> Note: plugingen only generates menu permission nodes in **table-driven mode** (`--db` + `--table`); `--blank` skeleton mode does not involve database tables and does not generate menus.
+
+**Next steps** (build-sync auto-chaining):
+
+1. **`cjpm build`**: the pre-build hook in `build.cj` automatically syncs `skills/{name}/scripts/cj/` to `src/plugins/{name}/` (artifacts are not committed, see `.gitignore`), and scans `plugin.yaml`'s `entry`/`routes` class names to generate `src/plugins/generated_anchors.cj` (L1 reflection anchors, ensuring the static linker retains plugin classes).
+2. **Start the host**: `PluginManager` loads plugins per `config/plugins.yaml`, and `PluginRouteScanner` registers routes at runtime via reflection (`@ModuleRoute` → `ClassTypeInfo.get` → `ConstructorInfo.apply` → `register(router, controller)`).
+3. **Zero-framework-change rollout**: new plugins go live without modifying `main.cj` or `AutoRouteConfig.cj` — the build-sync anchor mechanism covers it automatically.
+
+> **Dependency validation**: build-sync performs a lightweight warn-level check on `plugin.yaml`'s `dependencies` before syncing (prints WARN if `skills/{dep}/` is missing); hard validation is performed by the runtime `PluginLoader`.
+
+### Everything is a Skill: Plugin System Complete Guide
+
+AgentSkills Runtime follows the "**Everything is a Skill**" design philosophy — all new capabilities are delivered exclusively in plugin form, with no new code appended to `src/app` or `AutoRouteConfig.cj`. The plugin system evolves through four phases:
+
+| Phase | Version | Milestone | Status |
+|-------|---------|-----------|--------|
+| I: Plugin Framework Core | v0.5 | Integration tests green, zero regression to existing functionality | ✅ Complete |
+| II: Incremental Pluginization | v0.6 | First real new plugin goes live without framework code changes | ✅ Verified |
+| III: L2 Dynamic Loading | v0.7~v0.9 | Install a new plugin without recompiling the host | ✅ Complete |
+| IV: Plugin Marketplace | v1.0/v1.1 | Third parties can independently publish plugins | ⏳ Planning |
+
+#### Plugin System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Host (magic.app)                         │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐ │
+│  │PluginManager│  │PluginRoute   │  │SkillBridge         │ │
+│  │(lifecycle)  │  │Scanner(route)│  │(skill fusion)      │ │
+│  └──────┬──────┘  └──────┬───────┘  └─────────┬──────────┘ │
+│         │                │                     │            │
+│  ┌──────▼──────┐  ┌──────▼───────┐  ┌─────────▼──────────┐ │
+│  │PluginLoader │  │PluginEventBus│  │ServiceRegistry      │ │
+│  │(reflection) │  │(event bus)   │  │(service registry)   │ │
+│  └──────┬──────┘  └──────────────┘  └────────────────────┘ │
+│         │                                                    │
+│  ┌──────▼──────┐                                            │
+│  │PluginDylib  │  ← L2 dynamic library loading (PS-T012)   │
+│  │Loader       │                                            │
+│  └─────────────┘                                            │
+└─────────────────────────────────────────────────────────────┘
+                    ↕ plugin_spi contract
+┌─────────────────────────────────────────────────────────────┐
+│              Plugin Package (magic.plugins.{name})          │
+│  @PluginAnnotation + @ModuleRouteAnnotation                 │
+│  Independent cjpm package → libskill_{name}.so → closed-source distribution │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Plugin Development Methods
+
+**Method 1: plugingen table-driven generation (recommended)**
+
+```bash
+# Read table structure from db_info, generate five-layer CRUD plugin to skills/{name}/
+cjpm run --skip-build --name magic.plugin.tools.plugingen \
+  --run-args="--name <plugin_name> --db <database> --table <table_name>"
+
+# Example: generate CRUD plugin for feedback table in uctoo database
+cjpm run --skip-build --name magic.plugin.tools.plugingen \
+  --run-args="--name feedback --db uctoo --table feedback"
+```
+
+**Method 2: Blank skeleton manual development**
+
+```bash
+# Generate blank plugin skeleton (SKILL.md + plugin.yaml + package placeholder + plugin entry only)
+cjpm run --skip-build --name magic.plugin.tools.plugingen \
+  --run-args="--name mytool --blank"
+```
+
+After generation, add business code under `skills/mytool/scripts/cj/`, which participates in compilation via build-sync.
+
+**Plugin three-in-one structure**:
+
+| Dimension | Artifact | Description |
+|-----------|----------|-------------|
+| Service | `{ClassName}Service.cj` | Business logic, exposed via ServiceRegistry type-safe track |
+| Skill | `SKILL.md` | SkillEngine asset, auto-registered via SkillBridge |
+| Route | `{ClassName}Route.cj` | `@ModuleRouteAnnotation` declarative route, registered via PluginRouteScanner reflection |
+
+#### Plugin Loading Mechanism
+
+**L1 Reflection Loading** (Phase I~II, existing track):
+- `ClassTypeInfo.get(qualified_name)` → `findAnnotation<PluginAnnotation>()` → `ConstructorInfo.apply` instantiation
+- build-sync syncs `skills/{name}/scripts/cj/` → `src/plugins/{name}/` to participate in host compilation
+- `generated_anchors.cj` reflection anchors prevent LTO pruning
+
+**L2 Dynamic Library Loading** (Phase III, plugin track):
+- Plugin independent cjpm package compiled to `libskill_{name}.so` (`output-type = "dynamic"`)
+- `PluginDylibLoader.loadFromDylib(libPath, pluginName)` dynamically loads
+- Reuses fountain `App.run()` pipeline: `PackageInfo.load` → `BeanFactory.afterRegistered()` → `getList<Plugin>()`
+- **Install a new plugin without recompiling the host** — Phase III milestone achieved
+
+#### Plugin Publishing Methods
+
+**Workspace member mode** (Scheme A, Phase III L2 dynamic library loading):
+
+Plugins are independent members of the host cjpm workspace, compiled as dynamic libraries (`output-type = "dynamic"`), and dynamically loaded by the host via fountain's `PackageInfo.load` pipeline.
+
+1. **Generate plugin**: `plugingen --name entity --db uctoo --table entity`
+   - Auto-generates `skills/entity/cjpm.toml` (workspace member config)
+   - Auto-appends host `cjpm.toml` `[workspace] members`
+   - Auto-appends `config/plugins.yaml` loading manifest entry
+2. **Independent compilation**: `cd skills/entity && cjpm build`, producing `target/release/libskill_entity.so`
+3. **Distribution unit**: `plugin.yaml` is the distribution unit manifest (containing `name`/`version`/`entry`/`dylib`/`tables`/`routes`)
+4. **Closed-source distribution**: plugin-spi dependency minimization (only Cangjie standard library + cangjie-stdx), plugins can be distributed as closed-source dynamic libraries
+5. **Host loading**: Host-side `config/plugins.yaml` declares plugin entry, `PluginDylibLoader` dynamically loads
+
+**Independent plugin directory structure** (using entity as example):
+
+```
+skills/entity/
+├── cjpm.toml          # workspace member config (name="skill_entity", output-type="dynamic")
+├── plugin.yaml        # Distribution unit manifest (containing dylib: libskill_entity.so)
+├── SKILL.md           # Skill description (SkillEngine asset)
+└── src/               # Source directory (conforms to cjpm package structure, src-dir="src")
+    ├── pkg.cj         # Package placeholder (package skill_entity)
+    ├── EntityPO.cj    # Persistent object
+    ├── EntityDAO.cj   # Data access
+    ├── EntityService.cj    # Business logic
+    ├── EntityController.cj # Controller
+    ├── EntityRoute.cj      # Route (@ModuleRouteAnnotation)
+    └── EntityPlugin.cj     # Plugin entry (@PluginAnnotation)
+```
+
+**Host cjpm.toml workspace configuration**:
+
+```toml
+[workspace]
+  members = ["./skills/entity", "./skills/feedback"]
+```
+
+New plugin加入: append `"./skills/{name}"` to `members` list (plugingen auto-completes).
+
+#### Plugin Uninstall Methods
+
+**pluginuninstall CLI tool** (PS-T019/PS-T020):
+
+```bash
+# Uninstall plugin (remove entry from plugins.yaml + prompt runtime uninstall)
+cjpm run --skip-build --name magic.plugin.tools.pluginuninstall \
+  --run-args="--name entity"
+
+# Also delete plugin directory
+cjpm run --skip-build --name magic.plugin.tools.pluginuninstall \
+  --run-args="--name entity --purge"
+
+# Specify config file path
+cjpm run --skip-build --name magic.plugin.tools.pluginuninstall \
+  --run-args="--name entity --config ./config/plugins.yaml"
+```
+
+**Uninstall flow**:
+1. Precisely remove the specified plugin entry from `plugins.yaml` (backward trace comments/blank lines, forward delete to next entry)
+2. Prompt runtime uninstall (CLI tool does not directly call PluginManager.deactivate; requires host restart or Agent tool `plugin_deactivate`)
+3. Optionally delete plugin directory (`--purge`, recursive deletion)
+
+**Runtime uninstall** (Agent tool):
+- `plugin_deactivate(name)` → `PluginManager.deactivate(name)`
+- Five-dimensional cleanup after uninstall: route cleanup, event subscription cleanup, registry cleanup, service deregistration cleanup, isolation verification
+
+#### Plugin System Core Components
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| PluginManager | `src/plugin/plugin_manager.cj` | Plugin lifecycle orchestrator (load → onLoad → onActivate → register → skill registration) |
+| PluginLoader | `src/plugin/plugin_loader.cj` | L1 reflection loader (ClassTypeInfo.get → findAnnotation → ConstructorInfo.apply) |
+| PluginDylibLoader | `src/plugin/plugin_dylib_loader.cj` | L2 dynamic library loader (PackageInfo.load → BeanFactory.afterRegistered → getList<Plugin>) |
+| PluginRouteScanner | `src/plugin/plugin_route_scanner.cj` | Plugin route runtime registrar (plugin track of dual-track routing) |
+| PluginEventBus | `libs/plugin-spi/src/plugin_event_bus.cj` | Plugin collaboration event bus (emit broadcast + waterfall chain + ConcurrentHashMap concurrency control) |
+| ServiceRegistry | `libs/plugin-spi/src/service_registry.cj` | Service registry (Scheme B fully delegated to BeanFactory) |
+| PluginSyncBridge | `src/plugin/plugin_sync_bridge.cj` | Plugin runtime sync bridge (subscribe PluginEventBus events → write back agent_skills table) |
+| plugin-spi | `libs/plugin-spi/` | Plugin SPI contract package (dependency minimization, supports independent compilation as dynamic library) |
+
+#### plugin-spi Extraction (PS-T017 Scheme B)
+
+Plugin contracts migrated from `magic.plugin` to independent package `plugin_spi` (`libs/plugin-spi/`), adopting **Scheme B fully delegated + forwarding mode**:
+
+- **plugin-spi dependency minimization**: Only depends on Cangjie standard library (std.*) + cangjie-stdx (stdx.*), does not depend on http_lib/magic.log/fountain
+- **ServiceRegistry delegates to BeanFactory**: Scheme B full delegation, reusing fountain BeanFactory's getList<T>/getFirst<T> generic lookup
+- **PluginEventBus concurrency control optimization**: ConcurrentHashMap replaces HashMap+Mutex, reusing fountain f_concurrent concurrency pattern
+- **Forwarding mode**: `src/plugin/spi_reexport.cj`'s `public import plugin_spi.{Plugin, ...}` allows existing `import magic.plugin.{Plugin, ...}` consumers to work with zero changes
+
+**plugin-spi package structure**:
+
+```
+libs/plugin-spi/
+├── cjpm.toml          # Independent cjpm package config (output-type="dynamic")
+└── src/
+    ├── plugin.cj              # Plugin interface (getName/onLoad/onActivate/onDeactivate/onUnload)
+    ├── plugin_annotation.cj   # @PluginAnnotation annotation
+    ├── plugin_context.cj      # PluginContext (lifecycle carrier + onCleanup cleanup stack)
+    ├── plugin_event_bus.cj    # PluginEventBus (ConcurrentHashMap concurrency control)
+    ├── service_registry.cj    # ServiceRegistry (delegates to BeanFactory)
+    ├── module_route_annotation.cj  # @ModuleRouteAnnotation annotation
+    └── plugin_types.cj        # PluginState/PluginError/LoadResult and other types
+```
+
+#### Plugin System Acceptance Criteria
+
+**Phase III milestone achieved**:
+- ✅ plugin-spi extraction (Scheme B + forwarding mode, dependency minimization, supports independent compilation as dynamic library)
+- ✅ L2 dynamic library loading prototype (`PluginDylibLoader`, reuses fountain App.run() pipeline)
+- ✅ pluginuninstall tool (isomorphic with plugingen, precise YAML entry removal + recursive deletion)
+- ✅ build-sync dual-track (existing track `src/app/` + plugin track `skills/{name}/` → `src/plugins/{name}/`)
+- ✅ plugingen upgrade (template imports upgraded to plugin_spi, generated plugins consistent with latest plugin mechanism)
+- ✅ Uninstall regression verification (`testUninstallRegression` 5 dimensions 13 assertions: route/event/registry/service/isolation)
+
+**Uninstall regression verification five dimensions** (PS-T021 `testUninstallRegression`):
+
+1. **Route cleanup**: `routeClassNames()` no longer contains the uninstalled plugin's routeClass
+2. **Event subscription cleanup**: After `PluginEventBus.unsubscribeAll(name)`, all event subscriptions for that plugin are removed
+3. **Registry cleanup**: `registryRef().get(name)` returns None
+4. **Service deregistration cleanup**: `services().getService<T>()` returns None
+5. **Isolation verification**: Uninstalling doc-helper does not affect other plugins
 
 #### Standard Module Development Process
 

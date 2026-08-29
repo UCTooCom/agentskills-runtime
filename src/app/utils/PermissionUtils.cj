@@ -21,10 +21,11 @@ public class PermissionUtils {
         }
         try {
             let executor = ORM.executor()
+            executor.add(userId)
             let count = executor.setSql('''
                 SELECT COUNT(*) FROM role_has_permission rhp
                 INNER JOIN user_has_roles uhr ON rhp.role_id = uhr.role_id
-                WHERE uhr.user_id = '${userId}' AND rhp.permission_name = '*'
+                WHERE uhr.user_id = ? AND rhp.permission_name = '*'
                 AND rhp.status = 1 AND uhr.status = 1
                 AND rhp.deleted_at IS NULL AND uhr.deleted_at IS NULL
             ''').first<Int64>() ?? 0
@@ -80,8 +81,10 @@ public class PermissionUtils {
         try {
             let executor = ORM.executor()
 
+            executor.add(entityId)
+            executor.add(userId)
             let creatorCheck = executor.setSql('''
-                SELECT COUNT(*) FROM ${entityType} WHERE id = '${entityId}' AND creator = '${userId}'::uuid AND deleted_at IS NULL
+                SELECT COUNT(*) FROM ${entityType} WHERE id = ? AND creator = ? AND deleted_at IS NULL
             ''').first<Int64>() ?? 0
 
             LogUtils.info(logger, "checkUserHasPermission: userId=${userId}, entityType=${entityType}, entityId=${entityId}, creatorCheck=${creatorCheck}")

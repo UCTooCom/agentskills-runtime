@@ -1,0 +1,200 @@
+{
+  "slug": "北京北辰实业有限公司",
+  "company_name": "北京北辰实业有限公司",
+  "match_date": "2026-08-29",
+  "total_policies": 20,
+  "eliminated": [],
+  "matches": [
+    {
+      "policy_no": "1",
+      "title": "北京市引进人才管理办法",
+      "domain": "人才支持",
+      "level": "市级",
+      "department": "北京市人才工作局",
+      "support": "落户支持/资金奖励",
+      "score": 50,
+      "basis": "层级市级·领域人才支持",
+      "gap": [],
+      "conditions": {
+        "region": "北京市",
+        "qualification": "高层次人才",
+        "industry": []
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\1-北京市引进人才管理办法.md"
+    },
+    {
+      "policy_no": "3",
+      "title": "北京市知识产权质押融资专项政策",
+      "domain": "知识产权",
+      "level": "市级",
+      "department": "北京市知识产权局",
+      "support": "质押融资/贴息补贴",
+      "score": 50,
+      "basis": "层级市级·领域知识产权",
+      "gap": [],
+      "conditions": {
+        "region": "北京市",
+        "qualification": "拥有自主知识产权",
+        "industry": []
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\3-北京市知识产权质押融资专项政策.md"
+    },
+    {
+      "policy_no": "12",
+      "title": "北京市高新技术企业培育支持政策",
+      "domain": "高新技术产业",
+      "level": "市级",
+      "department": "北京市科委",
+      "support": "研发费用加计扣除/奖励",
+      "score": 50,
+      "basis": "层级市级·领域高新技术产业",
+      "gap": [],
+      "conditions": {
+        "region": "北京市",
+        "qualification": "高新技术企业",
+        "industry": []
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\12-北京市高新技术企业培育支持政策.md"
+    },
+    {
+      "policy_no": "17",
+      "title": "北京市专精特新中小企业培育支持政策",
+      "domain": "中小企业",
+      "level": "市级",
+      "department": "北京市经信局",
+      "support": "认定奖励/融资支持",
+      "score": 50,
+      "basis": "层级市级·领域中小企业",
+      "gap": [],
+      "conditions": {
+        "region": "北京市",
+        "qualification": "专精特新中小企业",
+        "industry": []
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\17-北京市专精特新中小企业培育支持政策.md"
+    },
+    {
+      "policy_no": "2",
+      "title": "北京市青年科技人才支持计划",
+      "domain": "青年科技人才",
+      "level": "市级",
+      "department": "北京市科委",
+      "support": "科研经费资助",
+      "score": 30,
+      "basis": "层级市级·领域青年科技人才",
+      "gap": [],
+      "conditions": {
+        "region": "北京市",
+        "qualification": "青年科技人才",
+        "industry": [
+          "人工智能",
+          "生物医药"
+        ]
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\2-北京市青年科技人才支持计划.md"
+    },
+    {
+      "policy_no": "4",
+      "title": "朝阳区中小企业融资担保费补贴政策",
+      "domain": "融资服务",
+      "level": "区级",
+      "department": "朝阳区金融办",
+      "support": "担保费补贴/贴息",
+      "score": 30,
+      "basis": "层级区级·领域融资服务",
+      "gap": [],
+      "conditions": {
+        "region": "朝阳区注册",
+        "qualification": "中小企业",
+        "industry": []
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\4-朝阳区中小企业融资担保费补贴政策.md"
+    },
+    {
+      "policy_no": "5",
+      "title": "北京市促进人工智能产业发展若干政策",
+      "domain": "人工智能",
+      "level": "市级",
+      "department": "北京市经信局",
+      "support": "算力补贴/场景开放",
+      "score": 30,
+      "basis": "层级市级·领域人工智能",
+      "gap": [],
+      "conditions": {
+        "region": "北京市",
+        "qualification": "人工智能企业",
+        "industry": [
+          "人工智能"
+        ]
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\5-北京市促进人工智能产业发展若干政策.md"
+    },
+    {
+      "policy_no": "8",
+      "title": "北京市数据要素市场建设支持政策",
+      "domain": "数据要素",
+      "level": "市级",
+      "department": "北京市经信局",
+      "support": "数据资产登记补贴/规范流通",
+      "score": 30,
+      "basis": "层级市级·领域数据要素",
+      "gap": [],
+      "conditions": {
+        "region": "北京市",
+        "qualification": "数据要素企业",
+        "industry": [
+          "数据要素"
+        ]
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\8-北京市数据要素市场建设支持政策.md"
+    },
+    {
+      "policy_no": "10",
+      "title": "北京市数字医疗产业创新发展政策",
+      "domain": "数字医疗",
+      "level": "市级",
+      "department": "北京市卫健委",
+      "support": "创新产品准入/应用",
+      "score": 30,
+      "basis": "层级市级·领域数字医疗",
+      "gap": [],
+      "conditions": {
+        "region": "北京市",
+        "qualification": "数字医疗企业",
+        "industry": [
+          "数字医疗"
+        ]
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\10-北京市数字医疗产业创新发展政策.md"
+    },
+    {
+      "policy_no": "13",
+      "title": "朝阳区支持高新技术企业创新发展若干政策",
+      "domain": "高新技术产业",
+      "level": "区级",
+      "department": "朝阳区科信局",
+      "support": "资金支持/研发费用补贴",
+      "score": 30,
+      "basis": "层级区级·领域高新技术产业",
+      "gap": [],
+      "conditions": {
+        "region": "朝阳区注册",
+        "qualification": "高新技术企业认定",
+        "industry": []
+      },
+      "status": "matched",
+      "source": "policy-original/policy-original\\13-朝阳区支持高新技术企业创新发展若干政策.md"
+    }
+  ],
+  "matched_count": 20,
+  "pending_verify": []
+}

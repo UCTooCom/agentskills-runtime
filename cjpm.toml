@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.5"
+  cjc-version = "1.1.3"
   compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=cj\""
   description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
   link-option = "--allow-multiple-definition"
@@ -7,13 +7,15 @@
   output-type = "static"
   src-dir = ""
   target-dir = ""
-  version = "0.0.26"
+  version = "0.0.27"
 
 [dependencies]
+  plugin_spi = { path = "./libs/plugin-spi" }
   yaml4cj = { path = "./libs/yaml4cj" }
   commonmark4cj = { path = "./libs/commonmark4cj" }
   f_orm = { path = "./libs/fountain/f_orm" }
   f_data = { path = "./libs/fountain/f_data" }
+  f_base = { path = "./libs/fountain/f_base" }
   f_config = { path = "./libs/fountain/f_config" }
   f_util = { path = "./libs/fountain/f_util" }
   f_ticktock = { path = "./libs/fountain/f_ticktock" }
@@ -40,6 +42,19 @@
   kaca_cookies = { path = "./libs/kaca_cookies", output-type = "static" }
   compress4cj = { path = "./libs/compress4cj", output-type = "static" }
   channel_cj = { path = "./libs/channel_cj", output-type = "static" }
+  # L3 进程隔离插件轨（cordis-cj 集成，spec REQ-PS-015 / design §5）
+  # cordis_host 含 organization=ystyle，依赖键须用完整名 ystyle::cordis_host
+  # 传递依赖：ystyle::cordis_core（path）、ystyle::jsonrpc 0.7.0、jsonvalue 1.1.0（中心仓拉取）
+  "ystyle::cordis_host" = { path = "./libs/cordis-cj/cordis_host" }
+  # 宿主 L3 代码直接使用 cordis_core 类型（InstanceStatus/DataModel/DataModelNull），
+  # 须显式声明为宿主依赖（cordis_host 传递依赖不自动暴露给宿主源码）
+  "ystyle::cordis_core" = { path = "./libs/cordis-cj/cordis_core" }
+  # 宿主 L3 代码直接使用 jsonrpc 类型（JsonRpcClient/Request/RequestCallback 等），
+  # 须显式声明为宿主依赖（cordis_host 传递依赖不自动暴露给宿主源码）
+  "ystyle::jsonrpc" = { path = "./libs/jsonrpc" }
+  # 宿主 L3 代码直接使用 jsonvalue 类型（JsonValue/DataModel/fromDataModel），
+  # 须显式声明为宿主依赖（cordis-cj 传递依赖不自动暴露给宿主源码）
+  jsonvalue = { path = "./libs/jsonvalue" }
 
 
 #----------------------------------------
@@ -103,6 +118,10 @@
 #  output-type = "executable"
 #[package.package-configuration."magic.examples.firecrawl_test"]
 #  output-type = "executable"
+[package.package-configuration."magic.plugin.integration"]
+  output-type = "executable"
+[package.package-configuration."magic.plugin.tools.plugingen"]
+  output-type = "executable"
 
 
 #----------------------------------------
@@ -117,33 +136,33 @@
 #----------------------------------------
 
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-linux-x64-1.0.5.1/linux_x86_64_cjnative/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-linux-x64-1.1.3.1/linux_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-unknown-windows-gnu]
   compile-option = "--cfg \"ohos=false\""
 [target.x86_64-unknown-windows-gnu.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-w64-mingw32]
   compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std --cfg \"ohos=false\""
 
 [target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-unknown-linux-gnu]
   compile-option = "--cfg \"ohos=false\""
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-linux-aarch64-1.0.5.1/linux_aarch64_cjnative/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-linux-aarch64-1.1.3.1/linux_aarch64_cjnative/dynamic/stdx"]
 
 [target.x86_64-apple-darwin]
   compile-option = "--cfg \"ohos=false\""
 [target.x86_64-apple-darwin.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-mac-x64-1.0.5.1/darwin_x86_64_cjnative/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-mac-x64-1.1.3.1/darwin_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-apple-darwin]
   compile-option = "--cfg \"ohos=false\""
 [target.aarch64-apple-darwin.bin-dependencies]
-  path-option = ["./libs/cangjie-stdx-mac-aarch64-1.0.5.1/darwin_aarch64_cjnative/dynamic/stdx"]
+  path-option = ["./libs/cangjie-stdx-mac-aarch64-1.1.3.1/darwin_aarch64_cjnative/dynamic/stdx"]
 
 
 

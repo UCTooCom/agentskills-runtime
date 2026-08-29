@@ -40,19 +40,27 @@ public class AgentSkillSyncHandler <: SyncHandler {
     }
 
     public func syncFromFileSystem(sourcePath: String, context: SyncContext): SyncResult {
-        statusManager.markAgentSkillPending(context.entityId)
+        // entityId 在 file->db 方向是 sourcePath，必须用 BySourcePath 版本更新 status，
+        // 否则将路径字符串传入 findAgentSkillsById 会触发 "无效的类型 uuid 输入语法"。
+        let normalizedId = ChangeDetector().normalizePath(context.entityId)
+        statusManager.markAgentSkillPendingBySourcePath(normalizedId)
         try {
             let fullPath = buildFilePath(sourcePath)
             let skillMdPath = fullPath + "/SKILL.md"
             if (!exists(skillMdPath)) {
+                statusManager.markAgentSkillErrorBySourcePath(normalizedId)
                 return SyncResult(false, entityType, context.entityId, SyncStatus.Error, "SKILL.md not found: ${skillMdPath}")
             }
+            // SkillMdLoader.loadSkillFromPath 期望传入 SKILL.md 文件路径（内部用 lastIndexOf('/') 推导 skillDir）
+            // 早期 bug 传入的是目录路径 fullPath，导致 File(目录) 打开失败、返回 None，agent_skills 表始终无数据。
             let loader = SkillMdLoader()
-            let manifestOpt = loader.loadSkillFromPath(fullPath)
+            let manifestOpt = loader.loadSkillFromPath(skillMdPath)
             if (manifestOpt.isNone()) {
-                return SyncResult(false, entityType, context.entityId, SyncStatus.Error, "Failed to parse skill from: ${fullPath}")
+                statusManager.markAgentSkillErrorBySourcePath(normalizedId)
+                return SyncResult(false, entityType, context.entityId, SyncStatus.Error, "Failed to parse skill from: ${skillMdPath}")
             }
             let manifest = manifestOpt.getOrThrow()
+            // manifest.skillPath 是 SKILL.md 文件路径，需要覆盖为 skill 目录路径
             let normalizedSourcePath = ChangeDetector().normalizePath(fullPath)
             let skillsDAO = ORM.executor() as AgentSkillsDAO
             let existingPO = if (let Some(dao) <- skillsDAO) {
@@ -71,10 +79,10 @@ public class AgentSkillSyncHandler <: SyncHandler {
                     LogUtils.info("AgentSkillSyncHandler: inserted skill '${po.name}' with id ${newId}")
                 }
             }
-            statusManager.markAgentSkillSynced(context.entityId)
+            statusManager.markAgentSkillSyncedBySourcePath(normalizedSourcePath)
             return SyncResult(true, entityType, context.entityId, SyncStatus.Synced, "Synced from file: ${normalizedSourcePath}")
         } catch (e: Exception) {
-            statusManager.markAgentSkillError(context.entityId)
+            statusManager.markAgentSkillErrorBySourcePath(normalizedId)
             LogUtils.error("AgentSkillSyncHandler.syncFromFileSystem failed: ${e.message}")
             return SyncResult(false, entityType, context.entityId, SyncStatus.Error, e.message)
         }
@@ -95,7 +103,8 @@ public class AgentSkillSyncHandler <: SyncHandler {
                         let fullPath = buildFilePath(sourcePath)
                         let skillMdPath = fullPath + "/SKILL.md"
                         writeToFile(skillMdPath, content)
-                        statusManager.markAgentSkillSynced(entityId)
+                        // 用 sourcePath（文件路径）更新状态，避免把路径当 UUID 传入 findAgentSkillsById
+                        statusManager.markAgentSkillSyncedBySourcePath(sourcePath)
                         LogUtils.info("AgentSkillSyncHandler: synced skill '${po.name}' to file")
                         return SyncResult(true, entityType, entityId, SyncStatus.Synced, "Synced to file: ${sourcePath}")
                     }
@@ -104,7 +113,10 @@ public class AgentSkillSyncHandler <: SyncHandler {
             }
             return SyncResult(false, entityType, entityId, SyncStatus.Error, "AgentSkill not found: ${entityId}")
         } catch (e: Exception) {
-            statusManager.markAgentSkillError(entityId)
+            // syncToFileSystem 入参 entityId 理论上是 UUID，但 SyncInterceptor 从 DAO 返回值
+            // 提取的 entityId 可能是路径字符串。用 BySourcePath 版本更新状态，
+            // 即使 entityId 是路径也不会触发 "无效的类型 uuid 输入语法" 错误。
+            statusManager.markAgentSkillErrorBySourcePath(entityId)
             LogUtils.error("AgentSkillSyncHandler.syncToFileSystem failed: ${e.message}")
             return SyncResult(false, entityType, entityId, SyncStatus.Error, e.message)
         }

@@ -1,16 +1,16 @@
 [dependencies]
   charset4cj = { path = "../../charset4cj" }
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_cache  = {path = "../f_cache", version = "1.0.45"}
-  f_collection  = {path = "../f_collection", version = "1.0.45"}
-  f_concurrent  = {path = "../f_concurrent", version = "1.0.45"}
-  f_exception  = {path = "../f_exception", version = "1.0.45"}
-  f_macros  = {path = "../f_macros", version = "1.0.45"}
-  f_regex  = {path = "../f_regex", version = "1.0.45"}
-  f_time  = {path = "../f_time", version = "1.0.45"}
+  f_base  = {path = "../f_base"}
+  f_cache  = {path = "../f_cache"}
+  f_collection  = {path = "../f_collection"}
+  f_concurrent  = {path = "../f_concurrent"}
+  f_exception  = {path = "../f_exception"}
+  f_macros  = {path = "../f_macros"}
+  f_regex  = {path = "../f_regex"}
+  f_time  = {path = "../f_time"}
  ## stdx = { git = "https://gitcode.com/Cangjie/cangjie_stdx.git" }
 [package]
-  cjc-version = "1.0.5"
+  cjc-version = "1.1.3"
   compile-option = "-Woff all --dy-std"
   override-compile-option = "-Woff all --dy-std"
   description = "数据复制模块"

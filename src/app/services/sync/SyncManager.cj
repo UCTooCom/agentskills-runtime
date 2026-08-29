@@ -2,6 +2,7 @@ package magic.app.services.sync
 
 import std.collection.{HashMap, ArrayList}
 import std.sync.Mutex
+import std.fs.exists
 import magic.app.services.sync.model.{SyncResult, SyncBatchResult, SyncDirection, TriggerSource, FileChange, ChangeType, SyncStatus}
 import magic.app.services.sync.context.SyncContext
 import magic.app.services.sync.handler.{SyncHandler, AgentSyncHandler, AgentSkillSyncHandler}
@@ -35,6 +36,17 @@ public class SyncManager {
     public func setupHandlers(agentBasePath: String, skillBasePath: String): Unit {
         mutex.lock()
         try {
+            // 路径存在性校验日志
+            if (!exists(agentBasePath)) {
+                LogUtils.warn("SyncManager: agentBasePath does not exist: ${agentBasePath} - agent sync will be empty")
+            } else {
+                LogUtils.info("SyncManager: agentBasePath exists: ${agentBasePath}")
+            }
+            if (!exists(skillBasePath)) {
+                LogUtils.warn("SyncManager: skillBasePath does not exist: ${skillBasePath} - agent_skill sync will be empty")
+            } else {
+                LogUtils.info("SyncManager: skillBasePath exists: ${skillBasePath}")
+            }
             handlers.add("agent", AgentSyncHandler(agentBasePath))
             handlers.add("agent_skill", AgentSkillSyncHandler(skillBasePath))
             initialized = true

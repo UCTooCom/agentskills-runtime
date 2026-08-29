@@ -28,6 +28,7 @@ internal import std.time.DateTime
 internal import stdx.encoding.base64.*
 internal import stdx.encoding.hex.*
 internal import stdx.net.tls.*
+internal import stdx.net.tls.common.*
 internal import stdx.crypto.x509.*
 internal import charset4cj.charset.encoding.Charset
 internal import charset4cj.charset.{Charsets, TextReader, TextWriter}

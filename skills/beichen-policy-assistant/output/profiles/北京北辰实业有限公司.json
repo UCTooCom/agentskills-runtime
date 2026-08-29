@@ -1,0 +1,36 @@
+{
+  "company_name": "北京北辰实业有限公司",
+  "slug": "北京北辰实业有限公司",
+  "region": "北京市朝阳区",
+  "industry": [],
+  "qualification": [],
+  "stage": "待核实",
+  "business": {
+    "registered_capital": "待补充",
+    "established_time": "待补充",
+    "legal_representative": "待补充",
+    "business_scope": "待补充"
+  },
+  "operation": {
+    "scale": "待补充",
+    "products": "待补充",
+    "qualifications": []
+  },
+  "public_opinion": {
+    "positive": [],
+    "negative": [],
+    "neutral": []
+  },
+  "profile_date": "2026-08-29",
+  "source_note": "公开信息聚合（工商/经营/舆情，未获取字段已标记待补充）",
+  "pending_fields": [
+    "注册资本",
+    "成立日期",
+    "经营范围",
+    "企业规模",
+    "产品/业务",
+    "所属行业",
+    "资质认定"
+  ],
+  "summary": "北京北辰实业有限公司，注册于北京市朝阳区。"
+}

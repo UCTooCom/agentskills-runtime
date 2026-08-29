@@ -32,6 +32,9 @@ import magic.core.model.ChatModel
 import magic.app.services.crontab.SchedulerEngine
 import magic.app.services.crontab.model.SchedulerStatus
 import magic.app.dao.uctoo.{CrontabDAO, CrontabLogDAO, CrontabTaskRegistryDAO}
+import magic.plugins.hello.HelloPlugin
+import magic.plugins.doc_helper.{DocHelperPlugin, DocHelperRoute}
+import magic.plugins.GeneratedPluginAnchors // L1 自动反射锚点（build-sync 数据驱动生成，新插件上线零框架改动）
 import std.convert.*
 import std.env.{getWorkingDirectory, getVariable}
 import std.fs.*
@@ -49,6 +52,7 @@ import magic.app.routes.uctoo.sync.SyncRoute // 导入同步路由
 import magic.app.services.billing.{BillingEventHandler, QuotaCheckHandler} // 导入计费事件处理器
 import magic.app.services.bridge.{WebSocketEventBridge, AgentRuntimeBridge} // 导入桥接层
 import magic.app.services.bridge.AgentPersistenceEventHandler // 导入持久化事件处理器
+import magic.plugin.{PluginHostManager, PluginRegistry, PluginLoader, PluginEventBus, PluginConfigParser, PluginRouteScanner, SkillBridge, PluginAgentTools, PluginInspectTool, PluginActivateTool, PluginDeactivateTool, PluginSyncBridge} // 导入插件系统
 import std.core.Duration
 
 /**
@@ -89,6 +93,7 @@ public class Application {
     private var _chatModelError: Option<String> = None
     private var schedulerEngineInitialized: Bool = false
     private var _agentLoadManager: AgentLoadManager
+    private var _pluginManager: Option<PluginHostManager> = None // 插件系统总控（阶段一双轨接入）
     private let _requestTimeout: Duration  // 请求超时时间
     
     // 默认超时时间：120秒（2分钟）
@@ -233,7 +238,7 @@ public class Application {
         
         // 初始化同步管理器
         let agentBasePath = getVariable("SYNC_AGENT_BASE_PATH").getOrDefault({ => "./" })
-        let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./.codeartsdoer/skills" })
+        let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./skills" })
         SyncManager.initialize(agentBasePath, skillBasePath)
         LogUtils.info("SyncManager initialized with agentBasePath: ${agentBasePath}, skillBasePath: ${skillBasePath}")
         
@@ -403,7 +408,7 @@ public class Application {
         
         // 初始化同步管理器
         let agentBasePath = getVariable("SYNC_AGENT_BASE_PATH").getOrDefault({ => "./" })
-        let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./.codeartsdoer/skills" })
+        let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./skills" })
         SyncManager.initialize(agentBasePath, skillBasePath)
         LogUtils.info("SyncManager initialized with agentBasePath: ${agentBasePath}, skillBasePath: ${skillBasePath}")
         
@@ -507,6 +512,10 @@ public class Application {
         let toolAuditService = ToolAuditService(operateLogService)
         let toolManager = SimpleToolManager()
         BuiltinToolsRegistry.registerAll(toolManager)
+        // 插件系统自引用工具（PS-T010；PluginManager 延迟注入，见下方插件系统启动段）
+        toolManager.addTool(PluginInspectTool())
+        toolManager.addTool(PluginActivateTool())
+        toolManager.addTool(PluginDeactivateTool())
         let toolDispatcher = ToolDispatcher(
             toolManager,
             permissionProvider,
@@ -633,7 +642,51 @@ public class Application {
         } catch (e: Exception) {
             LogUtils.error("Failed to load agents from database: ${e.message}")
         }
-        
+
+        // 插件系统启动（双轨接入：在全部存量路由之后，只追加不修改）
+        // 单插件失败不阻断启动；plugins.yaml 缺失时插件系统静默关闭
+        try {
+            let pluginRegistry = PluginRegistry()
+            let pluginEventBus = PluginEventBus()
+            let pluginSkillBridge = SkillBridge(skillManagementService, _skillManager)
+            let pluginLoader = PluginLoader(pluginRegistry)
+            let pluginConfigParser = PluginConfigParser()
+            let pluginManager = PluginHostManager(
+                registry: pluginRegistry,
+                loader: pluginLoader,
+                eventBus: pluginEventBus,
+                skillBridge: pluginSkillBridge,
+                configParser: pluginConfigParser,
+                pluginsRoot: "./plugins",
+                router: Some(router)
+            )
+            // PluginSyncBridge：订阅生命周期事件，插件运行态回写 agent_skills（须在 loadAll 前 bind）
+            // 观测面非控制面：回写失败仅记日志，不阻断插件生命周期
+            let pluginSyncBridge = PluginSyncBridge()
+            pluginSyncBridge.bind(pluginEventBus)
+            let loadResult = pluginManager.loadAll("config/plugins.yaml")
+            this._pluginManager = Some(pluginManager)
+            // 注入插件管理器供 Agent 自引用工具调用（plugin_inspect/activate/deactivate）
+            PluginAgentTools.setPluginManager(pluginManager)
+
+            // L1 反射锚点：确保示例插件类被静态链接进本可执行文件
+            // （cjpm/LTO 只保留可达代码；L2 动态库加载落地后可移除）
+            let _anchorHello = HelloPlugin()
+            let _anchorDocHelper = DocHelperPlugin()
+            let _anchorDocRoute = DocHelperRoute()
+            // skills/ 同步插件的锚点（build-sync 生成的 generated_anchors.cj，
+            // entry/routes 数据驱动；新插件上线无需再改 main.cj）
+            GeneratedPluginAnchors.touch()
+
+            // 插件轨路由注册（存量 AutoRouteRegistry.registerAllRoutes() 之后）
+            let routeScanner = PluginRouteScanner()
+            routeScanner.scanAndRegister(router, pluginManager)
+
+            LogUtils.info("Plugin system loaded: ${loadResult.summary()}")
+        } catch (e: Exception) {
+            LogUtils.error("Plugin system startup failed (framework continues): ${e.message}")
+        }
+
         server.setRouter(router)
         logger.info("All routes configured successfully")
     }
@@ -696,7 +749,7 @@ main() {
     ORMConfig.refresh {
     }
 
-    AppConfig.logLevel = AppConfig.env["LOG_LEVEL"].getOrDefault({ => "debug" })
+    AppConfig.logLevel = AppConfig.env["LOG_LEVEL"].getOrDefault({ => "debug" })  //warn
     AppConfig.logFile = AppConfig.env["LOG_FILE"].getOrDefault({ => "./logs/agentskills-runtime.log" })
 
     // 读取端口配置

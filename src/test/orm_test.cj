@@ -1,6 +1,8 @@
+package magic.test
+
 import std.env
-import fountain.orm.*
-import fountain.orm.macros.*
+import f_orm.*
+import f_orm.macros.*
 
 @QueryMappersGenerator[uctoo_entity]
 public class EntityPO {

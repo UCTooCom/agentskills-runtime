@@ -1,7 +1,89 @@
 # 插件系统需求规格
 
-> 版本：v2.1（2026-08-18 修订：①复核 agent_skills 表——无必须 DDL 变更，plugin.yaml 元数据走 extra_metadata；②crudgen/crudweb 保留不重构，REQ-PS-011 改为独立 plugingen 工具；③新增 REQ-PS-013 PluginSyncBridge 插件状态库同步。插件注册表本身仍为运行时内存结构，无新表）
+> 版本：v3.0（2026-08-28 阶段四立项修订：新增 REQ-PS-015 L3 进程隔离插件轨（cordis-cj 集成），演进路标插入阶段四（L3 轨），插件市场顺延为阶段五；REQ-PS-012 附 v3 修订——附7.13 HTTP 契约 SPI 拆分对 L3 轨不再是必须。依据：可行性报告附7.14 cordis-cj 完整调研。）
+> 版本：v2.2（2026-08-28 实际落地修订：同步实际实现方案与架构/框架/仓颉语言限制条件。①双轨并存退化为单轨（宿主内嵌轨），原因 cjpm `[workspace]` 与 `[package]` 互斥；②插件深度依赖宿主子包，独立包模式产生循环依赖；③仓颉反射 API 在 LTO 下剪除未引用类，需 generated_anchors.cj 显式锚定；④动态库标准库符号重复，需 `--dy-std` 编译选项；⑤插件包名必须为简单标识符（`skill_{name}`），不能是带点号的限定名；⑥HMR/合流性无定理背书，对外表述"确定性插件生命周期"。详见下方"§0 实际落地与限制条件"。）
+> v2.1（2026-08-18 修订：①复核 agent_skills 表——无必须 DDL 变更，plugin.yaml 元数据走 extra_metadata；②crudgen/crudweb 保留不重构，REQ-PS-011 改为独立 plugingen 工具；③新增 REQ-PS-013 PluginSyncBridge 插件状态库同步。插件注册表本身仍为运行时内存结构，无新表）
 > 修订依据：可行性报告全文（含附篇六跨平台、附篇七模块插件化、附7.8 目录归属修正、附7.9 存量冻结决策）、cordis-vs-npm-plugin.md、鸿蒙仓颉动态特性综合分析
+
+## §0 实际落地与限制条件（v2.2 新增，2026-08-28）
+
+> 本节集中说明编码落地后与原设计需求的差异，以及因当前架构、fountain 框架、仓颉编程语言方面的原因未能完全对标 deepseek-harness（Cordis）"一切皆插件"理念的限制条件。详细技术设计修订见 design.md §0。
+
+### §0.1 实际实现方案摘要
+
+| REQ-PS 需求 | 原设计需求 | 实际实现 | 落地状态 |
+|------------|-----------|---------|---------|
+| REQ-PS-001~009 | 插件框架核心（Plugin/Context/Registry/Loader/EventBus/Config/Manager/SkillBridge/示例） | ✅ 全部编码完成并编译通过，38 个集成测试全绿 | 阶段一完成 |
+| REQ-PS-010 | Agent 自引用工具（plugin_inspect/activate/deactivate） | ✅ 编码完成，集成测试通过 | 阶段二完成 |
+| REQ-PS-011 | plugingen 插件生成工具（crudgen 保留不重构） | ✅ 编码完成，entity/feedback 经 plugingen 生成 | 阶段二完成 |
+| REQ-PS-008 | 插件路由注册与双轨并存 | ⚠️ **退化为单轨**：entity/feedback 经 build-sync 同步进宿主内嵌轨（`src/plugins/{name}/`，包名 `magic.plugins.{name}`），由 PluginRouteScanner 注册路由。未实现"不重编宿主装上新插件"的完整双轨形态 | 部分达成 |
+| REQ-PS-009 | 新插件目录结构与构建集成 | ⚠️ **方案三 build-sync 落地，方案二独立包未完全升格**：build-sync 把 `skills/{name}/scripts/cj/` 同步到 `src/plugins/{name}/`，生成 `generated_anchors.cj` 反射锚点。entity/feedback 的独立 `cjpm.toml`（name="skill_entity"/"skill_feedback"，output-type="dynamic"）保留为 L2 动态库预编译入口，但宿主编译时不引用它们（cjpm `[workspace]` 与 `[package]` 互斥限制） | 部分达成 |
+| REQ-PS-012 | SPI 抽取与插件独立包化（阶段三硬前置） | ⚠️ **部分落地**：`libs/plugin-spi` 独立包已抽取（Plugin 接口 / PluginAnnotation / PluginContext 契约 / PluginEventBus 接口 / Controller 基类），但插件独立包化受 cjpm workspace 限制和循环依赖限制，未完全升格 | 部分达成 |
+| REQ-PS-013 | PluginSyncBridge 插件状态库同步 | ✅ 编码完成，集成测试通过；PluginSyncBridge 单向回写 agent_skills.runtime_status，plugin.yaml 不被数据库侧覆盖 | 阶段二完成 |
+| REQ-PS-014 | 插件卸载（阶段三完整卸载能力） | ✅ 编码完成：pluginuninstall CLI + 运行态卸载 + 回归验证。三层卸载模型（运行时层/静态资产层/数据库痕迹层）落地 | 阶段三完成 |
+| PS-T012 | L2 动态库加载原型 | ✅ 编码完成：plugin_dylib_loader.cj 实现 PackageInfo.load 热加载，L2 原型验证通过 | 阶段三完成 |
+
+### §0.2 因架构/框架/仓颉语言限制未能完全对标 deepseek-harness 的限制条件
+
+#### 限制 #1：插件无法真正"独立"——cjpm workspace 与 [package] 互斥（架构限制）
+
+**原设计需求**：方案二（阶段三升格）让 `skills/{name}/` 升格为独立 cjpm 包，根 cjpm.toml 追加 `[workspace] members = ["./skills/entity", ...]`，插件以动态库形态独立编译。
+
+**实际限制**：cjpm 规定同一个 `cjpm.toml` 中 `[workspace]` 和 `[package]` **不能共存**。宿主 `cjpm.toml` 既有 `[package]`（name="magic"）又要加 `[workspace]`，编译报错 `only one of 'workspace' or 'package' fields can exist`。fountain fdemo 先例证实：workspace 根 `cjpm.toml` 只有 `[workspace]` 段，没有 `[package]` 段——但我们的宿主本身就是 `magic` 包，不能既是 workspace 根又是 package。
+
+**实际落地方案**：放弃 workspace 成员模式，改用**宿主内嵌轨**——插件源码经 build-sync 同步到 `src/plugins/{name}/`，包名 `magic.plugins.{name}`，属宿主 magic 包编译图。entity/feedback 的 `cjpm.toml`（name="skill_entity"/"skill_feedback"，output-type="dynamic"）保留为独立编译入口，但宿主编译时不引用它们。
+
+**与 DSH 的差距**：DSH 的插件是运行时 fiber，天然独立于宿主进程；agentskills-runtime 的插件是编译期静态资产，必须进入宿主编译图才能被反射发现，无法实现"不重编宿主装上新插件"的完整形态。阶段三 PS-T012 L2 动态库加载原型部分缓解此限制（PackageInfo.load 热加载），但插件仍需预编译为动态库。
+
+#### 限制 #2：插件深度依赖宿主子包——独立包模式产生循环依赖（架构限制）
+
+**原设计需求**：插件包只依赖 `plugin-spi`，不 import 宿主 magic 包（cjpm 依赖单向性）。
+
+**实际限制**：entity 插件源码深度依赖宿主子包：`magic.app.core.http.*`、`magic.app.core.query.*`、`magic.app.core.response.*`、`magic.app.core.router.Router`、`magic.app.utils.PermissionUtils`、`magic.log.LogUtils`。若 entity 升格为独立 cjpm 包（name="skill_entity"），它必须 import 这些宿主子包，但 cjpm 依赖单向——宿主不能依赖 entity（否则循环），entity 又必须依赖宿主 → 循环依赖无解。
+
+**实际落地方案**：entity/feedback 保留对宿主 `magic` 包的依赖（CRUD 插件需要 `magic.app.core.*`、`magic.log.*` 等基础类型），通过宿主内嵌轨编译。独立包模式（skills/entity/cjpm.toml）仅在 L2 动态库预编译场景使用，此时插件动态库符号在运行时由 PackageInfo.load 解析，编译期不检查循环依赖。
+
+**与 DSH 的差距**：DSH 的插件是纯函数 fiber，不依赖宿主内部实现；agentskills-runtime 的 CRUD 插件深度耦合宿主 HTTP/RBAC/日志设施，无法做到插件包"零宿主依赖"。
+
+#### 限制 #3：仓颉反射 API 限制——ClassTypeInfo.get 跨包查询不稳定（语言限制）
+
+**原设计需求**：PluginRouteScanner 通过 `ClassTypeInfo.get("magic.plugins.entity.EntityRoute")` 跨包反射发现插件路由类。
+
+**实际限制**：仓颉反射 API 在 LTO（链接时优化）下会剪除未被静态引用的类，导致 `ClassTypeInfo.get` 返回 `None`。fountain BeanFactory.cj L52 注释警告：`调用isSubtypeOf会导致得不到类实现的直接接口，所以把isSubtypeOf放到if条件最后面`。此外 `TypeInfo`（fountain `TypeInfos.get()`）缺少 `constructors` 属性，必须保留 `ClassTypeInfo.get()` 才能获取构造器信息。
+
+**实际落地方案**：build-sync 自动生成 `generated_anchors.cj`，显式 import 并实例化插件 Route/Plugin 类（`let _anchor_0 = EntityRoute()`），作为 L1 反射锚点防 LTO 剪除。PluginRouteScanner 仍用 `ClassTypeInfo.get` 反射发现，但依赖锚点保证类不被剪除。
+
+**与 DSH 的差距**：DSH 的 `cordis_define` 是运行时动态定义，无编译期限制；agentskills-runtime 受静态语言 + LTO 限制，插件类必须显式锚定才能被反射发现。
+
+#### 限制 #4：仓颉动态库标准库符号重复——--dy-std 编译选项必需（语言/工具链限制）
+
+**原设计需求**：L2 动态库插件编译为 `.so`/`.dll`/`.dylib`，宿主通过 PackageInfo.load 热加载。
+
+**实际限制**：仓颉动态库默认静态链接标准库，多个 `.so` 同时加载会重复包含标准库符号，触发 `ld.lld: error: _CGP15xxx was replaced` 符号冲突。必须为动态库编译添加 `--dy-std` 选项，使动态库使用动态链接的标准库。fountain fdemo cjpm.toml 先例证实：`compile-option = "-O2 --dy-std -Woff unused"` + `[target.x86_64-unknown-linux-gnu.bin-dependencies] path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]`。
+
+**实际落地方案**：entity/feedback 的 `cjpm.toml` 编译选项统一为 `compile-option = "-O2 --dy-std -Woff all"`。宿主内嵌轨编译不需要 `--dy-std`（静态链接），仅 L2 动态库预编译时需要。
+
+**与 DSH 的差距**：DSH 是单一运行时进程，无动态库符号冲突问题；agentskills-runtime 受仓颉工具链限制，动态库插件必须显式处理标准库链接方式。
+
+#### 限制 #5：插件包名必须为简单标识符——cjpm name 字段约束（工具链限制）
+
+**原设计需求**：插件包名 `magic.plugins.{name}`（与框架包 `magic.plugin` 区分，复数形态）。
+
+**实际限制**：cjpm `name` 字段必须是**简单标识符**（如 `plugin_spi`、`skill_entity`），不能是带点号的限定名（如 `magic.plugins.entity`）。fountain 32 个子包均遵循此规范（`f_orm`、`f_data` 等）。
+
+**实际落地方案**：宿主内嵌轨插件包名仍用 `magic.plugins.{name}`（属宿主 magic 包的子包，cjpm 不单独编译）；独立包轨插件包名用 `skill_{name}`（如 `skill_entity`、`skill_feedback`），符合 cjpm 简单标识符规范。两轨包名不同但源码同构，通过 build-sync 同步保持一致。
+
+**与 DSH 的差距**：DSH 无包名约束；agentskills-runtime 受 cjpm 工具链限制，插件包命名需区分内嵌轨/独立轨两套规范。
+
+#### 限制 #6：HMR/合流性无定理背书——对外表述"确定性插件生命周期"（设计限制）
+
+**原设计需求**：§2.10 与 Cordis 六语义对照中，HMR/合流性标注"工程近似，无定理背书"。
+
+**实际限制**：静态编译语言无运行时 fiber 模型，无法实现 DSH 的响应式 inject、Proxy ctx、HMR、五种事件分发（emit/parallel/serial/bail/waterfall）。agentskills-runtime 以"注解声明 + 反射发现 + 生命周期状态机"覆盖 Cordis 六语义中的五个（Service/inject/effect/Events/检视），事件总线实现 emit/waterfall 两种最常用语义，仅 HMR 延后。
+
+**实际落地方案**：不变量表中明确标注"HMR/合流性无定理背书，对外只表述确定性插件生命周期"。PluginEventBus 实现 emit/waterfall，未实现 parallel/serial/bail（f_concurrent EventBus 不在当前依赖中，且其语义是线程池任务执行器非发布订阅）。
+
+**与 DSH 的差距**：DSH 是响应式 fiber 模型，HMR 原生支持；agentskills-runtime 受静态语言限制，HMR 需待 v1.1+ 增强形态（WASM 沙箱插件）才可能实现。
 
 ## 项目背景
 
@@ -158,15 +240,39 @@ agentskills-runtime 需要一套跨平台的纯仓颉插件系统，支撑 ROADM
 - 抽取 `libs/plugin-spi` 独立基础包：Plugin 接口 / PluginAnnotation / PluginContext 契约 / PluginEventBus 接口 / Controller 基类（插件面向的稳定 API）
 - 宿主（magic 包）与插件包都依赖 plugin-spi；插件包**不得 import 宿主 magic 包**（cjpm 依赖单向性）
 - 抽取时点：**首个 L2 动态库插件开发前**（动态库插件编译期不能依赖宿主包）——存量冻结决策下不提前做
+- **v3 修订（2026-08-28）**：阶段四引入 L3 进程隔离轨后，附7.13 的 HTTP 契约 SPI 拆分对 L3 轨不再是必须（进程边界使 JSON-RPC 协议契约取代接口契约）；SPI 拆分仅服务于 L2 动态库轨，按需推进，两轨演进解耦
 
-## 演进路标（与附7.9.2 一致）
+### REQ-PS-015: L3 进程隔离插件轨（cordis-cj 集成，阶段四）
+
+> **设计动因**：阶段三 L2 动态库轨实现了"不重编宿主装插件"，但插件与宿主同进程（无故障隔离、卸载依赖 dlclose 行为不确定），且设计文档 §0.2 六大限制中 #2/#3/#4/#5 仅被部分缓解。经调研第三方库 cordis-cj（`apps/cordis-cj`，MIT，对标 DeepSeek Harness Cordis 的仓颉实现，详见可行性报告附7.14），其"微内核 + 进程隔离"架构（插件 = 独立子进程，卸载 = 杀进程 + OS 资源回收）可彻底消解五大限制、大幅缓解第六限制。集成方案为**三轨并存新增第三轨**，不推翻现有内嵌轨/L2 轨。
+
+- **前置闸门（一票否决项，Spike 先行）**：
+  - Spike-1 工具链兼容：cordis-cj 声明 cjc 1.1.3，需用宿主 1.0.5 工具链编译验证（人工独立 cmd 执行）
+  - Spike-2 Windows 可编译性：cordis_host 依赖 `ystyle::jsonrpc_unix`（UDS 不支持 Windows），需在 x86_64-w64-mingw32 目标验证；失败则 vendor 后剥离 UDS 代码（stdio 模式不受影响）
+- **传输固定 stdio**：宿主开发环境含 Windows，集成后固定 `transport = "stdio"`（NewlineFraming + JSON-RPC 2.0，全平台）；UDS 不启用
+- **宿主集成组件**（全部位于 `src/plugin/`，magic.plugin 包，存量 src/app 零改动）：
+  - `CordisHostManager`：包装 `ystyle::cordis_host` 的 PluginManager(stdio)/PluginHost/reconcile 循环；从 `plugins.yaml` 读取 `mode: process` 插件生成期望状态
+  - `ExternalPluginRouteGateway`：为 process 插件注册 UCTOO V4 路由（POST /add、/edit、/del 等），handler 序列化 HTTP 请求（method/path/pathParams/queryParams/body/userId）→ `invoke` 插件进程 → 插件返回 `{errno, errmsg}` 或数据对象 → 网关回写；中间件链（CORS → DeserializeUser → RequirePermission → RowLevel → OperateLog）在宿主侧执行，V4 API 规范与 RBAC/行级权限体系完全保留
+  - **宿主侧服务代理**：宿主在 RPC 连接上注册 `host.db`/`host.log`/`host.cache` 等服务 handler，插件进程经 `ctx.invoke` 反向调用（数据访问复用宿主 f_orm/连接池/权限过滤，插件不直连数据库）
+- **插件形态**：独立 cjpm 工程（output-type = "executable"，--static），入口为 `PluginRuntime.run(...)` 显式 API 写法（**禁用 `@Plugin` 宏**——规避 cjpm 宏包 organization 跨模块缺陷，与 cordis-cj 官方对外部插件作者的建议一致）；依赖 `ystyle::cordis_plugin` + `jsonvalue`
+- **插件生命周期语义**（对齐 Cordis/DSH）：
+  - 启停：`plugin_activate`/`plugin_deactivate` Agent 工具映射为 reconcile 期望状态 enabled 变更 → 拉起/terminate（杀进程 = OS 级资源回收，卸载确定性优于 dlclose）
+  - 崩溃自愈：stdout EOF → Failed → 下一轮 reconcile 自动重拉（探活 ping 超时 → Unreachable → 重启）
+  - 状态回写：cordis InstanceStatus（Starting/Pending/Active/Unloading/Failed/Unreachable）→ PluginState 五态 → `agent_skills.runtime_status`（PluginHost.onStatusChange → PluginSyncBridge，复用既有通道）
+  - 可逆效果：插件侧 `ctx.effect` 注册、卸载逆序执行（对齐 Cordis fiber.dispose 语义）
+- **生成与卸载工具适配**：plugingen 新增 `mode: process` 输出形态（三维一体目录 + 独立 cjpm.toml + PluginRuntime.run 入口模板）；pluginuninstall 新增 process 轨支持（终止进程 + 删除二进制与清单 + 清数据库痕迹）
+- **跨进程事件（阶段四后期，可选增强）**：cordis EventRegistry（五种派发 emit/parallel/serial/bail/waterfall + 类型安全）与进程内 PluginEventBus 桥接
+- **与"一切皆技能"的关系**：L3 轨使"第三方开发者独立发布插件（可闭源、故障隔离、AI 动态启停）"的插件市场门槛真正达成——技能 = SKILL.md（AI 行为）+ 独立可执行插件（确定性能力）+ plugin.yaml（清单），AI 经 Agent 工具对插件进程做 inspect/activate/deactivate 即 DSH tool-cordis 自引用语义的进程级等价物
+
+## 演进路标（v3 修订：插入阶段四 L3 进程隔离轨，2026-08-28，与附7.14.8 一致）
 
 | 阶段 | 版本锚点 | 需求 | 晋级门槛 |
 |---|---|---|---|
 | 阶段一：插件框架核心 | v0.5 | REQ-PS-001~007、008（双轨验证） | 集成测试全绿，存量功能回归无损（src/app 零改动） |
 | 阶段二：增量插件化就位 | v0.6 | REQ-PS-006 工具上线、009（方案三）、011（plugingen）、013（SyncBridge） | 第一个真实新插件不经框架代码修改上线 |
 | 阶段三：L2 动态加载 | v0.7~v0.9 | REQ-PS-012（SPI）、010（L2）、009 升格方案二、014（卸载） | 不重编宿主装上一个新插件 |
-| 阶段四：插件市场 | v1.0 / v1.1 | 另立 SDD | 第三方可独立发布插件 |
+| **阶段四：L3 进程隔离轨（cordis-cj）** | v1.0 | **REQ-PS-015**（Spike 闸门 → 宿主集成 → 网关代理 → 生成/卸载/同步 → 事件桥接） | Spike 双闸门通过；一个 V4 CRUD 插件以进程形态上线（web-admin 回归通过、杀进程 3 秒内自愈）；第三方可独立发布进程插件 |
+| 阶段五：插件市场 | v1.1 / v1.2 | 另立 SDD | 第三方可独立发布插件（市场基础设施） |
 
 ## 验收标准
 
@@ -182,8 +288,14 @@ agentskills-runtime 需要一套跨平台的纯仓颉插件系统，支撑 ROADM
 - [ ] plugingen 对新表输出完整插件三维一体目录，`AutoRouteConfig.cj` 无任何新增行；crudgen/crudweb 源码零改动（保留验证）
 - [ ] PluginSyncBridge 把插件状态回写 agent_skills.runtime_status；plugin.yaml 不被数据库侧覆盖；存量 sync 双向机制回归无损
 - [ ] L2 动态库加载原型可加载一个最小插件动态库并反射访问（阶段三验收）
+- [ ] Spike-1/Spike-2 双闸门通过：cordis-cj 在宿主 1.0.5 工具链 + Windows（x86_64-w64-mingw32）目标编译通过（阶段四前置验收）
+- [ ] CordisHostManager 以 stdio 传输拉起 process 插件：握手/provide/日志汇聚/terminate 全链路日志可见（阶段四验收）
+- [ ] 一个 V4 CRUD 插件以进程形态上线：web-admin 数据表格页面 CRUD 回归通过，行级权限拦截行为与内嵌轨一致（阶段四验收）
+- [ ] 崩溃自愈：杀插件进程后 reconcile 自动重拉，宿主与相邻插件无感知（阶段四验收）
+- [ ] plugin_activate/plugin_deactivate 对 process 插件生效（拉起/杀进程），agent_skills.runtime_status 正确回写
+- [ ] plugingen `mode: process` 生成 → 独立 `cjpm build` → 放置即生效（不重编宿主、不重启宿主）
 - [ ] 全部代码仅依赖仓颉标准库（不依赖 `ohos.ark_interop` 等鸿蒙系统库）
-- [ ] 存量 `src/app` 代码零改动（阶段一硬约束的直接验证）
+- [ ] 存量 `src/app` 代码零改动（阶段一硬约束的直接验证，L3 轨同样适用——集成代码全部在 src/plugin/）
 
 ## 依赖
 
@@ -191,5 +303,6 @@ agentskills-runtime 需要一套跨平台的纯仓颉插件系统，支撑 ROADM
 - 依赖 interaction 的事件基础设施（`src/interaction/events.cj` 事件模型、EventHandlerManager）
 - 依赖 app 的路由设施（`src/app/registry/`：RouteRegistry / AutoRouteRegistry——只读复用，不修改存量行为）
 - 依赖构建设施（`build.cj` pre-build 钩子、`src/scripts/package_release/`）
-- 前置研究报告：`docs/ref/cangjie-plugin-system-feasibility.md`（含附7.8/附7.9 决策）、`docs/ref/cordis-vs-npm-plugin.md`
+- **阶段四新增依赖**：cordis-cj（vendor 至 `apps/cordis-cj`，MIT）——`ystyle::cordis_host`（宿主侧）/ `ystyle::cordis_plugin`（插件侧 SDK）+ 中心仓依赖 `ystyle::jsonrpc` 0.7.0 / `ystyle::jsonrpc_stdio` 0.7.0 / `ystyle::jsonrpc_unix` 0.7.0（Windows 需剥离验证）/ `tomlcj` 1.0.0 / `jsonvalue` 1.1.0；选型决策矩阵与风险清单见可行性报告附7.14.6/附7.14.7
+- 前置研究报告：`docs/ref/cangjie-plugin-system-feasibility.md`（含附7.8/附7.9 决策、附7.14 cordis-cj 调研）、`docs/ref/cordis-vs-npm-plugin.md`
 - 路线图：`ROADMAP.md`（v0.5 生产就绪、v1.0 插件市场基础设施、v1.1 插件市场上线）

@@ -171,21 +171,10 @@ public class HTTPServer {
             }
         }
 
-        try {
-            libRouter.get("/hello", { req: LibHttpRequest =>
-                LibHttpResponse.json(LibHttpStatus.OK, "{\"message\":\"AgentSkills-runtime,Hello World\"}")
-            })
-        } catch (ex: Exception) {
-            logger.error("Failed to register /hello: ${ex.message}")
-        }
-
-        for ((wsPath, wsHandler) in _webSocketRoutes) {
-            try {
-                libRouter.get(wsPath, wsHandler)
-            } catch (ex: Exception) {
-                logger.error("Failed to register WS route ${wsPath}: ${ex.message}")
-            }
-        }
+        // 说明：/hello 与 WebSocket 路径均不再在此处向 libRouter 重复注册——
+        // /hello 由应用层 SkillRoutes 注册（本方法上方路由循环已注册到 libRouter）；
+        // WebSocket 升级请求由下方顶层 handler 的 Upgrade 检测委托 _webSocketRoutes 处理，
+        // 非 upgrade 请求走应用层路由（如 WebMCPRoutes 的 streamableHttp GET 响应）。
 
         logger.info("All routes registered successfully")
 

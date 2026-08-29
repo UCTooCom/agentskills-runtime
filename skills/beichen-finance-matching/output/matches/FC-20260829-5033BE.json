@@ -1,0 +1,134 @@
+{
+  "case_id": "FC-20260829-5033BE",
+  "company_name": "北京北辰实业有限公司",
+  "need": {
+    "amount": "500万",
+    "purpose": "研发投入",
+    "term": "2年"
+  },
+  "matches": [
+    {
+      "partner": "光大银行",
+      "partner_no": "BK-001",
+      "type": "bank",
+      "strength_domains": [
+        "数据要素",
+        "科技金融",
+        "知识产权质押",
+        "专精特新"
+      ],
+      "score": 55.8,
+      "score_breakdown": {
+        "domain": 12.5,
+        "experience": 30.0,
+        "cycle": 13.3
+      },
+      "basis": "优势领域命中 1 项（1 项与需求领域相关）；服务经验 31 家次；平均放款周期约 5 个工作日",
+      "products": [
+        {
+          "name": "科技研发贷",
+          "type": "债权",
+          "amount": "视企业情况",
+          "term": "流贷最长5年/项目贷最长10年",
+          "guarantee": "灵活",
+          "target": "北京市科技型研发主体",
+          "purpose": [
+            "研发投入"
+          ],
+          "file": "finance-products\\光大银行-科技研发贷.md"
+        },
+        {
+          "name": "知识产权质押贷",
+          "type": "债权",
+          "amount": "额度无上限",
+          "term": "最长3年",
+          "guarantee": "质押",
+          "target": "拥有知识产权科创企业",
+          "purpose": [
+            "研发投入",
+            "流动资金"
+          ],
+          "file": "finance-products\\光大银行-知识产权质押贷.md"
+        }
+      ]
+    },
+    {
+      "partner": "浦发银行",
+      "partner_no": "BK-005",
+      "type": "bank",
+      "strength_domains": [
+        "科技金融",
+        "投贷联动",
+        "离岸跨境",
+        "园区服务"
+      ],
+      "score": 42.8,
+      "score_breakdown": {
+        "domain": 12.5,
+        "experience": 17.0,
+        "cycle": 13.3
+      },
+      "basis": "优势领域命中 1 项（1 项与需求领域相关）；服务经验 17 家次；平均放款周期约 5 个工作日",
+      "products": [
+        {
+          "name": "浦研贷",
+          "type": "债权",
+          "amount": "视企业情况",
+          "term": "流贷最长5年/固定贷最长10年",
+          "guarantee": "灵活",
+          "target": "成长期/成熟期科技企业研发",
+          "purpose": [
+            "研发投入"
+          ],
+          "file": "finance-products\\浦发银行-浦研贷.md"
+        }
+      ]
+    },
+    {
+      "partner": "北京银行",
+      "partner_no": "BK-002",
+      "type": "bank",
+      "strength_domains": [
+        "数据资产",
+        "专精特新",
+        "科技金融",
+        "普惠金融"
+      ],
+      "score": 38.2,
+      "score_breakdown": {
+        "domain": 12.5,
+        "experience": 11.0,
+        "cycle": 14.7
+      },
+      "basis": "优势领域命中 1 项（1 项与需求领域相关）；服务经验 11 家次；平均放款周期约 4 个工作日",
+      "products": [
+        {
+          "name": "科创贷",
+          "type": "债权",
+          "amount": "最高10亿元",
+          "term": "视情况",
+          "guarantee": "知识产权质押",
+          "target": "有中长期研发资金需求科技企业",
+          "purpose": [
+            "研发投入"
+          ],
+          "file": "finance-products\\北京银行-科创贷.md"
+        },
+        {
+          "name": "科创e贷",
+          "type": "债权",
+          "amount": "最高500万元",
+          "term": "视情况",
+          "guarantee": "信用",
+          "target": "初创企业科技成果转化",
+          "purpose": [
+            "研发投入"
+          ],
+          "file": "finance-products\\北京银行-科创e贷.md"
+        }
+      ]
+    }
+  ],
+  "eliminated": [],
+  "total_partners": 6
+}

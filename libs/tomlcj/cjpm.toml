@@ -1,0 +1,29 @@
+[dependencies]
+
+[package]
+  cjc-version = "1.1.0"
+  name = "tomlcj"
+  organization = ""
+  description = "TOML 解析与编码库，提取自 cjpm"
+  version = "1.0.0"
+  target-dir = ""
+  script-dir = ""
+  output-type = "static"
+  compile-option = "-Woff unused"
+  override-compile-option = ""
+  link-option = ""
+  license = ["Apache-2.0"]
+  authors = ["ystyle"]
+  repository = "https://atomgit.com/ystyle/tomlcj"
+  package-configuration = {}
+
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}"]
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["../cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${OHOS_AARCH64_CANGJIE_STDX_PATH}"]
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["${OHOS_x86_64_CANGJIE_STDX_PATH}"]

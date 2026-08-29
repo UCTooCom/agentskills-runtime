@@ -1407,4 +1407,675 @@ SDD 三份文档（`.codeartsdoer/specs/plugin-system/`）已按全部研究文�
 
 **3. crudgen/crudweb 保留不重构，插件生成另建 plugingen。** 原方案"crudgen 新增插件输出模式"取消——crudgen/crudweb 完整保留为**宿主代码通道**（未来宿主功能新增/迭代仍生成到 src/app + 追加 AutoRouteConfig；"只减不增"红线约束的是插件化新业务能力，不约束宿主自身演进）。插件形态生成由**新建 plugingen** 承担（架构同构：TemplateEngine + templates/，位置 src/plugin/tools/plugingen/，从 db_info 读表结构或 --blank 生成 skills/{name}/ 三维一体）。两条生成通道并行独立、模板互不依赖。PS-T013 已改写为 plugingen（1.5 天），新增 PS-T018 PluginSyncBridge（1 天，阶段二）。
 
+---
+
+## 附7.10 插件卸载机制调研与阶段三卸载需求补齐（2026-08-24）
+
+### 附7.10.1 触发背景
+
+阶段二删除 entitygen/feedbackgen 时全程手工（删目录、清 plugins.yaml、清 generated_anchors.cj、清 target 产物、清数据库痕迹），暴露了阶段二"只有运行时停用（plugin_deactivate）、无工程级卸载"的缺口。经研究对比 deepseek-harness（Cordis）卸载机制（详见 `docs/ref/deepseek-harness-plugin.md`），确认 agentskills-runtime 因插件生命周期模型不同（编译期静态资产 vs 会话级动态 effect），工程级卸载是本项目独有的能力，DSH 不需要也不具备这一层。
+
+### 附7.10.2 agentskills-runtime 现有卸载能力
+
+**只有运行时停用（deactivate），没有工程级卸载。**
+
+- ✅ 已实现：`Plugin.onDeactivate` / `onUnload` 生命周期钩子、PluginContext.onCleanup 逆序清理栈、PluginRegistry.delete + 快照回滚、`plugin_deactivate` Agent 工具
+- ❌ 缺失：物理删除插件文件资产、从 `plugins.yaml` 加载清单移除、清理 `generated_anchors.cj` 反射锚点、清理编译产物、清理数据库菜单节点/agent_skills 表记录
+
+spec.md REQ-PS-006 明确写道"不实现运行时定义新插件（`cordis_define` 等价物）——留待 L2"，卸载只到"停用"这一层。
+
+### 附7.10.3 deepseek-harness（Cordis）卸载机制
+
+**纯运行时、effect-based、自动完整。**
+
+核心是 `RegistryService.delete(plugin)` → 遍历该插件所有 fiber → `fiber.dispose()` 按逆序执行 `_disposables` 栈中每个 disposer，一次性撤销该插件产生的所有副作用（服务注册、事件订阅、命令、定时器）。
+
+DSH 宿主层在 Cordis 之上封装了两个面向 Agent/用户的卸载入口：
+
+| 方法 | 调用方 | 作用 |
+|---|---|---|
+| `undefine(agent, pluginId)` | Agent 工具调用 | 移除 Plugin + 其所有 Package + 当前活跃 run |
+| `undefineFromPanel(agent, pluginId)` | 用户 UI 面板 | 同上，额外注入 user 消息告知模型"该插件已被用户移除" |
+
+`undefine` 的实现（cordis-host-runner/src/index.ts:210-218）：
+
+```ts
+async undefine(agent, pluginId) {
+  const plugin = this.owned(agent, pluginId)
+  if (plugin === undefined) return { ok: false, reason: 'plugin-missing' }
+  const wasRunning = plugin.run !== undefined
+  this.cancelPending(pluginId, `... was removed before approval`)  // 取消未决审批
+  if (plugin.run !== undefined) await this.retract(plugin)          // 撤销活跃 run
+  this.registry.delete(pluginId)                                    // Cordis delete → fiber.dispose()
+  return { ok: true, wasRunning }
+}
+```
+
+**卸载顺序**：
+1. `cancelPending` —— 取消该插件所有未决的审批请求
+2. `retract` —— 若插件正在运行，先停止活跃 run（撤销沙箱、取消子 agent、等待 in-flight 完成）
+3. `registry.delete` —— 调用 Cordis 底层 `delete`，触发 `fiber.dispose()`，逆序撤销所有副作用
+
+### 附7.10.4 卸载机制三层差异对比
+
+| 层次 | agentskills-runtime（现状） | deepseek-harness（Cordis） | 差异根源 |
+|---|---|---|---|
+| **运行时停用** | ✅ deactivate + 逆序清理栈 | ✅ fiber.dispose() 撤销所有 effect | 基本对齐，agentskills 需插件手写 onCleanup，DSH 自动入栈 |
+| **工程级卸载** | ❌ 完全缺失，本轮手工删除暴露 | ❌ DSH 不做（沙箱级生命周期） | agentskills 插件是"编译期静态资产+运行时实例"双重生命周期，DSH 是纯运行时 effect |
+| **卸载安全/审计** | ❌ 未设计 | ✅ approval seam + 42 种事件溯源 | DSH event-sourcing 架构天然支持，agentskills 需在阶段四补齐 |
+
+**核心结论**：agentskills-runtime 的卸载能力设计对标了 Cordis 的"运行时 effect 撤销"语义，但因为插件生命周期模型不同（编译期静态资产 vs 会话级动态 effect），**工程级卸载（文件/配置/编译产物/数据库痕迹的清理）是 agentskills-runtime 独有的能力，DSH 不需要也不具备这一层**。这个缺口应该由新建的 `pluginuninstall` 工具来填补，而不是简单照搬 DSH 的 `undefine`。
+
+### 附7.10.5 卸载三层模型（对应 spec REQ-PS-014 / design §2.11）
+
+| 层 | 职责 | 关键动作 | 对标 DSH |
+|---|---|---|---|
+| **运行时层** | 停用运行时实例，撤销所有运行时副作用 | deactivate → onDeactivate → onUnload → 逆序清理栈 → unregister → removeByPlugin → unsubscribeAll → unregisterByPlugin。L2 额外 dlclose | ✅ Cordis fiber.dispose() 撤销所有 effect |
+| **静态资产层** | 删除插件文件资产与构建产物 | 删除 skills/{name}/、src/generated/skill-plugins/{name}/、target 编译产物、plugins.yaml 条目、generated_anchors.cj import | ❌ DSH 不做（沙箱级生命周期） |
+| **数据库痕迹层** | 清理数据库中该插件的持久化痕迹 | 清理 agent_skills、permissions、i18 表中该插件的记录 | ❌ DSH 不做（会话级，无持久化） |
+
+### 附7.10.6 阶段三卸载任务清单
+
+| 任务ID | 任务名称 | 优先级 | 预估工时 | 依赖 | 状态 |
+|--------|---------|--------|---------|------|------|
+| PS-T019 | pluginuninstall插件卸载工具 | P1 | 2天 | PS-T007, PS-T013, PS-T015, PS-T018 | ⏳待完成 |
+| PS-T020 | build-sync删除检测增强 | P2 | 0.5天 | PS-T015 | ⏳待完成 |
+| PS-T021 | 卸载集成测试与验证 | P1 | 1天 | PS-T019, PS-T020 | ⏳待完成 |
+
+---
+
+## 附7.11 轻量级插件机制调研：是否需要根 cjpm.toml 注册 + 是否需要重启宿主（2026-08-24）
+
+### 附7.11.1 核心问题
+
+用户在阶段三启动前提出深层架构问题：
+
+1. 每个单独的插件需要在根目录的 cjpm.toml 中进行依赖注册吗？
+2. 修改根目录 cjpm.toml 那不是还需要重启宿主？
+3. 是否有真正实现不重启宿主的轻量级插件方案？
+
+### 附7.11.2 方案对比：build-sync（阶段二） vs L2 动态加载（阶段三）
+
+| 维度 | 阶段二 build-sync | 阶段三 L2 动态加载 |
+|---|---|---|
+| 插件代码如何进入编译 | build.cj pre-build 把 `skills/{name}/scripts/cj/` **复制**到 `src/plugins/{name}/`，与宿主一起编译 | **不进入宿主编译**。插件预编译为独立动态库（`.so`/`.dll`/`.dylib`） |
+| 是否需要根 cjpm.toml 注册 | ❌ 不需要（build-sync 自动同步，宿主 cjpm.toml 不感知插件） | ❌ **不需要**（`PackageInfo.load()` 直接加载动态库，不经过 cjpm 依赖图） |
+| 安装新插件是否需重启宿主 | ✅ 需要（插件源码进了宿主编译单元，必须重编重启） | ❌ **不需要**（运行时 `PackageInfo.load()` 热加载，宿主进程不重启） |
+| 卸载插件是否需重启宿主 | ✅ 需要（需重编移除插件代码） | ❌ **不需要**（`dlclose` 卸载动态库，路由降级 503） |
+| 插件能否闭源 | ❌ 不能（源码必须随宿主编译） | ✅ **能**（只分发动态库二进制） |
+
+### 附7.11.3 关键技术点：PackageInfo.load() 不经过 cjpm 依赖图
+
+仓颉的 `PackageInfo.load(path)` 是**运行时** API，它直接调用操作系统的动态库加载机制（Linux `dlopen`、Windows `LoadLibrary`、macOS `dlopen`），**完全不经过 cjpm 的编译期依赖解析**。
+
+这意味着阶段三插件安装流程（不重启宿主）：
+
+```
+1. 第三方开发者预编译插件为动态库
+   cd skills/feedback/
+   cjpm build → 产出 libskill_feedback.so
+
+2. 把动态库 + plugin.yaml + SKILL.md 放入宿主的 plugins/ 目录
+   （或通过插件市场远程拉取）
+
+3. 宿主运行时调用 PluginDylibLoader.loadFromDylib()
+   → PackageInfo.load("plugins/feedback/libskill_feedback")
+   → ClassTypeInfo.get("magic.plugins.feedback.FeedbackPlugin")
+   → 实例化 → 注册 → 路由/技能可用
+
+4. 全程不修改根 cjpm.toml，不重启宿主进程
+```
+
+### 附7.11.4 与 deepseek-harness（Cordis）的对比
+
+DSH 的动态插件机制（`cordis-host-runner`）比仓颉更轻量，因为 JavaScript 是解释执行的：
+
+| 维度 | DSH Cordis 动态插件 | 仓颉 L2 动态加载 |
+|---|---|---|
+| 插件代码形态 | JavaScript 字符串（`code.host`/`code.client`） | 仓颉预编译动态库 |
+| 加载机制 | `node:vm.runInContext(code, sandbox)` — V8 沙箱解释执行 | `PackageInfo.load(path)` — OS 动态库加载 |
+| 是否需要预编译 | ❌ 不需要（JS 源码直接 eval） | ✅ 需要（仓颉是静态编译语言，必须先 `cjpm build` 编译为 `.so`/`.dll`） |
+| 沙箱隔离 | ✅ `node:vm` 沙箱（限制 `require`/`fetch`/`setTimeout` 等 Node API） | ❌ 无沙箱（动态库与宿主同进程，有完全权限） |
+| 热加载/卸载 | ✅ `define`/`undefine` 运行时动态操作 | ✅ `PackageInfo.load`/`dlclose` 运行时动态操作 |
+| 闭源能力 | ❌ JS 源码必须可见（解释执行） | ✅ 动态库二进制分发，源码可不公开 |
+
+**核心差异**：DSH 的插件是**运行时 eval 的 JavaScript 字符串**，不需要预编译；仓颉的插件是**预编译的动态库**，因为仓颉是静态编译语言，无法运行时 eval 源码。但两者都不需要修改根构建配置、都不需要重启宿主。
+
+### 附7.11.5 业界最佳实践对比
+
+| 系统 | 语言 | 插件形态 | 加载机制 | 需重启宿主？ | 闭源？ |
+|---|---|---|---|---|---|
+| **VS Code** | TS/JS | `.vsix` 包（JS 源码） | ExtensionHost 进程 + `require` | ❌ 热加载 | ❌ JS 源码可见 |
+| **IntelliJ** | Java/Kotlin | `.jar`/`.zip` 插件包 | JVM ClassLoader + `PluginDescriptor` | ❌ 热加载（部分需重启） | ✅ JAR 可闭源 |
+| **Obsidian** | TS/JS | `.obsidian/plugins/` 目录 | Node.js `require` + 沙箱 | ❌ 热加载 | ❌ JS 源码可见 |
+| **CangjieMagic** | 仓颉 | `skills/{name}/` 目录 | build-sync + 反射 | ✅ 需重编重启 | ❌ 源码必须编译 |
+| **agentskills-runtime 阶段三** | 仓颉 | 预编译动态库 | `PackageInfo.load()` + 反射 | ❌ **热加载** | ✅ **动态库可闭源** |
+
+agentskills-runtime 阶段三的方案最接近 **IntelliJ 的 JVM ClassLoader 插件机制**——预编译二进制 + 运行时反射加载 + 不重启宿主。
+
+### 附7.11.6 方案选择：方案 B（轻量级）
+
+用户在调研后选择**方案 B（轻量级）**：
+
+- **不修改根 cjpm.toml**（插件不进宿主 cjpm 依赖图）
+- 插件目录 `skills/{name}/` 增加自有 `cjpm.toml`（name = `skill_{name}`，output-type = `dynamic`，dependencies = `plugin_spi`）
+- 插件开发者在自己机器上 `cd skills/{name}/ && cjpm build` 预编译
+- 宿主运行时 `PackageInfo.load()` 加载预编译产物
+- 全程不修改根 cjpm.toml，不重启宿主进程
+
+### 附7.11.7 方案 B 的开发期 vs 发布期双轨
+
+| 阶段 | 插件形态 | 构建方式 | 是否修改根 cjpm.toml | 是否重启宿主 |
+|---|---|---|---|---|
+| **开发期** | build-sync 复制源码到 src/plugins/ | 与宿主一起编译 | ❌ 不修改 | ✅ 需重编重启 |
+| **发布期** | 预编译动态库 | 独立 `cjpm build` | ❌ 不修改 | ❌ 热加载 |
+
+开发期保留 build-sync 作为便利（增量编译快、IDE 跳转友好）；发布期用预编译动态库 + `PackageInfo.load()` 热加载。两套机制并存，由 `plugins.yaml` 的 `mode: sync` / `mode: dylib` 配置切换。
+
+---
+
+## 附7.12 阶段三插件形态总结（2026-08-24）
+
+### 附7.12.1 阶段三完成后插件的完整发布形态
+
+```
+plugins/feedback/                    # 插件目录（名=表名）
+├── plugin.yaml                      # 插件清单（name/version/dependencies/entry 类全名/tables）
+├── SKILL.md                         # AI 行为定义（SkillEngine 资产）
+├── libskill_feedback.so             # ← 预编译动态库（Linux）
+├── libskill_feedback.dll            # ← 预编译动态库（Windows）
+├── libskill_feedback.dylib          # ← 预编译动态库（macOS）
+└── templates/ assets/ references/   # 数据资产
+```
+
+**关键点**：
+1. **动态库是必须的** — `PackageInfo.load()` 加载的是预编译的 `.so`/`.dll`/`.dylib`，这是"不重编宿主装上新插件"晋级门槛的技术基础
+2. **源码是可选的** — 第三方开发者可以只分发动态库 + plugin.yaml + SKILL.md，不包含 `.cj` 源码
+3. **plugin.yaml 的 entry 字段**指向动态库中的插件类全名（如 `magic.plugins.feedback.FeedbackPlugin`），宿主通过反射 `ClassTypeInfo.get(entry)` 找到并实例化
+
+### 附7.12.2 闭源与知识产权保护
+
+| 场景 | 源码 | 动态库 | 是否可行 |
+|---|---|---|---|
+| 开源插件 | ✅ 公开 | ✅ 用户可自行编译 | ✅ |
+| 闭源商业插件 | ❌ 不公开 | ✅ 只分发二进制 | ✅ |
+| 混合模式 | ✅ 部分公开 | ✅ 核心逻辑闭源 | ✅ |
+
+**技术原理**：仓颉的 `PackageInfo.load()` 加载的是编译后的动态库，不依赖源码。动态库中的类型通过反射 (`ClassTypeInfo.get`) 可被发现和实例化。这与 Java 的 JAR/类加载器、Python 的 .pyd/.so 扩展模块、Node.js 的 .node 插件机制类似——**二进制分发是闭源的技术前提**。
+
+### 附7.12.3 阶段三 vs 阶段二的本质区别
+
+| | 阶段二（当前） | 阶段三（目标） |
+|---|---|---|
+| **插件安装** | 放入 `skills/{name}/` → build-sync 复制到 `src/plugins/` → **重编宿主** → 重启 | 放入 `plugins/{name}/` 预编译动态库 → **不重编** → 不重启 |
+| **插件卸载** | 手工删目录 + 清配置 + 清产物 → **重编宿主** → 重启 | `pluginuninstall --name` → dlclose → **不重编** → 不重启 |
+| **插件更新** | 替换源码 → **重编宿主** → 重启 | 替换动态库 → dlclose 旧库 + load 新库 → **不重编** → 不重启 |
+| **第三方分发** | 必须开源（源码要进宿主编译） | 可闭源（分发动态库二进制） |
+
+---
+
+## 附7.13 HTTP 契约迁入 SPI 完整接口拆分清单（2026-08-24）
+
+### 附7.13.1 触发背景
+
+阶段三方案 B（轻量级）要求插件能独立预编译为动态库，不 import 宿主 magic 包。但 entity/feedback 插件的 Controller/Service/Route 深度依赖宿主 `magic.app.core.{http,response,query,router}`、`magic.app.utils.PermissionUtils`、`magic.log.LogUtils`——这些都是**具体 class 而非 interface**。
+
+要实现 DSH "一切皆插件"理念，宿主实现类都必须接口拆分：interface 放入 plugin-spi（插件编译期依赖），宿主提供 Impl（运行期注入）。重构后宿主模块可被第三方插件替换（如 `DefaultPermissionChecker` 可被另一个 `PermissionChecker` 实现替换）。
+
+本清单列出 entity/feedback 插件依赖的**全部宿主核心类型**的接口拆分方案，是 PS-T017 子任务 4（方案 B）的实施依据。
+
+### 附7.13.2 第一类：HTTP 类型（必须拆为 interface）
+
+#### HttpRequest
+
+**当前形态**：`magic.app.core.http.HttpRequest`，具体 class，含 8 个 public var 字段 + 6 个方法。
+
+**拆分方案**：
+
+```cangjie
+// plugin-spi 中：HttpRequest 契约（只读访问器）
+public interface HttpRequest {
+    prop method: HttpMethod      // HttpMethod enum 也迁入 SPI
+    prop uri: HttpUrl            // HttpUrl class 也迁入 SPI
+    prop headers: ArrayList<HttpHeader>
+    prop body: String
+    prop pathParams: HashMap<String, String>
+    prop queryParams: HashMap<String, String>
+    prop locals: HashMap<String, Any>
+    prop connection: ?Connection
+
+    func header(name: String): ?String
+    func pathParam(name: String): ?String
+    func queryParam(name: String): ?String
+    func json(): ?String
+    func getLocals(key: String): ?Any
+    func setLocals(key: String, value: Any): Unit
+}
+
+// 宿主 magic.app.core.http 中：保留具体 class HttpRequestImpl
+public class HttpRequestImpl <: HttpRequest {
+    // 原有字段和方法实现
+    // 注意：var 字段需改为 prop get/set（interface 要求）
+}
+```
+
+**宿主 import 改造**：宿主所有 `HttpRequest` 引用改为 `HttpRequestImpl`（或通过 interface 引用）。
+
+**插件 import 改造**：插件 Controller 改为 `import plugin_spi.{HttpRequest, HttpResponse}`，方法签名 `add(req: HttpRequest, res: HttpResponse)` 中的 `HttpRequest` 现在是 SPI interface。
+
+**回归点**：
+- 宿主 HTTP 服务器创建 `HttpRequestImpl` 实例传给 handler，handler 接收 `HttpRequest` interface 参数——向上转型安全
+- Router 的 `handler: (HttpRequest, HttpResponse) -> Unit` 签名改为 interface 类型
+- 所有现有 Controller 的 `req: HttpRequest` 参数自动匹配 interface（Liskov 替换）
+
+#### HttpResponse
+
+**当前形态**：`magic.app.core.http.HttpResponse`，具体 class，含 3 个 private 字段 + 6 个 fluent API 方法（返回 `HttpResponse` 链式调用）。
+
+**拆分方案**：
+
+```cangjie
+// plugin-spi 中：HttpResponse 契约
+public interface HttpResponse {
+    func status(code: Int32): HttpResponse       // 链式调用，返回类型为 interface
+    func header(name: String, value: String): HttpResponse
+    func json(data: String): HttpResponse
+    func send(text: String): HttpResponse
+    func getStatusCode(): Int32
+    func getHeaders(): HashMap<String, String>
+    func getBody(): String
+}
+
+// 宿主中：保留具体 class HttpResponseImpl
+public class HttpResponseImpl <: HttpResponse {
+    // 原有实现，方法返回 this（HttpResponseImpl），向上转型为 HttpResponse interface
+}
+```
+
+**关键问题**：fluent API 的链式调用 `res.status(200).json(...)` 中，`status()` 返回 `HttpResponse` interface，再调 `json()` 仍匹配 interface——**链式调用安全**。
+
+**回归点**：
+- 宿主 HTTP 服务器创建 `HttpResponseImpl` 传给 handler，handler 通过 `HttpResponse` interface 操作
+- 插件 Controller 的 `res.status(200).json(...)` 链式调用保持不变（interface 方法签名兼容）
+
+#### HttpMethod / HttpUrl / HttpHeader
+
+**当前形态**：`HttpMethod` enum、`HttpUrl` class、`HttpHeader` class。
+
+**拆分方案**：
+
+- `HttpMethod`：enum，**整体迁入 plugin-spi**（enum 无实现耦合，纯数据类型）
+- `HttpUrl`：class 含 6 个 var 字段 + `toString()`，**整体迁入 plugin-spi**（纯数据，无宿主依赖）
+- `HttpHeader`：class 含 2 个 var 字段 + 2 个 init，**整体迁入 plugin-spi**（纯数据）
+
+**回归点**：宿主 `magic.app.core.http.HttpTypes.cj` 改为 `import plugin_spi.{HttpMethod, HttpUrl, HttpHeader}`，原定义删除。
+
+### 附7.13.3 第二类：路由类型（必须拆为 interface）
+
+#### Route
+
+**当前形态**：`magic.app.core.router.Route`，具体 class，含 4 个 var 字段（method/path/handler/middlewares）+ 2 个 init + 1 个 `use()` 方法。
+
+**拆分方案**：
+
+```cangjie
+// plugin-spi 中：Route 契约
+public interface Route {
+    prop method: HttpMethod
+    prop path: String
+    prop handler: (HttpRequest, HttpResponse) -> Unit
+    prop middlewares: ArrayList<Middleware>   // Middleware 也需迁入 SPI
+
+    func use(middleware: Middleware): Route
+}
+```
+
+**回归点**：`handler` 的函数签名 `(HttpRequest, HttpResponse) -> Unit` 中，`HttpRequest`/`HttpResponse` 现在是 SPI interface——所有 handler 实现兼容。
+
+#### Router
+
+**当前形态**：`magic.app.core.router.Router`，具体 class，含 `routes`/`middlewareChain` 两个 private 字段 + `globalRouter` 静态字段 + 10 个方法（`get/post/put/delete/match/findRoute` 等）。
+
+**拆分方案**：
+
+```cangjie
+// plugin-spi 中：Router 契约
+public interface Router {
+    func registerAsGlobal(): Unit
+    func use(middleware: Middleware): Router
+    func get(path: String, handler: (HttpRequest, HttpResponse) -> Unit): Router
+    func post(path: String, handler: (HttpRequest, HttpResponse) -> Unit): Router
+    func put(path: String, handler: (HttpRequest, HttpResponse) -> Unit): Router
+    func delete(path: String, handler: (HttpRequest, HttpResponse) -> Unit): Router
+    func match(req: HttpRequest): ?Route
+    func findRoute(method: HttpMethod, path: String): ?Route
+    func getMiddlewareChain(): ArrayList<Middleware>
+    func getRoutes(): ArrayList<Route>
+}
+```
+
+**宿主保留**：`RouterImpl <: Router`，含原有 `globalRouter` 静态字段和实现。
+
+**回归点**：
+- 宿主创建 `RouterImpl` 实例，通过 `Router` interface 操作
+- 插件 Route 文件通过 `PluginRoute.register(router: Router, ...)` 注册路由，`router.get/post` 方法签名兼容
+
+#### Middleware
+
+**当前形态**：`magic.app.core.middleware.Middleware`，可能是 interface 或 class（需进一步确认）。
+
+**拆分方案**：如果是 interface，整体迁入 SPI；如果是 class，拆为 interface + Impl。
+
+### 附7.13.4 第三类：响应类型（整体迁入 SPI，纯数据无实现耦合）
+
+#### APIResult / APIError / APIResponse
+
+**当前形态**：`magic.app.core.response.{APIResult, APIError, APIResponse}`，都是具体 class，纯数据容器 + getter。
+
+**拆分方案**：**整体迁入 plugin-spi**（这三个是纯数据容器，无宿主依赖，迁入 SPI 后宿主 `magic.app.core.response` 改为 `import plugin_spi.{APIResult, APIError, APIResponse}`）。
+
+**回归点**：宿主 Service 层返回 `APIResult<T>`，插件 Service 层也返回 `APIResult<T>`——类型一致，无转换开销。
+
+### 附7.13.5 第四类：查询条件类型（整体迁入 SPI，纯数据）
+
+#### QueryOperator / LogicOperator / QueryValue / FieldCondition / CompositeCondition / SortCondition / ParsedQuery
+
+**当前形态**：`magic.app.core.query.QueryCondition.cj`，含 2 个 enum + 5 个 class，都是纯数据类型 + `toString()` 方法。
+
+**拆分方案**：**整体迁入 plugin-spi**（QueryCondition.cj 和 ParsedQuery.cj 的所有类型迁入 SPI，宿主 `magic.app.core.query` 改为 `import plugin_spi.{...}`）。
+
+**回归点**：宿主 RequestParserService 解析请求后返回 `ParsedQuery`，插件 Service 接收 `ParsedQuery`——类型一致。
+
+### 附7.13.6 第五类：权限类型（拆为 interface + 宿主 Impl）
+
+#### PermissionUtils
+
+**当前形态**：`magic.app.utils.PermissionUtils`，具体 class，全部 static 方法，依赖 `ORM`/`DataAccessAuthorizationDAO`/`PermissionCache`/`PermissionConfig` 等宿主数据库层。
+
+**拆分方案**：
+
+```cangjie
+// plugin-spi 中：权限检查契约
+public interface PermissionChecker {
+    func hasWildcardPermission(userId: String): Bool
+    func checkReadPermission(userId: String, entityId: String, entityType: String): (Bool, String)
+    func checkWritePermission(userId: String, entityId: String, entityType: String): (Bool, String)
+    func checkAuthorizePermission(userId: String, entityId: String, entityType: String): (Bool, String)
+    func checkUserHasPermission(userId: String, entityType: String, entityId: String, requiredPermission: PermissionLevel): (Bool, String)
+    func appendPermissionFilter(userId: String, entityType: String): (String, ArrayList<String>)
+    func getUserAuthorizedEntityIds(userId: String, entityType: String, requiredPermission: PermissionLevel): ArrayList<String>
+    func autoGrantCreatorPermission(userId: String, entityId: String, entityType: String): Bool
+}
+```
+
+**宿主保留**：`DefaultPermissionChecker <: PermissionChecker`，含原有 static 方法的实例化版本。
+
+**依赖类型迁入**：`PermissionLevel` enum、`PermissionConfig` class、`PermissionCache` class 也需相应迁入或拆分。
+
+**插件获取方式**：插件通过 `PluginContext.getPermissionChecker()` 获取宿主注入的 `PermissionChecker` 实例。
+
+**回归点**：宿主 Service 层调用 `PermissionUtils.checkReadPermission(...)` 改为 `permissionChecker.checkReadPermission(...)`（实例方法而非 static）。
+
+### 附7.13.7 第六类：日志类型（拆为 interface + 宿主 Impl）
+
+#### LogUtils
+
+**当前形态**：`magic.log.LogUtils`，struct with static methods，委托给 `LogUtilsImpl`（含文件 I/O、Console 等宿主实现）。
+
+**拆分方案**：
+
+```cangjie
+// plugin-spi 中：日志契约
+public interface PluginLogger {
+    func trace(msg: String): Unit
+    func trace(name: String, msg: String): Unit
+    func debug(msg: String): Unit
+    func debug(name: String, msg: String): Unit
+    func info(msg: String): Unit
+    func info(name: String, msg: String): Unit
+    func warn(msg: String): Unit
+    func warn(name: String, msg: String): Unit
+    func error(msg: String): Unit
+    func error(name: String, msg: String): Unit
+}
+```
+
+**宿主保留**：`DefaultPluginLogger <: PluginLogger`，委托给原有 `LogUtilsImpl`。
+
+**插件获取方式**：插件通过 `PluginContext.getLogger()` 获取宿主注入的 `PluginLogger` 实例。
+
+**回归点**：插件 Controller/Service/Route 中的 `LogUtils.info(...)` 改为 `logger.info(...)`（实例方法而非 static）。
+
+### 附7.13.8 第七类：请求解析类型（拆为 interface + 宿主 Impl）
+
+#### RequestParserService
+
+**当前形态**：`magic.app.core.query.RequestParserService`，具体 class，解析 HTTP 请求参数为 `ParsedQuery`。
+
+**拆分方案**：
+
+```cangjie
+// plugin-spi 中：请求解析契约
+public interface RequestParser {
+    func parseQuery(req: HttpRequest): ParsedQuery
+    func parseBody(req: HttpRequest): ?JsonObject
+    // 其他解析方法...
+}
+```
+
+**宿主保留**：`DefaultRequestParser <: RequestParser`，含原有实现。
+
+**插件获取方式**：插件通过 `PluginContext.getRequestParser()` 获取宿主注入的 `RequestParser` 实例。
+
+### 附7.13.9 汇总：plugin-spi 扩展后的完整类型清单
+
+| 类别 | 类型 | 迁入方式 | 宿主保留 |
+|---|---|---|---|
+| HTTP 类型 | HttpMethod (enum) | 整体迁入 | 无 |
+| HTTP 类型 | HttpUrl (class) | 整体迁入 | 无 |
+| HTTP 类型 | HttpHeader (class) | 整体迁入 | 无 |
+| HTTP 类型 | HttpRequest (class) | **拆为 interface** | HttpRequestImpl |
+| HTTP 类型 | HttpResponse (class) | **拆为 interface** | HttpResponseImpl |
+| 路由类型 | Route (class) | **拆为 interface** | RouteImpl |
+| 路由类型 | Router (class) | **拆为 interface** | RouterImpl |
+| 路由类型 | Middleware | 整体迁入（若为 interface） | 无 |
+| 响应类型 | APIResult (class) | 整体迁入 | 无 |
+| 响应类型 | APIError (class) | 整体迁入 | 无 |
+| 响应类型 | APIResponse (class) | 整体迁入 | 无 |
+| 查询类型 | QueryOperator (enum) | 整体迁入 | 无 |
+| 查询类型 | LogicOperator (enum) | 整体迁入 | 无 |
+| 查询类型 | QueryValue (class) | 整体迁入 | 无 |
+| 查询类型 | FieldCondition (class) | 整体迁入 | 无 |
+| 查询类型 | CompositeCondition (class) | 整体迁入 | 无 |
+| 查询类型 | SortCondition (class) | 整体迁入 | 无 |
+| 查询类型 | ParsedQuery (class) | 整体迁入 | 无 |
+| 权限类型 | PermissionChecker (interface) | **新增 interface** | DefaultPermissionChecker |
+| 日志类型 | PluginLogger (interface) | **新增 interface** | DefaultPluginLogger |
+| 请求解析 | RequestParser (interface) | **新增 interface** | DefaultRequestParser |
+
+**plugin-spi 扩展后总文件数**：现有 7 个 + 新增约 15 个 = **约 22 个源文件**。
+
+### 附7.13.10 实施顺序与验证点
+
+按**低风险优先**顺序迁入，每迁入一个类别立即通知人工在单独 cmd 环境编译验证：
+
+| 步骤 | 迁入内容 | 风险 | 验证方式 |
+|---|---|---|---|
+| 1 | 查询类型（QueryOperator 等 9 个类型）整体迁入 SPI | 低 | 人工 cjpm build 验证 |
+| 2 | 响应类型（APIResult/APIError/APIResponse）整体迁入 SPI | 低 | 人工 cjpm build 验证 |
+| 3 | HTTP 基础类型（HttpMethod/HttpUrl/HttpHeader）整体迁入 SPI | 低 | 人工 cjpm build 验证 |
+| 4 | HttpRequest/HttpResponse 拆为 interface + 宿主 Impl | **高** | 人工 cjpm build 验证 + 运行时 HTTP 请求回归测试 |
+| 5 | Route/Router 拆为 interface + 宿主 Impl | **高** | 人工 cjpm build 验证 + 运行时路由注册回归测试 |
+| 6 | Middleware 迁入 SPI（若为 interface） | 低 | 人工 cjpm build 验证 |
+| 7 | PermissionChecker 新增 interface + 宿主 DefaultPermissionChecker | 中 | 人工 cjpm build 验证 + 运行时权限校验回归测试 |
+| 8 | PluginLogger 新增 interface + 宿主 DefaultPluginLogger | 中 | 人工 cjpm build 验证 + 运行时日志输出回归测试 |
+| 9 | RequestParser 新增 interface + 宿主 DefaultRequestParser | 中 | 人工 cjpm build 验证 + 运行时请求解析回归测试 |
+| 10 | entity/feedback 插件 import 改造（magic.app.* → plugin_spi.*）+ 新建独立 cjpm.toml | 低 | 人工 cjpm build 验证 + 插件功能回归测试 |
+
+**总工作量**：约 4.75 天（含编译验证等待时间）。
+
+**关键风险**：步骤 4-5（HTTP/路由 interface 拆分）是最高风险点，可能触发宿主 HTTP 核心层的连锁编译错误。建议步骤 4-5 拆分为更小的子步骤，每改一个文件立即编译验证。
+
+---
+
+## 附7.14 cordis-cj 第三方库调研与 L3 进程隔离轨集成可行性（2026-08-28）
+
+### 附7.14.1 触发背景
+
+阶段三（L2 动态库轨）完成后，插件系统已具备"不重编宿主装上新插件"的能力（`PackageInfo.load` 热加载），但 §0.2 六大限制中仍有多个深层限制未消解：L2 插件与宿主**同进程**（无故障隔离、无资源回收保证、卸载依赖 dlclose 行为不确定）、HMR/合流性无定理背书、五种事件分发只实现两种。恰逢在仓颉开源社区发现第三方库 **cordis-cj**（https://atomgit.com/ystyle/cordis-cj，已 clone 到 `apps/cordis-cj`），其宣称基于北大 & DeepSeek-AI《Revertible Effects and Reactive Coeffects》论文、对标 DeepSeek Harness 的 Cordis 插件框架。本节完整研究其源码与文档，评估集成可行性。
+
+### 附7.14.2 cordis-cj 项目全貌
+
+#### 项目定位
+
+「微内核 + 进程隔离」插件系统：核心框架常驻宿主进程，业务插件以**独立子进程**运行，卸载即杀进程，由操作系统回收全部物理资源——用进程边界规避静态语言无法卸载模块的根本问题。这与本报告 §2.2"仓颉不能做的：在运行中卸载已链接代码"的结论形成正面对冲：**既然卸不掉，那就让它死**。
+
+#### 模块划分（cjpm workspace，5 成员）
+
+| 模块 | 包名 | 职责 | 关键源码 |
+|---|---|---|---|
+| `cordis_core` | `ystyle::cordis_core` | 协议消息类（JsonSerializable）、统一 TOML/JSON 配置加载、ConfigSchema 校验 | message.cj / config.cj / config_schema.cj / methods.cj |
+| `cordis_host` | `ystyle::cordis_host` | 进程管理（PipeTransport/UnixServerTransport/PluginManager）、调和器（PluginHost/Reconciler）、事件注册表 | plugin_manager.cj L74-L178 / plugin_host.cj L81-L148 / event_registry.cj |
+| `cordis_plugin` | `ystyle::cordis_plugin` | 插件 SDK（PluginRuntime/ServiceRegistry/ServiceProxy/Service 基类/timer/Logger）、宏包 | plugin_runtime.cj / service_registry.cj / macros/plugin_macros.cj |
+| `cordis_examples` | — | 宏插件/显式 API 插件示例 | |
+| `cordis_tests` | — | 72 个测试用例（协议/配置/管道/UDS/进程管理/端到端/宏/事件总线） | |
+
+#### 核心机制
+
+1. **进程生命周期**：`PluginManager.launch` 用 `std.process.launch`（三流 `ProcessRedirect.Pipe`）拉起插件可执行文件 → `PipeTransport`（宿主写子进程 stdin / 读 stdout）+ `JsonRpcClient` 建 RPC 连接 → 握手 `initialize` → `provide` 注册服务（返回 undo_id）→ 状态 `Active`。`terminate` = close client + `terminate(force: true)` + `wait()` 回收退出码（无僵尸进程）。
+2. **双传输**：stdio（NewlineFraming 换行帧，**全平台**，默认）与 UDS（ContentLengthFraming，仅 Linux/macOS）。插件代码零感知——`PluginRuntime.run` 内部用 `std.env.getCommandLine()` 检测宿主传入的 `--uds <path>` 自动选择。
+3. **Reconciler 调和器**：读 cordis.toml 期望状态 → diff（ToAdd/ToRemove/ToUpdate）→ 依赖拓扑排序启动（inject 未满足保持 `Pending`，服务就绪 `PROVIDER_CHANGED` 唤醒重试）→ 崩溃自愈（stdout EOF → `Failed` → 下轮重拉）→ 配置热更新（config 变更 → 重启插件生效）。
+4. **Fiber 状态机**：`awaitActive`（等待 Active 且服务全部注册，重抛启动错误）/ `restartPlugin` / `updatePlugin`（schema 校验后重启）/ `transitionStatus` + `onStatusChange` 监听——对齐 Cordis Fiber 的 await/restart/update 与 `internal/status` 事件。
+5. **可逆效果**：插件侧 `ctx.effect(disposer)` / `effectAsync`（Future 等待）注册，`ServiceRegistry.disposeAll()` 卸载时**逆序执行**；`getEffects()` 诊断树。
+6. **事件总线**：宿主 `EventRegistry` 扇出，五种派发模式 `emit/parallel/serial/bail/waterfall` + `once/prepend` + 类型安全 `on<T>/emit<T>`（`JsonDeserializable/JsonSerializable` 自动转换）；waterfall 的 next 洋葱回调经 `events/next` 跨进程远程回调实现（宿主存链状态）。
+7. **服务调用**：宿主 `instance.client.call("invoke", InvokeParams(service, method, args))` 转发；插件间调用 `ctx.invoke<T, R>(service, method, args)` 经宿主路由；`@Inject["key"]` 宏生成 `ServiceProxy`。
+8. **类型安全 API**：`registerHandler<T, R>` / `invoke<T, R>` 泛型自动序列化；`Service` 基类（`super(ctx, name)` 自动 provide + `register(method, handler)` + `bind()`）。
+9. **可观测性**：插件 `ctx.log` → 宿主汇聚（时间戳 + plugin_id）；stderr 独立线程转发；`ping/pong` 探活（3s 超时 → `Unreachable` → 重启）；`ctx.logger(name)` 命名日志器；`ctx.timeout/interval/throttle/debounce` 可撤销定时器。
+10. **ConfigSchema**：`ConfigFieldSpec` + `validateStrict`（含未知字段检查），错误带完整路径；宿主 `registerSchema` 后 `launchPlugin` 前置校验。
+
+#### 依赖与工程属性
+
+| 项 | 值 | 与 agentskills-runtime 的关系 |
+|---|---|---|
+| 许可证 | MIT（允许闭源集成与 vendor） | ✅ 可 vendor 进 libs/ |
+| cjc-version | 1.1.3（宿主为 1.0.5 + stdx 1.0.5.1） | ⚠️ **首要验证点**：需验证 cordis-cj 能否被 1.0.5 工具链编译 |
+| 外部依赖 | `ystyle::jsonrpc` 0.7.0、`ystyle::jsonrpc_stdio` 0.7.0、`ystyle::jsonrpc_unix` 0.7.0、`tomlcj` 1.0.0、`jsonvalue` 1.1.0（均为中心仓库） | ⚠️ 宿主当前全部为本地 path 依赖，引入方式需决策（见附7.14.6） |
+| 协议 | JSON-RPC 2.0（stdio 换行帧 / UDS Content-Length 帧） | 与宿主 MCP 相关方案同源（README 明言"与 mcp-cj 生产方案一致"） |
+| 平台 | stdio 全平台；UDS 不支持 Windows | 宿主开发环境为 Windows（x86_64-w64-mingw32）→ **集成固定 stdio 模式** |
+| 成熟度 | v0.1.0，72 测试用例含真实子进程端到端（握手/invoke/热卸载/崩溃自愈/双传输），文档四篇（design/design-impl/cordis-comparison/progress-tracking + 宏缺陷排查） | 单人维护的早期项目，需 vendor 后自维护 |
+| 已知缺陷 | ①cjpm 宏包带 organization 跨模块依赖缺陷（`@Plugin` 等宏只能同模块使用，外部插件必须用显式 API 写法 B）；②stdio 下 `ConsoleReader.read(Array<Byte>)` 永久阻塞（故用 readln 换行帧） | ①不影响集成——外部插件规范即写法 B；②是 cordis-cj 已解决的问题 |
+
+#### 与 Cordis 4.x（DSH 实际使用版）的语义对齐度
+
+据 cordis-comparison.md 逐项对比：论文核心语义（Revertible Effects ✅ / Reactive Coeffects ✅ 含 Specification-and-Notification ✅ / 生命周期状态机 ✅ / 声明式配置 ✅）全部落地；dsh 高频 API（`ctx.effect` 140 文件 / `ctx.on` 223 文件 / `extends Service` 134 处 / `inject:` 567 处）均有对等实现。未实现项：`isolate`/`intercept`/`accessor`/`mixin`（进程隔离架构下评估为"不做"，理由成立——进程即天然作用域隔离）、HMR（进程隔离下等价为重启，与本项目限制 #6 的结论一致）。**cordis-cj 反超 Cordis 的两点：进程隔离故障隔离、崩溃自愈。**
+
+### 附7.14.3 对照 §0.2 六大限制：cordis-cj 的消解能力
+
+| 限制 | 现状（内嵌轨 + L2 轨） | cordis-cj（L3 进程隔离轨） | 消解度 |
+|---|---|---|---|
+| #1 插件无法独立（装新插件必须重编宿主） | L2 动态库已缓解（预编译 .so/.dll + PackageInfo.load） | 插件是**独立可执行文件**，PluginManager.launch 直接拉起二进制，完全不进宿主编译图 | ✅ 彻底消解，且无 L2 的 dlclose 不确定性 |
+| #2 插件深度依赖宿主子包 | L2 需 plugin-spi 抽取 + 附7.13 的 22 文件 HTTP 契约迁移 | 插件进程只依赖 `cordis_plugin` SDK（jsonrpc + jsonvalue），与宿主**零编译耦合**；宿主交互全部经 JSON-RPC 协议 | ✅ 消解（SPI 契约退化为协议契约，比接口拆分更稳定） |
+| #3 反射 LTO 剪除（需 generated_anchors.cj 锚点） | 锚点机制已落地 | 进程隔离不需要任何反射发现——服务注册走 `provide` 协议消息 | ✅ 消解 |
+| #4 动态库 --dy-std 符号冲突 | L2 已受此约束 | 无动态库加载，进程边界天然隔离符号 | ✅ 消解 |
+| #5 插件包名简单标识符约束 | 双轨两套包名规范 | 插件是独立 cjpm 工程的可执行产物，包名完全自由 | ✅ 消解 |
+| #6 HMR/合流性（事件只实现 emit/waterfall） | PluginEventBus 自建 | 五种事件分发 + once/prepend + 类型安全 + Fiber 状态机 + 依赖变更通知全部实现；HMR = reconcile 重启（有崩溃自愈兜底） | 🟡 大幅缓解（五种语义齐备；HMR 以"进程重启热替换"工程近似，且比 L2 的 dlclose 更可控） |
+
+**结论**：六大限制中五个被彻底消解、一个大幅缓解。cordis-cj 提供的正是本项目自 v2 规划以来追求的"Cordis 六语义仓颉等价物"，且其实现路径（进程隔离）恰好绕开了本报告 §2.2 判定的仓颉语言根本约束（无法运行时卸载已链接代码 → 干脆用进程生命周期承载插件生命周期）。
+
+### 附7.14.4 三轨并存定位：L3 进程隔离轨
+
+集成方案**不推翻**现有两轨，而是新增第三轨，三轨按场景分工：
+
+| 轨道 | 加载机制 | 插件形态 | 适用场景 | 对标 |
+|---|---|---|---|---|
+| 内嵌轨（mode: sync） | build-sync → 宿主编译图 + 反射锚点 | 宿主内子包 `magic.plugins.{name}` | 开发期（增量编译快、IDE 友好） | — |
+| L2 动态库轨（mode: dylib） | PackageInfo.load 热加载 | 预编译动态库 | 发布期热加载、闭源分发 | IntelliJ ClassLoader |
+| **L3 进程隔离轨（mode: process，新增）** | cordis-cj PluginManager.launch 拉起子进程 | **独立可执行文件 + cordis.toml/plugin.yaml** | 故障隔离、资源回收、跨进程事件、AI Agent 动态启停、对标 DSH 沙箱语义 | **DSH Cordis + landlock 进程沙箱** |
+
+三轨共用 `plugins.yaml` 配置入口与 `agent_skills` 状态回写（PluginSyncBridge），对上层（Agent 工具 plugin_inspect/activate/deactivate、管理界面）透明。
+
+### 附7.14.5 集成架构设计（与现有规范完全兼容）
+
+#### 关键约束的自检
+
+1. **UCTOO V4 API 规范不变**：L3 插件不直接注册宿主路由（独立进程拿不到宿主 Router 对象），而是**宿主侧 HTTP 网关代理**——这反而是优势：V4 路由、中间件链（CORS → DeserializeUser → RequirePermission → RowLevel → OperateLog）、RBAC/行级权限全部在宿主侧执行，插件进程只暴露纯业务服务。
+2. **存量冻结红线不变**：宿主集成代码全部落在 `src/plugin/`（magic.plugin 包），`src/app` 零改动。
+3. **数据访问不复制**：插件进程不直连 PostgreSQL（避免复制 f_orm/连接池），通过**宿主侧服务代理**反向调用——cordis 协议 invoke 是双向的，插件可 `ctx.invoke("host.db", "query", ...)` 经宿主转发执行 SQL（复用宿主 ORM 与权限过滤）。
+4. **plugingen 同构扩展**：新增 `mode: process` 生成形态，模板输出 `PluginRuntime.run` 显式 API 写法（写法 B），规避 cjpm 宏跨模块 organization 缺陷。
+
+#### 组件设计
+
+```
+┌──────────────── agentskills-runtime 宿主进程（magic）──────────────────┐
+│  HTTPServer / Router / MiddlewareChain（存量，零改动）                   │
+│        │ V4 路由 /api/v1/{table}/...                                   │
+│  ┌─────▼──────────────────────────────────────────────────────┐       │
+│  │ ExternalPluginRouteGateway（新增，magic.plugin 包）           │       │
+│  │  mode: process 插件 → 注册 V4 路由 → handler 序列化请求       │       │
+│  │  （method/path/pathParams/queryParams/body/userId）→ invoke  │       │
+│  │  → 插件返回 {errno, errmsg} 或数据对象 → 回写响应             │       │
+│  └─────┬──────────────────────────────────────────────────────┘       │
+│  ┌─────▼──────────────────────────────────────────────────────┐       │
+│  │ CordisHostManager（新增，包装 ystyle::cordis_host）           │       │
+│  │  PluginManager(stdio) + PluginHost + reconcile 循环          │       │
+│  │  宿主侧服务代理：host.db / host.log / host.cache（RPC handler）│       │
+│  │  onStatusChange → PluginSyncBridge → agent_skills             │       │
+│  └─────┬──────────────────────────────────────────────────────┘       │
+└────────┼───────────────────────────────────────────────────────────────┘
+         │ stdin/stdout 管道（NewlineFraming，JSON-RPC 2.0）
+┌────────▼────────────────┐  ┌────────────────────────┐
+│ 插件进程 entity-ext      │  │ 插件进程 feedback-ext   │
+│ PluginRuntime.run(...)  │  │ PluginRuntime.run(...)  │
+│ provide "entity"        │  │ provide "feedback"      │
+│ handler: add/edit/del…  │  │ handler: add/edit/del…  │
+│ ctx.invoke("host.db"…)  │  │ ctx.on("...") / emit    │
+└─────────────────────────┘  └────────────────────────┘
+```
+
+**请求往返路径**：客户端 → 宿主 V4 路由 → 中间件链（认证/权限/行级）→ ExternalPluginRouteGateway 序列化 → `instance.client.call("invoke", InvokeParams("{name}", "route", [reqJson]))` → 插件 handler 执行业务 → （需要数据时）`ctx.invoke("host.db", ...)` 反向回宿主执行 → 返回结果 → 网关反序列化回写。每请求增加一次管道 IPC + JSON 序列化（微秒~毫秒级），CRUD 场景在项目性能规范（API < 500ms）内。
+
+**状态映射**：cordis `InstanceStatus`（Starting/Pending/Active/Unloading/Failed/Unreachable）→ PluginState 五态（Loading/Pending/Active/Error/Disposed）→ `agent_skills.runtime_status`，经 PluginHost.onStatusChange 订阅桥接，复用既有 PluginSyncBridge 通道。
+
+**启停语义**：`plugin_activate`/`plugin_deactivate` Agent 工具对 mode: process 插件映射为 reconcile 期望状态变更（enabled: true/false）→ PluginHost 拉起/terminate——比 L2 dlclose 更确定的卸载语义（杀进程 = OS 级资源回收）。
+
+### 附7.14.6 兼容性风险清单与验证方案
+
+| # | 风险 | 等级 | 验证/缓解方案 |
+|---|---|---|---|
+| R1 | **工具链版本**：cordis-cj 声明 cjc 1.1.3，宿主为 cjc 1.0.5（stdx 1.0.5.1） | **高** | Spike-1：用宿主当前工具链对 cordis-cj 五个模块做 `cjpm build`（人工在独立 cmd 执行）。若失败：a) 检查失败点是否可用 1.0.5 语法改写（vendor 后自有维护权）；b) 评估宿主工具链升级代价。此为**一票否决项**，不通过则整个 L3 轨搁置 |
+| R2 | **Windows 可编译性**：cordis_host 依赖 `ystyle::jsonrpc_unix`（UDS，官方明确不支持 Windows），源码无平台条件编译 | **高** | Spike-2 同批验证：在 Windows 目标（x86_64-w64-mingw32）编译 cordis_host。若 jsonrpc_unix 编译失败：vendor 后将 UDS 传输代码从 cordis_host 剥离（stdio 模式不受影响——PluginManager(stdio) 路径不触 UDS 代码，需移除的是 import 依赖），fork 维护量可控（UDS 相关约 2 文件） |
+| R3 | **依赖引入方式**：宿主 30+ 依赖全部为 libs/ 本地 path，cordis-cj 依赖 5 个中心仓库 | 中 | 推荐全部 vendor：`libs/cordis-cj/`（MIT 允许）+ 中心仓依赖二选一：a) 宿主 cjpm.toml 直接远程声明（引入网络构建依赖）；b) 一并 vendor 到 libs/。**推荐 a**——ystyle::jsonrpc/tomlcj/jsonvalue 是中心仓发布的版本化库（README 注明与 mcp-cj 同源生产方案），远程依赖语义即 cordis-cj 上游的用法；若构建环境禁网则退化为 b |
+| R4 | 宏跨模块 organization 缺陷 | 低 | 集成规范直接规定：agentskills 生态的外部插件一律用显式 API 写法（`PluginRuntime.run`），不使用 `@Plugin` 宏——与 cordis-cj 官方对"外部插件作者"的建议一致 |
+| R5 | 每请求 IPC + 序列化开销 | 低 | 网关模式限 CRUD 类中低频交互（与 cordis-cj design §10 局限性自评一致）；高频场景仍走内嵌轨/L2 轨——三轨并存天然规避 |
+| R6 | 宿主崩溃连带杀插件进程（cordis design §10.2） | 低 | 插件设计为无状态或快照恢复（CRUD 插件本就无状态，数据在宿主/DB 侧）；宿主重启后 reconcile 自动重拉全部插件 |
+| R7 | 上游单人维护、v0.1.0 早期版本 | 中 | vendor 自维护（同 libs/ 下 fountain 等 17 个本地依赖的既有模式）；fork 时保留上游 atomgit 仓库链接便于回同步 |
+| R8 | stdio 帧协议带宽（换行帧逐行 JSON） | 低 | 单请求单行 JSON，V4 CRUD 载荷量级（<100KB）无压力；jsonrpc 内置 30s 超时断路 |
+
+### 附7.14.7 选型决策矩阵（按项目决策框架加权）
+
+| 维度 | 权重 | 得分 | 依据 |
+|---|---|---|---|
+| 成熟度 | 25% | 60 | v0.1.0 / 单人项目 / 但 72 用例含真实子进程端到端，文档完备 |
+| 性能 | 20% | 75 | 管道 IPC + JSON 序列化毫秒级，CRUD 规范内；高频场景由其他轨承担 |
+| 可维护性 | 20% | 80 | MIT、四篇设计文档 + 踩坑记录、源码结构清晰（三个包职责分明）、vendor 后可控 |
+| 学习成本 | 15% | 85 | 显式 API 上手简单；团队已有 Cordis 领域积累（cordis-vs-npm / deepseek-harness-plugin / 本报告多轮研究） |
+| 生态完整 | 10% | 70 | 依赖均中心仓发布；与 mcp-cj 同源方案；无现成插件生态（需自建） |
+| 安全性 | 10% | 70 | 进程隔离天然故障隔离 + 崩溃自愈 + 探活；无细粒度沙箱权限（弱于 DSH landlock） |
+| **加权总分** | | **72.6** | **60-80 区间：可接受，需记录权衡（本节即权衡记录）** |
+
+### 附7.14.8 结论与实施路线
+
+**结论：集成可行，且是当前限制条件下达成"一切皆技能（对标 DSH 一切皆插件）"的最优补充路径。**
+
+- 不推翻现有内嵌轨/L2 轨——它们解决"开发期便利"与"发布期热加载"，cordis-cj 解决"故障隔离 + 资源回收 + Cordis 六语义完备"，三轨正交互补；
+- 附7.13 的 22 文件 HTTP 契约 SPI 拆分对 L3 轨**不再是必须**（进程边界使协议契约取代接口契约），L2 轨按需推进，两轨演进解耦；
+- 前置两道一票否决闸门（工具链兼容 Spike-1、Windows 编译 Spike-2），通过后按 SDD 新阶段（阶段四：L3 进程隔离轨）推进，实施任务与验收标准已同步更新至 `.codeartsdoer/specs/plugin-system/`（spec.md REQ-PS-015、design.md 第六章、tasks.md PS-T022~T029）。
+
+| 阶段 | 内容 | 晋级门槛 |
+|---|---|---|
+| L3-S0（前置闸门） | Spike-1 工具链编译验证 + Spike-2 Windows stdio 编译验证（人工独立 cmd 执行） | cordis-cj 在宿主工具链 + Windows 目标编译通过 |
+| L3-S1（宿主集成） | vendor 依赖 + CordisHostManager + reconcile 接入 plugins.yaml（mode: process） | 宿主启动时拉起一个 hello-world 外部插件进程，握手/provide/日志汇聚/terminate 全链路日志可见 |
+| L3-S2（网关代理） | ExternalPluginRouteGateway + 宿主侧服务代理（host.db/log/cache） | 一个 V4 CRUD 插件以进程形态上线，web-admin 数据表格页面 CRUD 回归通过（含行级权限） |
+| L3-S3（生成与同步） | plugingen mode: process 模板 + PluginSyncBridge 状态桥接 + pluginuninstall process 轨支持 | plugingen 生成 → 独立 cjpm build → 放置即生效（不重编宿主、不重启宿主 reconcile 自动拉起） |
+| L3-S4（生态对齐） | 跨进程事件总线桥接（cordis EventRegistry ↔ PluginEventBus）+ Agent 工具适配 + 崩溃自愈演练 | 阶段四验收：第三方开发者可独立发布进程插件；杀插件进程 3 秒内自愈，宿主与相邻插件无感知 |
 

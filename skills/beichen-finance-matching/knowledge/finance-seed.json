@@ -1,0 +1,126 @@
+{
+  "_comment": "北辰金融工具数据库种子。基于命题金融资料《朝阳数据要素产业园金融工具统计_20260821.xlsx》真实产品要素整理；机构骨架覆盖银行/证券等类型，正式部署可按命题 64银行/12证券/9基金/6投资 目录扩充。products 字段：name(产品名)/type(产品类型)/amount(额度)/term(期限)/guarantee(担保)/target(适用客群)/purpose(用途适配)。",
+  "version": "1.0.0",
+  "partners": [
+    {
+      "partner_no": "BK-001",
+      "type": "bank",
+      "name": "光大银行",
+      "strength_domains": ["数据要素", "科技金融", "知识产权质押", "专精特新"],
+      "service_count": 31,
+      "avg_cycle_days": 5,
+      "products": [
+        {"name": "朝数贷", "type": "债权", "amount": "最高1000万元", "term": "1年期为主，最长不超3年", "guarantee": "信用", "target": "朝阳区数据要素优质小微/北数所挂牌企业", "purpose": ["流动资金"]},
+        {"name": "科技研发贷", "type": "债权", "amount": "视企业情况", "term": "流贷最长5年/项目贷最长10年", "guarantee": "灵活", "target": "北京市科技型研发主体", "purpose": ["研发投入"], "rate": "最低年化2.2%"},
+        {"name": "知识产权质押贷", "type": "债权", "amount": "额度无上限", "term": "最长3年", "guarantee": "质押", "target": "拥有知识产权科创企业", "purpose": ["研发投入", "流动资金"], "rate": "补贴后综合成本低于2%"},
+        {"name": "科技e贷", "type": "债权", "amount": "最高3000万元", "term": "最长3年", "guarantee": "信用", "target": "专精特新/高新/科技型中小企业", "purpose": ["流动资金"]},
+        {"name": "专精特新企业贷", "type": "债权", "amount": "最高1000万元", "term": "不超1年", "guarantee": "信用", "target": "专精特新企业", "purpose": ["流动资金"]},
+        {"name": "投联贷", "type": "债权(投贷联动)", "amount": "额度不限", "term": "不超5年", "guarantee": "信用", "target": "获投机构投资企业/专精特新", "purpose": ["股权融资后期"]},
+        {"name": "阳光e抵贷", "type": "债权", "amount": "最高1000万元", "term": "最长3年", "guarantee": "抵押", "target": "有合格抵押物小微/个体工商户", "purpose": ["流动资金"]},
+        {"name": "阳光e担贷", "type": "债权", "amount": "最高1000万元", "term": "最长3年", "guarantee": "保证", "target": "小微法人/个人独资/合伙", "purpose": ["流动资金"]},
+        {"name": "阳光e信贷", "type": "债权", "amount": "最高1000万元", "term": "最长3年", "guarantee": "信用", "target": "正常纳税优质小微企业", "purpose": ["流动资金"]},
+        {"name": "并购贷款", "type": "债权", "amount": "控制型不超交易价款70%", "term": "控制型不超10年", "guarantee": "组合", "target": "并购企业(科技企业并购试点)", "purpose": ["并购"]},
+        {"name": "认股权产品", "type": "股权+债权联动", "amount": "视企业情况", "term": "-", "guarantee": "-", "target": "科创企业", "purpose": ["股权融资"]},
+        {"name": "结构化融资(ABS/ABN)", "type": "投行(债权)", "amount": "视企业情况", "term": "-", "guarantee": "基础资产", "target": "有稳定现金流基础资产企业", "purpose": ["资产证券化"]},
+        {"name": "债券承销", "type": "投行(债权)", "amount": "视企业情况", "term": "-", "guarantee": "-", "target": "符合注册要求企业", "purpose": ["直接融资"]},
+        {"name": "IPO保荐承销", "type": "投行(股权)", "amount": "视企业情况", "term": "-", "guarantee": "-", "target": "拟上市科技企业(科创板/创业板/北交所)", "purpose": ["上市辅导"]},
+        {"name": "保理", "type": "交易银行", "amount": "视企业情况", "term": "-", "guarantee": "应收账款", "target": "有赊销应收账款企业", "purpose": ["流动资金"]},
+        {"name": "保函", "type": "交易银行", "amount": "视企业情况", "term": "-", "guarantee": "信用", "target": "工程建设/贸易服务企业", "purpose": ["履约增信"]},
+        {"name": "结构性存款", "type": "存款理财", "amount": "起点1000万元", "term": "1/3/6/12个月", "guarantee": "-", "target": "企业客户", "purpose": ["闲置资金增值"]}
+      ]
+    },
+    {
+      "partner_no": "BK-002",
+      "type": "bank",
+      "name": "北京银行",
+      "strength_domains": ["数据资产", "专精特新", "科技金融", "普惠金融"],
+      "service_count": 11,
+      "avg_cycle_days": 4,
+      "products": [
+        {"name": "数据易贷", "type": "债权", "amount": "最高3000万元(可组合扩大)", "term": "最长2年", "guarantee": "信用/组合", "target": "北数所数据资产登记企业", "purpose": ["流动资金", "数据资产增值"], "rate": "评估登记入表费用可获补贴"},
+        {"name": "数据资产质押贷款", "type": "债权", "amount": "国家级小巨人最高5000万", "term": "授信最长36个月", "guarantee": "质押", "target": "有数据资产的专精特新/科技型企业", "purpose": ["流动资金"]},
+        {"name": "科创贷", "type": "债权", "amount": "最高10亿元", "term": "视情况", "guarantee": "知识产权质押", "target": "有中长期研发资金需求科技企业", "purpose": ["研发投入"]},
+        {"name": "领航e贷/领航贷", "type": "债权", "amount": "小巨人最高5000万", "term": "最长36个月", "guarantee": "信用+个人保证", "target": "单项冠军/专精特新小巨人", "purpose": ["流动资金"], "rate": "知识产权质押享50%贴息"},
+        {"name": "金粒贷", "type": "债权", "amount": "最高1000万元", "term": "最长24个月", "guarantee": "信用+个人保证", "target": "专精特新潜质金种子/创投被投企业", "purpose": ["流动资金"]},
+        {"name": "科创e贷", "type": "债权", "amount": "最高500万元", "term": "视情况", "guarantee": "信用", "target": "初创企业科技成果转化", "purpose": ["研发投入"]},
+        {"name": "营商贷", "type": "债权", "amount": "最高1000万元", "term": "视情况", "guarantee": "信用", "target": "小微(按纳税/经营流水测算)", "purpose": ["流动资金"]},
+        {"name": "创业担保贷款", "type": "债权", "amount": "最高300万元", "term": "最长36个月", "guarantee": "保证+财政贴息", "target": "新招用职工达标企业", "purpose": ["流动资金"], "rate": "贴息后低至1.5%"},
+        {"name": "投贷联动", "type": "股权+债权联动", "amount": "匹配不超40%授信(国管基金被投最高1:1)", "term": "视情况", "guarantee": "信用", "target": "获股权融资企业", "purpose": ["股权+债权组合"]}
+      ]
+    },
+    {
+      "partner_no": "BK-003",
+      "type": "bank",
+      "name": "中国银行",
+      "strength_domains": ["专精特新", "高新技术", "知识产权质押", "普惠金融"],
+      "service_count": 4,
+      "avg_cycle_days": 4,
+      "products": [
+        {"name": "专精特新贷", "type": "债权", "amount": "最高不超3000万元(信用上限1000万)", "term": "原则上不超3年", "guarantee": "信用/抵押/保证组合", "target": "国家级/北京市专精特新", "purpose": ["流动资金"]},
+        {"name": "高新贷", "type": "债权", "amount": "最高不超1000万元", "term": "原则上不超3年", "guarantee": "信用/抵押/保证组合", "target": "国家级高新技术企业", "purpose": ["流动资金", "研发投入"]},
+        {"name": "科创易贷", "type": "债权", "amount": "最高100万元", "term": "不超1年", "guarantee": "连带责任保证", "target": "高新技术/专精特新(成立满两年)", "purpose": ["流动资金"]},
+        {"name": "知惠贷", "type": "债权", "amount": "信用总量最高3000万元", "term": "最长3年", "guarantee": "专利权质押", "target": "有专利权的科技小微企业", "purpose": ["流动资金", "研发投入"]}
+      ]
+    },
+    {
+      "partner_no": "BK-004",
+      "type": "bank",
+      "name": "交通银行",
+      "strength_domains": ["投贷联动", "股权融资", "数据要素", "园区赋能"],
+      "service_count": 3,
+      "avg_cycle_days": 5,
+      "products": [
+        {"name": "创投贷(国管基金版)", "type": "债权(投贷联动)", "amount": "视企业情况", "term": "视情况", "guarantee": "信用", "target": "朝阳区获国管基金投资企业", "purpose": ["股权融资后期"]},
+        {"name": "新苗计划", "type": "股权", "amount": "视企业情况", "term": "-", "guarantee": "-", "target": "战略新兴产业科技型企业", "purpose": ["股权融资"]},
+        {"name": "主动授信", "type": "债权", "amount": "视企业情况", "term": "视情况", "guarantee": "信用", "target": "园区数据要素企业", "purpose": ["流动资金"]}
+      ]
+    },
+    {
+      "partner_no": "BK-005",
+      "type": "bank",
+      "name": "浦发银行",
+      "strength_domains": ["科技金融", "投贷联动", "离岸跨境", "园区服务"],
+      "service_count": 17,
+      "avg_cycle_days": 5,
+      "products": [
+        {"name": "浦创贷", "type": "债权", "amount": "单户最高500万元", "term": "最长1年", "guarantee": "信用", "target": "种子期/初创期科技小微", "purpose": ["流动资金"]},
+        {"name": "浦投贷", "type": "债权(投贷联动)", "amount": "A轮前不超1000万/A轮后不超2000万", "term": "最长不超3年", "guarantee": "信用", "target": "获PE/VC投资早期科技企业", "purpose": ["股权融资后期"]},
+        {"name": "浦新贷", "type": "债权", "amount": "单户最高3000万元", "term": "最长3年", "guarantee": "信用", "target": "专精特新/高新/科技型中小企业", "purpose": ["流动资金"]},
+        {"name": "浦研贷", "type": "债权", "amount": "视企业情况", "term": "流贷最长5年/固定贷最长10年", "guarantee": "灵活", "target": "成长期/成熟期科技企业研发", "purpose": ["研发投入"]},
+        {"name": "浦科并购贷", "type": "债权", "amount": "控股型不高于80%", "term": "控股型不超10年", "guarantee": "组合", "target": "境内并购方企业", "purpose": ["并购"]},
+        {"name": "科创直投基金", "type": "股权", "amount": "单户上限2000万元", "term": "-", "guarantee": "-", "target": "新一代信息技术/智能制造/新能源等", "purpose": ["股权融资"]},
+        {"name": "园区贷", "type": "债权", "amount": "视企业情况", "term": "最长不超5年", "guarantee": "租金切入", "target": "入园企业(缴付园区租金)", "purpose": ["流动资金"]},
+        {"name": "离岸直贷", "type": "债权", "amount": "视企业情况", "term": "视情况", "guarantee": "信用", "target": "有跨境融资需求境内企业", "purpose": ["流动资金"]},
+        {"name": "跨境浦链通", "type": "债权", "amount": "视企业情况", "term": "视情况", "guarantee": "供应链交易背景", "target": "跨境供应链核心企业/上游供应商", "purpose": ["流动资金"]},
+        {"name": "人民币利率期权", "type": "避险服务", "amount": "视企业情况", "term": "与贷款期限匹配", "guarantee": "-", "target": "中长期人民币浮动贷款企业", "purpose": ["风险对冲"]}
+      ]
+    },
+    {
+      "partner_no": "SC-001",
+      "type": "securities",
+      "name": "首创证券",
+      "strength_domains": ["股权融资", "债券承销", "资产证券化", "数据资产证券化"],
+      "service_count": 6,
+      "avg_cycle_days": 10,
+      "products": [
+        {"name": "股权融资(IPO/再融资/定增/可转债)", "type": "投行(股权)", "amount": "视企业情况", "term": "-", "guarantee": "-", "target": "各行业企业(重点科技类)", "purpose": ["股权融资", "上市辅导"]},
+        {"name": "并购重组", "type": "投行(股权)", "amount": "视企业情况", "term": "-", "guarantee": "-", "target": "有产业整合需求企业", "purpose": ["并购"]},
+        {"name": "公司债券/企业债券承销", "type": "投行(债权)", "amount": "视企业情况", "term": "-", "guarantee": "-", "target": "地方国企/融资租赁/基础设施企业", "purpose": ["直接融资"]},
+        {"name": "ABS资产证券化", "type": "投行(债权)", "amount": "视企业情况", "term": "-", "guarantee": "基础资产", "target": "有可证券化基础资产企业", "purpose": ["资产证券化"]},
+        {"name": "数据资产证券化", "type": "投行(债权)", "amount": "视企业情况", "term": "-", "guarantee": "数据资产", "target": "有可确权数据资产国企", "purpose": ["资产证券化"]},
+        {"name": "直投股权投资", "type": "股权", "amount": "视企业情况", "term": "-", "guarantee": "-", "target": "拟申报北交所等资本市场企业", "purpose": ["股权融资"]}
+      ]
+    }
+  ],
+  "finance_policies": [
+    {"name": "贷款利率下浮", "provider": "北京银行", "scope": "数据要素行业优质企业", "detail": "最低可达 LPR-50BP"},
+    {"name": "创业担保贷款贴息", "provider": "北京银行(财政贴息)", "scope": "符合创业担保贷条件企业", "detail": "财政贴息后利率低至1.5%"},
+    {"name": "知识产权质押贴息", "provider": "北京银行(领航贷)", "scope": "以知识产权质押增信的专精特新企业", "detail": "可享50%贷款贴息"},
+    {"name": "知识产权质押融资补贴", "provider": "光大银行(市/区补贴)", "scope": "办理知识产权质押贷款科创企业", "detail": "补贴后综合融资成本低于2%"},
+    {"name": "科技研发贷利率优惠", "provider": "光大银行", "scope": "北京市科技型研发主体", "detail": "最低年化利率2.2%"},
+    {"name": "担保费率优惠", "provider": "北京银行合作担保公司", "scope": "数据要素行业企业", "detail": "担保费率最低0.5%/年"},
+    {"name": "免担保费", "provider": "北京银行+首创担保", "scope": "创业担保贷款借款企业", "detail": "首创担保提供担保，免担保费"},
+    {"name": "数据资产费用补贴", "provider": "朝阳区政府", "scope": "办理数据资产评估/登记/入表企业", "detail": "相关费用可获政府部门补贴"},
+    {"name": "区级数据要素贴息", "provider": "朝阳区政府", "scope": "朝阳区数据要素企业", "detail": "可享朝阳区数据要素专项贴息政策"}
+  ]
+}

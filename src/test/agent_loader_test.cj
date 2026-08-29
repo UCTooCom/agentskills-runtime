@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2026. All rights reserved.
  */
-package magic.agent.test
+package magic.test
 
 import magic.agent.{AgentLoader, AgentLoadManager, AgentType}
 import std.io.Path

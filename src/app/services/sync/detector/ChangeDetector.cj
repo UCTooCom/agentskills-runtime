@@ -16,6 +16,7 @@ public class ChangeDetector {
         let changes = ArrayList<FileChange>()
         try {
             if (!exists(basePath)) {
+                LogUtils.warn("ChangeDetector.detectAgentChanges: basePath does not exist: ${basePath}, skip detection")
                 return changes.toArray()
             }
             let dbSourcePaths = HashMap<String, DateTime>()
@@ -78,6 +79,7 @@ public class ChangeDetector {
         let changes = ArrayList<FileChange>()
         try {
             if (!exists(basePath)) {
+                LogUtils.warn("ChangeDetector.detectAgentSkillChanges: basePath does not exist: ${basePath}, skip detection")
                 return changes.toArray()
             }
             let dbSourcePaths = HashMap<String, DateTime>()
@@ -139,13 +141,32 @@ public class ChangeDetector {
         let result = ArrayList<String>()
         try {
             if (!exists(dirPath)) {
+                LogUtils.warn("ChangeDetector.collectMdFiles: dirPath does not exist: ${dirPath}")
                 return result.toArray()
             }
-            Directory.walk(dirPath) { fileInfo =>
-                if (!fileInfo.isDirectory() && fileInfo.path.toString().endsWith(".md")) {
-                    result.add(fileInfo.path.toString())
+            // 只收集 AGENTS.md（主 Agent 定义文件）
+            // 不递归扫描整个项目目录，避免把 README.md、docs/*.md 等非 Agent 定义文件同步到 agents 表
+            let agentsMdPath = if (dirPath.endsWith("/") || dirPath.endsWith("\\")) {
+                "${dirPath}AGENTS.md"
+            } else {
+                "${dirPath}/AGENTS.md"
+            }
+            if (exists(agentsMdPath)) {
+                result.add(agentsMdPath)
+            }
+            // 同时支持 agents/ 子目录下的 .md 文件（多 Agent 场景）
+            let agentsSubDir = if (dirPath.endsWith("/") || dirPath.endsWith("\\")) {
+                "${dirPath}agents"
+            } else {
+                "${dirPath}/agents"
+            }
+            if (exists(agentsSubDir)) {
+                Directory.walk(agentsSubDir) { fileInfo =>
+                    if (!fileInfo.isDirectory() && fileInfo.path.toString().endsWith(".md")) {
+                        result.add(fileInfo.path.toString())
+                    }
+                    return true
                 }
-                return true
             }
         } catch (_: Exception) {}
         return result.toArray()
@@ -155,6 +176,7 @@ public class ChangeDetector {
         let result = ArrayList<String>()
         try {
             if (!exists(basePath)) {
+                LogUtils.warn("ChangeDetector.collectSkillDirs: basePath does not exist: ${basePath}")
                 return result.toArray()
             }
             Directory.walk(basePath) { fileInfo =>

@@ -93,7 +93,7 @@ Build a domestically developed and controllable AI agent skill runtime, promote 
   3. Beichen Policy Assistant: `apps/agentskills-runtime/skills/beichen-policy-assistant`
   4. Beichen Finance Matching: `apps/agentskills-runtime/skills/beichen-finance-matching`
   5. Supply-Demand Portal: https://atomgit.com/UCToo/web-admin
-- Project Documentation (background, target users, tech stack, innovation, team division, development process, and follow-up plans): `apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon/shenicest项目文档-AgentSkills-runtime.docx`
+- Project Documentation (background, target users, tech stack, innovation, team division, development process, and follow-up plans): [`apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon/shenicest项目文档-AgentSkills-runtime.docx`](https://atomgit.com/UCToo/agentskills-runtime/blob/main/.codeartsdoer/specs/shenicestHackathon/shenicest%E9%A1%B9%E7%9B%AE%E6%96%87%E6%A1%A3-AgentSkills-runtime.docx)
 - Demo Video: [beichen policy assistant Demo Recording](./public/beichen_demo.mp4)
 - Live Demo Link (optional): https://demo.uctoo.com
 - Zhihu Article: "Major Update: Everything is a Skill Plugin System" https://zhuanlan.zhihu.com/p/2077145055673037317

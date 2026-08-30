@@ -93,7 +93,7 @@ AgentSkills Runtime 是一个全面的框架，用于构建和执行 AI 智能�
   3. 北辰政策助手 `apps/agentskills-runtime/skills/beichen-policy-assistant`
   4. 北辰金融对接 `apps/agentskills-runtime/skills/beichen-finance-matching`
   5. 供需对接官网 https://atomgit.com/UCToo/web-admin
-- 项目文档（项目背景、目标用户、技术栈、创新点、团队分工、开发过程及后续计划等）：`apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon/shenicest项目文档-AgentSkills-runtime.docx`
+- 项目文档（项目背景、目标用户、技术栈、创新点、团队分工、开发过程及后续计划等）：[`apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon/shenicest项目文档-AgentSkills-runtime.docx`](https://atomgit.com/UCToo/agentskills-runtime/blob/main/.codeartsdoer/specs/shenicestHackathon/shenicest%E9%A1%B9%E7%9B%AE%E6%96%87%E6%A1%A3-AgentSkills-runtime.docx)
 - 作品演示视频：[北辰政策助手 Demo 录屏](./public/beichen_demo.mp4)
 - 可直接体验项目的链接（可选）：https://demo.uctoo.com
 - 知乎文章：《重大更新，一切皆技能的插件系统》 https://zhuanlan.zhihu.com/p/2077145055673037317

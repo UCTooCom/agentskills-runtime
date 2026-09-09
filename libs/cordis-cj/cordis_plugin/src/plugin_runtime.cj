@@ -545,11 +545,14 @@ public class PluginRuntime {
      */
     public static func run(pluginId: String, inject: Array<String>, provide: Array<String>,
                            handler: (PluginContext) -> Unit): Unit {
+        eprintln("[${pluginId}] PluginRuntime.run entered")
         // 传输固定 stdio（design §5.2），NewlineFraming 逐行读取
         let transport = LineStdioTransport()
         let server = JsonRpcServer(transport, framing: NewlineFraming())
         let runtime = PluginRuntime(server, pluginId)
+        eprintln("[${pluginId}] calling runtime.start...")
         runtime.start(inject, provide, handler)
+        eprintln("[${pluginId}] runtime.start returned")
     }
 
     /**
@@ -572,8 +575,13 @@ public class PluginRuntime {
 
     private func start(inject: Array<String>, provide: Array<String>,
                        handler: (PluginContext) -> Unit): Unit {
+        eprintln("[${this.pluginId}] start() entered, inject=${inject.size}, provide=${provide.size}")
         this.registerHandlers()
-        this.server.start()   // 后台接收线程
+        eprintln("[${this.pluginId}] registerHandlers() done")
+        // 注意：不启动 server.start()（receiveLoop）。
+        // 仓颉 spawn 创建的仓颉线程在 readln() 阻塞时，会阻塞整个原生线程，
+        // 导致主线程无法发送 initialize 请求。
+        // 因此 server.request() 在 receiveLoop 未启动时，自己同步读取宿主响应。
 
         // 握手：向宿主发 initialize 请求。
         // 依赖未满足（ok=false）时保持 Pending 等待重试，而非抛异常退出
@@ -582,14 +590,17 @@ public class PluginRuntime {
         var handshakeOk = false
         while (!handshakeOk) {
             if (this.server.isClosed()) {
+                eprintln("[${this.pluginId}] server closed before request")
                 return   // 宿主终止 → 连接关闭，正常退出
             }
+            eprintln("[${this.pluginId}] sending initialize request...")
             let initResult = this.server.request<InitializeParams, InitializeResult>(
                 Methods.INITIALIZE,
                 params: InitializeParams(this.pluginId, inject, provide),
                 timeout: 2 * Duration.second)
             match (initResult) {
                 case Ok(r) =>
+                    eprintln("[${this.pluginId}] initialize Ok, ok=${r.ok}")
                     if (r.ok) {
                         handshakeOk = true
                         // 保存宿主下发的插件私有配置（JsonValue → DataModel）
@@ -601,6 +612,7 @@ public class PluginRuntime {
                     }
                     // ok=false：依赖未满足，进入等待重试
                 case Err(e) =>
+                    eprintln("[${this.pluginId}] initialize Err: ${e}")
                     // 连接已关闭（宿主终止）则退出；否则视为临时失败重试
                     if (this.server.isClosed()) {
                         return
@@ -619,6 +631,11 @@ public class PluginRuntime {
         // 插件业务逻辑
         let ctx = PluginContext(this)
         handler(ctx)
+
+        // 握手成功且业务逻辑注册完毕后，启动接收线程处理宿主发来的后续请求。
+        // 之前不启动是因为 readln() 阻塞会阻止主线程发送 initialize 请求；
+        // 现在 initialize 已完成，可以启动 receiveLoop 了。
+        this.server.start()
 
         // 阻塞等待连接关闭（宿主 terminate → stdin EOF → receiveLoop 关闭 server）
         while (!this.server.isClosed()) {
@@ -774,8 +791,15 @@ public class PluginRuntime {
      * 经宿主转发调用其他插件的服务
      */
     internal func invokeService(service: String, method: String, args: Array<JsonValue>): JsonValue {
+        // 宿主内置服务（host.db/host.log/host.cache）直接以服务名为 JSON-RPC method
+        // 插件间服务调用走 INVOKE 转发链路
+        let rpcMethod = if (service.startsWith("host.")) {
+            service
+        } else {
+            Methods.INVOKE
+        }
         let result = this.server.request<InvokeParams, JsonValue>(
-            Methods.INVOKE,
+            rpcMethod,
             params: InvokeParams(service, method, args))
         match (result) {
             case Ok(v) => v

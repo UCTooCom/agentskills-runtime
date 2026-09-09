@@ -69,6 +69,7 @@ public class SkillCLI {
             case "search" => executeSearchCommand(subArgs)
             case "crontab" => executeCrontabCommand(subArgs)
             case "config"  => executeConfigCommand(subArgs)
+            case "mcp-call" => executeMcpCallCommand(subArgs)
             case "help" => printUsage()
             case "--help" => printUsage()
             case "-h" => printUsage()
@@ -102,6 +103,7 @@ public class SkillCLI {
         getStdOut().writeln("  web [options]                 Launch web interface for skill management")
         getStdOut().writeln("  search [options]              Advanced semantic search with filtering options")
         getStdOut().writeln("  config <command> [options]    System config management (get/set/list/export/import/sync)")
+        getStdOut().writeln("  mcp-call --alias <a> --tool <t> [--args '<json>']  Call external MCP via open service")
         getStdOut().writeln("  help                          Show this help message")
         getStdOut().writeln("")
         getStdOut().writeln("Install Options:")
@@ -504,6 +506,11 @@ public class SkillCLI {
 
     private func executeConfigCommand(args: Array<String>): Unit {
         let cli = ConfigCLI()
+        cli.execute(args)
+    }
+
+    private func executeMcpCallCommand(args: Array<String>): Unit {
+        let cli = McpCallCLI()
         cli.execute(args)
     }
 }

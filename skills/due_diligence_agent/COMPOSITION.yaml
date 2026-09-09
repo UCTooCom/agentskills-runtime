@@ -1,0 +1,75 @@
+name: due-diligence-agent
+description: 企业信用与风控尽调智能体 —— 采集天眼查数据、股权穿透、风险分级、生成尽调报告并入库
+version: 1.0.0
+
+# 组合步骤：全流程编排（校验 → 采集 → 穿透 → 分级 → 报告 → 落库）
+steps:
+  - name: validate
+    step_type: script
+    script: scripts/validate_enterprise_list.py
+    depends_on: []
+    input:
+      enterprises: "${input.enterprises}"
+      outdir: "output/validated"
+
+  - name: dd-fetch
+    step_type: script
+    script: scripts/run_dd_pipeline.py
+    depends_on:
+      - validate
+    input:
+      enterprise: "${input.enterprises}"
+      mcp_alias: "tianyancha"
+      outdir: "output/fetched"
+
+  - name: penetrate
+    step_type: script
+    script: scripts/penetrate_equity.py
+    depends_on:
+      - dd-fetch
+    input:
+      equity_tree_file: "${dd-fetch.output}/shareholder-info.json"
+      max_depth: 5
+      outdir: "output/penetration"
+
+  - name: tier
+    step_type: script
+    script: scripts/tier_risks.py
+    depends_on:
+      - dd-fetch
+    input:
+      risk_data_file: "${dd-fetch.output}/judicial-case.json"
+      outdir: "output/risks"
+
+  - name: generate
+    step_type: script
+    script: scripts/generate_dd_report.py
+    depends_on:
+      - dd-fetch
+      - penetrate
+      - tier
+    input:
+      enterprise_data: "${dd-fetch.output}/registration-info.json"
+      penetration_data: "${penetrate.output}/penetration.json"
+      risk_data: "${tier.output}/risks.json"
+      format: "md,html,docx"
+      outdir: "output/report"
+
+  - name: dd-save
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/due_diligence/dd-save"
+    depends_on:
+      - generate
+    input:
+      enterprise_data: "${dd-fetch.output}/registration-info.json"
+      equity_data: "${penetrate.output}/penetration.json"
+      risk_data: "${tier.output}/risks.json"
+      report_data: "${generate.output}"
+      task_id: "${input.task_id}"
+
+  - name: output-report
+    step_type: output
+    depends_on:
+      - dd-save
+    input:
+      report_dir: "${generate.output}"

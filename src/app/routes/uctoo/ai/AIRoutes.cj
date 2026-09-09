@@ -19,7 +19,7 @@ public class AIRoutes {
 
     public init(router: Router, skillManager: SkillManager, chatModel: ChatModel) {
         this._router = router
-        this._controller = AIController(chatModel, skillManager)
+        this._controller = AIController(chatModel)
     }
 
     /**

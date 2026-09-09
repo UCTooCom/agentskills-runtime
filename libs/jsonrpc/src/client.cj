@@ -37,6 +37,20 @@ public class PendingRequest {
             this.response
         }
     }
+
+    // 检查响应是否已就绪（非阻塞）
+    public func isReady(): Bool {
+        synchronized(this.lock) {
+            this.response.isSome()
+        }
+    }
+
+    // 获取已就绪的响应（非阻塞；未就绪返回 None）
+    public func getResponse(): ?Response {
+        synchronized(this.lock) {
+            this.response
+        }
+    }
 }
 
 public type NotificationCallback = (Notification) -> Unit

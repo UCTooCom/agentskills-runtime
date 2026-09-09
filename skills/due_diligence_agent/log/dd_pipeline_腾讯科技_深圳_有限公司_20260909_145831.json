@@ -1,0 +1,142 @@
+{
+  "enterprise": "腾讯科技（深圳）有限公司",
+  "log_entries": [
+    {
+      "timestamp": "2026-09-09T14:58:09.505486+08:00",
+      "step": "mcp",
+      "action": "initialize",
+      "detail": "protocolVersion=2025-03-26, server=TianYanCha, session=mcp-session-01f48406...",
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:15.595803+08:00",
+      "step": "mcp",
+      "action": "notifications/initialized",
+      "detail": "已发送",
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:15.613598+08:00",
+      "step": "mcp",
+      "action": "call_tool",
+      "detail": "company=腾讯科技（深圳）有限公司, tool=get_company_registration_info",
+      "status": "info"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:22.614598+08:00",
+      "step": "mcp",
+      "action": "call_tool_result",
+      "detail": "tool=get_company_registration_info: success, 916 字符",
+      "status": "success",
+      "extra": {
+        "data_preview": "# 基础工商登记：腾讯科技（深圳）有限公司\n\n- tool: `get_company_registration_info`\n\n### 企业基本信息\n\n#### 概览字段\n\n| 字段 | 值 |\n|---|---|\n| 企业名称 | 腾讯科技（深圳）有限公司 |\n| 统一社会信用代码 | 9144030071526726XG |\n| 登记状态 | 存续 |\n| 法定代表人 | 马化腾 |\n| 注册资本 | 200万美元 |\n| 实缴资本 | 200万美元 |\n| 核准日期 | 2023-07-25 |\n| 实缴资本币种 | 美元 |\n| 经营范围 | 一般经营项目：从事计算机软硬件的技术开发、销售自行开发的软件；计算机技术服务及信息服务；计算机硬件的研发、批发；玩具设计开发；玩具的批发与零售（许可审批类商品除外）；商品的批发与零售（许可审批类商品除外）；动漫及衍生产品设计服务；电子产品设计服务；游戏游艺设备销售；国内贸易；从事货物及技术进出口(不含分销及国家专营、专... |\n| 企业类型 | 有限责任公司（台港澳法人独资） |\n| 城市 | 深圳市 |\n| 区县 | 南山区 |\n| "
+      }
+    },
+    {
+      "timestamp": "2026-09-09T14:58:22.617821+08:00",
+      "step": "mcp",
+      "action": "call_tool",
+      "detail": "company=腾讯科技（深圳）有限公司, tool=get_risk_overview",
+      "status": "info"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:27.017580+08:00",
+      "step": "mcp",
+      "action": "call_tool_result",
+      "detail": "tool=get_risk_overview: success, 1723 字符",
+      "status": "success",
+      "extra": {
+        "data_preview": "# 风险总览：腾讯科技（深圳）有限公司\n\n- tool: `get_risk_overview`\n\n### 可用专项工具获取详情\n\n| 风险类型 | 风险等级 | 风险数量 | 详情获取方式 |\n|---|---|---|---|\n| 被执行人 | 高风险 | 2 | 使用 `call_tool` 调用 `get_judgment_debtor_info` 查看详情 |\n| 开庭公告 | 警示 | 659 | 使用 `call_tool` 调用 `get_hearing_notice` 查看详情 |\n| 裁判文书 | 警示 | 201 | 使用 `call_tool` 调用 `get_judicial_documents` 查看详情 |\n| 法院公告 | 警示 | 70 | 使用 `call_tool` 调用 `get_court_notice` 查看详情 |\n| 送达公告 | 警示 | 139 | 使用 `call_tool` 调用 `get_service_notice` 查看详情 |\n| 立案信息 | 警示 | 188 | 使用 `call_tool` 调用 `get_case_"
+      }
+    },
+    {
+      "timestamp": "2026-09-09T14:58:27.021656+08:00",
+      "step": "mcp",
+      "action": "call_tool",
+      "detail": "company=腾讯科技（深圳）有限公司, tool=get_company_basic_profile",
+      "status": "info"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:29.427807+08:00",
+      "step": "mcp",
+      "action": "call_tool_result",
+      "detail": "tool=get_company_basic_profile: isError, 45 字符",
+      "status": "error",
+      "extra": {
+        "data_preview": "请求失败: unknown tool: get_company_basic_profile"
+      }
+    },
+    {
+      "timestamp": "2026-09-09T14:58:29.463656+08:00",
+      "step": "script",
+      "action": "run",
+      "detail": "penetrate_equity.py --input output\\腾讯科技（深圳）有限公司_equity.json --enterprise 腾讯科技（深圳）有限公司 --outdir output\\penetration",
+      "status": "info"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:30.302395+08:00",
+      "step": "script",
+      "action": "result",
+      "detail": "penetrate_equity.py: returncode=0, stdout=275 字符",
+      "status": "success",
+      "extra": {
+        "stdout_preview": "{\r\n  \"enterprise\": \"��Ѷ�Ƽ������ڣ����޹�˾\",\r\n  \"direct_shareholders\": [],\r\n  \"indirect_shareholders\": [],\r\n  \"beneficial_owners\": [],\r\n  \"max_depth_reached\": false,\r\n  \"cycles_detected\": [],\r\n  \"paths\": [],\r\n  \"output_path\": \"output\\\\penetration\\\\��Ѷ�Ƽ������ڣ����޹�˾.json\"\r\n}\r\n"
+      }
+    },
+    {
+      "timestamp": "2026-09-09T14:58:30.306891+08:00",
+      "step": "script",
+      "action": "run",
+      "detail": "tier_risks.py --input output\\腾讯科技（深圳）有限公司_risk.json --enterprise 腾讯科技（深圳）有限公司 --outdir output\\risks",
+      "status": "info"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:30.727386+08:00",
+      "step": "script",
+      "action": "result",
+      "detail": "tier_risks.py: returncode=0, stdout=211 字符",
+      "status": "success",
+      "extra": {
+        "stdout_preview": "{\r\n  \"enterprise\": \"��Ѷ�Ƽ������ڣ����޹�˾\",\r\n  \"risks\": [],\r\n  \"summary\": {\r\n    \"high\": 0,\r\n    \"medium\": 0,\r\n    \"low\": 0,\r\n    \"pending\": 0\r\n  },\r\n  \"output_path\": \"output\\\\risks\\\\��Ѷ�Ƽ������ڣ����޹�˾.json\"\r\n}\r\n"
+      }
+    },
+    {
+      "timestamp": "2026-09-09T14:58:30.735853+08:00",
+      "step": "script",
+      "action": "run",
+      "detail": "generate_dd_report.py --enterprise 腾讯科技（深圳）有限公司 --basic-info output\\腾讯科技（深圳）有限公司_basic.json --format md,html --outdir output\\report",
+      "status": "info"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:31.152500+08:00",
+      "step": "script",
+      "action": "result",
+      "detail": "generate_dd_report.py: returncode=0, stdout=212 字符",
+      "status": "success",
+      "extra": {
+        "stdout_preview": "{\r\n  \"enterprise\": \"��Ѷ�Ƽ������ڣ����޹�˾\",\r\n  \"output_paths\": [\r\n    \"output\\\\report\\\\��Ѷ�Ƽ������ڣ����޹�˾.md\",\r\n    \"output\\\\report\\\\��Ѷ�Ƽ������ڣ����޹�˾.html\"\r\n  ],\r\n  \"formats\": [\r\n    \"md\",\r\n    \"html\"\r\n  ]\r\n}\r\n"
+      }
+    },
+    {
+      "timestamp": "2026-09-09T14:58:31.192484+08:00",
+      "step": "pipeline",
+      "action": "complete",
+      "detail": "status=completed, errors=0",
+      "status": "completed"
+    },
+    {
+      "timestamp": "2026-09-09T14:58:31.245879+08:00",
+      "step": "mcp",
+      "action": "close",
+      "detail": "MCP 会话关闭",
+      "status": "success"
+    }
+  ],
+  "summary": {
+    "total_entries": 16,
+    "mcp_calls": 9,
+    "script_calls": 6,
+    "success_count": 8,
+    "error_count": 1
+  }
+}

@@ -6,6 +6,7 @@ package magic.plugin
 import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 import std.core.Duration
+import std.env.getWorkingDirectory
 import magic.log.LogUtils
 import f_base.Result
 import plugin_spi.{Plugin, PluginState, PluginError, PluginContext, LoadResult}
@@ -50,6 +51,9 @@ public class CordisHostManager {
     /// 已启动的进程插件 id 集合（用于 inspect 与优雅停机）
     private var startedIds: ArrayList<String> = ArrayList<String>()
 
+    /// 宿主侧服务代理（host.db/host.log/host.cache）
+    private let hostServices: CordisHostServices
+
     public init() {
         this.cordisManager = PluginManager({ pluginId, line =>
             LogUtils.info("[cordis][${pluginId}] ${line}")
@@ -58,7 +62,9 @@ public class CordisHostManager {
             LogUtils.info("[cordis][${pluginId}] ${line}")
         })
         this.processEntries = HashMap<String, PluginManifestEntry>()
+        this.hostServices = CordisHostServices()
         this.installStatusListener()
+        this.installHostServicesHook()
     }
 
     /// 安装状态变更监听器：InstanceStatus 变化时映射为 PluginState 并回写
@@ -69,6 +75,27 @@ public class CordisHostManager {
                 "[CordisHostManager] plugin '${pluginId}' status ${oldStatus} -> ${newStatus} (mapped=${mapped})")
             // 回写 agent_skills.runtime_status（复用 PluginSyncBridge 通道）
             this.notifyStatusListener(pluginId, mapped)
+        })
+    }
+
+    /**
+     * 安装宿主服务注册钩子：插件握手成功（Active）后，
+     * 为该插件实例注册 host.db/host.log/host.cache 服务 handler
+     */
+    private func installHostServicesHook(): Unit {
+        this.cordisHost.onStatusChange({ pluginId, oldStatus, newStatus =>
+            if (newStatus == InstanceStatus.Active) {
+                match (this.cordisHost.state.getInstance(pluginId)) {
+                    case Some(instance) =>
+                        this.hostServices.registerFor(instance, pluginId)
+                        // 设置 codelabs 插件的表白名单
+                        if (pluginId == "codelabs") {
+                            let tables = ArrayList<String>(1, { _ => "codelabs" })
+                            this.hostServices.setTableWhitelist(pluginId, tables)
+                        }
+                    case None => ()
+                }
+            }
         })
     }
 
@@ -147,18 +174,54 @@ public class CordisHostManager {
      * 将宿主 PluginManifestEntry 转换为 cordis PluginEntry（期望状态）
      *
      * 映射：name -> id, command -> source, args -> args, config -> config
+     *
+     * 重要：plugin.yaml 中 command 字段是相对于 plugin.yaml 所在目录的路径，
+     * 但 launch() 会从宿主工作目录解析相对路径。
+     * 因此需要把 command 转换为相对于宿主工作目录的路径：
+     *   ./skills/{name}/{command}
      */
     private func toCordisEntry(entry: PluginManifestEntry): PluginEntry {
-        let cmd = match (entry.command) {
+        let rawCmd = match (entry.command) {
             case Some(c) => c
             case None => ""
         }
-        // 宿主侧 config 为 JsonValue，cordis 侧为 DataModel
-        // 为简化集成，这里统一用 DataModelNull（插件私有配置经 env 传递）
-        let cfg: DataModel = DataModelNull()
+        // 把相对于 plugin.yaml 所在目录的 command 路径
+        // 转换为相对于宿主工作目录的路径
+        let cmd = this.resolvePluginCommand(entry.name, rawCmd)
         let cordisEntry = PluginEntry(entry.name, cmd)
         cordisEntry.args = entry.args
         return cordisEntry
+    }
+
+    /**
+     * 把 plugin.yaml 中的 command 路径转换为绝对路径。
+     *
+     * config/plugins.yaml 中 command 字段是相对于宿主工作目录的路径，
+     * 如 ./skills/codelabs/target/release/bin/skill_codelabs.exe
+     *
+     * launch() 从宿主工作目录解析相对路径，
+     * 因此需要把 command 转换为绝对路径，避免路径解析错误。
+     *
+     * 如果 command 已经是绝对路径（以 / 或盘符 D: 开头），则原样返回。
+     */
+    private func resolvePluginCommand(name: String, command: String): String {
+        if (command.isEmpty()) {
+            return command
+        }
+        // 绝对路径检测：Unix 绝对路径（/）或 Windows 盘符开头（D:/、C:\ 等）
+        let isAbsolute = command.startsWith("/") || (command.size >= 2 && command[1..2] == ":")
+        if (isAbsolute) {
+            return command
+        }
+        // 相对路径：拼接宿主工作目录，转换为绝对路径
+        let cwd = getWorkingDirectory().toString().replace("\\", "/")
+        // command 可能以 ./ 开头，也可能直接以 skills/ 开头
+        let normalizedCmd = if (command.startsWith("./")) {
+            command[2..]
+        } else {
+            command
+        }
+        return "${cwd}/${normalizedCmd}"
     }
 
     // ── Agent 工具映射 ─────────────────────────────────────────────────

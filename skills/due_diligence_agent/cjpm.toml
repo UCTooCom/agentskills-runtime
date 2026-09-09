@@ -1,0 +1,21 @@
+[package]
+  cjc-version = "1.1.3"
+  compile-option = "--dy-std -Woff all"
+  description = "企业信用与风控尽调智能体 L3 进程隔离轨插件（独立 executable 工程）"
+  link-option = ""
+  name = "skill_due_diligence_agent"
+  output-type = "executable"
+  src-dir = "src"
+  target-dir = "target"
+  version = "1.0.0"
+  package-configuration = {}
+  scripts = {}
+
+[dependencies]
+  "ystyle::cordis_plugin" = { path = "../../libs/cordis-cj/cordis_plugin" }
+  "ystyle::cordis_core" = { path = "../../libs/cordis-cj/cordis_core" }
+  "jsonvalue" = { path = "../../libs/jsonvalue" }
+  "ystyle::jsonrpc" = { path = "../../libs/jsonrpc" }
+
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["../../libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]

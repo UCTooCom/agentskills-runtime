@@ -157,11 +157,19 @@ public class ExternalPluginRouteGateway {
                 // 3. 序列化 ExternalRequest
                 let externalRequest = this.serializeRequest(pluginId, route, req, requestId)
 
-                // 4. 经 JSON-RPC invoke 插件进程
+                // 4. 包装为 InvokeParams 格式，经 JSON-RPC invoke 插件进程
+                //    InvokeParams { service, method, args: Array<JsonValue> }
+                //    ExternalRequest 作为 args 数组的第一个元素传递
+                let argsArray = ArrayList<JsonValue>(1, { _ => JsonValue.Null })
+                argsArray[0] = externalRequest
+                let invokeParams = HashMap<String, JsonValue>()
+                invokeParams["service"] = JsonValue.String(pluginId)
+                invokeParams["method"] = JsonValue.String(req.method.toString())
+                invokeParams["args"] = JsonValue.Array(argsArray)
                 let client = instance.client
                 let invokeResult = client.call<JsonValue, JsonValue>(
                     "invoke",
-                    params: Some(externalRequest),
+                    params: Some(JsonValue.from(invokeParams)),
                     timeout: this.invokeTimeout
                 )
 
@@ -219,16 +227,18 @@ public class ExternalPluginRouteGateway {
         params["pathParams"] = JsonValue.from(pathParams)
 
         // queryParams（从 URL query string 解析）
-        let queryParams = this.parseQueryParams(req.uri.path)
+        // req.uri.query 形如 "filter=%7B%22deleted_at%22%3A%7B%22not%22%3Anull%7D%7D"
+        let queryParams = this.parseQueryParams(req.uri.query)
         params["queryParams"] = this.mapToJsonValue(queryParams)
 
         // body（从请求体解析 JSON——简化实现）
-        params["body"] = JsonValue.Null  // 实际实现需解析 req.body
+        params["body"] = this.parseBody(req)
 
         // userId（从认证中间件注入——宿主侧 DeserializeUser 后提取）
+        // DeserializeUserMiddleware.setLocals("userId", userId:String UUID)
         match (this.extractUserId(req)) {
             case Some(uid) =>
-                params["userId"] = JsonValue.Number(Float64(uid))
+                params["userId"] = JsonValue.String(uid)
             case None =>
                 params["userId"] = JsonValue.Null
         }
@@ -301,50 +311,87 @@ public class ExternalPluginRouteGateway {
     }
 
     /// 解析 URL query string 为参数映射
-    private func parseQueryParams(path: String): HashMap<String, JsonValue> {
+    /// queryString 形如 "filter=%7B%22deleted_at%22%3A%7B%22not%22%3Anull%7D%7D&page=1"
+    /// 兼容传入完整 path（含 "?"）的情况
+    private func parseQueryParams(queryString: String): HashMap<String, JsonValue> {
         let params = HashMap<String, JsonValue>()
-        let queryStart = path.indexOf("?")
+        // 去除可能的 "?" 前缀（兼容传入完整 path 的情况）
+        var qs = queryString
+        let queryStart = qs.indexOf("?")
         match (queryStart) {
-            case Some(idx) =>
-                let queryString = path[idx + 1..]
-                let pairs = queryString.split("&")
-                for (pair in pairs) {
-                    let kv = pair.split("=")
-                    if (kv.size == 2) {
-                        params[kv[0]] = JsonValue.String(kv[1])
-                    }
-                }
+            case Some(idx) => qs = qs[idx + 1..]
             case None => ()
+        }
+        if (qs.isEmpty()) {
+            return params
+        }
+        let pairs = qs.split("&")
+        for (pair in pairs) {
+            let kv = pair.split("=")
+            if (kv.size == 2) {
+                params[kv[0]] = JsonValue.String(kv[1])
+            }
         }
         return params
     }
 
     /// 从认证中间件注入的上下文提取 userId
-    private func extractUserId(req: HttpRequest): ?Int32 {
-        // 简化实现：从 header 提取 X-User-Id
-        match (req.header("X-User-Id")) {
-            case Some(val) =>
-                try {
-                    return Some(Int32.parse(val))
-                } catch (e: Exception) {
-                    return None
+    /// DeserializeUserMiddleware.setLocals("userId", userId:String UUID)
+    private func extractUserId(req: HttpRequest): ?String {
+        let userIdOpt = req.getLocals("userId")
+        if (let Some(uid) <- userIdOpt) {
+            let uidStr = uid as String
+            if (let Some(s) <- uidStr) {
+                if (!s.isEmpty()) {
+                    return Some(s)
                 }
-            case None => return None
+            }
         }
+        return None
     }
 
     /// 从权限中间件注入的上下文提取 permissions
+    /// RequirePermissionMiddleware 运行后，将用户角色权限列表存入 locals
     private func extractPermissions(req: HttpRequest): ArrayList<String> {
         let perms = ArrayList<String>()
-        match (req.header("X-Permissions")) {
-            case Some(val) =>
-                let parts = val.split(",")
-                for (p in parts) {
+        // 从 locals 中提取权限列表
+        let permOpt = req.getLocals("permissions")
+        if (let Some(perm) <- permOpt) {
+            // permissions 存储为 ArrayList<String> 或类似结构
+            let permList = perm as ArrayList<String>
+            if (let Some(list) <- permList) {
+                for (p in list) {
                     perms.add(p)
                 }
-            case None => ()
+                return perms
+            }
+        }
+        // 兜底：从 locals 提取 roles，再查权限（简化实现，直接用 roles 作为 permissions）
+        let rolesOpt = req.getLocals("roles")
+        if (let Some(roles) <- rolesOpt) {
+            let rolesList = roles as ArrayList<String>
+            if (let Some(list) <- rolesList) {
+                for (r in list) {
+                    perms.add(r)
+                }
+            }
         }
         return perms
+    }
+
+    /// 解析请求体为 JsonValue
+    /// 支持空体（返回 Null）、JSON 对象/数组（解析为 Map/Array）、纯文本（String）
+    private func parseBody(req: HttpRequest): JsonValue {
+        let bodyStr = req.body
+        if (bodyStr.isEmpty()) {
+            return JsonValue.Null
+        }
+        try {
+            return JsonValue.parse(bodyStr)
+        } catch (e: Exception) {
+            // 非 JSON 体，作为字符串传递
+            return JsonValue.String(bodyStr)
+        }
     }
 
     /// 将 HashMap<String, JsonValue> 转换为 JsonValue（JsonObject）

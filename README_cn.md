@@ -6,7 +6,7 @@
 
 ## 项目简介
 
-AgentSkills Runtime 是一个基于仓颉编程语言实现的 Agent Skills 标准运行时环境。它是对 AgentSkills 开放标准的国产技术栈实现，提供了安全、高效的 AI 智能体技能执行环境。旨在让 AgentSkills 能够在任何地方运行。同时提供了多语言SDK适配各种技术栈。开源项目地址：https://atomgit.com/uctoo/agentskills-runtime 和 https://github.com/UCTooCom/agentskills-runtime 。配套的AIAgent Dashboard开源项目 https://atomgit.com/UCToo/web-admin  
+AgentSkills Runtime 是一个采用仓颉编程语言实现的AI驱动开发框架。它是对MCP、WebMCP、AgentSkills、智能体互联国家标准GB/Z 185-2026等开放标准的国产技术栈实现，提供了安全、高效的 AI 智能体运行环境。同时提供了多语言SDK适配各种技术栈。旨在为千行百业+AI提供更加坚实的开源基础设施。开源项目地址：https://atomgit.com/uctoo/agentskills-runtime 和 https://github.com/UCTooCom/agentskills-runtime 。配套的AIAgent Dashboard开源项目 https://atomgit.com/UCToo/web-admin  
 
 ### 产品截图
 

@@ -1,5 +1,6 @@
 # 插件系统需求规格
 
+> 版本：v3.1（2026-09-03 复核修订：①L3 进程隔离轨 codelabs 插件完整 V4 CRUD 已实现并测试通过——列表/编辑/删除/回收站/创建全部功能正确；②plugingen 新增 `CrudPluginGenerator` 表驱动生成器，可从数据库结构生成完整 CRUD 进程插件（plugin.yaml + cjpm.toml + main.cj + handlers.cj + effects.cj + README.md）；③host.db 服务支持 `$raw:` 前缀约定生成原始 SQL 函数（如 `CURRENT_TIMESTAMP`、`gen_random_uuid()`）；④回收站筛选基于 `filter` 查询参数动态构建 WHERE 子句（`{"deleted_at":{"not":null}}` → `deleted_at IS NOT NULL`）；⑤`empty-recycle-bin` 路由已实现。⑥README.md/web 端 `codelabs-table.vue` 的 `res.codelabss` 双 s 键名符合 API 规范 §8.2（表名+s 复数）。）
 > 版本：v3.0（2026-08-28 阶段四立项修订：新增 REQ-PS-015 L3 进程隔离插件轨（cordis-cj 集成），演进路标插入阶段四（L3 轨），插件市场顺延为阶段五；REQ-PS-012 附 v3 修订——附7.13 HTTP 契约 SPI 拆分对 L3 轨不再是必须。依据：可行性报告附7.14 cordis-cj 完整调研。）
 > 版本：v2.2（2026-08-28 实际落地修订：同步实际实现方案与架构/框架/仓颉语言限制条件。①双轨并存退化为单轨（宿主内嵌轨），原因 cjpm `[workspace]` 与 `[package]` 互斥；②插件深度依赖宿主子包，独立包模式产生循环依赖；③仓颉反射 API 在 LTO 下剪除未引用类，需 generated_anchors.cj 显式锚定；④动态库标准库符号重复，需 `--dy-std` 编译选项；⑤插件包名必须为简单标识符（`skill_{name}`），不能是带点号的限定名；⑥HMR/合流性无定理背书，对外表述"确定性插件生命周期"。详见下方"§0 实际落地与限制条件"。）
 > v2.1（2026-08-18 修订：①复核 agent_skills 表——无必须 DDL 变更，plugin.yaml 元数据走 extra_metadata；②crudgen/crudweb 保留不重构，REQ-PS-011 改为独立 plugingen 工具；③新增 REQ-PS-013 PluginSyncBridge 插件状态库同步。插件注册表本身仍为运行时内存结构，无新表）

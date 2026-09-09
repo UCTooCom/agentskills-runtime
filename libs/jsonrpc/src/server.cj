@@ -104,6 +104,10 @@ public class JsonRpcServer {
     private let asyncHandlers: ConcurrentHashMap<String, AsyncHandler> = ConcurrentHashMap<String, AsyncHandler>()
     private let lock: Mutex = Mutex()
     private var running: Bool = false
+    // 是否曾调用 start()/serve() 启动过接收循环。
+    // 插件握手阶段（PluginRuntime.start）先发 initialize 再 server.start()，
+    // 此阶段 running=false 属正常状态，isClosed() 不得据此误判连接已关闭。
+    private var everStarted: Bool = false
     private let recvBuffer = ByteBuffer()
 
     public init(transport: Transport, framing!: Framing = ContentLengthFraming()) {
@@ -135,6 +139,7 @@ public class JsonRpcServer {
     public func start(): Unit {
         synchronized(this.lock) {
             this.running = true
+            this.everStarted = true
         }
         spawn {
             => this.receiveLoop()
@@ -144,6 +149,7 @@ public class JsonRpcServer {
     public func serve(): Unit {
         synchronized(this.lock) {
             this.running = true
+            this.everStarted = true
         }
         this.receiveLoop()
     }
@@ -193,7 +199,12 @@ public func notify<T>(method: String, params!: ?T): Unit where T <: JsonSerializ
     
     public func isClosed(): Bool {
         synchronized(this.lock) {
-            !this.running
+            // 两种情况视为连接已关闭：
+            // 1. 传输层已关闭（EOF 后 close() 被调用）
+            // 2. 曾启动过接收循环但已停止（running 由 true 转 false）
+            // 注意：握手阶段（everStarted=false 且 transport 未关闭）不算关闭，
+            // 否则插件端 PluginRuntime.start 的 initialize 握手循环会立即退出
+            this.transport.isClosed() || (this.everStarted && !this.running)
         }
     }
     
@@ -434,18 +445,58 @@ public func notify<T>(method: String, params!: ?T): Unit where T <: JsonSerializ
             this.pendingRequest = pending
         }
         this.transport.send(this.framing.encode(bytes))
-        match (pending.waitForResponse(timeout: timeout)) {
-            case Some(resp) =>
-                synchronized(this.requestLock) { this.pendingRequest = None }
-                if (let Some(resultVal) <- resp.result) {
-                    try { Result.Ok(JsonValue.toObject<R>(resultVal)) }
-                    catch (e: Exception) { Result.Err("Failed to parse result: ${e.message}") }
-                } else if (let Some(error) <- resp.error) {
-                    Result.Err("[${error.code}] ${error.message}")
-                } else { Result.Err("Invalid response") }
-            case None =>
-                synchronized(this.requestLock) { this.pendingRequest = None }
-                Result.Err("Request timeout")
+
+        // 如果 receiveLoop 已启动（running=true），等待它读取响应；
+        // 否则同步读取 transport.receive()。
+        if (this.running) {
+            // receiveLoop 已启动，等待它唤醒 pending
+            match (pending.waitForResponse(timeout: timeout)) {
+                case Some(resp) =>
+                    synchronized(this.requestLock) { this.pendingRequest = None }
+                    if (let Some(resultVal) <- resp.result) {
+                        try { Result.Ok(JsonValue.toObject<R>(resultVal)) }
+                        catch (e: Exception) { Result.Err("Failed to parse result: ${e.message}") }
+                    } else if (let Some(error) <- resp.error) {
+                        Result.Err("[${error.code}] ${error.message}")
+                    } else { Result.Err("Invalid response") }
+                case None =>
+                    synchronized(this.requestLock) { this.pendingRequest = None }
+                    Result.Err("Request timeout")
+            }
+        } else {
+            // receiveLoop 未启动，同步读取响应
+            // 注意：transport.receive() 可能阻塞（如 readln），
+            // 但在握手阶段这是可接受的——主线程没有其他工作。
+            while (!pending.isReady()) {
+                match (this.transport.receive()) {
+                    case Some(data) =>
+                        this.recvBuffer.write(data)
+                        while (let Some((body, consumed)) <- this.framing.decode(this.recvBuffer.bytes())) {
+                            this.handleMessage(body)
+                            this.recvBuffer.seek(SeekPosition.Current(consumed))
+                        }
+                    case None =>
+                        // 连接关闭：调用 close() 标记传输层已关闭，
+                        // 让握手循环能通过 isClosed() 检测到连接关闭并退出
+                        this.close()
+                        synchronized(this.requestLock) { this.pendingRequest = None }
+                        return Result.Err("Connection closed")
+                }
+            }
+            // pending 已就绪，返回响应
+            match (pending.getResponse()) {
+                case Some(resp) =>
+                    synchronized(this.requestLock) { this.pendingRequest = None }
+                    if (let Some(resultVal) <- resp.result) {
+                        try { Result.Ok(JsonValue.toObject<R>(resultVal)) }
+                        catch (e: Exception) { Result.Err("Failed to parse result: ${e.message}") }
+                    } else if (let Some(error) <- resp.error) {
+                        Result.Err("[${error.code}] ${error.message}")
+                    } else { Result.Err("Invalid response") }
+                case None =>
+                    synchronized(this.requestLock) { this.pendingRequest = None }
+                    Result.Err("No response")
+            }
         }
     }
 }

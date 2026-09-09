@@ -707,43 +707,66 @@ main(args: Array<String>): Unit {
     
     println("")
     println("[STEP] Copying cangjie-stdx libraries to bin...")
-    
-    let stdxDynamicPath = getVariable("CANGJIE_STDX_DYNAMIC_PATH")
-    let stdxDir = if (stdxDynamicPath.isSome()) {
-        let p = stdxDynamicPath.getOrThrow()
-        Path("${p}/windows_x86_64_cjnative/dynamic/stdx")
-    } else {
-        // 优先使用 1.1.3.1（cjc 1.1.3 升级后的版本），回退到 1.0.5.1
-        let v113 = Path("${rootPath}/libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx")
-        if (exists(v113)) {
-            v113
-        } else {
-            Path("${rootPath}/libs/cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx")
+
+    // CANGJIE_STDX_DYNAMIC_PATH 可能已经指向 dynamic/stdx 目录，
+    // 也可能指向 stdx 根目录（需要拼接 windows_x86_64_cjnative/dynamic/stdx）。
+    // 优先使用 CANGJIE_STDX_PATH（指向 stdx 根目录），再探测各候选路径。
+    let stdxCandidates = ArrayList<String>()
+    match (getVariable("CANGJIE_STDX_DYNAMIC_PATH")) {
+        case Some(p) =>
+            // p 本身可能就是 dynamic/stdx 目录
+            stdxCandidates.add(p)
+            // 也可能需要拼接子目录
+            stdxCandidates.add("${p}/windows_x86_64_cjnative/dynamic/stdx")
+        case None => ()
+    }
+    match (getVariable("CANGJIE_STDX_PATH")) {
+        case Some(p) =>
+            stdxCandidates.add("${p}/windows_x86_64_cjnative/dynamic/stdx")
+            stdxCandidates.add(p)
+        case None => ()
+    }
+    // 项目内本地化的 stdx 目录（优先 1.1.3.1，回退 1.0.5.1）
+    stdxCandidates.add("${rootPath}/libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx")
+    stdxCandidates.add("${rootPath}/libs/cangjie-stdx-windows-x64-1.0.5.1/windows_x86_64_cjnative/dynamic/stdx")
+
+    // 找到第一个存在且包含 libstdx.dll 的目录
+    var stdxDir: ?Path = None
+    for (candidate in stdxCandidates) {
+        let candidatePath = Path(candidate)
+        if (exists(candidatePath) && exists("${candidate}/libstdx.dll")) {
+            stdxDir = Some(candidatePath)
+            break
         }
     }
-    if (exists(stdxDir) && exists(binDir)) {
-        let stdxCount = ArrayList<String>()
-        
-        Directory.walk(stdxDir.toString()) { fileInfo =>
-            if (!fileInfo.isDirectory()) {
-                let name = fileInfo.path.fileName
-                
-                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
-                    let destPath = Path("${binDir}/${name}")
-                    if (!exists(destPath)) {
-                        if (safeCopy(fileInfo.path.toString(), destPath.toString(), true)) {
-                            stdxCount.add(name)
-                            totalDlls.add(name)
+
+    match (stdxDir) {
+        case Some(dir) =>
+            if (exists(binDir)) {
+                let stdxCount = ArrayList<String>()
+                Directory.walk(dir.toString()) { fileInfo =>
+                    if (!fileInfo.isDirectory()) {
+                        let name = fileInfo.path.fileName
+                        if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                            // 强制覆盖：确保发布包使用最新版本 stdx DLL
+                            let destPath = Path("${binDir}/${name}")
+                            if (safeCopy(fileInfo.path.toString(), destPath.toString(), true)) {
+                                stdxCount.add(name)
+                                totalDlls.add(name)
+                            }
                         }
                     }
+                    true
                 }
+                println("  [OK] Copied ${stdxCount.size.toString()} stdx DLLs to bin/ (source: ${dir})")
+            } else {
+                println("  [WARN] bin/ directory not found, skip stdx DLLs")
             }
-            true
-        }
-        
-        println("  [OK] Copied ${stdxCount.size.toString()} stdx DLLs to bin/")
-    } else {
-        println("  [WARN] stdx directory not found: ${stdxDir}")
+        case None =>
+            println("  [WARN] stdx directory not found in any candidate path:")
+            for (c in stdxCandidates) {
+                println("         - ${c}")
+            }
     }
     
     println("")

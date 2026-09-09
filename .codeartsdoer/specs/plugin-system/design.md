@@ -1,5 +1,6 @@
 # 插件系统 - 技术设计文档
 
+> 版本：v4.2（2026-09-03 复核修订：①新增 §0.6 L3 进程隔离轨实际落地——codelabs 插件完整 V4 CRUD 已实现并测试通过；②新增 §0.7 插件轻量化方案——三个可行优化方向（插件安装到宿主目录/插件 SDK 精简包/WASM 沙箱插件）及推荐实施路径；③host.db 服务实际契约（query/count/execute + `$raw:` 前缀约定）记录到正文；④回收站筛选实际机制（`filter` 查询参数动态构建 WHERE 子句）记录到正文。）
 > 版本：v4.0（2026-08-24 fountain/agentskills-runtime 基础设施深度复用修订）
 > v4.0 核心变更：①将第三章 14 项优化方案**融入第二章设计本体**，消除"设计正文 vs 优化附录"割裂；②修正 HTTP 类型迁移错误——plugin-spi **不依赖 http_lib**（可编译备份验证：dynamic→dynamic 依赖触发 `ld.lld: error: _CGP15http_lib.bufferiiHv was replaced` 符号重复）；③ServiceRegistry/PluginEventBus/PluginDylibLoader 实现方式从"自建"改为"委托/包装 fountain"；④插件发现从"手动反射扫描"改为"BeanFactory.annotationMap + lookupList<Plugin>()"。
 > v3.x 历史见 git log（v3.1 runtime 自有基础设施复核、v3.0 fountain 深度复用、v2.3 反射基础设施+类型安全轨、v2.2 SkillBridge/SyncBridge 复核）
@@ -134,6 +135,86 @@ build-sync 是阶段二插件进入宿主编译图的核心机制，实际落地
 | #6 HMR/合流性无定理背书 | 进程边界提供确定性故障隔离（崩溃自愈 reconcile 重拉）；但热替换语义仍非形式化验证，对外表述维持"确定性插件生命周期" | 大幅缓解 |
 
 **三轨并存原则**：L3 轨为新增第三轨，不推翻内嵌轨（开发期增量编译便利）与 L2 轨（预编译动态库热加载）；`plugins.yaml` 的 `mode` 扩展三值 `sync` / `dylib` / `process`，缺省 `sync` 向后兼容。
+
+### §0.6 L3 进程隔离轨实际落地（v4.2 新增，2026-09-03）
+
+> 阶段四 L3 进程隔离轨（cordis-cj 集成）编码完成并测试通过。本节记录实际实现方案与设计文档的差异。
+
+#### 实际实现组件清单
+
+| 组件 | 落地文件 | 实际实现 |
+|------|----------|----------|
+| CordisHostManager | `src/plugin/cordis_host_manager.cj` | 包装 `ystyle::cordis_host` 的 PluginManager(stdio)/PluginHost/reconcile 循环；`installHostServicesHook` 在 `InstanceStatus.Active` 时触发 `CordisHostServices.registerFor` |
+| ExternalPluginRouteGateway | `src/plugin/external_plugin_route_gateway.cj` | 为 process 插件注册 V4 路由；`serializeRequest` 从 `req.uri.query` 解析 `queryParams`，`parseBody(req)` 转发 POST 请求体；`userId`/`permissions` 从 `req.getLocals` 提取（String UUID） |
+| CordisHostServices | `src/plugin/cordis_host_services.cj` | 宿主侧服务代理：`host.db`/`host.log`/`host.cache`；`executeDbOperation` 分发 query/execute/count；`buildRowLevelCondition` 基于 `creator` 字段（String UUID）的行级权限；`jsonValueToSqlLiteral` 支持 `$raw:` 前缀生成原始 SQL 函数 |
+| codelabs 插件 | `skills/codelabs/` | 独立 cjpm executable 工程（`--dy-std -Woff all`），完整 V4 CRUD：list/get/add/edit/del/empty-recycle-bin，回收站筛选基于 `filter` 查询参数 |
+| CrudPluginGenerator | `src/plugin/tools/plugingen/CrudPluginGenerator.cj` | 表驱动 CRUD 进程插件生成器：从数据库结构生成完整插件（plugin.yaml + cjpm.toml + main.cj + handlers.cj + effects.cj + README.md），对标 codelabs 参考实现 |
+
+#### host.db 服务实际契约
+
+| 操作 | subOp | 参数 | 返回 |
+|------|-------|------|------|
+| query | - | `table`, `where`, `orderBy`, `limit`, `offset`, `userId`, `permissions` | `{ "rows": [...] }` |
+| count | - | `table`, `where`, `userId`, `permissions` | `{ "count": N }` |
+| execute | insert/update/delete | `table`, `subOp`, `where`, `data`, `userId`, `permissions` | `{ "affected": N }` |
+
+**`$raw:` 前缀约定**：`jsonValueToSqlLiteral` 对 `JsonValue.String` 检查 `$raw:` 前缀，去除前缀后作为原始 SQL 片段直接输出（不加引号）：
+- `"$raw:CURRENT_TIMESTAMP"` → `CURRENT_TIMESTAMP`（SQL 函数，用于软删除 SET deleted_at=CURRENT_TIMESTAMP）
+- `"$raw:gen_random_uuid()"` → `gen_random_uuid()`（SQL 函数，用于 id 生成）
+
+#### 回收站筛选实际机制
+
+Web 前端通过 `filter` 查询参数区分普通模式与回收站模式：
+- 普通模式：`filter={"deleted_at":null}` → WHERE `deleted_at IS NULL`
+- 回收站模式：`filter={"deleted_at":{"not":null}}` → WHERE `deleted_at IS NOT NULL`
+
+`buildWhereFromFilter` 从 `queryParams.filter` 解析 URL 编码的 JSON，构建 WHERE 子句。`parseQueryParams(req.uri.query)` 从查询字符串（而非 path）解析参数。
+
+#### 插件轻量化方向（v4.2 新增）
+
+当前 L3 进程插件已实现完整 V4 CRUD 并测试通过，但插件发布包仍然较重——编译产物需要将宿主中的大量依赖（cordis-cj、jsonvalue、jsonrpc 等）复制到插件目录才能运行。后续优化方向见 §0.7。
+
+### §0.7 插件轻量化方案（v4.2 新增，2026-09-03）
+
+> 本节为插件系统成熟度提升方向，目标是使 L3 进程插件达到可商业化应用和推广的水平。
+
+#### 当前问题：插件发布包过重
+
+以 codelabs 插件为例，最终编译出的发布包需要将宿主中的大量依赖复制到插件中才能正常运行。这导致：
+1. 插件包体积大（包含完整 cordis-cj 库、jsonvalue 库、jsonrpc 库等）
+2. 依赖重复复制（每个插件都包含相同的基础库）
+3. 版本管理复杂（插件依赖版本需与宿主一致）
+4. 分发不便（插件包不能简单复制即用）
+
+#### 可行优化方向
+
+**方向一：插件安装到宿主目录（宿主共享依赖）**
+
+插件安装时不将依赖复制到插件目录，而是将插件二进制复制到宿主中的合适位置运行。宿主提供共享依赖目录，所有插件共享同一份基础库。
+
+实现要点：
+1. 宿主启动时设置 `CANGJIE_STDX_DYNAMIC_PATH` 等环境变量指向宿主共享目录
+2. 插件 cjpm.toml 的 `[target.*.bin-dependencies]` path-option 指向宿主共享目录（相对路径 `../../libs/...`）
+3. 插件安装工具将插件二进制复制到 `plugins/{name}/` 目录，宿主通过 `plugins.yaml` 的 `command` 字段定位
+4. 基础库（cordis-cj、jsonvalue、jsonrpc）由宿主统一管理，插件只包含业务逻辑代码
+
+**方向二：插件 SDK 精简包**
+
+将 `cordis-cj` 拆分为：
+- `cordis-plugin-sdk`（精简 SDK，仅含 PluginRuntime/PluginContext/HostContext 等核心接口）
+- `cordis-host`（完整宿主实现，仅宿主使用）
+
+插件只依赖精简 SDK，体积大幅减小。SDK 可进一步静态链接基础库，生成单一静态库文件。
+
+**方向三：WASM 沙箱插件（v1.1+ 增强形态）**
+
+插件编译为 WASM 模块，宿主通过 WASM 运行时加载执行。WASM 模块天然轻量（仅含业务逻辑），基础库由宿主 WASM 运行时提供。
+
+#### 推荐实施路径
+
+1. **短期（v1.0）**：实施方向一（插件安装到宿主目录），最小改动达到轻量化目标
+2. **中期（v1.1）**：实施方向二（插件 SDK 精简包），进一步减小插件体积
+3. **长期（v1.2+）**：评估方向三（WASM 沙箱插件），实现极致轻量化
 
 ## 一、需求与存量功能关系分析
 

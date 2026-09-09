@@ -6,7 +6,7 @@
 
 ## Project Introduction
 
-AgentSkills Runtime is a runtime environment for the Agent Skills standard implemented based on the Cangjie programming language. It is a domestic technology stack implementation of the AgentSkills open standard, providing a secure and efficient AI agent skill execution environment. It aims to enable AgentSkills to run anywhere. Open source project address: https://atomgit.com/uctoo/agentskills-runtime
+AgentSkills Runtime is an AI-driven development framework implemented using the Cangjie programming language. It is a domestic technology stack implementation of open standards including MCP, WebMCP, AgentSkills, and the national standard for agent interconnection GB/Z 185-2026, providing a secure and efficient AI agent runtime environment. It also provides multi-language SDKs to adapt to various tech stacks. It aims to provide a more solid open source infrastructure for AI empowerment across all industries. Open source project address: https://atomgit.com/uctoo/agentskills-runtime and https://github.com/UCTooCom/agentskills-runtime . Companion AI Agent Dashboard open source project: https://atomgit.com/UCToo/web-admin
 
 ### Product Screenshots
 

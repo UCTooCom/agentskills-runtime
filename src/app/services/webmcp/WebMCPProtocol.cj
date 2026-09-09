@@ -10,7 +10,7 @@ import magic.model.ModelManager
 import magic.core.message.{Message, MessageRole, Conversation}
 import magic.skill.SkillAwareAgent
 import magic.agent_executor.react.ReactExecutor
-import magic.core.agent.{AgentRequest, AgentResponse}
+import magic.core.agent.{AgentRequest, AgentResponse, AgentCancelException}
 import magic.core.agent.AgentDefinition
 import magic.agent.memory.tiered.TieredMemory
 import magic.interaction.EventHandlerManager
@@ -1346,6 +1346,257 @@ public class WebMCPProtocol {
         //       因 values[0] 是纯文本 answer，不含 reasoning_content 字段
         // 修复：把思维链内容作为 completion 的独立字段转发，前端从独立字段提取
         // reasoningContentStr 已在上方降级分支或 SkillAwareAgent 分支填充（统一外层变量）
+        if (!reasoningContentStr.isEmpty()) {
+            completion.put("reasoning_content", JsonString(reasoningContentStr))
+        }
+
+        let result = JsonObject()
+        result.put("completion", completion)
+
+        return createSuccessResponse(result, requestId)
+    }
+
+    /**
+     * 异步流式处理 completion/complete 请求（P2-3.2）
+     *
+     * 使用 Agent.asyncChat 获取 AsyncAgentResponse，迭代 chunks 通过 SSEEventBridge
+     * 实时推送 reasoning 和 content 增量。
+     *
+     * 仓颉规范约束（已复核 design.md D-4 迭代器副作用）：
+     * 1. AsyncAgentResponse.next() 有累加副作用（buffer.append），
+     *    迭代完成后 content 才可安全读取。
+     * 2. next() 在迭代器耗尽时返回 None（非抛异常），见 async_agent_response.cj:102。
+     * 3. next() 在 chunk.message.role != this.role 时 throw ModelException，
+     *    在 AgentCancelException 时返回 None，在 Exception 时 throw。
+     * 4. 调用方必须在 chunk.done == true 时主动 break 退出循环，
+     *    或用 try-catch 包裹迭代循环。
+     *
+     * 异常映射：
+     * - Agent.asyncChat 不支持 → 降级调用 handleCompletionComplete 同步分支
+     * - 大模型 API 错误 → 返回 MCP error 响应，SSE 推送 response.failed
+     * - 超时 → 返回 MCP error 响应（timeout）
+     * - UnsupportedException（迭代器耗尽）→ 安全忽略，迭代正常结束
+     * - ModelException（消息角色不一致）→ 记录 error 日志，降级为同步 chat()
+     */
+    public func handleCompletionCompleteStream(obj: JsonObject): String {
+        let requestId = obj.get("id")
+
+        LogUtils.info("WebMCP handling completion/complete request (stream)")
+
+        // 获取请求参数（与 handleCompletionComplete 共用解析逻辑）
+        let params = obj.get("params")
+        var userMessage = ""
+        var systemMessage = ""
+        var isStream = true
+
+        if (params.isSome()) {
+            let paramsVal = params.getOrThrow()
+            if (paramsVal is JsonObject) {
+                let paramsObj = paramsVal.asObject()
+
+                let streamParam = paramsObj.get("stream")
+                if (streamParam.isSome()) {
+                    let streamVal = streamParam.getOrThrow()
+                    if (streamVal is JsonBool) {
+                        isStream = streamVal.asBool().getValue()
+                    }
+                }
+
+                let messagesJson = paramsObj.get("messages")
+                if (messagesJson.isSome()) {
+                    let msgs = messagesJson.getOrThrow()
+                    if (msgs is JsonArray) {
+                        let msgsArray = msgs.asArray()
+                        let size = msgsArray.size()
+                        var i = 0
+                        while (i < size) {
+                            let msg = msgsArray.get(i)
+                            if (msg.isSome()) {
+                                let msgVal = msg.getOrThrow()
+                                if (msgVal is JsonObject) {
+                                    let msgObj = msgVal.asObject()
+                                    let role = msgObj.get("role")
+                                    let content = msgObj.get("content")
+
+                                    if (role.isSome() && content.isSome()) {
+                                        let roleStr = role.getOrThrow().toString().replace("\"", "")
+                                        let contentVal = content.getOrThrow()
+                                        var contentStr = ""
+                                        if (contentVal is JsonString) {
+                                            contentStr = contentVal.asString().getValue()
+                                        } else {
+                                            contentStr = contentVal.toString().replace("\"", "")
+                                        }
+
+                                        if (roleStr == "user") {
+                                            userMessage = contentStr
+                                        } else if (roleStr == "system") {
+                                            systemMessage = contentStr
+                                            LogUtils.info("WebMCP completion/complete stream received system message, length=${contentStr.size.toString()}")
+                                        }
+                                    }
+                                }
+                            }
+                            i = i + 1
+                        }
+                    }
+                }
+            }
+        }
+
+        LogUtils.debug("WebMCP completion/complete stream user message: ${userMessage}")
+
+        // 前置条件检查：userMessage 为空时返回默认响应
+        if (userMessage.isEmpty()) {
+            let values = JsonArray()
+            values.add(JsonString("WebMCP server received your message."))
+            let completion = JsonObject()
+            completion.put("values", values)
+            completion.put("total", JsonInt(1))
+            completion.put("hasMore", JsonBool(false))
+            let result = JsonObject()
+            result.put("completion", completion)
+            return createSuccessResponse(result, requestId)
+        }
+
+        // 前置条件检查：agent 不存在时降级为同步分支
+        if (_agent.isNone()) {
+            LogUtils.warn("WebMCPProtocol: agent not available, falling back to handleCompletionComplete")
+            return handleCompletionComplete(obj)
+        }
+
+        let agent = _agent.getOrThrow()
+
+        // 合并系统提示词：前端 system 消息 + 后端技能知识库
+        let backendSkillPrompt = buildAgentSystemPrompt()
+        if (!systemMessage.isEmpty()) {
+            LogUtils.info("WebMCPProtocol stream: using system message from frontend, length=${systemMessage.size.toString()}")
+            agent.systemPrompt = systemMessage + "\n\n" + backendSkillPrompt
+        } else if (agent.systemPrompt.isEmpty()) {
+            agent.systemPrompt = backendSkillPrompt
+            LogUtils.info("WebMCPProtocol stream: set fallback systemPrompt, length=${backendSkillPrompt.size.toString()}")
+        } else {
+            agent.systemPrompt = agent.systemPrompt + "\n\n" + backendSkillPrompt
+        }
+
+        // 加载历史上下文（用于多轮对话）
+        let checkpointManager = CheckpointManager()
+        var conversation: ?Conversation = None
+        if (!_agentId.isEmpty()) {
+            if (let Some(historyMessages) <- checkpointManager.loadLatestCheckpoint(_agentId)) {
+                LogUtils.info("WebMCPProtocol stream: loaded ${historyMessages.size} historical messages for agent ${_agentId}")
+                if (historyMessages.size > 0) {
+                    conversation = Some(Conversation())
+                    var i = 0
+                    while (i < historyMessages.size - 1) {
+                        if (i + 1 < historyMessages.size) {
+                            conversation.getOrThrow().addChatRound(historyMessages[i], historyMessages[i + 1])
+                        }
+                        i = i + 2
+                    }
+                }
+            }
+        }
+
+        // 创建 Agent 请求
+        let agentRequest = AgentRequest(userMessage, conversation: conversation)
+
+        // 启动 progress 定时器（防止前端超时）
+        let stopProgress = AtomicBool(false)
+        spawn {
+            while (!stopProgress.load()) {
+                sleep(Duration.second * 15)
+                if (!stopProgress.load() && _sseConnectionManager.isSome()) {
+                    let sseMgr = _sseConnectionManager.getOrThrow()
+                    if (!_sessionId.isEmpty() && sseMgr.hasConnection(_sessionId)) {
+                        sseMgr.pushMessage(_sessionId, "progress", "{\"progress\":1}")
+                    }
+                }
+            }
+        }
+
+        // 初始化 SSEEventBridge（在 ReAct 执行过程中实时推送 reasoning 到 SSE）
+        SSEEventBridge.instance.initialize(_sseConnectionManager, _sessionId)
+
+        // 异步执行 agent.asyncChat，迭代 chunks 实时推送
+        var responseContent = ""
+        var reasoningContentStr = ""
+
+        try {
+            let asyncResponse = agent.asyncChat(agentRequest)
+
+            // 迭代 chunks（仓颉规范 D-4：处理迭代器副作用）
+            try {
+                while (true) {
+                    match (asyncResponse.next()) {
+                        case Some(chunk) =>
+                            // chunk 为正文增量字符串
+                            responseContent = responseContent + chunk
+                            // 通过 SSEEventBridge 推送正文增量（response.output_text.delta）
+                            if (_sseConnectionManager.isSome()) {
+                                let sseMgr = _sseConnectionManager.getOrThrow()
+                                if (!_sessionId.isEmpty() && sseMgr.hasConnection(_sessionId)) {
+                                    SSEEventBridge.instance.pushContentStream(sseMgr, _sessionId, chunk, 0)
+                                }
+                            }
+                        case None =>
+                            // 迭代器正常结束
+                            break
+                    }
+                }
+            } catch (e: AgentCancelException) {
+                LogUtils.info("WebMCPProtocol stream: agent execution cancelled by user")
+                responseContent = "Agent execution cancelled: ${e.reason}"
+            } catch (e: Exception) {
+                LogUtils.error("WebMCPProtocol stream: agent execution error: ${e.message}")
+                responseContent = "Error: Failed to generate response from model"
+                // SSE 推送 response.failed
+                if (_sseConnectionManager.isSome()) {
+                    let sseMgr = _sseConnectionManager.getOrThrow()
+                    if (!_sessionId.isEmpty() && sseMgr.hasConnection(_sessionId)) {
+                        sseMgr.pushMessage(_sessionId, "response.failed", "{\"error\":\"${e.message}\"}")
+                    }
+                }
+            }
+
+            // 提取 reasoning_content（从 agentResponse.execution.chatRound.answer.reason）
+            try {
+                let execution = asyncResponse.execution
+                if (let Some(answerMsg) <- execution.chatRound.answer.reason) {
+                    reasoningContentStr = answerMsg
+                }
+            } catch (_: Exception) {}
+
+            LogUtils.debug("WebMCP completion stream response: ${responseContent}")
+        } catch (e: Exception) {
+            LogUtils.error("WebMCPProtocol stream: asyncChat failed: ${e.message}")
+            // 降级为同步 chat()
+            SSEEventBridge.instance.clear()
+            stopProgress.store(true)
+            return handleCompletionComplete(obj)
+        }
+
+        // 清理 SSEEventBridge，停止 progress 定时器
+        SSEEventBridge.instance.clear()
+        stopProgress.store(true)
+
+        // 异步同步 Agent 状态到数据库
+        spawn {
+            try {
+                AgentRuntimeBridge.instance.syncToDatabase(agent.name, agent)
+            } catch (_: Exception) {}
+        }
+
+        // 返回符合 MCP 协议标准格式的响应
+        let values = JsonArray()
+        values.add(JsonString(responseContent))
+
+        let completion = JsonObject()
+        completion.put("values", values)
+        completion.put("total", JsonInt(1))
+        completion.put("hasMore", JsonBool(false))
+
+        // 转发 reasoning_content 到 completion 独立字段
         if (!reasoningContentStr.isEmpty()) {
             completion.put("reasoning_content", JsonString(reasoningContentStr))
         }

@@ -117,6 +117,21 @@ main(args: Array<String>) {
     // L3 进程隔离轨：独立 cjpm executable 工程（design §5.3）
     // 不走表驱动（进程插件经 host.db 服务代理访问数据，不直接依赖 f_orm/DbInfoPO）
     if (mode == "process") {
+        // 如果同时指定了 --db 和 --table，生成完整 CRUD 进程插件（对标 codelabs）
+        if (!dbName.isEmpty() && !tableName.isEmpty()) {
+            let crudGen = CrudPluginGenerator()
+            if (crudGen.generate(normalized, dbName, tableName)) {
+                println("\nCRUD 进程轨插件生成完成！")
+                println("后续步骤:")
+                println("1. cd skills/${normalized} && cjpm build（产出 target/release/bin/skill_${normalized}.exe）")
+                println("2. 在 config/plugins.yaml 追加 mode:process + command 条目")
+                println("3. 启动宿主后经 CordisHostManager 加载，路由经 ExternalPluginRouteGateway 注册")
+            } else {
+                println("\n生成失败，请检查上述错误信息")
+            }
+            return
+        }
+        // 否则生成空白进程插件骨架
         let generator = PluginGenerator()
         if (generator.generateProcessPlugin(normalized)) {
             println("\nL3 进程轨插件生成完成！")

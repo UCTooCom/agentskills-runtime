@@ -18,6 +18,9 @@ import magic.app.routes.tool.ToolRoutes
 import magic.app.routes.webmcp.WebMCPRoutes
 import magic.app.routes.uctoo.ai.AIRoutes
 import magic.app.routes.aip.AipRoute
+import magic.app.routes.mcpopen.McpOpenRoutes
+import magic.app.controllers.uctoo.mcpopen.McpOpenController
+import magic.app.services.mcp.McpOpenService
 import magic.tool.{ToolDispatcher, BuiltinToolsRegistry, SimpleToolManager}
 import magic.app.services.tool.ToolAuditService
 import magic.app.services.uctoo.OperateLogService
@@ -554,6 +557,13 @@ public class Application {
         let syncRoute = SyncRoute(router)
         syncRoute.register()
         LogUtils.info("Sync routes registered successfully")
+        
+        // 注册 MCP 开放服务路由（天眼查等外部 MCP 统一调用入口）
+        let mcpOpenService = McpOpenService()
+        let mcpOpenController = McpOpenController(mcpOpenService)
+        let mcpOpenRoutes = McpOpenRoutes(router, mcpOpenController)
+        mcpOpenRoutes.register()
+        LogUtils.info("MCP open routes registered successfully")
         
         // 注册 AIP 智能体互联路由
         let aipRoute = AipRoute(router)

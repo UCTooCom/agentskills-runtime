@@ -1,0 +1,90 @@
+name: due_diligence_agent
+version: 1.0.0
+mode: process
+protocol: jsonrpc-stdio
+command: ./target/release/bin/skill_due_diligence_agent.exe
+description: 企业信用与风控尽调智能体 L3 进程隔离轨插件（6 表 CRUD + dd-fetch 采集聚合 + dd-save 落库）
+routes:
+  # due_diligence_task CRUD
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_task/add
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_task/edit
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_task/del
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_task/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_task/:id
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_task/:limit/:page
+  # due_diligence_enterprise CRUD
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_enterprise/add
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_enterprise/edit
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_enterprise/del
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_enterprise/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_enterprise/:id
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_enterprise/:limit/:page
+  # due_diligence_equity CRUD
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_equity/add
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_equity/edit
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_equity/del
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_equity/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_equity/:id
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_equity/:limit/:page
+  # due_diligence_risk CRUD
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_risk/add
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_risk/edit
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_risk/del
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_risk/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_risk/:id
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_risk/:limit/:page
+  # due_diligence_report CRUD
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_report/add
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_report/edit
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_report/del
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_report/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_report/:id
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_report/:limit/:page
+  # due_diligence_mcp_call_log CRUD
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_mcp_call_log/add
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_mcp_call_log/edit
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_mcp_call_log/del
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_mcp_call_log/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_mcp_call_log/:id
+  - method: GET
+    path: /api/v1/uctoo/due_diligence_mcp_call_log/:limit/:page
+  # 自定义路由：dd-fetch 采集聚合 + dd-save 落库
+  - method: POST
+    path: /api/v1/uctoo/due_diligence/dd-fetch
+  - method: POST
+    path: /api/v1/uctoo/due_diligence/dd-save

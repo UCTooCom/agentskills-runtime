@@ -1,0 +1,53 @@
+[package]
+  cjc-version = "1.1.3"
+  compile-option = "-O2 --dy-std -Woff all"
+  description = "entity 表 CRUD 技能插件（workspace 成员模式，独立动态库）"
+  link-option = ""
+  name = "skill_entity"
+  output-type = "dynamic"
+  src-dir = "src"
+  target-dir = "target"
+  version = "1.0.0"
+  package-configuration = {}
+  scripts = {}
+
+[dependencies]
+  plugin_spi = { path = "../../libs/plugin-spi" }
+  f_orm = { path = "../../libs/fountain/f_orm" }
+  f_data = { path = "../../libs/fountain/f_data" }
+  f_base = { path = "../../libs/fountain/f_base" }
+  f_bean = { path = "../../libs/fountain/f_bean" }
+  f_macros = { path = "../../libs/fountain/f_macros" }
+  f_exception = { path = "../../libs/fountain/f_exception" }
+  f_log = { path = "../../libs/fountain/f_log" }
+  f_collection = { path = "../../libs/fountain/f_collection" }
+  f_cache = { path = "../../libs/fountain/f_cache" }
+  f_concurrent = { path = "../../libs/fountain/f_concurrent" }
+  f_regex = { path = "../../libs/fountain/f_regex" }
+  f_time = { path = "../../libs/fountain/f_time" }
+  f_aspect = { path = "../../libs/fountain/f_aspect" }
+  f_config = { path = "../../libs/fountain/f_config" }
+  f_util = { path = "../../libs/fountain/f_util" }
+  f_mockdb = { path = "../../libs/fountain/f_mockdb" }
+  f_pool = { path = "../../libs/fountain/f_pool" }
+  charset4cj = { path = "../../libs/charset4cj" }
+  json4cj = { path = "../../libs/json4cj" }
+  magic = { path = "../../" }
+
+#----------------------------------------
+#  Setting cangjie-stdx
+#----------------------------------------
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["../../libs/cangjie-stdx-linux-x64-1.1.3.1/linux_x86_64_cjnative/dynamic/stdx"]
+
+[target.x86_64-unknown-windows-gnu.bin-dependencies]
+  path-option = ["../../libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]
+
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["../../libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]
+
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["../../libs/cangjie-stdx-linux-aarch64-1.1.3.1/linux_aarch64_cjnative/dynamic/stdx"]
+
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["../../libs/cangjie-stdx-mac-aarch64-1.1.3.1/darwin_aarch64_cjnative/dynamic/stdx"]

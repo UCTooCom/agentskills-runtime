@@ -18,6 +18,7 @@ import http_lib.connection.Connection
 import stdx.encoding.json.{JsonObject, JsonString, JsonBool, JsonValue, JsonArray, JsonInt}
 import std.time.DateTime
 import std.time.*
+import std.sync.AtomicBool
 import f_util.UUID
 import std.collection.{HashMap, ArrayList}
 
@@ -193,22 +194,15 @@ public class WebMCPController {
             let isStream = parseStreamFlag(body)
             
             if (isStream) {
-                // 流式响应：v18修复去掉裸写 Transfer-Encoding: chunked 头
-                // 根因：裸写 chunked 头但 res.send() 单次发送完整 JSON，浏览器按 chunked 解析时遇到非法分块
-                //       → net::ERR_INVALID_CHUNKED_ENCODING（与 SSE /sse 端点同型根因）
-                // 修复：改用 Connection: close 让浏览器按"读到连接关闭即响应结束"的裸字节流模式解析，
-                //       避免分块编码校验失败。真正流式需用 SSE /sse 端点的 conn.write()+flush() 裸字节流。
-                LogUtils.info("WebMCP streaming response requested")
-                res.status(200)
-                   .header("Content-Type", "application/json")
-                   .header("Connection", "close")
-
-                // 使用异步方式处理流式响应
-                spawn {
-                    let response = protocol.handleMessage(body)
-                    LogUtils.debug("WebMCP streamable HTTP response: ${response}")
-                    res.send(response)
-                }
+                // v24 真流式：劫持 POST /mcp 连接，SSE 事件（reasoning-start/delta/end、
+                // response.output_text.delta、response.completed）实时写入该连接，
+                // 前端从 fetch 响应流增量解析，实现真正的流式思维链。
+                // 恢复说明：此前因"连接劫持导致后续请求 body 丢失 → 400"改走非劫持模式，
+                // 但 v21 已查明该 400 的真正根因是 http_lib request.cj 的 copyTo 参数顺序 bug
+                // （bodyRead 误传为 srcStart，多段读取时越界），与连接劫持无关，已修复。
+                LogUtils.info("WebMCP streaming response requested (real-stream hijack mode)")
+                handleStreamableHttpRealStream(req, res, body)
+                return
             } else {
                 // 非流式响应：同步处理
                 let response = protocol.handleMessage(body)
@@ -233,6 +227,210 @@ public class WebMCPController {
                .json("{\"error\": \"${e.message}\"}")
         }
     }
+
+    /**
+     * 真流式 HTTP 响应（P2-3.3）
+     *
+     * 利用 http_lib ConnectionController 劫持连接，实现真流式 HTTP 响应。
+     * SSE 事件通过 conn.write+flush 逐步推送，最后写入 MCP JSON-RPC 响应。
+     *
+     * 仓颉规范约束（已复核 design.md D-5/D-7）：
+     * 1. spawn 闭包捕获语义：仓颉 spawn { ... } 创建新协程，
+     *    闭包内引用的 req、res、body、controller、conn、sessionId 等应为 let 不可变绑定；
+     *    若需在协程间共享可变状态（如停止标志），必须使用 AtomicBool / Ref<T> 等线程安全容器，
+     *    禁止直接捕获 var。
+     * 2. 连接生命周期：劫持连接后，主请求处理流程不得再操作 res
+     *    （此时由 conn.write() 直接写入裸字节流）。
+     *    conn.write() + conn.flush() 必须成对调用，确保 SSE 事件立即送达浏览器缓冲区。
+     * 3. 异常不外泄：spawn 块内的异常必须捕获并记录日志，
+     *    禁止让异常逃逸导致协程静默崩溃（无错误堆栈）。
+     * 4. SSE 事件通过 SSEConnectionManager 注册的 sessionId→writer 回调推送，
+     *    writer = message => conn.write(message) + conn.flush()。
+     *
+     * 异常映射：
+     * - 连接劫持失败（req.connection 为 None）→ 降级调用 handleStreamableHttp 假流式分支
+     * - conn.write 异常 → 记录 error 日志，关闭连接
+     *
+     * 注意：本方法需要 http_lib ConnectionController 的底层 API 支持。
+     * 当前实现为架构占位，具体 conn.write/flush 调用需根据实际 http_lib 版本确认。
+     */
+    public func handleStreamableHttpRealStream(req: HttpRequest, res: HttpResponse, body: String): Unit {
+        LogUtils.info("WebMCP real stream HTTP request received")
+
+        // 前置条件检查：body 为空时返回 400
+        if (body.isEmpty()) {
+            LogUtils.warn("WebMCP real stream request body is empty")
+            setCorsHeaders(req, res)
+            res.status(400)
+               .header("Content-Type", "application/json")
+               .send("{\"error\": \"Empty request body\"}")
+            return
+        }
+
+        // 设置 CORS 头部
+        setCorsHeaders(req, res)
+           .header("Access-Control-Allow-Methods", "POST, OPTIONS")
+           .header("Access-Control-Allow-Headers", "*")
+
+        // 解析方法和 ID
+        let (method, requestId) = parseMethodAndId(body)
+
+        // notifications/* 方法提前返回（非流式，无需劫持连接）
+        if (method.startsWith("notifications/")) {
+            LogUtils.info("WebMCP real stream notification early return: ${method}")
+            if (requestId.isSome()) {
+                let resultObj = JsonObject()
+                resultObj.put("success", JsonBool(true))
+                resultObj.put("message", JsonString("Notification received"))
+                let responseObj = JsonObject()
+                responseObj.put("jsonrpc", JsonString("2.0"))
+                responseObj.put("result", resultObj)
+                responseObj.put("id", requestId.getOrThrow())
+                res.status(200).json(responseObj.toString())
+            } else {
+                res.status(204).send("")
+            }
+            return
+        }
+
+        // 获取会话 ID 和用户 ID
+        let sessionId = "webmcp-default"
+        let userId = _extractUserId(req)
+
+        // 初始化或获取 protocol 实例
+        let protocol = if (_sessions.contains(sessionId)) {
+            let p = _sessions.get(sessionId).getOrThrow()
+            _initProtocolInfrastructure(p, sessionId, userId)
+            p
+        } else {
+            let p = WebMCPProtocol(_skillManager, _chatModel, getMainAgentDef())
+            _initProtocolInfrastructure(p, sessionId, userId)
+            _sessions.add(sessionId, p)
+            p
+        }
+
+        // 真流式实现：通过 http_lib ConnectionController 劫持 POST /webmcp/mcp 连接，
+        // 写入 SSE 响应头，注册 sessionId→writer 回调到 SSEConnectionManager，
+        // 调用 protocol.handleCompletionCompleteStream 异步执行，
+        // SSE 事件在执行过程中通过 writer 回调实时 conn.write+flush 推送到前端，
+        // 最后写入 MCP JSON-RPC 2.0 响应并关闭连接。
+        //
+        // 参考 handleSSE（第 722-794 行）的连接劫持模式。
+        //
+        // 仓颉规范约束：
+        // 1. spawn 闭包捕获：req、res、body、conn 等应为 let 不可变绑定；
+        //    线程间共享可变状态必须使用 AtomicBool / Ref<T> 等线程安全容器。
+        // 2. 连接生命周期：劫持连接后，主请求处理流程不得再操作 res
+        //    （此时由 conn.write() 直接写入裸字节流）。
+        // 3. conn.write() + conn.flush() 必须成对调用，确保 SSE 事件立即送达浏览器缓冲区。
+        // 4. 异常不外泄：spawn 块内的异常必须捕获并记录日志，
+        //    禁止让异常逃逸导致协程静默崩溃。
+        match (req.connection) {
+            case Some(conn) =>
+                // === 真流式分支：劫持连接 ===
+                let controller = ConnectionController(conn)
+
+                // 写入 SSE 响应头（Content-Type: text/event-stream）
+                // 参考 handleSSE 第 743 行，不声明 chunked，用 Connection: close 让浏览器按裸字节流模式解析
+                let sseHeader = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
+                controller.write(unsafe { sseHeader.rawData() })
+                req.takenOver = true
+
+                LogUtils.info("[WebMCPController] Real stream connection hijacked: sessionId=${sessionId}")
+
+                // 注册 sessionId→writer 回调到 SSEConnectionManager
+                // writer 回调：将 SSE 消息字符串写入连接并 flush
+                // SSEConnectionManager.pushMessage 内部构建 "event: ${eventType}\ndata: ${data}\n\n" 格式
+                _sseConnectionManager.registerConnection(sessionId, { message: String =>
+                    try {
+                        conn.write(unsafe { message.rawData() })
+                        conn.flush()
+                    } catch (e: Exception) {
+                        LogUtils.warn("[WebMCPController] Real stream SSE write failed: ${e.message}")
+                    }
+                })
+
+                // 推送 connected 事件，通知前端 SSE 连接已建立
+                conn.write(unsafe { "event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n".rawData() })
+                conn.flush()
+
+                // 启动 SSE 心跳保活协程（每 15 秒推送 ": ping\n\n"）
+                // 参考 handleSSE 第 760-772 行的心跳保活模式
+                let stopHeartbeat = AtomicBool(false)
+                spawn {
+                    while (!stopHeartbeat.load()) {
+                        sleep(Duration.second * 15)
+                        if (stopHeartbeat.load()) {
+                            break
+                        }
+                        try {
+                            conn.write(unsafe { ": ping ${DateTime.now()}\n\n".rawData() })
+                            conn.flush()
+                        } catch (e: Exception) {
+                            LogUtils.info("[WebMCPController] Real stream heartbeat failed, connection closed: sessionId=${sessionId}")
+                            break
+                        }
+                    }
+                }
+
+                // 调用 protocol.handleCompletionCompleteStream 异步执行
+                // 执行过程中 SSE 事件通过注册的 writer 回调实时 conn.write+flush 推送到前端
+                // 方法返回最终的 MCP JSON-RPC 2.0 响应字符串
+                var streamResponse = ""
+                var streamSucceeded = false
+                try {
+                    // 解析请求体为 JsonObject
+                    let jsonObj = JsonValue.fromStr(body)
+                    if (jsonObj is JsonObject) {
+                        let obj = jsonObj.asObject()
+                        streamResponse = protocol.handleCompletionCompleteStream(obj)
+                        streamSucceeded = true
+                        LogUtils.debug("[WebMCPController] Real stream response: ${streamResponse}")
+                    } else {
+                        LogUtils.error("[WebMCPController] Real stream: invalid JSON body")
+                        // 推送错误事件到前端
+                        conn.write(unsafe { "event: response.failed\ndata: {\"error\":\"Invalid JSON body\"}\n\n".rawData() })
+                        conn.flush()
+                    }
+                } catch (e: Exception) {
+                    LogUtils.error("[WebMCPController] Real stream error: ${e.message}")
+                    // 推送错误事件到前端
+                    let errorMsg = e.message
+                    conn.write(unsafe { "event: response.failed\ndata: {\"error\":\"${errorMsg}\"}\n\n".rawData() })
+                    conn.flush()
+                }
+
+                // 停止心跳保活协程
+                stopHeartbeat.store(true)
+
+                // 流式完成后，写入最终的 MCP JSON-RPC 2.0 响应
+                // 响应格式：event: response.completed\ndata: ${MCP响应}\n\n
+                if (streamSucceeded && !streamResponse.isEmpty()) {
+                    try {
+                        let finalEvent = "event: response.completed\ndata: ${streamResponse}\n\n"
+                        conn.write(unsafe { finalEvent.rawData() })
+                        conn.flush()
+                        LogUtils.info("[WebMCPController] Real stream completed: sessionId=${sessionId}")
+                    } catch (e: Exception) {
+                        LogUtils.error("[WebMCPController] Real stream final write failed: ${e.message}")
+                    }
+                }
+
+                // 注销 SSEConnectionManager 回调，关闭连接
+                _sseConnectionManager.removeConnection(sessionId)
+                try {
+                    conn.close()
+                } catch (e: Exception) {
+                    LogUtils.warn("[WebMCPController] Real stream connection close failed: ${e.message}")
+                }
+
+            case None =>
+                // === 降级分支：连接不可劫持，降级为 handleStreamableHttp 假流式 ===
+                // 参考 spec 5.4.3.2 "连接劫持失败 → 降级为 spawn + res.send() 假流式"
+                LogUtils.warn("[WebMCPController] Real stream: connection not hijackable, falling back to handleStreamableHttp")
+                handleStreamableHttp(req, res)
+        }
+    }
     
     /**
      * 解析请求体中的 stream 标志
@@ -240,6 +438,21 @@ public class WebMCPController {
     private func parseStreamFlag(body: String): Bool {
         try {
             let jsonValue = JsonValue.fromStr(body)
+            // v24 修复：前端 _chatViaWebMCP 直接 POST JsonObject（{method, params:{stream:true}}），
+            // 此前只解析 JsonArray 包装格式，JsonObject 恒返回 false → isStream 恒为 false
+            // → 请求永远走阻塞分支，SSE 事件无法增量推送（表现为接口一直"待处理"，
+            // 思维链和正文最后一次性返回渲染）。
+            if (jsonValue is JsonObject) {
+                let obj = jsonValue.asObject()
+                let params = obj.get("params")
+                if (params.isSome() && params.getOrThrow() is JsonObject) {
+                    let paramsObj = params.getOrThrow().asObject()
+                    let stream = paramsObj.get("stream")
+                    if (stream.isSome() && stream.getOrThrow() is JsonBool) {
+                        return stream.getOrThrow().asBool().getValue()
+                    }
+                }
+            }
             if (jsonValue is JsonArray) {
                 let arr = jsonValue.asArray()
                 if (arr.size() > 0) {

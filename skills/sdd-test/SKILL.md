@@ -1,6 +1,6 @@
 ---
 name: sdd-test
-description: Execute verification and testing for SDD workflow. Runs build, lint, and tests to validate code quality. Passive design: records but does not block. Trigger on "run tests", "verify code", "验证代码", "运行测试".
+description: Execute verification and testing for SDD workflow. Runs build, lint, and tests to validate code quality. Passive design, records but does not block. Trigger on "run tests", "verify code", "验证代码", "运行测试".
 version: 1.0.0
 author: OpenCangjie Team
 agent_type: qa-worker

@@ -86,6 +86,8 @@ public class PluginHost {
         }
         let instance = this.manager.launch(entry)
         this.registerHostHandlers(instance)
+        // 在 handler 注册之后启动 receiveLoop，避免丢失 initialize 请求
+        instance.client.start()
         this.state.addInstance(instance)
         instance
     }
@@ -229,11 +231,16 @@ public class PluginHost {
 
         // 插件 → 宿主：invoke 服务调用转发（@Inject 代理链路）
         // 消费者发 invoke → 查 serviceIndex 找提供者 → 用提供者连接转发 → 返回结果
+        // 宿主内置服务（host.db/host.log/host.cache）由 CordisHostServices 直接注册 handler
+        // （registerRequestHandler("host.db", ...)），不经过 INVOKE 转发链路
         client.registerRequestHandler(Methods.INVOKE, { req =>
             match (req.params) {
                 case Some(p) =>
                     try {
                         let params = JsonValue.toObject<InvokeParams>(p)
+                        // 宿主内置服务（host.*/cache.*等）由 CordisHostServices 注册的
+                        // "host.db"/"host.log"/"host.cache" handler 处理，
+                        // INVOKE handler 只处理插件间服务转发
                         match (this.state.serviceIndex.get(params.service)) {
                             case Some(providerId) =>
                                 match (this.state.getInstance(providerId)) {

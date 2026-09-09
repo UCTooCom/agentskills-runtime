@@ -218,7 +218,7 @@ public class PluginGenerator {
         let sb = StringBuilder()
         sb.append("[package]\n")
         sb.append("  cjc-version = \"1.1.3\"\n")
-        sb.append("  compile-option = \"-O2 -Woff all\"\n")
+        sb.append("  compile-option = \"--dy-std -Woff all\"\n")
         sb.append("  description = \"L3 进程隔离轨插件 ${name}（独立 executable 工程）\"\n")
         sb.append("  link-option = \"\"\n")
         sb.append("  name = \"${pkgName}\"\n")

@@ -1,0 +1,19 @@
+name: codelabs
+version: 1.0.0
+mode: process
+protocol: jsonrpc-stdio
+command: ./target/release/bin/skill_codelabs.exe
+description: L3 进程隔离轨插件 codelabs
+routes:
+  - method: POST
+    path: /api/v1/uctoo/codelabs/add
+  - method: POST
+    path: /api/v1/uctoo/codelabs/edit
+  - method: POST
+    path: /api/v1/uctoo/codelabs/del
+  - method: POST
+    path: /api/v1/uctoo/codelabs/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/codelabs/:id
+  - method: GET
+    path: /api/v1/uctoo/codelabs/:limit/:page

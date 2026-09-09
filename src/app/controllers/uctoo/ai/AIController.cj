@@ -6,12 +6,6 @@ package magic.app.controllers.uctoo.ai
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.core.model.{ChatModel, ChatRequest, ChatResponse, AsyncChatResponse}
 import magic.core.message.{Message, MessageList, MessageRole}
-import magic.core.skill.SkillManager
-import magic.skill.SkillAwareAgent
-import magic.agent_executor.react.ReactExecutor
-import magic.core.agent.{AgentRequest, AgentResponse}
-import magic.agent.memory.tiered.TieredMemory
-import magic.interaction.EventHandlerManager
 import magic.log.LogUtils
 
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
@@ -23,26 +17,17 @@ import std.collection.{ArrayList, HashMap}
 /**
  * AI 聊天控制器
  * 提供 OpenAI 兼容的聊天 API
+ *
+ * P3-4.1：移除了 SkillAwareAgent + ReactExecutor + TieredMemory 初始化逻辑，
+ *        因为 WebMCPProtocol 作为主要聊天接口已保留完整 ReAct 能力，
+ *        AIController 仅保留 OpenAI 兼容响应格式，直接调用 ChatModel.create，
+ *        不再包含重复的 agent 执行逻辑。
  */
 public class AIController {
     private let _chatModel: ChatModel
-    private let _skillManager: SkillManager
-    private let _agent: SkillAwareAgent
 
-    public init(chatModel: ChatModel, skillManager: SkillManager) {
+    public init(chatModel: ChatModel) {
         this._chatModel = chatModel
-        this._skillManager = skillManager
-        let executor = ReactExecutor()
-        let memory = TieredMemory(agentId: "ai-api-assistant")
-        this._agent = SkillAwareAgent(
-            skillManager: skillManager,
-            model: chatModel,
-            executor: executor,
-            name: "AI API Assistant",
-            description: "An intelligent assistant for OpenAI-compatible API",
-            memory: Some(memory),
-            eventHandlerManager: None // v22修复：不再传 global，避免 agent_op 三层分发中 agent 层与 global 层重复触发（reasoning 推送两次）
-        )
     }
 
     /**
@@ -151,32 +136,12 @@ public class AIController {
 
     /**
      * 处理非流式聊天请求
+     *
+     * P3-4.1：移除了 _agent.chat(agentRequest) 分支（SkillAwareAgent 重复初始化）。
+     *        AIController 仅保留 OpenAI 兼容响应格式，直接调用 ChatModel.create。
+     *        WebMCPProtocol 作为主要聊天接口已保留完整 ReAct 能力。
      */
     private func handleNonStreamChat(req: HttpRequest, res: HttpResponse, messages: Array<Message>): Unit {
-        try {
-            var lastUserMessage = ""
-            for (msg in messages) {
-                if (msg.role == MessageRole.User) {
-                    lastUserMessage = msg.content
-                }
-            }
-            if (!lastUserMessage.isEmpty()) {
-                let agentRequest = AgentRequest(lastUserMessage)
-                let agentResponse = _agent.chat(agentRequest)
-                let chatResponse = ChatResponse(
-                    "agent",
-                    Message(MessageRole.Assistant, agentResponse.content),
-                    usage: None
-                )
-                let jsonResponse = buildResponse(chatResponse)
-                res.status(200)
-                   .header("Content-Type", "application/json")
-                   .json(jsonResponse)
-                return
-            }
-        } catch (e: Exception) {
-            LogUtils.error("AI chat via Agent failed, falling back to direct ChatModel: ${e.message}")
-        }
         let chatReq = ChatRequest(messages)
         let response = _chatModel.create(chatReq)
         let jsonResponse = buildResponse(response)

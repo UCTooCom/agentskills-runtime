@@ -117,13 +117,11 @@ func buildPluginManager(pluginsRoot: String): PluginHostManager {
     let registry = PluginRegistry()
     let loader = PluginLoader(registry)
     let eventBus = PluginEventBus()
-    let configParser = PluginConfigParser()
     return PluginHostManager(
         registry: registry,
         loader: loader,
         eventBus: eventBus,
         skillBridge: skillBridge,
-        configParser: configParser,
         pluginsRoot: pluginsRoot
     )
 }
@@ -291,7 +289,7 @@ func testLifecycleE2E(ctx: TestContext, projectRoot: String): Unit {
     LifecycleProbePlugin.hookLog.clear()
 
     let manager = buildPluginManager("${projectRoot}/plugins")
-    let result = manager.loadAll(configPath)
+    let result = manager.loadAll(["${projectRoot}/skills"])
 
     // 加载结果分类
     ctx.check("hello 加载成功", result.loaded.contains("hello"))
@@ -478,7 +476,7 @@ func testDualTrackRoutes(ctx: TestContext, projectRoot: String): Unit {
     writeTempYaml(configPath, yaml)
 
     let manager = buildPluginManager("${projectRoot}/plugins")
-    let result = manager.loadAll(configPath)
+    let result = manager.loadAll(["${projectRoot}/skills"])
     ctx.check("doc-helper 加载成功", result.loaded.contains("doc-helper"))
 
     // 2. routeClassNames 收集（PluginRouteScanner 的数据源）
@@ -533,7 +531,7 @@ func testUninstallRegression(ctx: TestContext, projectRoot: String): Unit {
     writeTempYaml(configPath, yaml)
 
     let manager = buildPluginManager("${projectRoot}/plugins")
-    let result = manager.loadAll(configPath)
+    let result = manager.loadAll(["${projectRoot}/skills"])
     ctx.check("doc-helper 加载成功", result.loaded.contains("doc-helper"))
 
     // === 维度 1：路由清理验证 ===

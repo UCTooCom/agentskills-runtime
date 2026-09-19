@@ -559,6 +559,18 @@ public class AgentApprovalsController {
         if (let Some(deletedAt) <- map.get("deleted_at")) {
             // DateTime类型, 由数据库处理
         }
+        if (let Some(options) <- map.get("options")) {
+            let optionsStr = options as String
+            if (let Some(s) <- optionsStr) {
+                entity.options = Some<String>(s)
+            }
+        }
+        if (let Some(selectedOption) <- map.get("selected_option")) {
+            let selectedOptionStr = selectedOption as String
+            if (let Some(s) <- selectedOptionStr) {
+                entity.selectedOption = Some<String>(s)
+            }
+        }
         return entity
     }
 
@@ -679,7 +691,7 @@ public class AgentApprovalsController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,agent_id,task_id,approval_type,content,status,user_response,timeout_ms,creator,created_at,updated_at,deleted_at\n")
+            sb.append("id,agent_id,task_id,approval_type,content,status,user_response,timeout_ms,creator,created_at,updated_at,deleted_at,options,selected_option\n")
 
             // 写入数据行
             for (entity in entities) {
@@ -696,6 +708,8 @@ public class AgentApprovalsController {
                 sb.append("\"" + "${entity.createdAt.toString()}" + ",")
                 sb.append("\"" + "${entity.updatedAt.toString()}" + ",")
                 sb.append(if (let Some(v) <- entity.deletedAt) { "\"" + v.toString() + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.options) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.selectedOption) { "\"" + v + "\"," } else { "" })
                 sb.append("\n")
             }
 

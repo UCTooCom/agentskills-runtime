@@ -1,0 +1,173 @@
+{
+  "tool": "code-gen-verifier",
+  "passed": true,
+  "verify_level": "syntax",
+  "project_path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task",
+  "files": [
+    "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\models\\uctoo\\AgentApprovalsPO.cj",
+    "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\dao\\uctoo\\AgentApprovalsDAO.cj",
+    "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj"
+  ],
+  "table": "",
+  "degraded": false,
+  "degraded_reasons": [],
+  "on_missing_toolchain": "fail",
+  "steps": [
+    {
+      "name": "completeness",
+      "passed": true,
+      "detail": "文件与五层齐全"
+    },
+    {
+      "name": "syntax",
+      "passed": true,
+      "detail": "语法检查通过"
+    },
+    {
+      "name": "compile",
+      "passed": true,
+      "detail": "verify_level=syntax，按约定跳过编译验证"
+    },
+    {
+      "name": "spec",
+      "passed": true,
+      "detail": "符合 uctoo-v4 规范"
+    },
+    {
+      "name": "fix_suggest",
+      "passed": true,
+      "detail": "产出 0 条修复建议"
+    }
+  ],
+  "errors": [],
+  "warnings": [
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\models\\uctoo\\AgentApprovalsPO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 8 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\models\\uctoo\\AgentApprovalsPO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 9 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\models\\uctoo\\AgentApprovalsPO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 10 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\models\\uctoo\\AgentApprovalsPO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 11 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\models\\uctoo\\AgentApprovalsPO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 12 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\models\\uctoo\\AgentApprovalsPO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 13 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\models\\uctoo\\AgentApprovalsPO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 14 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\dao\\uctoo\\AgentApprovalsDAO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 11 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\dao\\uctoo\\AgentApprovalsDAO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 12 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\dao\\uctoo\\AgentApprovalsDAO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 13 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\dao\\uctoo\\AgentApprovalsDAO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 14 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\dao\\uctoo\\AgentApprovalsDAO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 15 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\dao\\uctoo\\AgentApprovalsDAO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 16 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\dao\\uctoo\\AgentApprovalsDAO.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 17 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 11 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 16 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 17 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 18 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 19 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 20 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 21 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 22 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 23 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 24 行）"
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\src\\app\\services\\uctoo\\AgentApprovalsService.cj",
+      "code": "syntax_warning",
+      "message": "import语句应在文件顶部，package声明之后（第 25 行）"
+    }
+  ],
+  "fix_suggestions": [],
+  "summary": "通过",
+  "checked_at": "2026-09-15T06:39:09+08:00"
+}

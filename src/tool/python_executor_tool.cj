@@ -14,7 +14,7 @@ import std.process.{ProcessRedirect, SubProcess}
 import std.time.DateTime
 import std.core.Duration
 import std.io.{InputStream, OutputStream}
-import std.fs.Path
+import std.fs.{Path, FileInfo, exists}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonArray, JsonBool, JsonInt}
 
 public class PythonExecutorTool <: NativeFuncTool {
@@ -94,11 +94,11 @@ public class PythonExecutorTool <: NativeFuncTool {
         let pythonCmd = determinePythonCommand(pythonPath, venvPath)
         let commandArgs = buildCommandArgs(scriptPath, argsStr)
         let envVars = parseEnvObject(envStr)
-        let workingDir = if (cwd.isEmpty()) {
-            getWorkingDirectory()
-        } else {
-            Path(cwd)
-        }
+        // Ch0.4 修复：与 CliTool 完全同源的 cwd 死代码缺陷。
+        // 旧代码算出 workingDir 后**从未透传给 newProcess**，子进程 CWD 恒为
+        // runtime 根目录 → D 层脚本（scripts/*.py）里的相对路径读写必然落到错误位置。
+        // 现做 exists + isDirectory 校验后真正透传，行为与 CliTool.resolveWorkingDirectory 对齐。
+        let workingDir: ?Path = PythonExecutorTool.resolveWorkingDirectory(cwd)
 
         let startTime = DateTime.now()
 
@@ -107,7 +107,8 @@ public class PythonExecutorTool <: NativeFuncTool {
                 pythonCmd,
                 commandArgs,
                 env: envVars,
-                redirectErr: true
+                redirectErr: true,
+                workingDirectory: workingDir
             )
 
             let result = if (captureOutput) {
@@ -126,7 +127,9 @@ public class PythonExecutorTool <: NativeFuncTool {
                 result.stderr,
                 durationMs,
                 scriptPath,
-                pythonCmd
+                pythonCmd,
+                cwd: cwd,
+                cwdApplied: cwd.isEmpty() || workingDir.isSome()
             )
         } catch (ex: Exception) {
             let endTime = DateTime.now()
@@ -141,8 +144,38 @@ public class PythonExecutorTool <: NativeFuncTool {
                 "Python script execution failed: ${ex.message}. Please ensure Python is installed and '${scriptPath}' exists.",
                 durationMs,
                 scriptPath,
-                pythonCmd
+                pythonCmd,
+                cwd: cwd,
+                cwdApplied: false
             )
+        }
+    }
+
+    /**
+     * 把 cwd 参数解析成子进程工作目录（Ch0.4 新增）。
+     *
+     * 与 `CliTool.resolveWorkingDirectory` 语义完全对齐：
+     *   - 空字符串 → None（未指定，子进程继承 runtime 当前目录）
+     *   - 存在的目录 → Some(Path)
+     *   - 不存在 / 非目录 / 解析异常 → None，并记日志，调用方退化为进程当前工作目录
+     *
+     * 约束（依据 std.process.launch 文档）：workingDirectory 必须是**存在的目录**，
+     * 否则 launch 直接抛异常。因此这里必须先校验，不能把裸字符串丢给 launch。
+     */
+    protected static func resolveWorkingDirectory(cwd: String): ?Path {
+        if (cwd.isEmpty()) {
+            return None<Path>
+        }
+        try {
+            if (exists(cwd) && FileInfo(cwd).isDirectory()) {
+                LogUtils.info("[PythonExecutorTool] Using working directory: ${cwd}")
+                return Some(Path(cwd))
+            }
+            LogUtils.info("[PythonExecutorTool] cwd is not an existing directory, fallback to process working directory: ${cwd}")
+            return None<Path>
+        } catch (ex: Exception) {
+            LogUtils.info("[PythonExecutorTool] Failed to resolve cwd '${cwd}': ${ex.message}, fallback to process working directory")
+            return None<Path>
         }
     }
 
@@ -152,11 +185,25 @@ public class PythonExecutorTool <: NativeFuncTool {
         }
 
         if (!venvPath.isEmpty()) {
-            let venvPython = Path(venvPath).join("bin").join("python").toString()
-            return venvPython
+            // Ch0.4 修复：虚拟环境解释器路径随平台而变。
+            // 旧代码硬编码 `bin/python`（仅 Unix/macOS），Windows 下 venv 是 `Scripts\python.exe`，
+            // 结果必然启动失败。现按平台选择。
+            return determineVenvPython(venvPath)
         }
 
         return "python"
+    }
+
+    /// Windows：venv 布局为 `Scripts\python.exe`
+    @When[os == "Windows"]
+    protected static func determineVenvPython(venvPath: String): String {
+        return Path(venvPath).join("Scripts").join("python.exe").toString()
+    }
+
+    /// 非 Windows：venv 布局为 `bin/python`
+    @When[os != "Windows"]
+    protected static func determineVenvPython(venvPath: String): String {
+        return Path(venvPath).join("bin").join("python").toString()
     }
 
     protected static func buildCommandArgs(scriptPath: String, argsStr: String): Array<String> {
@@ -277,7 +324,9 @@ public class PythonExecutorTool <: NativeFuncTool {
         stderr: String,
         durationMs: Int64,
         scriptPath: String,
-        pythonCmd: String
+        pythonCmd: String,
+        cwd!: String = "",
+        cwdApplied!: Bool = true
     ): String {
         let result = JsonObject()
         result.put("success", JsonBool(success))
@@ -287,7 +336,12 @@ public class PythonExecutorTool <: NativeFuncTool {
         result.put("duration_ms", JsonInt(durationMs))
         result.put("script_path", JsonString(scriptPath))
         result.put("python_cmd", JsonString(pythonCmd))
-        
+        // Ch0.4：把工作目录回显给 agent，让它能自己判断 cwd 是否生效
+        // （此前 cwd 是死代码，agent 只能靠试错发现"相对路径被解析到 runtime 根目录"）
+        let cwdDesc = if (cwd.isEmpty()) { getWorkingDirectory().toString() } else { cwd }
+        result.put("cwd", JsonString(cwdDesc))
+        result.put("cwd_applied", JsonBool(cwdApplied))
+
         return result.toJsonString()
     }
 

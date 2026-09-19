@@ -1,0 +1,91 @@
+{
+  "date": "2026-09-11",
+  "companies": [
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "market_factors": {
+        "close_price": 1275.16,
+        "change_pct": -0.78,
+        "pe": 17.9,
+        "pb": 6.34,
+        "market_cap": 15940.5405,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    },
+    {
+      "code": "000858",
+      "name": "五 粮 液",
+      "market_factors": {
+        "close_price": 69.75,
+        "change_pct": -1.04,
+        "pe": 15.47,
+        "pb": 2.29,
+        "market_cap": 2707.4216,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    },
+    {
+      "code": "300750",
+      "name": "宁德时代",
+      "market_factors": {
+        "close_price": 330.51,
+        "change_pct": -2.23,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "sentiment": "negative",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日市场情绪偏负面",
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    },
+    {
+      "code": "002594",
+      "name": "比亚迪",
+      "market_factors": {
+        "close_price": 84.0,
+        "change_pct": 0.57,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    },
+    {
+      "code": "601318",
+      "name": "中国平安",
+      "market_factors": {
+        "close_price": 54.83,
+        "change_pct": -1.24,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "sentiment": "neutral",
+        "volatility_flag": false
+      },
+      "event_count": 0,
+      "risk_flags": [
+        "当日未获取到有效公告/新闻数据，信息覆盖有限"
+      ]
+    }
+  ]
+}

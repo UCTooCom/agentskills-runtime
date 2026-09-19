@@ -128,12 +128,23 @@ public class AsyncAgentResponse <: AgentResponse {
             this.buffer.reset()
             // Set the status to failed
             this._status = AgentResponseStatus.Failed
+            this.markTerminationReason(AgentTerminationReason.Error)
             this.buffer.append(ex.message)
             this.finished = true
             for (fn in this.finishFnList) {
                 fn(false)
             }
             throw ex
+        }
+    }
+
+    /**
+     * Ch0 / 中断语义：将终止原因写入共享的 AgentExecution，
+     * 使外层通过 `terminationReason` 能读到取消/异常等中断态。
+     */
+    private func markTerminationReason(reason: AgentTerminationReason): Unit {
+        if (let Some(exec) <- this._execution) {
+            exec.setTerminationReason(reason)
         }
     }
 

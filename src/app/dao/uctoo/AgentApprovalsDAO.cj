@@ -51,7 +51,9 @@ public interface AgentApprovalsDAO <: RootDAO {
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                options,
+                selected_option
             ) values(
 ${arg(entity.agentId)},
                 ${arg(entity.taskId)},
@@ -63,7 +65,9 @@ ${arg(entity.agentId)},
                 ${arg(entity.creator)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.options)},
+                ${arg(entity.selectedOption)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -78,7 +82,7 @@ ${arg(entity.agentId)},
      */
     func findAgentApprovalsById(id: String): Option<AgentApprovalsPO> {
         executor.setSql('''
-            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at from agent_approvals where id = ${arg(id)}
+            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at, options, selected_option from agent_approvals where id = ${arg(id)}
         ''').first<AgentApprovalsPO>()
     }
 
@@ -101,6 +105,8 @@ ${arg(entity.agentId)},
                 timeout_ms = ${arg(entity.timeoutMs)},
                 creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
+                options = ${arg(entity.options)},
+                selected_option = ${arg(entity.selectedOption)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -151,7 +157,7 @@ ${arg(entity.agentId)},
      */
     func findAllAgentApprovalsPage(page: Int64, size: Int64): Pagination<AgentApprovalsPO> {
         executor.page<AgentApprovalsPO>('''
-            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at from agent_approvals order by created_at desc
+            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at, options, selected_option from agent_approvals order by created_at desc
         ''', size, page: page)
     }
 
@@ -164,7 +170,7 @@ ${arg(entity.agentId)},
      */
     func findAgentApprovalsByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<AgentApprovalsPO> {
         executor.page<AgentApprovalsPO>('''
-            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at from agent_approvals where creator = ${arg(creator)} order by created_at desc
+            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at, options, selected_option from agent_approvals where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -174,7 +180,7 @@ ${arg(entity.agentId)},
      */
     func listAllAgentApprovals(): ArrayList<AgentApprovalsPO> {
         executor.setSql('''
-            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at from agent_approvals order by created_at desc
+            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at, options, selected_option from agent_approvals order by created_at desc
         ''').list<AgentApprovalsPO>()
     }
 
@@ -188,7 +194,7 @@ ${arg(entity.agentId)},
             return ArrayList<AgentApprovalsPO>()
         }
         executor.setSql('''
-            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at from agent_approvals where id ${IN(ids)}
+            select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at, options, selected_option from agent_approvals where id ${IN(ids)}
         ''').list<AgentApprovalsPO>()
     }
 
@@ -227,7 +233,7 @@ ${arg(entity.agentId)},
      */
     func findAgentApprovalsByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentApprovalsPO> {
         let sql = StringBuilder()
-        sql.append("select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at from agent_approvals where 1=1")
+        sql.append("select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at, options, selected_option from agent_approvals where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -300,7 +306,7 @@ ${arg(entity.agentId)},
      */
     func findAgentApprovalsByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentApprovalsPO> {
         let sql = StringBuilder()
-        sql.append("select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at from agent_approvals")
+        sql.append("select id, agent_id, task_id, approval_type, content, status, user_response, timeout_ms, creator, created_at, updated_at, deleted_at, options, selected_option from agent_approvals")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

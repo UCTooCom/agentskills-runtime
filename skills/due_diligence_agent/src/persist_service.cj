@@ -56,7 +56,7 @@ public class PersistService {
                 }
                 let queryArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 queryArgs[0] = JsonValue.from(queryParam)
-                let queryResult = ctx.invoke("host.db", "query", queryArgs)
+                let queryResult = ctx.invoke<JsonValue, JsonValue>("host.db", "query", queryArgs)
                 match (queryResult) {
                     case JsonValue.Map(qFields) =>
                         match (qFields.get("rows")) {
@@ -98,7 +98,7 @@ public class PersistService {
                 }
                 let queryArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 queryArgs[0] = JsonValue.from(queryParam)
-                let queryResult = ctx.invoke("host.db", "query", queryArgs)
+                let queryResult = ctx.invoke<JsonValue, JsonValue>("host.db", "query", queryArgs)
                 match (queryResult) {
                     case JsonValue.Map(qFields) =>
                         match (qFields.get("rows")) {
@@ -138,7 +138,7 @@ public class PersistService {
                 }
                 let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 execArgs[0] = JsonValue.from(execParam)
-                let execResult = ctx.invoke("host.db", "execute", execArgs)
+                let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
                 eprintln("[persist] insert ${table} result: ${execResult.stringify()}")
                 return execResult
         }
@@ -171,7 +171,7 @@ public class PersistService {
                 }
                 let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 execArgs[0] = JsonValue.from(execParam)
-                let execResult = ctx.invoke("host.db", "execute", execArgs)
+                let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
                 eprintln("[persist] update ${table} result: ${execResult.stringify()}")
                 return execResult
         }
@@ -202,7 +202,7 @@ public class PersistService {
                 }
                 let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 execArgs[0] = JsonValue.from(execParam)
-                let execResult = ctx.invoke("host.db", "execute", execArgs)
+                let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
                 eprintln("[persist] hardDelete ${table} result: ${execResult.stringify()}")
                 return execResult
         }

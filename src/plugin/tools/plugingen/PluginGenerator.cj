@@ -21,6 +21,8 @@ public class FieldInfo {
     public var isNullable: String = ""
     public var columnDefault: ?String = None<String>
     public var ordinalPosition: Int32 = 0
+    /// 列注释（db_info.column_comment）。契约骨架生成用；CRUD 模板不使用。
+    public var columnComment: String = ""
 
     public init() {}
 }
@@ -86,6 +88,7 @@ public class PluginGenerator {
             field.isNullable = dbInfo.isNullable
             field.columnDefault = dbInfo.columnDefault
             field.ordinalPosition = dbInfo.ordinalPosition
+            field.columnComment = dbInfo.columnComment ?? ""
             tableInfo.fields.add(field)
         }
         return tableInfo
@@ -191,14 +194,27 @@ public class PluginGenerator {
     }
 
     /// 写入 process 轨 plugin.yaml（mode: process + command）
+    ///
+    /// §14.1 同步（2026-09-15）：与宿主实际解析的 `plugin_config.cj` 对齐——
+    /// 删除无解析逻辑的 `protocol`（避免误导为可切换传输层），
+    /// 显式化 enabled/autoRestart/order，并补上功能必需的 `tableWhitelist` 占位。
     private func writeProcessPluginYaml(name: String, className: String, pluginDir: String): Unit {
         let sb = StringBuilder()
         sb.append("name: ${name}\n")
         sb.append("version: 1.0.0\n")
         sb.append("mode: process\n")
-        sb.append("protocol: jsonrpc-stdio\n")
-        sb.append("command: ./target/release/bin/skill_${name}.exe\n")
+        // command 是相对**宿主工作目录**的路径（CordisHostManager.resolvePluginCommand
+        // 直接 `${cwd}/${command}`，无校验、无兜底），必须带 skills/{name}/ 前缀，
+        // 否则开发态（cwd=仓库根）与发布态（cwd=bin）都定位不到 exe。
+        sb.append("command: ./skills/${name}/target/release/bin/skill_${name}.exe\n")
         sb.append("description: L3 进程隔离轨插件 ${name}\n")
+        sb.append("enabled: true\n")
+        sb.append("order: 10\n")
+        sb.append("autoRestart: true\n")
+        // 空白骨架不连 DB，无法自动得知需要哪些表；此处留空并提示——
+        // 一旦本插件开始经 ctx.invoke("host.db", ...) 访问数据，必须补齐，否则调用被拒。
+        sb.append("# TODO: 本插件需访问的表（未列入的表 host.db 调用会被宿主拒绝）\n")
+        sb.append("tableWhitelist: []\n")
         sb.append("routes:\n")
         sb.append("  - method: POST\n")
         sb.append("    path: /api/v1/${name}/add\n")

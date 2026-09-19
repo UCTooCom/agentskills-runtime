@@ -1,0 +1,51 @@
+province + data.content.address_detail.city);
+
+                        // var reg = new RegExp("\"","g");
+
+                        // $("b").text(a.replace(reg,""));
+
+                        var a = JSON.stringify(data.content.address_detail.province);
+
+                        var reg = new RegExp("\"", "g");
+
+                        var province = a.replace(reg, "");
+
+                        //调取省份赋code函数   
+
+                        provinceCode(province);
+
+                    } else {
+
+                        provinceCode('北京市');
+
+                    }
+
+                },
+
+                error: function (error) {
+
+                    provinceCode('北京市');
+
+                }
+
+            });
+
+        }
+
+
+
+        // 广告--分省
+
+        function adshow(code) {
+
+            console.log(code);
+
+            $.ajax({
+
+                type: "GET",
+
+                url: "https://misc.eol.cn/js/target/pc/gk/stda--gk/111.json",
+
+                crossDomain: true,
+
+                dataType: 'json',

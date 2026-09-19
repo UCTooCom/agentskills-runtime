@@ -1,6 +1,7 @@
 package magic.app.services.crontab
 
 import std.sync.AtomicBool
+import magic.app.core.database.DbSerialLock
 import std.time.DateTime
 import std.core.Duration
 import std.collection.ArrayList
@@ -10,7 +11,7 @@ import f_ticktock.{Ticktock, CronCompiler}
 import magic.app.models.uctoo.{CrontabPO, CrontabLogPO}
 import magic.app.dao.uctoo.{CrontabDAO, CrontabLogDAO, CrontabTaskRegistryDAO}
 import magic.app.services.crontab.model.{TriggerType, triggerTypeToString, CrontabExecutionContext, ExecutionResult, SchedulerStatus, durationMsBetween}
-import magic.app.services.crontab.executor.{ExecutorRegistry, CrontabExecutor, ScriptExecutor, HttpExecutor, BuiltinExecutor, AgentExecutionExecutor, QuotaResetExecutor, EvaluationExecutor, SkillCuratorExecutor}
+import magic.app.services.crontab.executor.{ExecutorRegistry, CrontabExecutor, ScriptExecutor, HttpExecutor, BuiltinExecutor, AgentExecutionExecutor, LrtPluginExecutor, QuotaResetExecutor, EvaluationExecutor, SkillCuratorExecutor}
 import magic.app.services.crontab.executor.builtin.{BuiltinTaskHandler, DatabaseCleanupHandler, CacheRefreshHandler, LogRotationHandler, HealthCheckHandler, MetricsReportHandler, AibuilderTaskRefundHandler}
 import magic.app.services.crontab.misfire.{MisfireManager, MisfireAction}
 import magic.app.services.crontab.retry.RetryManager
@@ -27,6 +28,13 @@ public class SchedulerEngine {
 
     private let runningTasks = ConcurrentHashMap<String, DateTime>()
     private let shuttingDown = AtomicBool(false)
+
+    /// 数据库访问串行化锁。
+    /// 早先这里是一把**本类私有**的 `Mutex()`，只能串行化 SchedulerEngine 内部
+    /// 的并发任务，挡不住 `AsyncLogWriter`、事件处理器等**别的线程**使用同一条
+    /// ORM 连接 —— 日志里 `更新定时任务失败（已加锁）: ... parameter index 0 out of range`
+    /// 就是这么来的：本线程加锁了，别的线程照样在读写同一个 socket。
+    /// 现改为进程级共享的 `DbSerialLock`，所有 DB 访问路径都用同一把锁。
 
     private var ticktock: Option<Ticktock> = None<Ticktock>
     private var crontabDAO: Option<CrontabDAO> = None<CrontabDAO>
@@ -79,6 +87,8 @@ public class SchedulerEngine {
         executorRegistry.register("http", httpExecutor)
         executorRegistry.register("builtin", builtinExecutor)
         executorRegistry.register("agent_execution", AgentExecutionExecutor())
+        // 长程任务：改派 L3 插件（lrt-execute），宿主不置 status=2（spec 5.6.1 规则 7）。
+        executorRegistry.register("lrt", LrtPluginExecutor())
         executorRegistry.register("quota_reset", QuotaResetExecutor())
         executorRegistry.register("evaluation", EvaluationExecutor())
         executorRegistry.register("skill-curator", SkillCuratorExecutor())
@@ -103,7 +113,7 @@ public class SchedulerEngine {
                         case Some(ticktockInstance) =>
                             ticktock = Some<Ticktock>(ticktockInstance)
 
-                            let allTasks = dao.listAllCrontab()
+                            let allTasks = this.listAllCrontabLocked(dao)
                             var activeCount: Int32 = 0
                             var totalCount: Int32 = 0
 
@@ -164,7 +174,7 @@ public class SchedulerEngine {
             case Some(dao) =>
                 match (ticktock) {
                     case Some(tk) =>
-                        match (dao.findCrontabById(crontabId)) {
+                        match (this.findCrontabLocked(dao, crontabId)) {
                             case Some(task) =>
                                 if (task.status == 1 && task.deletedAt == None) {
                                     if (validateCronExpression(task.cron)) {
@@ -220,7 +230,7 @@ public class SchedulerEngine {
 
         match (crontabDAO) {
             case Some(dao) =>
-                match (dao.findCrontabById(crontabId)) {
+                match (this.findCrontabLocked(dao, crontabId)) {
                     case Some(crontab) =>
                         let isConcurrentable = match (crontab.concurrentable) { case Some(v) => v; case None => false }
                         if (!isConcurrentable && runningTasks.contains(crontabId)) {
@@ -332,9 +342,56 @@ public class SchedulerEngine {
                 crontab.retryCount = Some(currentRetry + 1)
             }
 
-            dao.updateCrontab(crontab)
+            // 走串行化写，避免与其它并发任务的读/写撞同一条连接
+            this.updateCrontabLocked(dao, crontab)
         } catch (e: Exception) {
             LogUtils.error("SchedulerEngine", "更新执行元数据失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 串行化读取全部定时任务（持 dbLock）。
+     */
+    private func listAllCrontabLocked(dao: CrontabDAO): ArrayList<CrontabPO> {
+        DbSerialLock.lock()
+        try {
+            return dao.listAllCrontab()
+        } catch (e: Exception) {
+            LogUtils.error("SchedulerEngine", "查询定时任务列表失败（已加锁）: ${e.message}")
+            return ArrayList<CrontabPO>()
+        } finally {
+            DbSerialLock.unlock()
+        }
+    }
+
+    /**
+     * 串行化读取单个定时任务（持 dbLock）。
+     * 并发任务共用同一条 ORM 连接时会抛
+     * `Socket is already reading: concurrent read is not allowed`，故加锁。
+     */
+    private func findCrontabLocked(dao: CrontabDAO, crontabId: String): Option<CrontabPO> {
+        DbSerialLock.lock()
+        try {
+            return dao.findCrontabById(crontabId)
+        } catch (e: Exception) {
+            LogUtils.error("SchedulerEngine", "查询定时任务失败（已加锁）: ${crontabId}, ${e.message}")
+            return None<CrontabPO>
+        } finally {
+            DbSerialLock.unlock()
+        }
+    }
+
+    /**
+     * 串行化写回定时任务（持 dbLock）。
+     */
+    private func updateCrontabLocked(dao: CrontabDAO, crontab: CrontabPO): Unit {
+        DbSerialLock.lock()
+        try {
+            dao.updateCrontab(crontab)
+        } catch (e: Exception) {
+            LogUtils.error("SchedulerEngine", "更新定时任务失败（已加锁）: ${crontab.id}, ${e.message}")
+        } finally {
+            DbSerialLock.unlock()
         }
     }
 

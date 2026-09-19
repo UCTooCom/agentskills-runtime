@@ -1,0 +1,31 @@
+ev.gaokao.cn/www/2.0/json/coop/9.json', // 测试
+
+            url: 'https://static-gkcx.gaokao.cn/www/2.0/json/coop/9.json' + '?a=' + window.location.host, // 正式
+
+            crossDomain: true,
+
+            dataType: 'json',
+
+            success: function (res) { 
+
+                if(res.code === '0000') {
+
+                    if(res.data[145].default.status) {
+
+                        var bzyImg = res.data[145].default.img_url
+
+                        var bzyDom = (
+
+                            "<div class='enter-score-box'>" +
+
+                                "<div class='inner'>" +
+
+                                    "<div class='right-bar-bzy'>" +
+
+                                        "<img src='" + bzyImg + "' alt='' width='239' height='253' />" + 
+
+                                        "<div class='score-enter'>" + 
+
+                                            "<input type='text' maxLength='3' placeholder='输入分数，测录取' id='scoreVal' />" +
+
+                                        

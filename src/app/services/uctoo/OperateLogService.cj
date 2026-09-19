@@ -935,9 +935,12 @@ public class OperateLogService {
             operateLog.createdAt = DateTime.now()
             operateLog.updatedAt = DateTime.now()
             
-            let service = OperateLogService()
-            let creatorId = if (creator.isSome()) { creator.getOrThrow() } else { "" }
-            let _ = service.create(operateLog, creatorId)
+            // 直接走 DAO，不经 create()：create() 在 creator 为 None 时会用传入的
+            // creatorId 覆盖（传空串即 Some("")），而 creator 是 uuid 列 —— 空串会让
+            // PostgreSQL 报 invalid input syntax for type uuid，异常在 create() 与本方法
+            // 的 catch 里被依次吞掉，表现为「日志静默丢失」。保持 None 写 NULL，
+            // 这样插件链路（无用户上下文）也能正常留痕。
+            let _ = ORM.executor().insertOperateLog(operateLog)
         } catch (e: Exception) {
             // 日志记录失败不影响主流程
         }
@@ -980,5 +983,244 @@ public class OperateLogService {
         creator: ?String
     ): Unit {
         recordLog("cli", operate, route, params, "127.0.0.1", "cli", creator)
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 审计留痕出口（spec/long-running-task 5.12.1 规则 5 / 5.13.1 规则 3）
+    //
+    // 为什么接在 operate_log、而不是另建 agent_audit_log 表：
+    //   ① operate_log 的表注释就是「操作记录」，既有 api/tool/cli 三类；插件写库与
+    //      MCP 调用是第四、五类操作，同属操作记录，不构成新领域。
+    //   ② 数据库规范要求所有表含 created_at/updated_at/deleted_at/creator 四列，
+    //      operate_log 已齐备，且五层模块 + 中间件 + 回收站 + CSV 导出 + Web 管理页
+    //      全部在位；另建表要把这一整套重建一遍。
+    //   ③ backend(TS) / agentskills-runtime(仓颉) / web-admin 三端已同构，
+    //      另建表要在三端各建一套，与「多端一致的 UMI 规范」相悖。
+    //   评估与字段映射见
+    //   .codeartsdoer/specs/long-running-task/audit-module-evaluation-20260915.md
+    //
+    // 两个出口（都选在宿主侧唯一通道上，插件与脚本不必各自实现）：
+    //   recordPluginLog  ← CordisHostServices.executeExecute()（成功路径）
+    //                      与其外层 catch（失败路径）
+    //   recordMcpCallLog ← McpOpenService.call()（REST / 插件 host.mcp / CLI 三入口汇聚点）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// 入参摘要最大长度（字节）
+    public static let AUDIT_MAX_SUMMARY: Int64 = 2000
+    /// 错误信息最大长度（字节）
+    public static let AUDIT_MAX_ERROR: Int64 = 1000
+
+    /// 插件写库审计（spec 5.12.1 规则 5）：`module='plugin'`
+    ///
+    /// @param pluginId 来源 L3 插件标识
+    /// @param table 被写入的表名
+    /// @param operation insert / update / delete
+    /// @param dataJson 写入内容摘要（JSON 对象文本；内部脱敏 + 截断）
+    /// @param affected 影响记录数（失败时传 0）
+    /// @param userId 操作人 userId；插件链路无用户上下文时留空，creator 写 NULL
+    public static func recordPluginLog(
+        pluginId: String,
+        table: String,
+        operation: String,
+        dataJson: String,
+        affected: Int64,
+        userId!: String = "",
+        status!: String = "ok",
+        errorMessage!: String = "",
+        traceId!: String = ""
+    ): Unit {
+        let params = buildAuditParams(
+            dataJson,
+            if (status == "ok") { true } else { false },
+            affected,
+            0,
+            errorMessage: errorMessage,
+            pluginId: pluginId,
+            source: "host.db",
+            actorType: resolveAuditActorType(userId, pluginId),
+            traceId: traceId
+        )
+        recordLog(
+            "plugin",
+            if (operation.isEmpty()) { "execute" } else { operation },
+            table,
+            params,
+            "127.0.0.1",
+            "plugin",
+            if (userId.isEmpty()) { None<String> } else { Some(userId) }
+        )
+    }
+
+    /// MCP 调用审计（spec 5.13.1 规则 3）：`module='tool'`
+    ///
+    /// 与既有 174 条 `module='tool'` 记录同构 —— `operate` 为工具名，`params` 为
+    /// `args/result/error` JSON。`source` 区分入口（mcp_open_rest / host.mcp / mcp_cli）。
+    public static func recordMcpCallLog(
+        mcpAlias: String,
+        tool: String,
+        argumentsJson: String,
+        durationMs: Int64,
+        userId!: String = "",
+        pluginId!: String = "",
+        source!: String = "mcp_open",
+        status!: String = "ok",
+        errorMessage!: String = ""
+    ): Unit {
+        let params = buildAuditParams(
+            argumentsJson,
+            if (status == "ok") { true } else { false },
+            0,
+            durationMs,
+            errorMessage: errorMessage,
+            pluginId: pluginId,
+            mcpAlias: mcpAlias,
+            source: source,
+            actorType: resolveAuditActorType(userId, pluginId)
+        )
+        recordLog(
+            "tool",
+            tool,
+            "/api/v1/uctoo/mcp/open/call",
+            params,
+            "127.0.0.1",
+            "tool",
+            if (userId.isEmpty()) { None<String> } else { Some(userId) }
+        )
+    }
+
+    /// 构造审计 `params` JSON —— 与既有数据格式对齐：
+    /// `{"args":{…},"result":{"success":…,"affected":…,"durationMs":…},"error":"…",…}`
+    ///
+    /// 空值字段一律省略，避免 JSON 塞满空串噪声。
+    public static func buildAuditParams(
+        argsJson: String,
+        success: Bool,
+        affected: Int64,
+        durationMs: Int64,
+        errorMessage!: String = "",
+        pluginId!: String = "",
+        mcpAlias!: String = "",
+        source!: String = "",
+        actorType!: String = "",
+        traceId!: String = ""
+    ): String {
+        let sb = StringBuilder()
+        sb.append("{\"args\":")
+        sb.append(normalizeAuditArgs(argsJson))
+        sb.append(",\"result\":{\"success\":")
+        sb.append(if (success) { "true" } else { "false" })
+        sb.append(",\"affected\":")
+        sb.append(affected.toString())
+        sb.append(",\"durationMs\":")
+        sb.append(durationMs.toString())
+        sb.append("}")
+        if (!errorMessage.isEmpty()) {
+            sb.append(",\"error\":\"" + jsonEscape(truncateAuditText(errorMessage, AUDIT_MAX_ERROR)) + "\"")
+        }
+        if (!pluginId.isEmpty()) {
+            sb.append(",\"pluginId\":\"" + jsonEscape(pluginId) + "\"")
+        }
+        if (!mcpAlias.isEmpty()) {
+            sb.append(",\"mcpAlias\":\"" + jsonEscape(mcpAlias) + "\"")
+        }
+        if (!source.isEmpty()) {
+            sb.append(",\"source\":\"" + jsonEscape(source) + "\"")
+        }
+        if (!actorType.isEmpty()) {
+            sb.append(",\"actorType\":\"" + jsonEscape(actorType) + "\"")
+        }
+        if (!traceId.isEmpty()) {
+            sb.append(",\"traceId\":\"" + jsonEscape(traceId) + "\"")
+        }
+        sb.append("}")
+        sb.toString()
+    }
+
+    /// 敏感字段脱敏：把 `<"key":"值">` 形式的值替换为 `***`。
+    ///
+    /// 与 `SchedulerEngine.sanitizeParameters` 同思路（纯字符串扫描，不用正则）；
+    /// 那个服务定时任务参数日志，本方法服务审计表。
+    public static func sanitizeAuditText(text: String): String {
+        var result = text
+        for (key in auditSensitiveKeys()) {
+            let patterns = ArrayList<String>()
+            patterns.add("\"${key}\":\"")
+            patterns.add("\"${key}\": \"")
+            for (p in patterns) {
+                // 同一 key 可能出现多次；每次替换后原值即消失，循环必然收敛，
+                // attempts 仅作为极端输入下的保险丝。
+                var attempts = 0
+                while (result.contains(p) && attempts < 16) {
+                    attempts = attempts + 1
+                    let lower = result.toAsciiLower()
+                    match (lower.indexOf(p.toAsciiLower())) {
+                        case Some(idx) =>
+                            let valueStart = idx + p.size
+                            let tail = result[valueStart..]
+                            match (tail.indexOf("\"")) {
+                                case Some(relEnd) =>
+                                    result = result[0..valueStart] + "***" + result[valueStart + relEnd..]
+                                case None =>
+                                    result = result[0..valueStart] + "***"
+                            }
+                        case None => ()
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    // ── 审计内部实现 ─────────────────────────────────────────────────
+
+    private static func resolveAuditActorType(userId: String, pluginId: String): String {
+        if (!userId.isEmpty()) {
+            return "user"
+        }
+        if (!pluginId.isEmpty()) {
+            return "plugin"
+        }
+        "system"
+    }
+
+    /// 入参文本规整为可直接嵌入 `params` 的 JSON 片段
+    private static func normalizeAuditArgs(text: String): String {
+        if (text.isEmpty()) {
+            return "{}"
+        }
+        let sanitized = truncateAuditText(sanitizeAuditText(text.trimAscii()), AUDIT_MAX_SUMMARY)
+        if (sanitized.startsWith("{") && sanitized.endsWith("}")) {
+            return sanitized
+        }
+        // 非对象文本（数组 / 裸字符串）退化为 JSON 字符串，避免拼出非法 JSON
+        "\"" + jsonEscape(sanitized) + "\""
+    }
+
+    /// 截断（超出部分丢弃）
+    public static func truncateAuditText(value: String, maxLength: Int64): String {
+        if (value.size > maxLength) {
+            value[0..maxLength]
+        } else {
+            value
+        }
+    }
+
+    /// JSON 字符串值转义（键名固定，值需转义）
+    private static func jsonEscape(value: String): String {
+        value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    }
+
+    private static func auditSensitiveKeys(): ArrayList<String> {
+        let keys = ArrayList<String>()
+        keys.add("password")
+        keys.add("passwd")
+        keys.add("token")
+        keys.add("secret")
+        keys.add("api_key")
+        keys.add("apikey")
+        keys.add("accesskey")
+        keys.add("authorization")
+        keys.add("credential")
+        return keys
     }
 }

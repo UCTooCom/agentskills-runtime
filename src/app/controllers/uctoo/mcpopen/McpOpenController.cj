@@ -34,7 +34,18 @@ public class McpOpenController {
                     return
                 }
                 let arguments = extractArguments(obj)
-                let result = service.call(mcpAlias, tool, arguments)
+                // 审计上下文（spec 5.13.1 规则 3）：操作人取自鉴权中间件，
+                // 入口标记固定为 mcp_open_rest，便于与 host.mcp / CLI 入口区分
+                var actorId = ""
+                if (let Some(uid) <- userId) {
+                    // getLocals 返回 ?Any；`e as T` 是安全向下转型，返回 ?T（不抛异常）。
+                    // 与 AgentsController.cj / AipDescriptionController.cj 取 userId 的写法一致。
+                    let uidStr = uid as String
+                    if (let Some(s) <- uidStr) {
+                        actorId = s
+                    }
+                }
+                let result = service.call(mcpAlias, tool, arguments, actorId: actorId, source: "mcp_open_rest")
                 if (result.isError) {
                     res.status(200).json("{\"errno\":\"50001\",\"errmsg\":\"${result.meta.errorMessage}\",\"data\":\"${result.data}\",\"meta\":{\"tool\":\"${result.meta.tool}\",\"durationMs\":${result.meta.durationMs},\"status\":\"${result.meta.status}\"}}")
                 } else {

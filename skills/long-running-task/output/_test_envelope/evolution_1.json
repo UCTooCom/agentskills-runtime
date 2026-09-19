@@ -1,0 +1,10 @@
+{
+  "agent_id": "env-probe",
+  "round": 1,
+  "root_cause": "LLM 不可用，无法自动定位根因（请看 context 人工分析）",
+  "optimization_plan": "待人工基于 context 制定增量优化",
+  "anti_regression": "禁止复现本轮观察到的失败行为",
+  "skill_md_updates": [],
+  "generated_at": "2026-09-15T23:54:34+08:00",
+  "model": ""
+}

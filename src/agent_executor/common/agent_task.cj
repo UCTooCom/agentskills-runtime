@@ -12,6 +12,9 @@ import magic.core.interaction.*
 import magic.core.rag.RetrieverMode
 import magic.config.Config
 import magic.compactor.SimpleToolCompactor
+// 仅用于向下转型取「技能级提示词 profile 候选链」；agent_executor → magic.skill
+// 是既有依赖（见 dag_scheduler.cj / dag_team_orchestrator.cj 的同款 import），不构成循环。
+import magic.skill.SkillAwareAgent
 import magic.jsonable.ToJsonValue
 import magic.log.LogUtils
 import magic.interaction.*
@@ -66,6 +69,21 @@ public open class AgentTask {
         this.execution = AgentExecutionInfo(agent, request)
         if (request.verbose) {
             initVerboseEventHandlers(this.request, this.execution)
+        }
+    }
+
+    /**
+     * 工具结果压缩用的提示词 profile 候选链。
+     *
+     * 技能感知型 agent（`SkillAwareAgent`）会把已注册的技能名前置，
+     * 从而命中 `<promptsDir>/tool-summarize.user.<技能名>.md`；
+     * 非技能感知型 agent 退回 `agent.name`（即改动前的行为）。
+     * 背景见 `SkillAwareAgent.promptProfileCandidates` 的注释。
+     */
+    private static func resolvePromptProfile(agent: Agent): String {
+        match (agent as SkillAwareAgent) {
+            case Some(saa) => return saa.promptProfileCandidates()
+            case None => return agent.name
         }
     }
 
@@ -334,33 +352,37 @@ public open class AgentTask {
                 return resp.content
         }
         // Now, the normal process of calling a tool
-        let toolResult = this.doInvokeTool(toolRequest)
+        let toolResponse = this.doInvokeTool(toolRequest)
         // Call event handlers
-        AgentOp.handle(event: ToolCallEndEvent(this.agent, toolRequest, ToolResponse(toolResult)), forRequest: this.request)
+        AgentOp.handle(event: ToolCallEndEvent(this.agent, toolRequest, toolResponse), forRequest: this.request)
         // If there is a warning, add it to the result to guide the agent
         if (let Some(warning) <- warningOpt) {
-            return "${warning}\n\nResult of the tool:\n${toolResult}"
+            return "${warning}\n\nResult of the tool:\n${toolResponse.content}"
         } else {
-            return toolResult
+            return toolResponse.content
         }
     }
 
     /**
      * Invoke the tool and return the result
+     *
+     * 返回 ToolResponse 而非纯 String：失败路径必须带上 isError=true，
+     * 否则 ToolCallEndEvent 的消费方（SSE 桥接到前端工具卡片）永远只能看到 success。
+     * 注意：返回内容字符串本身不变，LLM 观察到的结果不受影响。
      */
-    private func doInvokeTool(toolRequest: ToolRequest): String {
+    private func doInvokeTool(toolRequest: ToolRequest): ToolResponse {
         // Find the tool
         let toolOpt = this.findTool(toolRequest.name)
         if (toolOpt.isNone()) {
             // LLM generate invalid tool calling?
             let names = this.agent.toolManager.tools |> map { t => t.name } |> collectArray
-            return "Tool `${toolRequest.name}` not found in ${names}"
+            return ToolResponse("Tool `${toolRequest.name}` not found in ${names}", isError: true)
         }
         let tool = toolOpt.getOrThrow()
         match (AgentOp.handle(event: ToolCallStartEvent(this.agent, toolRequest), forRequest: this.request)) {
             case EventResponse.Continue => () // Do nothing
             case EventResponse.Continue(resp) =>
-                return resp.content
+                return resp
             case EventResponse.Terminate(resp) =>
                 let toolResult = resp.content
                 this.stop(
@@ -368,7 +390,7 @@ public open class AgentTask {
                     result: toolResult,
                     log: "Terminated by tool call event handler"
                 )
-                return toolResult
+                return ToolResponse(toolResult)
         }
         // Invoke the tool
         let toolResponse = try {
@@ -382,13 +404,13 @@ public open class AgentTask {
         } catch (ex: AgentCancelException) {
             throw ex // throw the exception to the upper level to cancel the execution
         } catch (ex: ToolException) {
-            return "Tool `${toolRequest.name}` did not run successfully. Reason: ${ex.reason}"
+            return ToolResponse("Tool `${toolRequest.name}` did not run successfully. Reason: ${ex.reason}", isError: true)
         } catch (ex: Exception) {
             let strBuilder = StringBuilder()
             for (ste in ex.getStackTrace()) {
                 strBuilder.append("${ste.fileName}:${ste.lineNumber} ${ste.methodName}\n")
             }
-            return "Fail to invoke the tool with exception `${strBuilder}`"
+            return ToolResponse("Fail to invoke the tool with exception `${strBuilder}`", isError: true)
         }
         // Save the tool result
         var toolResult = toolResponse.content
@@ -396,7 +418,7 @@ public open class AgentTask {
         if ((tool.extra.get("compactable") ?? "false") == "true" &&
             toolResult.size > Config.toolResultCompactThreshold) {
             // If the tool is compactable, we can compact its result
-            let compactor = SimpleToolCompactor(ChatModelWrapper(this))
+            let compactor = SimpleToolCompactor(ChatModelWrapper(this), profile: AgentTask.resolvePromptProfile(this.agent))
             let summary = compactor.compact(toolRequest, toolResponse)
             // Put the compacted results to the cache
             toolResult = this.toolResultCache.put(
@@ -413,7 +435,9 @@ public open class AgentTask {
                 log: "Tool `${tool.name}` terminates the task"
             )
         }
-        return toolResult
+        // 调用成功：保留工具自身的 isError（内置工具或 MCP 工具可能已置位），
+        // compact 后内容变化但成败判定不变
+        return ToolResponse(toolResult, isError: toolResponse.isError)
     }
 
     /**

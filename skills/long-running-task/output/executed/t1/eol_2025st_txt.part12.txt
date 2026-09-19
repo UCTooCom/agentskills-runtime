@@ -1,0 +1,20 @@
+   <div class="nav-head-wz float_r">
+                <div class="clearfix">
+                    <p class="change_icon float_r">[切换]</p>
+                    <p class="province float_r" id="spanpos">北京</p>
+                </div>
+                <div class="divstates" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="zyx-main-nav">
+        <div class="center mainnav_center">
+            <ul class="mainnav-ul clearfix">
+                <li class="nav-li" style="margin: 0px 26px;"><a target="_blank"
+                        href="https://www.gaokao.cn?fromcoop=pddh">首页</a></li>
+                <li class="nav-li" style="margin: 0px 26px;">
+                    <span class="bzy_item"><a target="_blank"
+                            href="https://mnzy.gaokao.cn?fromcoop=pddh">模拟报志愿</a></span>
+                </li>
+                <li class="nav-li" style="margin: 0px 26px;"><a target="_blank"
+                        href="https://www.gaokao.cn/school/search

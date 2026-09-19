@@ -1,0 +1,39 @@
+                      if (Number(a1_res[i].publish_id) != 0) {
+
+                            sucai_1.push(a1_res[i])
+
+                        }
+
+                    }
+
+                    if (sucai_1.length == 0) {
+
+                        $('.a1ad').hide();
+
+                    } else {
+
+                        if (a1_res) {
+
+                            a1_res.forEach(function (item, index) {
+
+                                if (index < 2) {
+
+                                    a1_imgarr[0].group.push(item);
+
+                                } else {
+
+                                    a1_imgarr[1].group.push(item);
+
+                                }
+
+                            })
+
+                        }
+
+
+
+                        var storage_img = JSON.parse(localStorage.getItem('storage_ad'));
+
+                        var a1_ad_arr = a1_imgarr.filter(item => item.group.length > 0);
+
+                        var a1_ad_data = randomAd('storage_ad', a1_ad_arr, storage_ad_obj, storage

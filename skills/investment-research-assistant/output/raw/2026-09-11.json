@@ -1,0 +1,56 @@
+{
+  "date": "2026-09-11",
+  "companies": [
+    {
+      "code": "300308",
+      "name": "中际旭创",
+      "quotes": {
+        "code": "300308",
+        "name": "中际旭创",
+        "price": 926.0,
+        "change_pct": 4.03,
+        "volume": 32781300,
+        "amount": 29974072230.26,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 929.8,
+        "low": 891.17,
+        "open": 898.17,
+        "prev_close": 890.1,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "688256",
+      "name": "寒武纪",
+      "quotes": {
+        "code": "688256",
+        "name": "寒武纪",
+        "price": 1040.0,
+        "change_pct": -0.37,
+        "volume": 10764829,
+        "amount": 11057459706.0,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 1047.33,
+        "low": 1006.0,
+        "open": 1020.99,
+        "prev_close": 1043.84,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    }
+  ],
+  "sources": [
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news"
+  ],
+  "fetched_at": "2026-09-11T23:39:09.402418"
+}

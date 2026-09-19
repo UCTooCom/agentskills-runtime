@@ -1,0 +1,93 @@
+: 30px;
+
+          opacity: 0;
+
+        }
+
+
+
+        100% {
+
+          top: 30px;
+
+          opacity: 0;
+
+        }
+
+    }
+
+
+
+    @keyframes robotMove2 {
+
+        0% {
+
+            top: 30px;
+
+            opacity: 0;
+
+        }
+
+
+
+        10% {
+
+            top: 14px;
+
+            opacity: 1;
+
+        }
+
+
+
+        20% {
+
+            top: 14px;
+
+            opacity: 1;
+
+        }
+
+
+
+        30% {
+
+            top: 30px;
+
+            opacity: 0;
+
+        }
+
+
+
+        100% {
+
+            top: 30px;
+
+            opacity: 0;
+
+        }
+
+    }
+
+</style>
+
+<!-- 左侧悬浮 -->
+
+<div class="left-fix-box"></div>
+
+<!-- 右侧悬浮 -->
+
+<div class="right-bzy-box"></div>
+
+<!-- <script src='https://misc.eol.cn/js/global/2017/jquery-3.2.1.min.js'></script> -->
+
+<script src="https://gaokao.eol.cn/e_include/gk/ceshi/swiper4.5.1.min.js"></script>
+
+<script>
+
+    if (/Mobile|iP(hone|ad)|Android|BlackBerry|IEMobile/.test(window.navigator.userAgent)) {
+
+        $('.left-fix-box').hide()
+
+        $('.right-bzy-box').hide(

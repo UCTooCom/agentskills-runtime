@@ -1,0 +1,14 @@
+{
+  "artifact_path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\_test_verify_empty\\empty_14824.txt",
+  "artifact_type": "code",
+  "passed": false,
+  "checks": [
+    {
+      "name": "existence",
+      "passed": false,
+      "detail": "文件不存在或为空: D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\_test_verify_empty\\empty_14824.txt"
+    }
+  ],
+  "summary": "未通过: existence",
+  "checked_at": "2026-09-15T10:59:04+08:00"
+}

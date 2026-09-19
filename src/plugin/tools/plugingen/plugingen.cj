@@ -6,7 +6,7 @@ package magic.plugin.tools.plugingen
 import f_orm.ORM
 import f_orm.wrap.ORMConfig
 import f_config.Config
-import std.collection.HashMap
+import std.collection.{HashMap, ArrayList}
 import std.database.sql.DriverManager
 import std.fs.{Path, File, exists}
 import std.regex.Regex
@@ -40,6 +40,10 @@ main(args: Array<String>) {
     var tableName = ""
     var blank = false
     var mode = "sync"  // 缺省 sync 轨；process 轨产出独立 cjpm executable 工程
+    // §14.1 数据契约骨架：--contract 与代码一起产出；--contract-only 只产出契约
+    var emitContract = false
+    var contractOnly = false
+    var tablesRaw = ""
 
     var i = 0
     while (i < args.size) {
@@ -73,6 +77,20 @@ main(args: Array<String>) {
                 } else {
                     i += 1
                 }
+            case "--tables" =>
+                if (i + 1 < args.size) {
+                    tablesRaw = args[i + 1]
+                    i += 2
+                } else {
+                    i += 1
+                }
+            case "--contract" =>
+                emitContract = true
+                i += 1
+            case "--contract-only" =>
+                contractOnly = true
+                emitContract = true
+                i += 1
             case "--blank" =>
                 blank = true
                 i += 1
@@ -117,6 +135,10 @@ main(args: Array<String>) {
     // L3 进程隔离轨：独立 cjpm executable 工程（design §5.3）
     // 不走表驱动（进程插件经 host.db 服务代理访问数据，不直接依赖 f_orm/DbInfoPO）
     if (mode == "process") {
+        if (emitContract) {
+            println("提示: process 轨不连 DB（无 db_info 可读），--contract 已忽略")
+            println("      需要契约骨架时请用 sync 轨：plugingen --name <名> --db <库> --tables <表...> --contract-only")
+        }
         // 如果同时指定了 --db 和 --table，生成完整 CRUD 进程插件（对标 codelabs）
         if (!dbName.isEmpty() && !tableName.isEmpty()) {
             let crudGen = CrudPluginGenerator()
@@ -155,8 +177,13 @@ main(args: Array<String>) {
         return
     }
 
-    if (dbName.isEmpty() || tableName.isEmpty()) {
-        println("错误: 表驱动模式必须同时指定 --db 与 --table（或使用 --blank 生成空白骨架）")
+    if (dbName.isEmpty() || (tableName.isEmpty() && tablesRaw.isEmpty())) {
+        println("错误: 表驱动模式必须指定 --db 与（--table 或 --tables）；或用 --blank 生成空白骨架")
+        printHelp()
+        return
+    }
+    if (!contractOnly && tableName.isEmpty()) {
+        println("错误: 生成 CRUD 代码需要 --table（--tables 仅用于 --contract-only）")
         printHelp()
         return
     }
@@ -205,6 +232,24 @@ main(args: Array<String>) {
         return
     }
 
+    // §14.1 数据契约骨架（--contract / --contract-only）——
+    // 与代码生成共用同一份 db_info 与同一个已初始化的 ORM 连接，故放在这里而非另起工具。
+    if (emitContract) {
+        let tableList = resolveTableList(tableName, tablesRaw)
+        if (tableList.size == 0) {
+            println("错误: --contract 需要 --table 或 --tables")
+            return
+        }
+        let contractGen = ContractGenerator()
+        if (!contractGen.generate(normalized, dbName, tableList)) {
+            println("\n契约骨架生成失败，请检查上述错误信息")
+            return
+        }
+        if (contractOnly) {
+            return
+        }
+    }
+
     let generator = PluginGenerator()
     if (generator.generateCrudPlugin(normalized, dbName, tableName)) {
         println("\n插件生成完成！")
@@ -214,6 +259,29 @@ main(args: Array<String>) {
     } else {
         println("\n生成失败，请检查上述错误信息")
     }
+}
+
+/**
+ * 解析契约要覆盖的表清单：--tables（逗号分隔）优先，否则退回单个 --table。
+ */
+func resolveTableList(tableName: String, tablesRaw: String): Array<String> {
+    if (!tablesRaw.trimAscii().isEmpty()) {
+        let parts = tablesRaw.split(",")
+        let out = ArrayList<String>()
+        for (p in parts) {
+            let t = p.trimAscii()
+            if (!t.isEmpty()) {
+                out.add(t)
+            }
+        }
+        return out.toArray()
+    }
+    if (tableName.isEmpty()) {
+        return Array<String>()
+    }
+    let single = ArrayList<String>()
+    single.add(tableName)
+    return single.toArray()
 }
 
 /**
@@ -230,19 +298,28 @@ func printHelp(): Unit {
     println("  --name <插件名>   插件唯一名（小写字母/数字/下划线；连字符自动转下划线）")
     println("  --db <数据库名>   表驱动模式：数据库名（读 db_info 表结构）")
     println("  --table <表名>    表驱动模式：表名")
+    println("  --tables <表名表> 逗号分隔的多表（供 --contract / --contract-only 用）")
     println("  --mode <轨>       加载轨：sync（缺省）/ dylib / process")
+    println("  --contract        额外产出 DATA_CONTRACT.yaml 骨架（sync 轨，需连 DB）")
+    println("  --contract-only   只产出 DATA_CONTRACT.yaml 骨架（不生成代码）")
     println("  --blank           生成空白插件骨架（跳过表结构）")
     println("  --help, -h        显示帮助")
+    println("")
+    println("注意：契约骨架只包含 db_info 能确定的部分（表/列/类型/可空/注释），")
+    println("      role / idempotent_key / write_rule / sample_rows 留 TODO 待人工补齐。")
     println("")
     println("输出：")
     println("  skills/{name}/SKILL.md          技能定义（SkillEngine 资产）")
     println("  skills/{name}/plugin.yaml       插件清单（design.md §2.5）")
+    println("  skills/{name}/DATA_CONTRACT.yaml 数据契约骨架（仅 --contract/--contract-only）")
     println("  skills/{name}/scripts/cj/       仓颉源码（包 magic.plugins.{name}）")
     println("  config/plugins.yaml             自动追加启用条目")
     println("")
     println("示例：")
     println("  plugingen --name entity --db uctoo --table entity")
     println("  plugingen --name mytool --blank")
+    println("  plugingen --name mytool --db uctoo --table entity --contract")
+    println("  plugingen --name mytool --db uctoo --tables entity,tasks --contract-only")
 }
 
 /**

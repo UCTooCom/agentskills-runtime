@@ -1047,6 +1047,48 @@ Then copy the certificates to this directory:
                     let skillDest = Path("${pluginsBinDir}/${pluginName}/SKILL.md")
                     safeCopy(skillSrc.toString(), skillDest.toString(), true)
                 }
+
+                // ===== PS-LRT-01: 技能随包资源（scripts/ + 技能资产）=====
+                // L3 进程插件 exe 落在 bin/skills/{name}/（见 PS-T029）。
+                // 进程插件的函数体虽已静态链接进 exe，但外层 Python 脚本（D 层降级后端）
+                // 和 COMPOSITION.yaml / DATA_CONTRACT.yaml 是运行时按相对路径读取的：
+                // LrtScriptRunner 按 <skillRoot>/scripts 解析脚本目录，脚本则用相对路径
+                // 读写 output/xxx。只打 plugin.yaml + SKILL.md 会让已安装的进程插件
+                // 「能起来、跑不出结果」——所有 cli_execute/llm/template 降级后端全部失效。
+                // 因此资源必须与 exe 同根（bin/skills/{name}/）。
+                let skillAssetRoot = Path("${binDir}/skills/${pluginName}")
+                let skillAssets = ["scripts", "COMPOSITION.yaml", "DATA_CONTRACT.yaml",
+                                   "OPS.md", "README.md", "AGENTS.md", "agents"]
+                // 用 `let` 绑定到可变容器（数组单元），避免在闭包中捕获可变局部变量
+                // （Cangjie：捕获 mutable 变量的 lambda 只能被直接调用，而 Directory.walk
+                // 把 lambda 作为逃逸参数传递，故此用数组单元计数）。
+                let skillAssetCount = [0]
+                for (asset in skillAssets) {
+                    let assetSrc = Path("${rootPath}/skills/${pluginName}/${asset}")
+                    if (!exists(assetSrc)) {
+                        continue
+                    }
+                    if (asset == "scripts") {
+                        let assetRootNorm = assetSrc.toString().replace("\\", "/")
+                        Directory.walk(assetSrc.toString()) { assetInfo =>
+                            if (!assetInfo.isDirectory()) {
+                                let assetPathNorm = assetInfo.path.toString().replace("\\", "/")
+                                // 相对 assetRoot 的路径（含子目录），保持目录结构
+                                let rel = assetPathNorm[assetRootNorm.size + 1..]
+                                if (safeCopy(assetInfo.path.toString(),
+                                             "${skillAssetRoot}/scripts/${rel}", true)) {
+                                    skillAssetCount[0] = skillAssetCount[0] + 1
+                                }
+                            }
+                            true
+                        }
+                    } else if (safeCopy(assetSrc.toString(), "${skillAssetRoot}/${asset}", true)) {
+                        skillAssetCount[0] = skillAssetCount[0] + 1
+                    }
+                }
+                if (skillAssetCount[0] > 0) {
+                    println("  [OK] Packaged ${skillAssetCount[0].toString()} skill asset file(s) for '${pluginName}' to bin/skills/")
+                }
             }
             println("  [OK] Packaged ${packagedPlugins.size.toString()} plugin manifest(s) to bin/plugins/")
         }
@@ -1112,9 +1154,20 @@ Then copy the certificates to this directory:
     // 需要被打包到 bin/ 下，以便进程插件运行时能找到这些 DLL
     println("")
     println("[STEP] Copying cordis-cj dependency DLLs to bin...")
-    let cordisDeps = ["jsonvalue", "jsonrpc", "cordis_core", "cordis_host", "cordis_plugin"]
+    // 依赖目录名可能带 organization 后缀：cjpm 对 `organization="ystyle"` 的包
+    // 产出目录是 `<name>@ystyle/`，不是 `<name>/`。漏了后缀会静默跳过整批 DLL，
+    // 进程插件起不来且没有任何报错（这里也只是 [INFO] 级）。
+    // gjson / tomlcj 是 cordis-cj 的传递依赖，同样需要参与 DLL 收集。
+    let cordisDeps = ["jsonvalue", "jsonrpc", "cordis_core", "cordis_host", "cordis_plugin",
+                      "gjson", "tomlcj"]
     for (depName in cordisDeps) {
-        let depDir = Path("${targetDir}/${depName}")
+        var depDir = Path("${targetDir}/${depName}")
+        if (!exists(depDir)) {
+            let orgDir = Path("${targetDir}/${depName}@ystyle")
+            if (exists(orgDir)) {
+                depDir = orgDir
+            }
+        }
         if (exists(depDir) && exists(binDir)) {
             let dllCount = ArrayList<String>()
             Directory.walk(depDir.toString()) { fileInfo =>
@@ -1187,6 +1240,20 @@ Then copy the certificates to this directory:
     // Users should create .env from .env.example after extracting the package
     println("  [INFO] .env file will NOT be packaged (contains sensitive information)")
     println("  [INFO] Users should create .env from .env.example after extraction")
+    
+    // ===== PS-LRT-02: 写 VERSION 文件 =====
+    // README「发布包目录结构」声明 release 根含 VERSION；此前脚本只在收尾打印里写到它，
+    // 从不落盘，导致解压后没有版本标识别，现场排查版本只能靠包文件名。
+    println("")
+    println("[STEP] Writing VERSION file...")
+    let versionFilePath = Path("${targetDir}/VERSION")
+    let versionContent = "agentskills-runtime ${version}\nplatform: ${platform}\nbuild date: ${buildDate}\n"
+    try {
+        File.writeTo(versionFilePath, versionContent.toArray())
+        println("  [OK] Wrote VERSION (${version}, ${platform})")
+    } catch (e: Exception) {
+        println("  [WARN] Failed to write VERSION to ${versionFilePath.toString()}: ${e.message}")
+    }
     
     println("")
     println("[STEP] Updating package.json runtime version...")

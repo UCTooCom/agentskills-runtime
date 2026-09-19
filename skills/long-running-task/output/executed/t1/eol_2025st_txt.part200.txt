@@ -1,0 +1,95 @@
+  .xz-robot-box {
+
+        position: relative;
+
+    }
+
+
+
+    .xz-robot-box .tip {
+
+        width: 121px;
+
+        height: 29px;
+
+        line-height: 29px;
+
+        text-align: center;
+
+        background: #FF802B;
+
+        color: #fff;
+
+        white-space: nowrap;
+
+        font-size: 12px;
+
+        position: absolute;
+
+        right: -123px;
+
+        top: 14px;
+
+        opacity: 0;
+
+        z-index: 600;
+
+        border-radius: 35px 36px 36px 0px;
+
+    }
+
+    .xz-robot-box .tips1 {
+
+        animation: robotMove1 10s ease forwards 1s;
+
+    }
+
+    .xz-robot-box .tips2 {
+
+        animation: robotMove2 10s ease forwards 4s;
+
+    }
+
+    .xz-robot-box .xizhi-img {
+
+        width: 95px;
+
+        cursor: pointer;
+
+    }
+
+    @keyframes robotMove1 {
+
+        0% {
+
+          top: 30px;
+
+          opacity: 0;
+
+        }
+
+
+
+        10% {
+
+          top: 14px;
+
+          opacity: 1;
+
+        }
+
+
+
+        20% {
+
+          top: 14px;
+
+          opacity: 1;
+
+        }
+
+
+
+        30% {
+
+          top

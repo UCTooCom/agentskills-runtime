@@ -1,0 +1,32 @@
+        var scoreVal = document.getElementById('scoreVal').value
+
+                            if(!scoreVal || scoreVal.length < 3) {
+
+                                alert('请输入正确的分数')
+
+                                return
+
+                            }
+
+                            window.open('https://mnzy.gaokao.cn?forecastSore=' + scoreVal)
+
+                        }) 
+
+                    }
+
+                }
+
+            }
+
+        })
+
+    }
+
+</script>
+
+</body>
+
+
+
+</html>
+

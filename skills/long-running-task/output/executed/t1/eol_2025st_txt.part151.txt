@@ -1,0 +1,41 @@
+>陕西卷</span>
+
+                        </div>
+
+                        <div class="head-mid">
+
+
+
+                        </div>
+
+                        <div class="head-fr clearfix">
+
+                            <a href="">2025</a>
+
+                            <a href="https://gaokao.eol.cn/e_html/gk/gkst/2024st.shtml">2024</a>
+
+                            <a href="https://www.eol.cn/e_html/gk/gkst/2023st.shtml">2023</a>
+
+                            <a href="https://www.eol.cn/e_html/gk/gkst/2022st.shtml">2022</a>
+
+                        </div>
+
+                    </div>
+
+                    <div class="sline">
+
+                        
+
+<div class="gkzt-xueke mtT_30 clearfix">
+
+     <li>
+
+        <div class="word-xueke">语文</span>
+
+            <div class="xueke-a">
+
+                <a href="https://gaokao.eol.cn/shiti/yw/202506/t20250612_2674255.shtml"><font color="red">试题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/yw/202506/t20250

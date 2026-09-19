@@ -1,0 +1,33 @@
+"' + res.data[85]['default'].link + '"><img src="' + res.data[85]['default'].img_url + '" class="img_item" /></a>');
+
+                        window.gio('track', 'mnzy_show85')
+
+                    }
+
+                }
+
+
+
+                if (res.data[99] && res.data[99][coop] && res.data[99][coop]["status"]) {
+
+                    $('.right_bar').append('<a target="_blank" href="' + res.data[99][coop].link + '"><img src="' + res.data[99][coop].img_url + '" class="img_item" /></a>');
+
+                    window.gio('track', 'mnzy_show99')
+
+                } else {
+
+                    if (res.data[99] && res.data[99]['default'] && res.data[99]['default']["status"]) {
+
+                        $('.right_bar').append('<a target="_blank" href="' + res.data[99]['default'].link + '"><img src="' + res.data[99]['default'].img_url + '" class="img_item" /></a>');
+
+                        window.gio('track', 'mnzy_show99')
+
+                    }
+
+                }
+
+            },
+
+        });
+
+   

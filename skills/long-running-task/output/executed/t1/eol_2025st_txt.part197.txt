@@ -1,0 +1,11 @@
+pointer; font-size: 17px; }
+
+    .left-nav-wrapper .icon_dafangxiang_up { top: -40px; border: 1px solid #595959; width: 8px; height: 8px; border-left-color: transparent; border-top-color: transparent; transform: rotate(-135deg); margin: 0 auto; margin-top: 20px; }
+
+    .left-nav-wrapper .icon_dafangxiang_down { bottom: 31px; border: 1px solid #595959; width: 8px; height: 8px; border-left-color: transparent; border-top-color: transparent; transform: rotate(45deg); margin: 0 auto; margin-top: 20px; }
+
+    .left-nav-wrapper .bottom-icon .closeimg { position: relative;display: flex; width: 24px; height: 24px; background: #fff4ee; border: 1px solid #ffbc98; justify-content: center; align-items: center; border-radius: 50%; color: #595959; cursor: pointer; margin: 0 auto 10px; }
+
+    .left-nav-wrapper .bottom-icon .closeimg::before, .left-nav-wrapper .bottom-icon .closeimg::after { position: absolute; content: ''; background: #595959; left: 11px; width: 1px; height: 13px; }
+
+    .left-nav-wra

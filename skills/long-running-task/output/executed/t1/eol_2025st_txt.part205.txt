@@ -1,0 +1,49 @@
+        height: 340,
+
+                        width: 65,
+
+                        speed: 200,
+
+                        loop: false,
+
+                        direction: "vertical",
+
+                        slidesPerView: 4,
+
+                        slidesPerGroup: 4,
+
+                        spaceBetween: 16,
+
+                        autoplay: false,
+
+                        navigation: {
+
+                            nextEl: ".swiper-button-next",
+
+                            prevEl: ".swiper-button-prev",
+
+                        },
+
+                    })
+
+
+
+                    $('.left-nav-wrapper .icon_dafangxiang_up').click(function() {
+
+                        myFixSwiper.slidePrev()
+
+                    })
+
+                    $('.left-nav-wrapper .icon_dafangxiang_down').click(function() {
+
+                        myFixSwiper.slideNext()
+
+                    })
+
+
+
+                    // 小智入口
+
+                    var robotFlag = sessionStorage.getItem('robot_alert_time')
+
+       

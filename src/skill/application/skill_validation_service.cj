@@ -3,9 +3,8 @@
  */
 package magic.skill.application
 
-import magic.skill.domain.models.{SkillManifest, ValidationResult}
-import magic.skill.infrastructure.validators.{SkillValidatorImpl, YamlValidator}
-import std.collection.ArrayList
+import magic.skill.domain.models.{SkillManifest, ValidationResult, DecisionPointParseResult}
+import magic.skill.infrastructure.validators.{SkillValidatorImpl, YamlValidator, DecisionPointValidator}
 
 /**
  * SkillValidationService implements validation of skills against the agentskills specification.
@@ -13,10 +12,12 @@ import std.collection.ArrayList
 public class SkillValidationService {
     private let skillValidator: SkillValidatorImpl
     private let yamlValidator: YamlValidator
+    private let decisionPointValidator: DecisionPointValidator
 
     public init() {
         this.skillValidator = SkillValidatorImpl()
         this.yamlValidator = YamlValidator()
+        this.decisionPointValidator = DecisionPointValidator()
     }
 
     /**
@@ -66,7 +67,24 @@ public class SkillValidationService {
         
         // Validate YAML frontmatter structure
         let frontmatterValidation = this.yamlValidator.validateYamlFrontmatter(content)
-        
-        return frontmatterValidation
+
+        // Validate decision-points (Ch13.1: options.length>=2, default/recommended valid id)
+        let dpValidation = this.decisionPointValidator.validate(content)
+
+        // Merge: frontmatter errors are blocking, decision-point issues are warnings only.
+        // 修复（v15 复核问题 B）：两处 warnings 取**并集**，不再用 dp 侧覆盖 frontmatter 侧，
+        // 避免新代码削弱既有 frontmatter 告警能力。
+        return ValidationResult.mergeValidations(frontmatterValidation, dpValidation)
+    }
+
+    /**
+     * 解析并校验技能内容中的决策点，返回结构化结果。
+     *
+     * 供加载链（SkillManagementService.loadSkillFromPath）消费：
+     *   - validPoints      → 可正常参与人在回路的决策点
+     *   - invalidPointIds  → **不生效**的决策点（spec 5.15.3 异常场景 3）
+     */
+    public func validateDecisionPoints(content: String): DecisionPointParseResult {
+        return this.decisionPointValidator.parseAndValidate(content)
     }
 }

@@ -1,0 +1,39 @@
+               var storage_img = JSON.parse(localStorage.getItem('storage_ad'));
+
+                        var a5_ad_arr = a5_imgarr.filter(item => item.group5.length > 0);
+
+                        var a5_ad_data = randomAd('storage_ad', a5_ad_arr, storage_ad_obj, storage_img, 'a5_ad_status', 'a5_ad');
+
+
+
+                        if (a5_ad_data.length == 0) {
+
+                            a5_ad_data = {
+
+                                group5: []
+
+                            };
+
+                        }
+
+
+
+                        var a5 = a5_ad_data;
+
+                        var a5_str = '';
+
+                        for (var i = 0; i < a5.group5.length; i++) {
+
+                            a5_str += '<a href="' + a5.group5[i].href + '">' + '<img src="' + a5.group5[i].img + '" />' + '</a>';
+
+                        }
+
+                        $(".a5ad").html(a5_str);
+
+                    }
+
+
+
+                    // A6广告--底部通栏9583--切帧
+
+                    var group6 = data.data[9583] || [];

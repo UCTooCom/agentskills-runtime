@@ -58,6 +58,12 @@ public class AgentApprovalsPO {
         @ORMField['deleted_at']
     public var deletedAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['options']
+    public var options: Option<String> = None<String>
+
+        @ORMField['selected_option']
+    public var selectedOption: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -72,7 +78,9 @@ public class AgentApprovalsPO {
                 creator: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
-                deletedAt: Option<DateTime>
+                deletedAt: Option<DateTime>,
+                options: Option<String>,
+                selectedOption: Option<String>
     ) {
                 this.id = id
                 this.agentId = agentId
@@ -86,6 +94,8 @@ public class AgentApprovalsPO {
                 this.createdAt = createdAt
                 this.updatedAt = updatedAt
                 this.deletedAt = deletedAt
+                this.options = options
+                this.selectedOption = selectedOption
     }
 
     /// 序列化为 JsonValue
@@ -103,6 +113,8 @@ public class AgentApprovalsPO {
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("options", optionToJsonValue(this.options))
+        map.add("selected_option", optionToJsonValue(this.selectedOption))
         return JsonObject(map)
     }
 

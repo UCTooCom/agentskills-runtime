@@ -1,0 +1,51 @@
+
+
+                success: function (data) {
+
+                    console.log("data");
+
+
+
+                    // A4
+
+                    var group4 = data.data[6192] || [];
+
+                    $('.focus .center').html('<a>' + '<img src="' + group4[0].img + '" />' + '</a>');
+
+
+
+                },
+
+            });
+
+
+
+            $.ajax({
+
+                type: "GET",
+
+                // url: "https://xsxt.43.dev.eol.com.cn/app/html/www/target/pc/gk/stda--gk/" + code + ".json",
+
+                url: "https://misc.eol.cn/js/target/pc/gk/stda--gk/" + code + ".json",
+
+                crossDomain: true,
+
+                dataType: 'json',
+
+                success: function (data) {
+
+                    console.log(data)
+
+
+
+                    // A1广告--首屏半通栏6189--切帧
+
+                    var a1_imgarr = [{ group: [] }, { group: [] }];
+
+                    var a1_res = data.data[6189] || [];
+
+                    var sucai_1 = [];
+
+                    for (var i = 0; i < a1_res.length; i++) {
+
+  

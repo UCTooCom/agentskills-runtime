@@ -115,13 +115,14 @@ public interface GroupHasPermissionDAO <: RootDAO {
             return ArrayList<GroupHasPermissionPO>()
         }
         
-        // 构建IN子句
+        // 构建IN子句（使用转义字面量，不使用 arg() 避免在 setSql() 外部调用导致参数绑定错位）
         let inClause = StringBuilder()
         for (i in 0..groupIds.size) {
             if (i > 0) {
                 inClause.append(",")
             }
-            inClause.append("${arg(groupIds[i])}")
+            let escaped = groupIds[i].replace("'", "''")
+            inClause.append("'${escaped}'")
         }
         
         executor.setSql('''

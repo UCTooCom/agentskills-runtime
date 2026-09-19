@@ -1,0 +1,30 @@
+{
+  "artifact_path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\_test_verify\\good.txt",
+  "artifact_type": "code",
+  "passed": true,
+  "checks": [
+    {
+      "name": "existence",
+      "passed": true,
+      "detail": "文件存在且非空"
+    },
+    {
+      "name": "syntax",
+      "passed": true,
+      "detail": "无可用语法检查器，跳过"
+    },
+    {
+      "name": "no_secret_leak",
+      "passed": true,
+      "detail": "未发现高危密钥字面量"
+    },
+    {
+      "name": "size",
+      "passed": true,
+      "detail": "体积 87 字节（<20MB）"
+    }
+  ],
+  "summary": "通过",
+  "checked_at": "2026-09-15T23:54:30+08:00",
+  "task_id": "test-task-0001"
+}

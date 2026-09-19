@@ -1,0 +1,10 @@
+{
+  "goal": "集成测试：为订单表生成完整 CRUD 模块",
+  "success_criteria": [],
+  "constraints": [
+    "LLM 解析不可用，已降级为最小骨架"
+  ],
+  "sub_goals": [],
+  "parsed_at": "2026-09-15T06:39:04+08:00",
+  "model": ""
+}

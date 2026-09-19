@@ -1,0 +1,55 @@
+bottom-icon').append(liuxueDom)
+
+                    $('.xz-robot-box').click(function() {
+
+                        window.open(liuxueLink)
+
+                    })
+
+
+
+                    $('.left-nav-wrapper .closeimg').click(function() {
+
+                        var now = new Date()
+
+                        var time = now.getTime()
+
+                        time += ((60 * (60 * 24)) * 1000)
+
+                        now.setTime(time)
+
+                        document.cookie = 'fixed_tool_nav=true;expires=' + now.toUTCString() + ';path=/'
+
+                        $('.left-nav-wrapper').hide()
+
+                    })   
+
+
+
+                    if(!robotFlag) {
+
+                        sessionStorage.setItem('robot_alert_time', 1)
+
+                    }
+
+                }
+
+            }
+
+        })
+
+    }
+
+
+
+    // 右侧报志愿组件
+
+    var right_fix_cookie = getCookie('right_bar_bzy')
+
+    if(!right_fix_cookie) {
+
+        $.ajax({
+
+            type: "GET",
+
+            // url: 'http://static-gkcx.d

@@ -1,0 +1,97 @@
+ize: 18px;
+
+				color: #333;
+
+				padding-top: 20px;
+
+				margin: 0 22px 45px 22px;
+
+				color: #ff0000;
+
+				cursor: pointer;
+
+			}
+
+			.gj-li-first p{
+
+				margin-top: 15px;
+
+			}
+
+		</style>
+
+            <!--<style>
+
+    .leftGif {
+
+        position: fixed;
+
+        left: -178px;
+
+        width: 178px;
+
+        height: 457px;
+
+        top: calc(50% - 225px);
+
+    }
+
+
+
+    .leftGifGif {
+
+        position: absolute;
+
+        top: 412px;
+
+        left: 0px;
+
+    }
+
+
+
+    .leftGifclose_btn {
+
+        position: absolute;
+
+        bottom: -45px;
+
+        left: 65px;
+
+        z-index: 11;
+
+        cursor: pointer;
+
+        width: 30px;
+
+        height: 17px;
+
+        line-height: 16px;
+
+        font-size: 12px;
+
+        text-align: center;
+
+        border: 1px solid red;
+
+        color: red;
+
+        cursor: pointer;
+
+    }
+
+
+
+    .leftGif.active {
+
+        animation: animation-bg-liveImg 1s linear;
+
+        animation-fill-mode: forwards;
+
+        animation-delay: 2s;
+
+    }
+
+
+
+    @keyfra

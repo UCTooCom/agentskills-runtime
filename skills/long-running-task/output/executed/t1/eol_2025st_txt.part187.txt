@@ -1,0 +1,33 @@
+code version 2.1 -->  
+
+ <!-- Copyright 2015-2018 GrowingIO, Inc. More info available at http://www.growingio.com -->  
+
+   <script type='text/javascript'>  
+
+ !function(e,t,n,g,i){e[i]=e[i]||function(){(e[i].q=e[i].q||[]).push(arguments)},n=t.createElement("script"),tag=t.getElementsByTagName("script")[0],n.async=1,n.src=('https:'==document.location.protocol?'https://':'http://')+g,tag.parentNode.insertBefore(n,tag)}(window,document,"script","assets.giocdn.com/2.1/gio.js","gio");  
+
+ gio('init','88025341dda01c5f', {});  
+
+   //custom page code begin here  
+
+   //custom page code end here  
+
+   gio('send');  
+
+   </script>  
+
+   <!-- End GrowingIO Analytics code version: 2.1 --> 
+
+    <div style="width:1px;height:1px;overflow:hidden;">
+
+        <script type="text/javascript" src="https://v1.cnzz.com/z_stat.php?id=1279067249&web_id=1279067249"></script>
+
+    </div>
+
+    <script src="https://gaokao.eol.cn/e_js/gk/2017/requestOrigin.js"></script>
+
+
+
+    <script>
+
+        function getQuery

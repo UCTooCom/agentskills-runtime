@@ -10,6 +10,60 @@ metadata:
   category: fintech
   tags: ["fintech", "investment", "research", "daily-briefing", "投研", "投资简报"]
 allowed-tools: network, filesystem, cli
+decision-points:
+  - id: data_source
+    when: 抓取行情数据时选择数据源
+    question: 使用哪个数据源抓取行情数据？
+    options:
+      - id: tushare
+        label: Tushare
+        description: 免费 Tushare 接口，覆盖 A 股日线/分钟线
+        tradeoff: 免费但有限频限制，高频调用需加 sleep
+      - id: wind
+        label: Wind
+        description: Wind 商业接口，数据质量更高
+        tradeoff: 需付费授权，适合机构级场景
+      - id: eastmoney
+        label: 东方财富
+        description: 东方财富公开接口，无需注册
+        tradeoff: 数据字段较少，无历史分钟线
+    default: tushare
+    recommended: tushare
+    timeout_seconds: 30
+  - id: persist_confirm
+    when: 研报生成完成后准备写入 company/tasks 表
+    question: 是否确认将研报写入数据库？
+    options:
+      - id: write
+        label: 写入数据库
+        description: 按 company_name 幂等 upsert + tasks 插入研报内容
+        tradeoff: 数据落库可复用，但不可撤销
+      - id: sql_only
+        label: 仅生成 SQL
+        description: 生成 SQL 文件不直连数据库，人工审核后执行
+        tradeoff: 安全可控但需额外手动步骤
+      - id: skip
+        label: 跳过落库
+        description: 不写入数据库，仅保留文件产出
+        tradeoff: 不污染数据库但数据不持久化
+    default: sql_only
+    recommended: sql_only
+    timeout_seconds: 60
+  - id: report_depth
+    when: 生成投资简报时选择报告深度
+    question: 投资简报的详细程度？
+    options:
+      - id: brief
+        label: 简版
+        description: 仅含核心指标（收盘/涨跌幅/PE/PB）
+        tradeoff: 快速浏览，适合每日盘后速览
+      - id: full
+        label: 详版
+        description: 含核心指标 + 事件驱动 + 情绪分析 + 技术面
+        tradeoff: 信息全面但篇幅较长
+    default: full
+    recommended: full
+    timeout_seconds: 30
 ---
 
 # 智能投研助理（Investment Research Assistant）

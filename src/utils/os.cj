@@ -23,6 +23,7 @@ import std.os.getEnv as stdGetEnv
 import std.os.setEnv as stdSetEnv
 
 import std.collection.HashMap
+import std.fs.Path
 
 @When[cjc_version < "1.0.0"]
 protected func getEnv(envVarName: String): Option<String> {
@@ -42,7 +43,52 @@ protected func setEnv(envVarName: String, value: String): Unit {
     setVariable(envVarName, value)
 }
 
-protected func newProcess(name: String, args: Array<String>, env!: Array<(String, String)> = [], redirectErr!: Bool = true): SubProcess {
+/**
+ * 创建并启动子进程。
+ *
+ * Round2 修复：新增 workingDirectory 形参。
+ * 根因：调用方（CliTool）早就解析出了 cwd，但旧签名没有这个形参，
+ * 导致 `cli_execute` 的 cwd 参数是死代码 —— 子进程永远在 runtime 根目录执行，
+ * 任何相对路径脚本都会 "can't open file ..."。
+ *
+ * 依据 std.process.launch 签名（cjc 1.0.0+）：
+ *   launch(command, arguments, workingDirectory!: ?Path = None, environment!: ?Map<String,String> = None, ...)
+ * workingDirectory 必须是**存在的目录**，且不允许为空路径或包含空字符，
+ * 因此调用方在传入前必须先做存在性校验（见 CliTool.resolveWorkingDirectory）。
+ */
+@When[cjc_version >= "1.0.0"]
+protected func newProcess(name: String, args: Array<String>, env!: Array<(String, String)> = [],
+                          redirectErr!: Bool = true, workingDirectory!: ?Path = None): SubProcess {
+    let allEnv = HashMap(getVariables())
+    allEnv.add(all: env)
+    if (redirectErr) {
+        return launch(
+            name, args,
+            workingDirectory: workingDirectory,
+            environment: allEnv,
+            stdIn: ProcessRedirect.Pipe,
+            stdOut: ProcessRedirect.Pipe,
+            stdErr: ProcessRedirect.Pipe
+        )
+    } else {
+        return launch(
+            name, args,
+            workingDirectory: workingDirectory,
+            environment: allEnv,
+            stdIn: ProcessRedirect.Pipe,
+            stdOut: ProcessRedirect.Pipe
+        )
+    }
+}
+
+/**
+ * cjc < 1.0.0 分支：std.os.process.launch 不保证支持 workingDirectory 命名参数，
+ * 这里保持旧行为（忽略该参数，子进程继承当前进程工作目录），仅保证签名兼容。
+ * 当前项目 cjpm.toml 声明 cjc-version = "1.1.3"，实际走的是上面的分支。
+ */
+@When[cjc_version < "1.0.0"]
+protected func newProcess(name: String, args: Array<String>, env!: Array<(String, String)> = [],
+                          redirectErr!: Bool = true, workingDirectory!: ?Path = None): SubProcess {
     let allEnv = HashMap(getVariables())
     allEnv.add(all: env)
     if (redirectErr) {

@@ -1,0 +1,43 @@
+</span>
+
+                <a href="" ><font color="re d">解析</font></a>
+
+            </div>
+
+    </li>
+
+<li>
+
+    <div class="word-xueke"> 物理</span>
+
+        <div class="xueke-a">
+
+            <a href="https://gaokao.eol.cn/shiti/wl/202506/t20250612_2674291.shtml"><font color="red">试题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/wl/202506/t20250612_2674311.shtml"><font color="red">答案</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/wl/202506/t20250612_2674311.shtml"><font color="red">解析</font></a>
+
+            </div>
+
+</li>
+
+<li>
+
+    <div class="word-xueke">政治</span>
+
+        <div class="xueke-a">
+
+           <a href="https://gaokao.eol.cn/shiti/zz/202506/t20250612_2674349.shtml"><font color="red">试题</font></a>
+
+           <span>|</span>
+
+            <a href="https://gaokao.eol.cn/shiti/zz/202506/t20250612_2674349_7.shtml"><font color="red">答案</font></a>
+
+            <span>|</span>
+
+     

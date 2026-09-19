@@ -1,0 +1,41 @@
+       <a href="" ><font color="grey">解析</font></a>
+
+        </div>
+
+</li>
+
+<li>
+
+    <div class="word-xueke">化学</span>
+
+        <div class="xueke-a">
+
+            <a href="https://gaokao.eol.cn/shiti/hx/202506/t20250612_2674320.shtml"><font color="red">试题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/hx/202506/t20250612_2674320.shtml"><font color="red">答案</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/hx/202506/t20250612_2674320.shtml" ><font color="red">解析</font></a>
+
+        </div>
+
+</li>
+
+<li>
+
+    <div class="word-xueke">历史</span>
+
+        <div class="xueke-a">
+
+            <a href="https://gaokao.eol.cn/shiti/ls/202506/t20250612_2674330.shtml"><font color="red">试题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/ls/202506/t20250612_2674330_6.shtml"><font color="red">答案</font></a>
+
+                <span>|</span>
+
+                <a hr

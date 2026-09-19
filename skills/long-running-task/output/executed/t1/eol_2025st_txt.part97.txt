@@ -1,0 +1,41 @@
+ef="" ><font color="grey">解析</font></a>
+
+        </div>
+
+</li>
+
+<li>
+
+    <div class="word-xueke">生物</span>
+
+        <div class="xueke-a">
+
+                <a href="https://gaokao.eol.cn/shiti/sw/202506/t20250612_2674302.shtml"><font color="red">真题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/sw/202506/t20250612_2674302.shtml"><font color="red">答案</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/sw/202506/t20250612_2674302.shtml"><font color="red">解析</font></a>
+
+            </div>
+
+</li>
+
+        <li>
+
+    <div class="word-xueke">地理</span>
+
+        <div class="xueke-a">
+
+            <a href="https://gaokao.eol.cn/shiti/dl/202506/t20250612_2674340.shtml"><font color="red">试题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/dl/202506/t20250612_2674340_6.shtml"><font color="red">答案</font></a>
+
+                <span>|</span>
+
+                <a

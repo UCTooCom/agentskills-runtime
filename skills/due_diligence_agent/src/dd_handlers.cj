@@ -306,12 +306,14 @@ public class DdHandlers {
                     case None => ()
                 }
                 match (permissions) {
+                    case Some(JsonValue.Array(arr)) =>
+                        if (arr.size > 0) { queryParam["permissions"] = JsonValue.Array(arr) }
                     case Some(v) => queryParam["permissions"] = v
                     case None => ()
                 }
                 let queryArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 queryArgs[0] = JsonValue.from(queryParam)
-                let queryResult = ctx.invoke("host.db", "query", queryArgs)
+                let queryResult = ctx.invoke<JsonValue, JsonValue>("host.db", "query", queryArgs)
 
                 let countParam = HashMap<String, JsonValue>()
                 countParam["operation"] = JsonValue.String("count")
@@ -322,12 +324,14 @@ public class DdHandlers {
                     case None => ()
                 }
                 match (permissions) {
+                    case Some(JsonValue.Array(arr)) =>
+                        if (arr.size > 0) { countParam["permissions"] = JsonValue.Array(arr) }
                     case Some(v) => countParam["permissions"] = v
                     case None => ()
                 }
                 let countArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 countArgs[0] = JsonValue.from(countParam)
-                let countResult = ctx.invoke("host.db", "count", countArgs)
+                let countResult = ctx.invoke<JsonValue, JsonValue>("host.db", "count", countArgs)
 
                 let response = HashMap<String, JsonValue>()
                 response["currentPage"] = JsonValue.Number(Float64(page))
@@ -380,7 +384,7 @@ public class DdHandlers {
                 }
                 let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 execArgs[0] = JsonValue.from(execParam)
-                let execResult = ctx.invoke("host.db", "execute", execArgs)
+                let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
                 eprintln("[dd] empty-recycle-bin ${table} result: ${execResult.stringify()}")
                 return DdHandlers.okResult("empty-recycle-bin")
         }
@@ -563,7 +567,7 @@ public class DdHandlers {
         // 纯赋值形式消歧：invoke 有非泛型与泛型两个重载，带期望类型（let result: JsonValue
         // 或直接 return）时两个重载都匹配而报 ambiguous match；无期望类型时泛型重载的 R
         // 无法从实参推断，唯一候选为非泛型重载（与 codelabs 插件调用惯例一致）。
-        let result = ctx.invoke("host.mcp", "call", mcpArgs)
+        let result = ctx.invoke<JsonValue, JsonValue>("host.mcp", "call", mcpArgs)
         return result
     }
 

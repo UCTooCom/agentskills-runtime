@@ -93,6 +93,11 @@ public class WebMCPRoutes {
         _router.get("/api/v1/uctoo/webmcp/sse", { req, res =>
             _controller.handleSSE(req, res)
         })
+
+        // 可重连 SSE 事件端点 - 断线后续传 agent 运行事件（带 lastEventId 回放）
+        _router.get("/api/v1/uctoo/webmcp/events", { req, res =>
+            _controller.handleEventsReplay(req, res)
+        })
         
         LogUtils.debug("WebMCP HTTP routes registered")
     }

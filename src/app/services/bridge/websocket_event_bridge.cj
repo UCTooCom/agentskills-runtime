@@ -199,6 +199,25 @@ public class WebSocketEventBridge {
         broadcastToSessions(data)
     }
 
+    /**
+     * 长程任务事件广播（Ch9.2）
+     *
+     * 复用既有 `pushEvent` + `broadcastToSessions`，不新建推送基础设施。
+     * 之所以由 LrtEventBridge 调用本方法而不是自己实现广播：
+     * `sessionBuffers` / `broadcastToSessions` 都是本类的私有状态，
+     * 从外部复制一套会导致同一条事件在两个缓冲里各存一份。
+     *
+     * 注意：本方法**不抛异常**——事件属观测面，推送失败不应影响长程任务执行。
+     */
+    public func broadcastLrtEvent(agentId: String, eventJson: JsonObject): Unit {
+        try {
+            pushEvent(agentId, eventJson)
+            broadcastToSessions(eventJson)
+        } catch (e: Exception) {
+            LogUtils.warn("WebSocketEventBridge", "长程任务事件广播失败: ${e.message}")
+        }
+    }
+
     private func broadcastToSessions(eventJson: JsonObject): Unit {
         try {
             let sessionManager = WebSocketSessionManager.instance

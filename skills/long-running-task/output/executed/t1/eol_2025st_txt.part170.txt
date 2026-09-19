@@ -1,0 +1,47 @@
+tGif').addClass('active')
+
+            // 4s隐藏
+
+            setTimeout(function () {
+
+                $('#leftGif').addClass('end').removeClass('active')
+
+                localStorage.setItem('show_liveImg_time', new Date().getTime())
+
+            }, 30000)
+
+        }
+
+        $('#leftGifclose_btn').click(function () {
+
+            $('#leftGif').hide()
+
+        })
+
+    });
+
+</script>-->
+
+<!--<script>
+
+$(document).ready(function() {
+
+        // var show_liveImg_time = localStorage.getItem('show_liveImg_time');
+
+        // if (!show_liveImg_time || (new Date().getTime() - Number(show_liveImg_time)) > 3600000) {
+
+        $('#leftGif').addClass('active')
+
+            //     // 4s隐藏
+
+            //     setTimeout(function () {
+
+            //         $('#leftGif').addClass('end').removeClass('active')
+
+            //         localStorage.setItem('show_liveImg_time', new Date().getTime())
+
+            //     }, 30000)
+
+            // }
+
+            // $('#leftGifclose_btn').click(function ()

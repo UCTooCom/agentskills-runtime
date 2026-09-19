@@ -148,7 +148,7 @@ public class CodelabsHandlers {
                         }
                         let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                         execArgs[0] = JsonValue.from(execParam)
-                        let execResult = ctx.invoke("host.db", "execute", execArgs)
+                        let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
                         eprintln("[codelabs] host.db insert result: ${execResult.stringify()}")
                         // 5. 查询刚创建的记录（通过 creator + command 查询）
                         // 由于 INSERT 没有 RETURNING 支持（f_orm 限制），用后续 query 回读
@@ -164,7 +164,7 @@ public class CodelabsHandlers {
                         queryParam["permissions"] = JsonValue.Array(permArr)
                         let queryArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                         queryArgs[0] = JsonValue.from(queryParam)
-                        let queryResult = ctx.invoke("host.db", "query", queryArgs)
+                        let queryResult = ctx.invoke<JsonValue, JsonValue>("host.db", "query", queryArgs)
                         // 6. 返回创建的记录
                         match (queryResult) {
                             case JsonValue.Map(qFields) =>
@@ -263,7 +263,7 @@ public class CodelabsHandlers {
                         }
                         let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                         execArgs[0] = JsonValue.from(execParam)
-                        let execResult = ctx.invoke("host.db", "execute", execArgs)
+                        let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
                         eprintln("[codelabs] host.db update result: ${execResult.stringify()}")
                         // 返回更新后的记录（单条）
                         match (idVal) {
@@ -352,7 +352,7 @@ public class CodelabsHandlers {
                         }
                         let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                         execArgs[0] = JsonValue.from(execParam)
-                        let execResult = ctx.invoke("host.db", "execute", execArgs)
+                        let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
                         eprintln("[codelabs] host.db delete result: ${execResult.stringify()}")
                         return CodelabsHandlers.okResult("del")
                 }
@@ -433,7 +433,7 @@ public class CodelabsHandlers {
                 }
                 let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 execArgs[0] = JsonValue.from(execParam)
-                let execResult = ctx.invoke("host.db", "execute", execArgs)
+                let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
                 eprintln("[codelabs] host.db empty-recycle-bin result: ${execResult.stringify()}")
                 return CodelabsHandlers.okResult("empty-recycle-bin")
         }
@@ -515,7 +515,7 @@ public class CodelabsHandlers {
                 queryArgs[0] = JsonValue.from(queryParam)
 
                 // 调用宿主数据库服务
-                let queryResult = ctx.invoke("host.db", "query", queryArgs)
+                let queryResult = ctx.invoke<JsonValue, JsonValue>("host.db", "query", queryArgs)
                 eprintln("[codelabs] host.db query result: ${queryResult.stringify()}")
                 // queryResult 格式: { "rows": [...] }
 
@@ -535,7 +535,7 @@ public class CodelabsHandlers {
                 }
                 let countArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
                 countArgs[0] = JsonValue.from(countParam)
-                let countResult = ctx.invoke("host.db", "count", countArgs)
+                let countResult = ctx.invoke<JsonValue, JsonValue>("host.db", "count", countArgs)
                 eprintln("[codelabs] host.db count result: ${countResult.stringify()}")
                 // countResult 格式: { "count": N }
 
@@ -622,7 +622,7 @@ public class CodelabsHandlers {
         }
         let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
         execArgs[0] = JsonValue.from(execParam)
-        let execResult = ctx.invoke("host.db", "execute", execArgs)
+        let execResult = ctx.invoke<JsonValue, JsonValue>("host.db", "execute", execArgs)
         eprintln("[codelabs] host.db restore result: ${execResult.stringify()}")
         return CodelabsHandlers.okResult("restore")
     }
@@ -648,7 +648,7 @@ public class CodelabsHandlers {
         queryParam["permissions"] = JsonValue.Array(permArr)
         let queryArgs = Array<JsonValue>(1, { _ => JsonValue.Null })
         queryArgs[0] = JsonValue.from(queryParam)
-        let queryResult = ctx.invoke("host.db", "query", queryArgs)
+        let queryResult = ctx.invoke<JsonValue, JsonValue>("host.db", "query", queryArgs)
         match (queryResult) {
             case JsonValue.Map(qFields) =>
                 match (qFields.get("rows")) {

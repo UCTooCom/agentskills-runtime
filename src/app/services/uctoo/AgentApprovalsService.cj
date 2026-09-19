@@ -5,6 +5,11 @@ package magic.app.services.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
 
+// Ch13.4：web_request_approval 通道的审批结果快照（tool 层产出、此处消费）
+// 依赖方向 app.services.uctoo → tool.webmcp 与仓库既有写法一致（app 下多处已 import magic.tool.webmcp），
+// 且 tool.webmcp 无任何 `import magic.app.*`，不构成循环依赖。
+import magic.tool.webmcp.ApprovalDecisionRecord
+
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 //#region AutoCreateCode
 
@@ -104,6 +109,12 @@ public class AgentApprovalsService {
             }
             if (entity.deletedAt.isSome()) {
                 existingEntity.deletedAt = entity.deletedAt
+            }
+            if (entity.options.isSome()) {
+                existingEntity.options = entity.options
+            }
+            if (entity.selectedOption.isSome()) {
+                existingEntity.selectedOption = entity.selectedOption
             }
 
             
@@ -906,4 +917,88 @@ public class AgentApprovalsService {
 
 //#endregion AutoCreateCode
 // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    /**
+     * 记录一次「人在回路」决策的完整结果（spec 5.15 / Ch13.4）。
+     *
+     * 背景：`web_request_approval`（真正被 SOP 走的那条路径，见第二十轮接线）此前**完全不落库**，
+     * 只有 WebSocket 通道的 `WebHumanAgent` 会写 agent_approvals —— 于是 spec 5.15 规则 5
+     * 「agent_approvals 记录 selected_option」在真实链路上是不可达的。这里把落库能力补到调用方。
+     *
+     * 幂等与容错：每次审批 = 一条新记录（不做 upsert），失败只记日志返回 false，
+     * 由调用方决定是否影响主流程 —— 绝不能因为落库失败把用户的选择丢掉。
+     *
+     * @param record 工具侧产出的决策快照
+     * @return true=已写入 agent_approvals
+     */
+    public func recordDecision(record: ApprovalDecisionRecord): Bool {
+        let entity = AgentApprovalsPO()
+
+        // agent_id：优先用决策点归属技能，退化到通道名，便于按技能回溯审批历史
+        var agentId = record.skillName
+        if (agentId.isEmpty()) {
+            agentId = "webmcp"
+        }
+        entity.agentId = agentId
+
+        // approval_type：区分「决策点选择」与「普通确认」，后者无 options / selected_option
+        var approvalType = "confirm"
+        if (!record.decisionPointId.isEmpty()) {
+            approvalType = "decision_point"
+        }
+        entity.approvalType = approvalType
+
+        // content：把技能/决策点 id 一并写进去，事后能直接从正文看出这是哪个决策点
+        var header = record.action
+        if (!record.decisionPointId.isEmpty()) {
+            header = "[${record.skillName}/${record.decisionPointId}] ${record.action}"
+        }
+        if (record.details.isEmpty()) {
+            entity.content = header
+        } else {
+            entity.content = "${header}\n${record.details}"
+        }
+
+        entity.status = record.status
+        entity.timeoutMs = record.timeoutMs
+        entity.creator = None<String>
+        entity.createdAt = DateTime.now()
+        entity.updatedAt = DateTime.now()
+        entity.deletedAt = None<DateTime>
+
+        if (!record.userResponse.isEmpty()) {
+            entity.userResponse = Some(record.userResponse)
+        } else {
+            entity.userResponse = None<String>
+        }
+        // 选项集：记录"当时给了哪些方案"，供事后复盘
+        if (!record.options.isEmpty()) {
+            entity.options = Some(record.options)
+        } else {
+            entity.options = None<String>
+        }
+        // ← Ch13.4 要求的落库字段：用户实际选中（或自动兜底采用）的选项 id
+        if (!record.selectedOption.isEmpty()) {
+            entity.selectedOption = Some(record.selectedOption)
+        } else {
+            entity.selectedOption = None<String>
+        }
+
+        try {
+            let result = create(entity, "system")
+            if (!result.success) {
+                let reason = match (result.reason) {
+                    case Some(msg) => msg
+                    case None => "unknown error"
+                }
+                LogUtils.error("AgentApprovalsService: 审批决策落库失败 approval_type=${approvalType} decision_point=${record.decisionPointId}: ${reason}")
+                return false
+            }
+            LogUtils.info("AgentApprovalsService: 已记录审批决策 status=${record.status} selected_option='${record.selectedOption}' auto_default=${record.autoDefaulted} decision_point='${record.decisionPointId}'")
+            return true
+        } catch (e: Exception) {
+            LogUtils.error("AgentApprovalsService: 审批决策落库异常: ${e.message}")
+            return false
+        }
+    }
 }

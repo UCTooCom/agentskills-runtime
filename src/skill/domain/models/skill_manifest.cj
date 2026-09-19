@@ -23,6 +23,8 @@ public class SkillManifest {
     public let referencesDirExists: Bool  // Whether references/ directory exists
     public let assetsDirExists: Bool  // Whether assets/ directory exists
     public let parameters: Array<SkillParameter>  // Definition of parameters the skill accepts
+    public let decisionPoints: Array<DecisionPoint>  // 校验通过、可参与人在回路的决策点（spec 5.15）
+    public let invalidDecisionPointIds: Array<String>  // 校验失败、**不生效**的决策点 id（spec 5.15.3 异常场景 3）
 
     public init(
         name!: String,
@@ -36,7 +38,9 @@ public class SkillManifest {
         scriptsDirExists!: Bool,
         referencesDirExists!: Bool,
         assetsDirExists!: Bool,
-        parameters!: Array<SkillParameter>
+        parameters!: Array<SkillParameter>,
+        decisionPoints!: Array<DecisionPoint> = [],
+        invalidDecisionPointIds!: Array<String> = []
     ) {
         this.name = name
         this.description = description
@@ -50,5 +54,28 @@ public class SkillManifest {
         this.referencesDirExists = referencesDirExists
         this.assetsDirExists = assetsDirExists
         this.parameters = parameters
+        this.decisionPoints = decisionPoints
+        this.invalidDecisionPointIds = invalidDecisionPointIds
+    }
+
+    /// 按 id 查找一个**有效**决策点。
+    /// 失效决策点查不到 ⇒ 天然"不生效"，下游据此跳过（spec 5.15.3 异常场景 3）。
+    public func findDecisionPoint(pointId: String): Option<DecisionPoint> {
+        for (dp in this.decisionPoints) {
+            if (dp.id == pointId) {
+                return Some(dp)
+            }
+        }
+        return None
+    }
+
+    /// 该决策点是否已因校验失败而被禁用。
+    public func isDecisionPointDisabled(pointId: String): Bool {
+        for (id in this.invalidDecisionPointIds) {
+            if (id == pointId) {
+                return true
+            }
+        }
+        return false
     }
 }

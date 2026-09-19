@@ -1,0 +1,39 @@
+box').append(leftFixDom)
+
+
+
+                    var bannerData = res.data.operate[4][13].img_mess
+
+                    $.each(bannerData, function (index, item) {
+
+                        var img_url = item.img_url; // 图片地址
+
+                        var img_title1 = item.img_title1; // 名称
+
+                        var img_link = item.img_link; // 跳转链接
+
+                        var swiperDom = (
+
+                            '<div class="swiper-slide">' +
+
+                            '<a href=' + img_link + ' target="_blank">' +
+
+                            '<img src=' + img_url + ' alt="" width="54" height="55" />' +
+
+                            '<p class="title">' + img_title1 + '</p>' +
+
+                            '</a>' +
+
+                            '</div>'
+
+                        )
+
+                        $('.left-nav-wrapper .swiper-wrapper').append(swiperDom)
+
+                    })
+
+
+
+                    var myFixSwiper = new Swiper(".leftnav-fix-container", {
+
+                

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+
+<html>
+
+
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+
+    <meta name="viewport" content="width=750, user-scalable=no">
+
+    <meta name="format-detection" content="telephone=no">
+
+    <title>2025年高考真题|2025高考真题答案解析|历年高考试题及答案——中国教育在线</title>
+
+    <meta name="keywords" content="2025高考,高考真题答案,2025高考真题作文,高考真题试题答案,高考真题试题点评,2025高考,中国教育在线" />
+
+    <meta name="description" content="中国教育在线高考后第一时间发布2025年高考真题(试题)及答案、高考作文、高考真题解析等，同时邀请高考专家对高考真题进行点评，为广大考生高考志愿填报提供参考。" />
+
+    <meta name="author" content="">
+
+    <base target="_blank" />
+
+
+
+    <link rel="stylesheet" type="text/css" href="css/npc.css" />
+
+    <link href="//misc.eol.cn/e_css/index/2017/global.css" rel="stylesheet" type="text/css" ignoreapd="false">
+
+    <script src="js/babel.js"></script>
+
+    <script src="https://www.eol.cn/e_js/index/2018/jquery.min.js" type="text/javascript"></script>
+
+    <script src="//misc.eol.cn/e_js/index/2017/global.js" type="text/javas

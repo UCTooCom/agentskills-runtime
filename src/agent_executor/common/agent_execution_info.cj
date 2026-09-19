@@ -42,6 +42,11 @@ public class AgentExecutionInfo <: AgentExecution {
     private var _answerReason: Option<String> = None
 
     /**
+     * Ch0：任务终止原因（步数耗尽等中断态），供持久化层区分 completed。
+     */
+    private var _terminationReason: AgentTerminationReason = Completed
+
+    /**
      * Retrieved documents during execution
      */
     private let _retrievalInfo = ArrayList<RetrievalInfo>()
@@ -71,6 +76,14 @@ public class AgentExecutionInfo <: AgentExecution {
 
     override public prop retrievalInfo: ArrayList<RetrievalInfo> {
         get() { this._retrievalInfo }
+    }
+
+    override public prop terminationReason: AgentTerminationReason {
+        get() { this._terminationReason }
+    }
+
+    override public func setTerminationReason(reason: AgentTerminationReason): Unit {
+        this._terminationReason = reason
     }
 
     /**

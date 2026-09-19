@@ -1,0 +1,55 @@
+ol.cn/e_html/gk/gkst/images/fenxiang.jpg',
+
+            'desc': '中国教育在线高考后第一时间发布2023年高考试题及答案、高考作文、高考试题解析等，同时邀请高考专家对高考试题进行点评，为广大考生高考志愿填报提供参考',
+
+        });
+
+
+
+    </script>
+
+    <div style="width:1px;height:1px;overflow:hidden;">
+
+   
+
+    <!-- End ecounter Tag -->
+
+    <script src="https://s6.cnzz.com/stat.php?id=4696180&web_id=4696180" language="JavaScript"></script>
+
+    <script src="https://misc.eol.cn/js/target/stat/uid.js" type="text/javascript" ignoreapd="false"></script>
+
+    <script src="https://misc.eol.cn/js/target/stat/adstat.all.js" type="text/javascript" ignoreapd="false"></script>
+
+</div>
+
+
+
+
+
+
+
+<div style="width:1px;height:1px;overflow:hidden;">
+
+<script>
+
+var _hmt = _hmt || [];
+
+(function() {
+
+  var hm = document.createElement("script");
+
+  hm.src = "https://hm.baidu.com/hm.js?0a962de82782bad64c32994d6c9b06d3";
+
+  var s = document.getElementsByTagName("script")[0]; 
+
+  s.parentNode.insertBefore(hm, s);
+
+})();
+
+</script>
+
+</div>
+
+<!--biaoshi-->
+
+<!-- GrowingIO Analytics 

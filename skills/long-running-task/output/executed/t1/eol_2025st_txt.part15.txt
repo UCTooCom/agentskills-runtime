@@ -1,0 +1,56 @@
+  }, {
+        code: 45,
+        name: "广西"
+    }, {
+        code: 46,
+        name: "海南"
+    }, {
+        code: 50,
+        name: "重庆"
+    }, {
+        code: 51,
+        name: "四川"
+    }, {
+        code: 52,
+        name: "贵州"
+    }, {
+        code: 53,
+        name: "云南"
+    }, {
+        code: 54,
+        name: "西藏"
+    }, {
+        code: 61,
+        name: "陕西"
+    }, {
+        code: 62,
+        name: "甘肃"
+    }, {
+        code: 63,
+        name: "青海"
+    }, {
+        code: 64,
+        name: "宁夏"
+    }, {
+        code: 65,
+        name: "新疆"
+    }, {
+        code: 81,
+        name: "香港"
+    }, {
+        code: 82,
+        name: "澳门"
+    }, {
+        code: 71,
+        name: "台湾"
+    }];
+    var pul = ""
+    for (var item of adProvinceList) {
+        pul += ("<span id ='" + item.code + "' class='pspan'>" + item.name + "</span>")
+    }
+    $(".nav-head-wz .divstates").html(pul);
+</script>
+<script>
+    // 点击展示省份
+    $('.nav-head-wz .clearfix').click(function (event) {
+        $(".nav-head

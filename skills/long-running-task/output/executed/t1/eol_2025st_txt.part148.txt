@@ -1,0 +1,39 @@
+ class="word-xueke">英语</span>
+
+            <div class="xueke-a">
+
+                <a href="https://gaokao.eol.cn/shiti/yy/202506/t20250612_2674278.shtml"><font color="red">试题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/yy/202506/t20250612_2674282.shtml"><font color="red">答案</font></a>
+
+                <span>|</span>
+
+                <a href="" ><font color="re d">解析</font></a>
+
+            </div>
+
+    </li>
+
+<li>
+
+    <div class="word-xueke"> 物理</span>
+
+       <div class="xueke-a">
+
+                <a href="https://gaokao.eol.cn/shiti/wl/202506/t20250612_2674338.shtml"><font color="red">真题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/wl/202506/t20250612_2674351.shtml"><font color="red">答案</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/wl/202506/t20250612_2674351.shtml"><font color="red">解析</font></a>
+
+            </div>
+
+</li>
+
+<li>

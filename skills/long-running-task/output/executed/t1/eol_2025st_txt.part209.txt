@@ -1,0 +1,35 @@
+    "<button><em class='iconfont icon_Test'></em>立即测算</button>" + 
+
+                                        "</div>" +
+
+                                        "<i class='iconfont icon_close'></i>" + 
+
+                                    "</div>" +
+
+                                "</div>" +
+
+                            "</div>"
+
+                        )
+
+                        $('.right-bzy-box').append(bzyDom)
+
+                        $('.right-bar-bzy .icon_close').click(function() {
+
+                            var now = new Date()
+
+                            var time = now.getTime()
+
+                            time += 3600 * 6 * 1000
+
+                            now.setTime(time)
+
+                            document.cookie = 'right_bar_bzy=true;expires=' + now.toUTCString() + ';path=/'
+
+                            $('.enter-score-box').hide()
+
+                        })  
+
+                        $('.right-bar-bzy .score-enter button').click(function() {
+
+                    

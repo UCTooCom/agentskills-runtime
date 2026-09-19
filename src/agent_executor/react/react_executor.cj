@@ -11,7 +11,7 @@ import magic.config.Config
 import magic.log.LogUtils
 
 public class ReactExecutor <: AgentExecutor {
-    public ReactExecutor(private let loop!: Int64 = Config.maxReactNumber) {}
+    public ReactExecutor(private let loop!: Int64 = Config.normalReactSteps) {}
 
     override public prop name: String {
         get() { "react" }
@@ -35,6 +35,7 @@ public class ReactExecutor <: AgentExecutor {
                 task.handleAgentStepEvent()
             }
             let answer = task.summarize()
+            task.markMaxStepsExhausted()
             return AgentResponse(AgentResponseStatus.Success, answer, execution: task.execution)
         } finally {
             task.end()
@@ -58,6 +59,7 @@ public class ReactExecutor <: AgentExecutor {
                     task.handleAgentStepEvent()
                 }
                 LogUtils.info("Exceed the max react loop")
+                task.markMaxStepsExhausted()
                 return task.asyncSummarize()
             } finally {
                 task.end()

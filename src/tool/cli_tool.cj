@@ -14,7 +14,7 @@ import std.process.{ProcessRedirect, SubProcess}
 import std.time.DateTime
 import std.core.Duration
 import std.io.{InputStream, OutputStream}
-import std.fs.Path
+import std.fs.{Path, FileInfo, exists}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonArray, JsonBool, JsonInt}
 
 public class CliTool <: NativeFuncTool {
@@ -92,11 +92,9 @@ public class CliTool <: NativeFuncTool {
 
         let commandArgs = parseArgsArray(argsStr)
         let envVars = parseEnvObject(envStr)
-        let workingDir = if (cwd.isEmpty()) {
-            getWorkingDirectory()
-        } else {
-            Path(cwd)
-        }
+        // Round2 修复：旧代码这里算出 workingDir 之后**从未使用**（死代码），
+        // 子进程 CWD 恒为 runtime 根目录，相对路径脚本必然失败。现在真正透传给 newProcess。
+        let workingDir: ?Path = CliTool.resolveWorkingDirectory(cwd)
 
         let startTime = DateTime.now()
 
@@ -109,7 +107,8 @@ public class CliTool <: NativeFuncTool {
                 actualCommand,
                 actualArgs,
                 env: envVars,
-                redirectErr: true
+                redirectErr: true,
+                workingDirectory: workingDir
             )
 
             let result = if (captureOutput) {
@@ -128,7 +127,9 @@ public class CliTool <: NativeFuncTool {
                 result.stderr,
                 durationMs,
                 command,
-                argsStr
+                argsStr,
+                cwd: cwd,
+                cwdApplied: cwd.isEmpty() || workingDir.isSome()
             )
         } catch (ex: Exception) {
             let endTime = DateTime.now()
@@ -143,9 +144,41 @@ public class CliTool <: NativeFuncTool {
                 "Command execution failed: ${ex.message}. Please ensure '${command}' is installed and available in PATH.",
                 durationMs,
                 command,
-                argsStr
+                argsStr,
+                cwd: cwd,
+                cwdApplied: false
             )
         }
+    }
+
+    /**
+     * 把 cwd 参数解析成子进程工作目录。
+     *
+     * Round2 修复（本方法为新增）：cwd 之前只是被算出来却从未传给 newProcess，是死代码。
+     *
+     * 约束（依据 std.process.launch 文档）：workingDirectory 必须是**存在的目录**，
+     * 不允许为空路径或包含空字符，否则 launch 抛 IllegalArgumentException。
+     * 因此这里做 exists + isDirectory 双重校验，校验失败时降级为 None（继承当前进程工作目录），
+     * 保证命令至少能跑起来，同时在日志里留下可追溯的线索。
+     *
+     * 返回：
+     *   - None：未指定 cwd，或 cwd 非法（调用方会退化为进程当前工作目录）
+     *   - Some(Path)：可直接传给 newProcess 的合法目录
+     */
+    protected static func resolveWorkingDirectory(cwd: String): ?Path {
+        if (cwd.isEmpty()) {
+            return None
+        }
+        try {
+            if (exists(cwd) && FileInfo(cwd).isDirectory()) {
+                LogUtils.info("[CliTool] Using working directory: ${cwd}")
+                return Some(Path(cwd))
+            }
+            LogUtils.info("[CliTool] cwd is not an existing directory, fallback to process working directory: ${cwd}")
+        } catch (ex: Exception) {
+            LogUtils.info("[CliTool] Failed to resolve cwd '${cwd}': ${ex.message}, fallback to process working directory")
+        }
+        return None
     }
 
     protected static func executeWithCapture(subProcess: SubProcess, timeout: Int64): ExecutionResult {
@@ -354,7 +387,9 @@ public class CliTool <: NativeFuncTool {
         stderr: String,
         durationMs: Int64,
         command: String,
-        args: String
+        args: String,
+        cwd!: String = "",
+        cwdApplied!: Bool = true
     ): String {
         let result = JsonObject()
         result.put("success", JsonBool(success))
@@ -364,7 +399,14 @@ public class CliTool <: NativeFuncTool {
         result.put("duration_ms", JsonInt(durationMs))
         result.put("command", JsonString(command))
         result.put("args", JsonString(args))
-        
+        // Round2：把工作目录回显给 agent，让它能自己判断 cwd 是否生效
+        // （此前 cwd 是死代码，agent 只能靠试错发现"相对路径被解析到 runtime 根目录"）
+        // 注意：std.env.getWorkingDirectory() 返回的是 Path 而不是 String，
+        // 必须显式 toString()，否则 if 表达式两个分支类型（Path / String）不一致。
+        let cwdDesc = if (cwd.isEmpty()) { getWorkingDirectory().toString() } else { cwd }
+        result.put("cwd", JsonString(cwdDesc))
+        result.put("cwd_applied", JsonBool(cwdApplied))
+
         return result.toJsonString()
     }
 

@@ -1,0 +1,73 @@
+{
+  "title": "Global AI Industry Market Growth 2021-2025",
+  "generated_at": "2026-09-14T19:25:37.793432",
+  "unit_global": "100 million USD",
+  "unit_china": "100 million CNY",
+  "global": {
+    "2020": 1565,
+    "2021": 2200,
+    "2022": 4328,
+    "2023": 5381,
+    "2024": 6382,
+    "2025": 7576
+  },
+  "china": {
+    "2020": 1500,
+    "2021": 1962,
+    "2022": 2845,
+    "2023": 4500,
+    "2024": 6964,
+    "2025": 9000
+  },
+  "cagr": {
+    "global_2020_2025": 37.08,
+    "global_2021_2025": 36.22,
+    "china_2020_2025": 43.1
+  },
+  "segments_2020": [
+    [
+      "软件 Software",
+      620
+    ],
+    [
+      "服务 Services",
+      585
+    ],
+    [
+      "硬件 Hardware",
+      360
+    ]
+  ],
+  "segments_2025": [
+    [
+      "软件 Software",
+      2810
+    ],
+    [
+      "服务 Services",
+      3370
+    ],
+    [
+      "硬件 Hardware",
+      1396
+    ]
+  ],
+  "drivers": [
+    "大模型与生成式 AI 商业化落地加速，推理侧算力需求爆发",
+    "企业级 AI Agent 与行业垂直应用进入规模复制阶段",
+    "全球算力基础设施（GPU/加速卡/数据中心）持续高投入",
+    "各国 AI 产业政策与主权 AI 战略推动公共部门采购"
+  ],
+  "risks": [
+    "高端算力芯片供给与出口管制带来的供应链不确定性",
+    "数据合规、隐私保护与 AI 监管框架趋严",
+    "模型训练成本高企，中小企业 ROI 兑现周期拉长",
+    "区域市场分化，新兴市场付费能力与渗透率不均衡"
+  ],
+  "sources": [
+    "IDC Worldwide AI Spending Guide (公开摘要)",
+    "Gartner AI Spending Forecast (公开新闻稿)",
+    "Statista Artificial Intelligence Market Size (公开数据页)",
+    "Sogou 公开搜索结果摘要（本报告抓取留痕，output/raw/）"
+  ]
+}

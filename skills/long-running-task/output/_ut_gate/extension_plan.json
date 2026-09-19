@@ -1,0 +1,25 @@
+{
+  "task_id": "",
+  "generated_at": "2026-09-15T23:54:36+08:00",
+  "covered": [],
+  "quality_gate": {
+    "generator_to_verifier": "cangjie-coder / skill-creator → code-gen-verifier",
+    "on_verify_failed": "回 cangjie-coder 修复后重试，最多 2 轮；仍失败则上报人工",
+    "max_retry": 2
+  },
+  "steps": [
+    {
+      "name": "some_cangjie_gen",
+      "task": "",
+      "language": "",
+      "handler": "cangjie-coder",
+      "builtin_available": false,
+      "action": "编排 cangjie-coder 编写仓颉代码子任务补齐能力 some_cangjie_gen",
+      "verifier": "code-gen-verifier",
+      "acceptance_criteria": [
+        "产物通过 code-gen-verifier 验证",
+        "补齐后以最小用例实跑一次，产出非空且不报错"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+name: long-running-task
+version: 1.0.0
+mode: process
+# 注意：不要写 protocol 字段。plugin_config.cj 无 protocol 解析逻辑，写了会被静默忽略；
+# L3 进程轨传输固定为 stdio（见 tasks.md §2.3）。
+# 注意：command 是「相对**宿主工作目录**」的路径，不是相对插件目录！
+# CordisHostManager.resolvePluginCommand 直接把 `${cwd}/${command}` 交给 launch()，
+# 不做存在性校验、也没有 skills/{name}/ 兜底补全（见 plugin_config.cj 契约示例
+# `command: ./skills/external-tool/target/release/skill_external_tool.exe`）。
+# 写成相对的 ./target/release/bin/... 时：开发态 cwd=仓库根 → 拼成 <root>/target/...（错）；
+# 发布态 cwd=bin → 拼成 <bin>/target/...（错，exe 实际在 bin/skills/{name}/...）。
+# 两种形态都带上 skills/{name}/ 前缀才都在射程内。
+command: ./skills/long-running-task/target/release/bin/skill_long_running_task.exe
+description: AI 自主驱动长程任务系统 L3 进程隔离轨插件（2 表 CRUD + lrt-plan/lrt-execute/lrt-intervene/lrt-verify/lrt-evolve/lrt-deliver/lrt-review）
+enabled: true
+order: 7
+autoRestart: true
+# config 段被宿主读取（Ch0.1 / Ch4.1 要求 maxRounds 统一从此读取，默认 30）
+config:
+  maxRounds: 30
+  maxRoundDurationMs: 1800000
+  maxTaskDurationMs: 86400000
+  maxConcurrentTasks: 100
+  # 是否允许**同一任务**的重叠触发并发执行（LrtExecutor.isConcurrentable 读此键，
+  # 环境变量 LRT_CONCURRENTABLE 优先级更高）。默认 false = 禁止重叠：
+  # 一次 runTask 是一整轮收敛循环，重叠会重复调用 LLM、重复写产物。
+  concurrentable: false
+  checkpointStrategy: "per-round"
+  degradationChain:
+    - "cli_execute"
+    - "builtin_tool"
+    - "llm"
+    - "template"
+  qualityGate: true
+  # ── §11.3 监控告警阈值（单一事实来源；环境变量 LRT_MONITOR_* 可覆盖）──
+  # rate 类为 0.0~1.0 浮点（0.3 = 30%）；latency 类为毫秒。
+  monitorEnabled: true
+  monitorWindowSize: 50
+  monitorFailureRate: 0.3
+  monitorRoundTimeoutRate: 0.2
+  monitorCheckpointLatencyMs: 30000
+  monitorProgressLatencyMs: 1000
+# D 层脚本运行环境（Ch8）。LrtScriptRunner 按以下优先级解析脚本目录，
+# 全部缺省时回退到「进程 cwd 下的 scripts/」。插件为 mode:process（宿主经 stdio 拉起），
+# 进程 cwd 不保证是技能根，**生产部署建议显式设置 LRT_SKILL_ROOT**，
+# 否则 `output/parsed` 等相对产物可能落到非预期位置。
+env:
+  # 技能根目录绝对路径（推荐设置）。LrtScriptRunner 会据此取 <root>/scripts 作为脚本目录，
+  # 并把 <root> 作为子进程 cwd，使 COMPOSITION.yaml 里的 output/xxx 相对路径正确落盘。
+  LRT_SKILL_ROOT: ""
+  # 直接指定脚本目录（优先级最高，覆盖 LRT_SKILL_ROOT）
+  LRT_SCRIPTS_DIR: ""
+  # Python 解释器。为空时按 python3 → python 顺序探测
+  LRT_PYTHON: ""
+# 全部需访问表（含既有表 + 2 张新表）。未在此白名单的表 host.db 调用会被拒绝
+tableWhitelist:
+  - agent_tasks
+  - agent_contexts
+  - crontab
+  - crontab_log
+  - agent_loop_metrics
+  - agent_loop_tuning_configs
+  - long_running_task_artifact
+  - long_running_task_evolution
+  - agent_approvals
+  - aip_interaction_session
+  - aip_interaction_task
+  - agent_skills
+routes:
+  # long_running_task_artifact CRUD
+  - method: POST
+    path: /api/v1/uctoo/long_running_task_artifact/add
+  - method: POST
+    path: /api/v1/uctoo/long_running_task_artifact/edit
+  - method: POST
+    path: /api/v1/uctoo/long_running_task_artifact/del
+  - method: POST
+    path: /api/v1/uctoo/long_running_task_artifact/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/long_running_task_artifact/:id
+  - method: GET
+    path: /api/v1/uctoo/long_running_task_artifact/:limit/:page
+  # long_running_task_evolution CRUD
+  - method: POST
+    path: /api/v1/uctoo/long_running_task_evolution/add
+  - method: POST
+    path: /api/v1/uctoo/long_running_task_evolution/edit
+  - method: POST
+    path: /api/v1/uctoo/long_running_task_evolution/del
+  - method: POST
+    path: /api/v1/uctoo/long_running_task_evolution/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/long_running_task_evolution/:id
+  - method: GET
+    path: /api/v1/uctoo/long_running_task_evolution/:limit/:page
+  # 自定义路由：长程任务核心能力
+  - method: POST
+    path: /api/v1/uctoo/long_running_task/lrt-plan
+  - method: POST
+    path: /api/v1/uctoo/long_running_task/lrt-execute
+  - method: POST
+    path: /api/v1/uctoo/long_running_task/lrt-intervene
+  - method: POST
+    path: /api/v1/uctoo/long_running_task/lrt-verify
+  - method: POST
+    path: /api/v1/uctoo/long_running_task/lrt-evolve
+  - method: POST
+    path: /api/v1/uctoo/long_running_task/lrt-deliver
+  - method: POST
+    path: /api/v1/uctoo/long_running_task/lrt-review

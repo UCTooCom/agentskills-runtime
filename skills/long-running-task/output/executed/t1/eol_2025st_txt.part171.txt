@@ -1,0 +1,43 @@
+ {
+
+            //     $('#leftGif').hide()
+
+            // })
+
+    });
+
+	</script>
+
+	-->
+
+            <div class="copyr">
+
+                <div>
+
+                    <a href="/html/cer.net/jj.htm">eol.cn简介</a> |
+
+                    <a href="/html/cer.net/lx.htm">联系方式</a> |
+
+                    <a href="/html/cer.net/sm.htm">网站声明</a> |
+
+                    <a href="/html/cer.net/zhaopinxinxi.htm">招聘信息</a> |
+
+                    <a href="/html/cer.net/icp.htm">京ICP证140769号</a> | 京ICP备12045350号 |
+
+                    <a href="//img.eol.cn/images/indexnew/www1024.jpg">京网文[2014]2016-306号</a> |
+
+                    <a href="//www.beian.gov.cn/portal/registerSystemInfo?recordcode=11010802020236">京公网安备
+
+                        11010802020236号</a>
+
+                </div>
+
+                <div>版权所有
+
+                    <a href="//www.cer.net/">北京中教双元科技集团有限公司</a> CERNET Corporation
+
+                </div>
+
+                <div>Mail to:
+
+                    <a href="mailto:webmaster@eol.cn">webm

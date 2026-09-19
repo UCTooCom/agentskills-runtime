@@ -24,7 +24,7 @@ public class SimpleConversationCompactor <: ConversationCompactor {
     override public func compact(conversation: Conversation): String {
         LogUtils.info(this.name, "Start to summarize conversation")
         let messages = MessageList([
-            Message.system(CONVERSATION_SUMMARY_SYSTEM_PROMPT)
+            Message.system(PromptConfig.resolveConversationSummarySystem())
         ])
         // Compose messages of all chat rounds
         for (chatRound in conversation) {

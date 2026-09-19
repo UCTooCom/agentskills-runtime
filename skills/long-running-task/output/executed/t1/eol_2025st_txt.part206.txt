@@ -1,0 +1,37 @@
+             var liuxueImg = res.data.operate[4][19].img_mess[0].img_url
+
+                    var liuxueLink = res.data.operate[4][19].img_mess[0].img_link
+
+                    var liuxueDom = ''
+
+                    if(robotFlag) {
+
+                        liuxueDom = (
+
+                            "<div class='xz-robot-box'>" + 
+
+                                "<img src='" + liuxueImg + "' alt='' class='xizhi-img' />" + 
+
+                            "</div>"
+
+                        )
+
+                    } else {
+
+                        liuxueDom = (
+
+                            "<div class='xz-robot-box'>" + 
+
+                                "<div class='tip tips1'>hi，我是高考小智</div>" +
+
+                                "<div class='tip tips2'>有问题，问我吧</div>" + 
+
+                                "<img src='" + liuxueImg + "' alt='' class='xizhi-img' />" + 
+
+                            "</div>"
+
+                        )
+
+                    }
+
+                    $('.left-nav-wrapper .

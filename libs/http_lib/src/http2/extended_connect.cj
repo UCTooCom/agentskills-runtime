@@ -206,7 +206,10 @@ public class H2WebSocketConnection <: AbstractConnection {
         let tmp = Array<UInt8>(length, repeat: 0)
         let n = read(tmp)
         if (n > 0 && offset + n <= buf.size) {
-            tmp[0..n].copyTo(buf, offset, 0, n)
+            // v21 修复：copyTo 签名为 (destination, srcStart, dstStart, length)，
+            // 原代码把目的偏移 offset 误传为 srcStart，与 request.cj:154 同款错误。
+            // 正确语义：从切片 srcStart=0 拷贝 n 字节到 buf 的 dstStart=offset。
+            tmp[0..n].copyTo(buf, 0, offset, n)
         }
         n
     }

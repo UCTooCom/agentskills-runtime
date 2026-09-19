@@ -74,7 +74,7 @@ python scripts/save_to_db.py --need output/needs/{case_id}.json --plan output/pl
 |------|------|--------|
 | `LLM_BASE_URL` / `OPENAI_BASE_URL` | LLM API 基址 | `https://api-ai.gitcode.com/v1`（AtomGit 昇腾 API） |
 | `LLM_API_KEY` / `OPENAI_API_KEY` | API 密钥 | 未设置时降级为规则/模板 |
-| `LLM_MODEL` | 模型名 | `deepseek-v4-flash` |
+| `LLM_MODEL` | 模型名 | `deepseek-flash` |
 | `DATABASE_URL` | PostgreSQL 连接串（直连模式） | — |
 
 ## 合规声明

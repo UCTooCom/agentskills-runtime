@@ -1,0 +1,57 @@
+_r {
+        float: right;
+    }
+
+    .header_wrap {
+        width: 1190px;
+        height: auto;
+        background: hsla(0, 0%, 100%, 0);
+        margin: 0 auto;
+        position: relative;
+    }
+
+    .lmzHeader {
+        height: 60px;
+        width: 1190px;
+        margin: 60px auto 0;
+    }
+
+    .zyxheard {
+        width: 1190px;
+        height: 100%;
+        background: #fff;
+        margin: 0 auto;
+        position: relative;
+        z-index: 1000;
+        padding: 0 20px;
+        box-sizing: border-box;
+    }
+
+    /* 图片logo1 */
+
+    .zyxheard .head_logo1 {
+        width: 169px;
+    }
+
+    .zyxheard .head_logo {
+        float: left;
+        height: 35px;
+        margin-top: 14px;
+        cursor: pointer;
+    }
+
+    /* 图片logo分界线 */
+
+    .zyxheard .logo_line {
+        display: inline-block;
+        width: 1px;
+        height: 10px;
+        margin: 27px 9px 0;
+        background: #b8b8b8;
+        opacity: .4;
+        float: left;
+    }
+
+    /* 图片logo2 */
+
+    .zyxheard .head_logo2 {

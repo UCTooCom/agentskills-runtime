@@ -4,12 +4,13 @@
 package magic.app.services.bridge
 
 import magic.interaction.{EventHandlerManager, AgentStartEvent, AgentEndEvent, ChatModelEndEvent, AgentStartEventHandler, AgentEndEventHandler, ChatModelEndEventHandler, EventResponse}
-import magic.core.agent.AgentResponse
+import magic.core.agent.{AgentResponse, AgentResponseStatus, AgentTerminationReason}
 import magic.app.models.uctoo.{AgentTasksPO, AgentMessagesPO, AgentContextsPO, AgentMemoriesPO, AgentsPO}
 import magic.app.services.uctoo.{AgentTasksService, AgentMessagesService, AgentContextsService, AgentMemoriesService, AgentsService}
 import magic.log.LogUtils
 import std.time.DateTime
 import std.collection.concurrent.ConcurrentHashMap
+import magic.app.core.database.DbSerialLock
 
 func reasonStr(reason: ?String): String {
     match (reason) { case Some(s) => s; case None => "unknown" }
@@ -21,6 +22,26 @@ func toJsonString(text: String): String {
 
 func toJsonArrayString(text: String): String {
     "[\"${text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n")}\"]"
+}
+
+/**
+ * Ch0 / 中断语义：把 AgentResponse 的终止原因映射为 agent_tasks.status 整型。
+ * 状态约定（与 AgentExecutionExecutor 对齐）：
+ *   1=running 2=completed 3=failed/error 4=cancelled 5=步数耗尽未收敛（新增）
+ * 核心目的：步数耗尽但未达成目标的任务，绝不再记为 completed(2)。
+ */
+func resolveTaskStatus(resp: AgentResponse): Int32 {
+    match (resp.terminationReason) {
+        case AgentTerminationReason.MaxStepsExhausted => return 5
+        case AgentTerminationReason.Cancelled => return 4
+        case AgentTerminationReason.Error => return 3
+        case AgentTerminationReason.Completed =>
+            match (resp.status) {
+                case AgentResponseStatus.Cancelled => return 4
+                case AgentResponseStatus.Failed => return 3
+                case _ => return 2
+            }
+    }
 }
 
 public class AgentPersistenceEventHandler {
@@ -36,7 +57,7 @@ public class AgentPersistenceEventHandler {
         if (let Some(cached) <- agentUuidCache.get(agentName)) {
             return cached
         }
-        let (agentList, _) = agentsService.getListWithFilter(1, 1, "", "{\"name\":{\"equals\":\"${agentName}\"}}")
+        let (agentList, _) = DbSerialLock.withLock({ => agentsService.getListWithFilter(1, 1, "", "{\"name\":{\"equals\":\"${agentName}\"}}") })
         if (agentList.size > 0) {
             let uuid = agentList[0].id
             agentUuidCache.add(agentName, uuid)
@@ -80,7 +101,7 @@ public class AgentPersistenceEventHandler {
                 taskPo.priority = Some(0)
                 taskPo.payload = Some(toJsonString(question))
                 taskPo.creator = Some(agentUuid)
-                let taskResult = tasksService.create(taskPo, agentName)
+                let taskResult = DbSerialLock.withLock({ => tasksService.create(taskPo, agentName) })
                 if (taskResult.success) {
                     let dbTaskId = if (let Some(data) <- taskResult.data) { data.id } else { "" }
                     activeTasks.add(agentName, dbTaskId)
@@ -96,7 +117,7 @@ public class AgentPersistenceEventHandler {
                 userMsg.content = Some(toJsonString(question))
                 userMsg.status = Some(1)
                 userMsg.creator = None<String>
-                let userMsgResult = messagesService.create(userMsg, agentName)
+                let userMsgResult = DbSerialLock.withLock({ => messagesService.create(userMsg, agentName) })
                 if (userMsgResult.success) {
                     LogUtils.info("AgentPersistenceEventHandler: saved user message for agent ${agentName}")
                 } else {
@@ -110,12 +131,12 @@ public class AgentPersistenceEventHandler {
                     // 这里可以将历史消息传递给 agent，需要修改事件或使用其他方式
                 }
 
-                let (agentList, _) = agentsService.getListWithFilter(1, 1, "", "{\"name\":{\"equals\":\"${agentName}\"}}")
+                let (agentList, _) = DbSerialLock.withLock({ => agentsService.getListWithFilter(1, 1, "", "{\"name\":{\"equals\":\"${agentName}\"}}") })
                 if (agentList.size > 0) {
                     let existingAgent = agentList[0]
                     let updatePo = AgentsPO()
                     updatePo.status = Some(1)
-                    let agentUpdateResult = agentsService.update(existingAgent.id, updatePo)
+                    let agentUpdateResult = DbSerialLock.withLock({ => agentsService.update(existingAgent.id, updatePo) })
                     if (agentUpdateResult.success) {
                         LogUtils.info("AgentPersistenceEventHandler: updated agent ${agentName} status to running")
                     } else {
@@ -127,7 +148,7 @@ public class AgentPersistenceEventHandler {
                     agentPo.agentType = "skill"
                     agentPo.status = Some(1)
                     agentPo.creator = None<String>
-                    let agentResult = agentsService.create(agentPo, agentName)
+                    let agentResult = DbSerialLock.withLock({ => agentsService.create(agentPo, agentName) })
                     if (agentResult.success) {
                         let newUuid = if (let Some(data) <- agentResult.data) { data.id } else { "" }
                         agentUuidCache.add(agentName, newUuid)
@@ -160,7 +181,7 @@ public class AgentPersistenceEventHandler {
                 if (let Some(taskId) <- taskIdOpt) {
                     po.taskId = Some(taskId)
                 }
-                let result = messagesService.create(po, agentName)
+                let result = DbSerialLock.withLock({ => messagesService.create(po, agentName) })
                 if (result.success) {
                     LogUtils.info("AgentPersistenceEventHandler: saved assistant message for agent ${agentName}")
                 } else {
@@ -181,15 +202,22 @@ public class AgentPersistenceEventHandler {
                 if (let Some(taskId) <- activeTasks.get(agentName)) {
                     let po = AgentTasksPO()
                     po.id = taskId
-                    po.status = Some(2)
+                    // Ch0 中断语义：状态必须由终止原因推导，不能一律写 completed(2)。
+                    // 此前硬编码 2 导致「步数耗尽未闭环」也被记成成功完成，
+                    // 使 resolveTaskStatus 形同虚设（从未被调用）。
+                    let finalStatus: Int32 = match (event.agentResponse) {
+                        case Some(resp) => resolveTaskStatus(resp)
+                        case None => 2
+                    }
+                    po.status = Some(finalStatus)
                     po.completedAt = Some(DateTime.now())
                     if (let Some(resp) <- event.agentResponse) {
                         po.result = Some(toJsonString(resp.content))
                     }
-                    let updateResult = tasksService.update(taskId, po)
+                    let updateResult = DbSerialLock.withLock({ => tasksService.update(taskId, po) })
                     if (updateResult.success) {
                         activeTasks.remove(agentName)
-                        LogUtils.info("AgentPersistenceEventHandler: updated task ${taskId} to completed for agent ${agentName}")
+                        LogUtils.info("AgentPersistenceEventHandler: updated task ${taskId} to status=${finalStatus} (2=completed 3=failed 4=cancelled 5=步数耗尽未闭环) for agent ${agentName}")
                     } else {
                         LogUtils.error("AgentPersistenceEventHandler: update task FAILED for ${taskId}, reason: ${reasonStr(updateResult.reason)}")
                     }
@@ -202,7 +230,7 @@ public class AgentPersistenceEventHandler {
                     msg.content = Some(toJsonString(resp.content))
                     msg.status = Some(1)
                     msg.creator = Some(agentUuid)
-                    let msgResult = messagesService.create(msg, agentName)
+                    let msgResult = DbSerialLock.withLock({ => messagesService.create(msg, agentName) })
                     if (!msgResult.success) {
                         LogUtils.error("AgentPersistenceEventHandler: save agent_end message FAILED, reason: ${reasonStr(msgResult.reason)}")
                     }
@@ -226,7 +254,7 @@ public class AgentPersistenceEventHandler {
                     memPo.tags = "[\"conversation\",\"result\"]"
                     memPo.metadata = "{\"source\":\"agent_end\"}"
                     memPo.creator = Some(agentUuid)
-                    let memResult = memoriesService.create(memPo, agentName)
+                    let memResult = DbSerialLock.withLock({ => memoriesService.create(memPo, agentName) })
                     if (memResult.success) {
                         LogUtils.info("AgentPersistenceEventHandler: saved memory for agent ${agentName}")
                     } else {

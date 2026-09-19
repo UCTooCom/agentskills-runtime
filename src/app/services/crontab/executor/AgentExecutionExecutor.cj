@@ -4,6 +4,7 @@
 package magic.app.services.crontab.executor
 
 import magic.log.LogUtils
+import magic.config.Config
 import magic.app.services.crontab.model.{CrontabExecutionContext, ExecutionResult}
 import magic.app.services.bridge.{AgentRuntimeBridge, CheckpointManager}
 import magic.app.services.uctoo.AgentTasksService
@@ -13,8 +14,12 @@ import magic.core.agent.{AgentRequest, AgentResponse, AgentResponseStatus}
 import magic.core.message.{Message, Conversation}
 import std.time.DateTime
 import std.core.Duration
+import magic.app.core.database.DbSerialLock
 
 public class AgentExecutionExecutor <: CrontabExecutor {
+    /// 终端内容最小长度阈值（见 isSopCompleted 说明）
+    private static let MIN_TERMINAL_CONTENT_LENGTH = 120
+
     public prop scheme: String {
         get() { "agent_execution" }
     }
@@ -22,8 +27,15 @@ public class AgentExecutionExecutor <: CrontabExecutor {
     private let bridge = AgentRuntimeBridge.instance
     private let tasksService = AgentTasksService()
     private let checkpointManager = CheckpointManager()
-    /// v11：多步循环最大轮数，防止无限循环
-    private let maxRounds = 10
+    /// v11：多步循环最大轮数，防止无限循环。
+    ///
+    /// Ch0.1 统一（tasks.md 0.1）：原为硬编码 30，与 `Config.maxReactNumber` 各自维护一份，改一处忘一处。
+    /// 现拆分出独立配置 `Config.agentExecutionSteps`（子 agent / crontab 执行，默认 30，env `AGENT_EXEC_STEPS` 可覆盖）。
+    /// 普通任务见 `Config.normalReactSteps`，长程任务内循环见 `Config.longRunningTaskSteps`。
+    /// （10 过紧——格式错误会消耗重试步数）。
+    /// 长程任务侧另有 `plugin.yaml` 的 `config.maxRounds`，由 LrtExecutor 自行读取，
+    /// 二者语义一致（单次执行的最大 ReAct 轮数），此处不再各写一份。
+    private let maxRounds = Config.agentExecutionSteps
 
     public func execute(context: CrontabExecutionContext): ExecutionResult {
         let startTime = DateTime.now()
@@ -38,7 +50,7 @@ public class AgentExecutionExecutor <: CrontabExecutor {
         LogUtils.info("AgentExecutionExecutor", "开始执行Agent任务: agentId=${agentId}, taskName=${context.taskName}")
 
         try {
-            let agentResult = bridge.loadFromDatabase(agentId)
+            let agentResult = DbSerialLock.withLock({ => bridge.loadFromDatabase(agentId) })
             if (!agentResult.success) {
                 LogUtils.error("AgentExecutionExecutor", "Agent加载失败: ${agentId}, reason=${agentResult.reason}")
                 updateTaskStatus(context.crontabId, agentId, Some(3), None, Some("Agent加载失败: ${agentResult.reason}"))
@@ -96,7 +108,11 @@ public class AgentExecutionExecutor <: CrontabExecutor {
                         return ExecutionResult.failureResult("Agent执行失败: ${agentId}", calcDuration(startTime), -1)
                     }
 
-                    // 5. SOP 完成判定：response 内容中包含完成标志，或没有更多工具调用需求
+                    // 5. SOP 完成判定（Ch0.1 改造：废弃魔法字符串）
+                    //    原实现匹配 "## 完成总结"/"投研报告已生成" 等中文魔法串，
+                    //    换措辞即失效，且与长程任务的结构化判定口径不一致。
+                    //    现改为结构化判定：优先 <answer> 标签（执行内核基线 spec 5.14），
+                    //    其次要求内容达到最小实质长度；长度过短视为中间态，继续下一轮。
                     if (isSopCompleted(response.content)) {
                         LogUtils.info("AgentExecutionExecutor", "SOP已完成，退出循环: agentId=${agentId}, round=${round}")
                         break
@@ -127,18 +143,32 @@ public class AgentExecutionExecutor <: CrontabExecutor {
         }
     }
 
-    /// v11：SOP 完成判定
-    /// 检查 response 内容中是否包含完成标志
+    /// v11 / Ch0.1：SOP 完成判定（结构化）
+    ///
+    /// 判定优先级：
+    ///   1. 显式 `<answer>` 闭合标签 —— 执行内核基线（spec 5.14），最可靠的"已给出最终答复"信号；
+    ///   2. 内容达到最小实质长度且不含工具调用痕迹 —— 视为已收敛的总结性回复。
+    ///
+    /// 注意：
+    ///   - 这里**不再**匹配 "## 完成总结"/"投研报告已生成" 等业务措辞魔法串。
+    ///     长程任务的"是否真的完成"由插件侧 `LrtArtifactVerifier`（文件存在/非空/日期/内容）
+    ///     与 `LrtVerifier`（结构化验核报告）判定，宿主侧只做"循环是否该退出"的收敛判断，
+    ///     职责边界清晰（tasks.md 0.1 / design 2.4.4）。
+    ///   - 最小长度阈值 120：低于此长度通常仍是中间态碎片，过早退出会让任务"假完成"。
     private func isSopCompleted(content: String): Bool {
-        // 如果内容中包含以下完成标志，认为 SOP 已完成
-        let completionMarkers = ["## 完成总结", "## 执行总结", "任务已完成", "所有步骤已完成", "投研报告已生成", "Final Answer"]
-        for (marker in completionMarkers) {
-            if (content.contains(marker)) {
-                return true
-            }
+        let trimmed = content.trimAscii()
+        if (trimmed.isEmpty()) {
+            return false
         }
-        // 如果内容较短（<100字符）且不包含工具调用格式，认为是总结性回复
-        if (content.size < 100 && !content.contains("Action:") && !content.contains("```json")) {
+        // 1. 显式 answer 闭合标签 —— 最强信号
+        if (trimmed.contains("</answer>")) {
+            return true
+        }
+        // 2. 已收敛：内容足够长且不再要求工具调用
+        let hasToolCallTrace = trimmed.contains("Action:") ||
+            trimmed.contains("<tool_call") ||
+            trimmed.contains("```json")
+        if (trimmed.size >= MIN_TERMINAL_CONTENT_LENGTH && !hasToolCallTrace) {
             return true
         }
         return false
@@ -163,7 +193,7 @@ public class AgentExecutionExecutor <: CrontabExecutor {
                 if (status == Some(2)) {
                     task.completedAt = Some(DateTime.now())
                 }
-                tasksService.update(crontabId, task)
+                DbSerialLock.withLock({ => tasksService.update(crontabId, task) })
             } catch (_: Exception) {}
         }
     }

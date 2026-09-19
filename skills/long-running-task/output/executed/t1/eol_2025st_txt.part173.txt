@@ -1,0 +1,63 @@
+elector("#tzy_h5");
+
+    tzy.style.display = "block"
+
+  } else {
+
+    // var tzy = document.querySelector("#tzy_pc");
+
+    // tzy.style.display = "block"
+
+  }
+
+  function handleOpenH5(e) {
+
+    e.preventDefault();
+
+    window.open('https://mnzy.gaokao.cn/?channelCode=yyb');
+
+  }
+
+  function handleOpenPC(e) {
+
+    e.preventDefault();
+
+    window.open('https://mnzy.gaokao.cn/?channelCode=yyb');
+
+  }
+
+</script>-->  
+
+    <div class="right_suspend"></div>
+
+
+
+    <script type="text/babel">
+
+        //切帧逻辑
+
+        function randomAd(ad_key, first_imgarr, storage_ad_obj, storage_img, status, obj_current_key) {
+
+            if (!first_imgarr || first_imgarr.length == 0) {
+
+                return [];
+
+            }
+
+            if (first_imgarr.length == 1) { //如果1张默认展示一张
+
+
+
+                return first_imgarr[0];
+
+
+
+            } else if (first_imgarr.length == 2) { //如果2张进行切帧
+
+
+
+                if (storage_img && storage_img[status]) { //缓存已存在进行两帧循环
+
+
+
+                    let currentIndex = s

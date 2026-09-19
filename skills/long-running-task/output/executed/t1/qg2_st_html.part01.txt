@@ -1,0 +1,132 @@
+ick(function (event) {
+ event.stopPropagation();
+console.log(12312312)
+ if ($('.gzmask').attr('data-open') == 'true') {
+ $('.gzmask').hide();
+ $('.gzmask').attr('data-open', 'false');
+ } else {
+ $('.gzmask').show();
+ $('.gzmask').attr('data-open', 'true');
+ }
+ // $('html').css({ 'overflow': 'hidden', 'height': '100%' });
+ // $('body').css({ 'overflow': 'hidden', 'height': '100%' });
+ });
+ $('.main').click(function (event) {
+ $('.gzmask').hide();
+ $('.gzmask').attr('data-open', 'false');
+ // $('html').css({ 'overflow': 'auto', 'height': 'auto' });
+ // $('body').css({ 'overflow': 'hidden', 'height': 'auto' });
+ });
+ $('.gzimg').click(function (event) {
+ event.stopPropagation();
+ });
+ });
+ 
+ 
+ 
+ 
+ 
+ 
+查大学
+ 
+ 
+ 
+ 
+查专业
+ 
+ 
+ 
+ 
+模拟报志愿
+ 
+ 
+ 
+ 
+志愿课堂
+ 
+ 
+ 
+ 
+APP下载
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+双一流名单
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+招生答疑
+ 
+ 
+ 
+ 
+ 
+ 
+高校直播
+ 
+ 
+ 
+ 
+ 
+ 
+分数线
+ 
+ 
+ 
+ 
+ 
+ 
+志愿填报
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+各省招规
+ 
+ 
+ 
+ 
+ 
+ 
+加分政策
+ 
+ 
+ 
+ 
+ 
+ 
+扫码下载掌上高考app
+ 
+ 
+ 
+ 
+ -->
+ ﻿
+ 
+ -->
+ 
+-->
+ 
+ 
+ 
+ 
+2026年高考招生直播咨询会启动
+ 
+重点大学分数线
+ 
+中国大学排行榜
+ 
+历年高考真题及

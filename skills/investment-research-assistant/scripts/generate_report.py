@@ -11,7 +11,7 @@
 环境变量:
     OPENAI_BASE_URL / LLM_BASE_URL   （默认 https://api-ai.gitcode.com/v1，AtomGit 昇腾 API）
     OPENAI_API_KEY / LLM_API_KEY
-    LLM_MODEL                          （默认 deepseek-v4-flash）
+    LLM_MODEL                          （默认 deepseek-flash）
 """
 
 import argparse
@@ -36,7 +36,7 @@ def call_llm(prompt: str) -> str:
     """调用 OpenAI 兼容接口（AtomGit 昇腾 API）生成简报"""
     base = os.environ.get("LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "https://api-ai.gitcode.com/v1"
     key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY") or "sk-dummy-key"
-    model = os.environ.get("LLM_MODEL") or "deepseek-v4-flash"
+    model = os.environ.get("LLM_MODEL") or "deepseek-flash"
     url = f"{base.rstrip('/')}/chat/completions"
     payload = {
         "model": model,

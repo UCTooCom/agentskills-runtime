@@ -1,0 +1,47 @@
+.eol.cn/e_html/gk/gkst/2022st.shtml">2022</a>
+
+                            
+
+                        </div>
+
+                    </div>
+
+                    <div class="sline">
+
+                        <div class="gkzt-xueke mtT_30 clearfix">
+
+    <li>
+
+        <div class="word-xueke">语文</span>
+
+            <div class="xueke-a">
+
+                <a href=""><font color="grey">真题</font></a>
+
+                <span>|</span>
+
+                <a href=""><font color="grey">答案</font></a>
+
+                <span>|</span>
+
+                <a href=""><font color="grey">解析</font></a>
+
+                
+
+            </div>
+
+    </li>
+
+    <li>
+
+        <div class="word-xueke">英语</span>
+
+            <div class="xueke-a">
+
+                <a href="https://gaokao.eol.cn/shiti/yy/202506/t20250612_2674288.shtml"><font color="red">真题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/yy/202506/t20250612_2674296.shtml"><font color="red">答案</font></a>
+
+          

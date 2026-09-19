@@ -6,6 +6,7 @@ package http_lib.connection
  */
 
 import std.collection.ArrayList
+import std.env.getVariable
 import http_lib.buffer.ByteBuffer
 import http_lib.utils.{copyBytes, maxInt64, toHex64}
 import jinguissl.live.*
@@ -562,18 +563,66 @@ public func tls12GcmOpenFixtureHandshake(encodedRecord: Array<Byte>): Array<Byte
 
 /**
  * 解析系统 CA 证书包路径。
- * 探测各 Linux 发行版的常见位置，返回
- * 从找到的第一个可读文件中解析的 X509 信任锚点。
+ * 探测顺序：环境变量（SSL_CERT_FILE / CURL_CA_BUNDLE / REQUESTS_CA_BUNDLE）
+ * → 项目内 ./ssl/cacert.pem 逃生舱 → Windows 常见 Git / certifi CA 包位置
+ * → 各 Linux 发行版 / macOS 常见位置。
+ * 返回从找到的第一个可读文件中解析的 X509 信任锚点；全部落空则返回空数组。
  */
 private func resolveSystemCaCerts(): Array<X509Certificate> {
-    let candidatePaths = [
+    let candidatePaths = ArrayList<String>()
+    // 1) 标准环境变量优先：跨平台通用注入手段，Windows 无系统 CA 包时的主要配置入口。
+    //    例如 SSL_CERT_FILE=C:\...\certifi\cacert.pem
+    for (key in ["SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE"]) {
+        match (getVariable(key)) {
+            case Some(v) =>
+                if (!v.isEmpty()) {
+                    candidatePaths.add(v)
+                }
+            case None => ()
+        }
+    }
+    // 2) 项目内逃生舱：把任意公共 CA 根证书包放这里即可，无需改环境变量。
+    //    相对进程工作目录（runtime 根目录）解析。
+    for (p in [
+        "./ssl/cacert.pem",
+        "./ssl/ca-bundle.crt"
+    ]) {
+        candidatePaths.add(p)
+    }
+    // 3) Windows 常见 CA 包位置。
+    //    原实现只探测 Unix 路径，Windows 上必然全部落空 → 返回空锚点数组 →
+    //    抛出 "No CA trust anchors available"，导致 web_fetch 等所有 HTTPS 请求失败。
+    //    注意：Git for Windows 的实际布局是 <盘符>\...\Git\mingw64\etc\ssl\certs\，
+    //    且常被装在 D 盘，故 C/D 两盘与 etc/ssl、usr/ssl、ssl 三种布局都要覆盖。
+    for (p in [
+        "C:/Program Files/Git/mingw64/etc/ssl/certs/ca-bundle.crt",
+        "C:/Program Files/Git/mingw64/etc/ssl/cert.pem",
+        "C:/Program Files/Git/usr/ssl/certs/ca-bundle.crt",
+        "C:/Program Files/Git/usr/ssl/cert.pem",
+        "C:/Program Files/Git/mingw64/ssl/certs/ca-bundle.crt",
+        "C:/Program Files/Git/etc/ssl/certs/ca-bundle.crt",
+        "D:/Program Files/Git/mingw64/etc/ssl/certs/ca-bundle.crt",
+        "D:/Program Files/Git/mingw64/etc/ssl/cert.pem",
+        "D:/Program Files/Git/usr/ssl/certs/ca-bundle.crt",
+        "D:/Program Files/Git/usr/ssl/cert.pem",
+        "D:/Program Files/Git/mingw64/ssl/certs/ca-bundle.crt",
+        "D:/Program Files/Git/etc/ssl/certs/ca-bundle.crt",
+        "C:/Program Files/python/Lib/site-packages/certifi/cacert.pem",
+        "C:/ProgramData/Git/ssl/certs/ca-bundle.crt"
+    ]) {
+        candidatePaths.add(p)
+    }
+    // 4) 原有 Unix / Linux / macOS 路径
+    for (p in [
         "/etc/ssl/certs/ca-certificates.crt",     // Debian/Ubuntu 路径
         "/etc/pki/tls/certs/ca-bundle.crt",        // RHEL/CentOS/Fedora 路径
         "/etc/ssl/ca-bundle.pem",                  // OpenSUSE 路径
         "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",  // RHEL 7+ 路径
         "/etc/ssl/cert.pem",                       // Alpine/macOS 路径
-        "/usr/local/etc/openssl/cert.pem",         // Homebrew OpenSSL 路径
-    ]
+        "/usr/local/etc/openssl/cert.pem"          // Homebrew OpenSSL 路径
+    ]) {
+        candidatePaths.add(p)
+    }
     for (path in candidatePaths) {
         try {
             let pem = String.fromUtf8(File.readFrom(Path(path)))

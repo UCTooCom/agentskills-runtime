@@ -1,0 +1,29 @@
+{
+  "artifact_path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\_test_envelope\\probe.txt",
+  "artifact_type": "artifact",
+  "passed": true,
+  "checks": [
+    {
+      "name": "existence",
+      "passed": true,
+      "detail": "文件存在且非空"
+    },
+    {
+      "name": "non_empty",
+      "passed": true,
+      "detail": "文本内容 32 字符"
+    },
+    {
+      "name": "no_secret_leak",
+      "passed": true,
+      "detail": "未发现高危密钥字面量"
+    },
+    {
+      "name": "size",
+      "passed": true,
+      "detail": "体积 34 字节（<20MB）"
+    }
+  ],
+  "summary": "通过",
+  "checked_at": "2026-09-15T23:54:35+08:00"
+}

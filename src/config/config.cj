@@ -10,6 +10,8 @@ import magic.utils.{exists, setEnv, getEnv}
 import std.unicode.UnicodeStringExtension
 import std.fs.{File, Path}
 import std.regex.Regex
+import std.convert.*  // Int64.tryParse 等 Parsable 扩展（parseIntEnv 使用）
+import std.collection.{HashSet, Set}
 
 /**
  * Wrapper for providing a convenient way to get and set environment variables.
@@ -88,6 +90,21 @@ public class Config {
      * If set to a file path, logs will be saved to that file.
      */
     public static var logFile: String = "stderr"
+
+    /**
+     * Ch0.3（spec 5.18 / design 2.5.1）：日志文件名带时间戳。
+     *
+     * true  —— 实际日志写入 `<basename>-<yyyyMMdd>-<HHmmss>.log`（同秒重启追加 -1/-2），
+     *          历史日志不再被覆盖，便于事后回溯长程任务的完整执行轨迹。
+     * false —— 沿用 Config.logFile 原路径（单文件追加）。
+     */
+    public static var logFileTimestamped = true
+
+    /**
+     * Ch0.3：日志保留天数。启动时清理超期的带时间戳日志文件（只删符合模板的文件）。
+     * 设为 0 或负数表示不清理。
+     */
+    public static var logRetentionDays = 14
 
     /**
      * Whether to enable agent log.
@@ -200,9 +217,36 @@ public class Config {
     public static let env = EnvWrapper()
 
     /**
-     * The max number of react execution steps
+     * The max number of react execution steps.
+     * 长程任务（long_running_task）单步 ReAct 也可能需要较多轮，规范定为 30；
+     * 普通任务一般远早于上限结束，仅放宽上限不影响正常终止。
      */
-    public static var maxReactNumber = 10
+    public static var maxReactNumber = 30
+
+    /**
+     * 步数预算分层（Ch0 / spec long-running-task 决策 2）：
+     * 普通任务、子 agent 执行、长程任务内循环各自独立配置，互不影响。
+     * 环境变量可覆盖：`AGENT_NORMAL_STEPS` / `AGENT_EXEC_STEPS` / `LRT_REACT_STEPS`。
+     */
+    public static var normalReactSteps = Config.parseIntEnv("AGENT_NORMAL_STEPS", 30)
+    public static var agentExecutionSteps = Config.parseIntEnv("AGENT_EXEC_STEPS", 30)
+    /// 长程任务（long_running_task）求解器内循环 ReAct 步数预算，默认放宽到 100，
+    /// 避免「找到题目图片却步数耗尽」的中断（2026-09-15 实测教训）。
+    public static var longRunningTaskSteps = Config.parseIntEnv("LRT_REACT_STEPS", 100)
+
+    /**
+     * 从环境变量读取 Int64 配置，解析失败回退默认值。
+     */
+    private static func parseIntEnv(name: String, fallback: Int64): Int64 {
+        match (getEnv(name)) {
+            case Some(v) =>
+                match (Int64.tryParse(v)) {
+                    case Some(n) => n
+                    case None => fallback
+                }
+            case None => fallback
+        }
+    }
 
     /**
      * The max retry number when failing to generate outputs of required json schema
@@ -264,6 +308,56 @@ public class Config {
             return false
         }
         return true
+    }
+
+    /**
+     * 当前模型能力声明（Ch0 / spec 多模态感知，2026-09-16）。
+     *
+     * 根因：此前运行时对模型只有 `MODEL_NAME` / `MODEL_CONFIG`，没有任何能力元数据，
+     * 因此既不会把「模型其实原生支持视觉」这件事告诉 agent，技能也只能按纯文本假设
+     * 写死 OCR 降级逻辑——最终出现「deepseek-flash 本是多模态，却误判为纯文本而强制 OCR」。
+     *
+     * 这里集中解析能力集合，供 agent / 技能 / 系统提示词读取。
+     * 来源优先级：环境变量 `MODEL_CAPABILITIES`（逗号分隔，如 "vision,tools,reasoning"）
+     *   > 由 `MODEL_NAME` 自动推断（含 v4-1 / vl / vision 视为具备 vision；
+     *     deepseek 系且含 flash 视为具备 vision —— 见下；含 reasoner 视为 reasoning）。
+     */
+    public static var modelCapabilities: Set<String> = Config.resolveModelCapabilities()
+
+    private static func resolveModelCapabilities(): Set<String> {
+        let caps = HashSet<String>()
+        match (getEnv("MODEL_CAPABILITIES")) {
+            case Some(v) =>
+                for (part in v.split(",")) {
+                    let t = part.trimAscii()
+                    if (!t.isEmpty()) {
+                        caps.add(t.toAsciiLower())
+                    }
+                }
+            case None => ()
+        }
+        let lower = MODEL_NAME.toAsciiLower()
+        // DeepSeek 2026-09 起把正式 ID 简化为 `deepseek-flash`（= DeepSeek-V4.1-Flash）。
+        // 新名字里既没有 "v4-1" 也没有 "vl" / "vision"，只靠老特征词会被判成纯文本模型，
+        // 于是又把「原生多模态却强制 OCR」的老毛病带回来。
+        // 官方模型页明示 `deepseek-flash` 支持图像理解，而 `deepseek-v4-pro` **不支持**，
+        // 所以这里必须同时命中 deepseek + flash，不能只判 deepseek。
+        let deepseekFlash = lower.contains("deepseek") && lower.contains("flash")
+        if (caps.contains("vision") || lower.contains("v4-1") || lower.contains("vl") || lower.contains("vision") || deepseekFlash) {
+            caps.add("vision")
+        }
+        if (caps.contains("reasoning") || lower.contains("reasoner")) {
+            caps.add("reasoning")
+        }
+        caps.add("tools")
+        return caps
+    }
+
+    /**
+     * 便捷判断：当前模型是否具备视觉/多模态输入能力。
+     */
+    public static func modelSupportsVision(): Bool {
+        return Config.modelCapabilities.contains("vision")
     }
 
     /**

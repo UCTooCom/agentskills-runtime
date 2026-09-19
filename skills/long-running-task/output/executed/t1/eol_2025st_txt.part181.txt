@@ -1,0 +1,39 @@
+                              a2_imarr[1].group2.push(item);
+
+                            }
+
+                        })
+
+                    }
+
+                    var storage_img = JSON.parse(localStorage.getItem('storage_ad'));
+
+                    var a2_ad_arr = a2_imarr.filter(item => item.group2.length > 0);
+
+                    var a2_ad_data = randomAd('storage_ad', a2_ad_arr, storage_ad_obj, storage_img, 'a2_ad_status', 'a2_ad');
+
+
+
+                    if (a2_ad_data.length == 0) {
+
+                        a2_ad_data = {
+
+                            group2: []
+
+                        };
+
+                    }
+
+                    for (var i = 0; i < a2_ad_data.group2.length; i++) {
+
+                        $('.listAd-mid' + i).html('<a href="' + a2_ad_data.group2[i].href + '">' + '<img src="' + a2_ad_data.group2[i].img + '" />' + '</a>');
+
+                    }
+
+
+
+                    //A3广告--首屏文字链6191--不切帧
+
+                    var group3 = data.data[6191] || [];
+
+            

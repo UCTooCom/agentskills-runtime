@@ -91,6 +91,13 @@ NEVER generate ${Tag.Observation} yourself. This is an important requirement.
 If there are no available tools, generate final answer directly.
 
 You must generate either a pair of ${Tag.Thought} and ${Tag.Action} or a single ${Tag.Answer}.
+
+# Strict output format rules
+Your output MUST start immediately with ${Tag.Thought}, ${Tag.Action} or ${Tag.Answer}.
+Never write any prose, summary, or "Let me ..." sentence before the first tag.
+Never put ${Tag.Thought} at the END of your output - it must come first.
+${Tag.Answer} means the task is fully finished; if any tool still needs to run, output ${Tag.Action} instead.
+Output that does not start with a valid tag is rejected and you will be asked to reply again.
 """
 }
 

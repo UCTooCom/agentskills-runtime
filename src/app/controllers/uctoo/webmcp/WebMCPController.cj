@@ -11,6 +11,7 @@ import magic.core.model.ChatModel
 import magic.core.agent.{AgentDefinition, AgentLoadManager}
 import magic.log.LogUtils
 import magic.tool.webmcp.{SSEConnectionManager, PendingToolCallManager, FrontendToolRegistry, WebMCPToolContext}
+import magic.app.services.bridge.LrtEventBridge
 import http_lib.server.{WebSocketConn, ConnectionController, WebSocketOpcode}
 import http_lib.message.{HttpRequest as LibHttpRequest, HttpResponse as LibHttpResponse}
 import http_lib.core.HttpStatus
@@ -18,9 +19,10 @@ import http_lib.connection.Connection
 import stdx.encoding.json.{JsonObject, JsonString, JsonBool, JsonValue, JsonArray, JsonInt}
 import std.time.DateTime
 import std.time.*
-import std.sync.AtomicBool
+import std.sync.{AtomicBool, Mutex}
 import f_util.UUID
 import std.collection.{HashMap, ArrayList}
+import std.convert.Parsable
 
 /**
  * WebMCP WebSocket 控制器
@@ -28,6 +30,10 @@ import std.collection.{HashMap, ArrayList}
  * 实现与前端 webmcp-sdk 的通信
  */
 public class WebMCPController {
+    /// /events 长连接的心跳次数上限：120 * 15s = 30 分钟。
+    /// 到点即主动关闭，由客户端带 lastEventId 重连，避免连接与心跳协程泄漏。
+    public static let EVENTS_HEARTBEAT_MAX_TICKS: Int64 = 120
+
     private let _skillManager: SkillManager
     private let _chatModel: ChatModel
     private let _agentLoadManager: AgentLoadManager
@@ -86,11 +92,25 @@ public class WebMCPController {
 
         // 设置 WebMCPToolContext 全局单例的会话上下文
         // （供 WebMCPToolHelper.executeToolCall 使用）
-        WebMCPToolContext.instance.setSessionContext(
+        //
+        // Ch0.5：改用 registerDefaultContext 而非 setSessionContext。
+        // 本方法是**幂等的"当前会话挂载"**（每次请求都会走一遍），
+        // 若走 setSessionContext 会把绑定栈逐次请求堆满；
+        // registerDefaultContext 只刷新默认绑定，栈深度恒为 0。
+        // 需要请求作用域隔离的嵌套场景（如同一请求内并发子任务）
+        // 才使用 setSessionContext + endSessionContext 配对。
+        WebMCPToolContext.instance.registerDefaultContext(
             sessionId,
             _sseConnectionManager,
             _pendingToolCallManager
         )
+
+        // Ch9.2：把 SSE 连接管理器注入长程任务事件桥。
+        // 长程任务是**后台长跑**的，没有"当前请求"可依附，因此这里一次性注入、
+        // 长期持有（与 SSEEventBridge 的「每请求 init/clear」不同）；
+        // 推送时按 sessionId 取具体连接，连接不存在则只走 WebSocket 通道。
+        // attachSSEManager 内部幂等，重复调用无副作用。
+        LrtEventBridge.attachSSEManager(_sseConnectionManager)
 
         // 将用户菜单数据注入 Agent system prompt
         // 让大模型知道用户有权限访问的页面列表，从而引导用户通过前端工具操作页面
@@ -330,9 +350,30 @@ public class WebMCPController {
                 // === 真流式分支：劫持连接 ===
                 let controller = ConnectionController(conn)
 
+                // 连接级写锁：保证 heartbeat 协程、connected 事件、实时 writer 回调对同一个 conn 的
+                // write+flush 串行化，避免 "Socket is already writing: concurrent write is not allowed"
+                // 引发的 TLS 写失败（浏览器侧表现为 net::ERR_SSL_PROTOCOL_ERROR，重连也必死）。
+                let writeLock = Mutex()
+                let writeSSE = { message: String =>
+                    writeLock.lock()
+                    try {
+                        conn.write(unsafe { message.rawData() })
+                        conn.flush()
+                        true
+                    } catch (e: Exception) {
+                        false
+                    } finally {
+                        writeLock.unlock()
+                    }
+                }
+
+                // v26 韧性：每轮 agent 运行开始时先清空事件缓冲（在写 SSE 头之前），
+                // 使 /events 回放范围收敛到当前轮次，并彻底避免「/events 在 reset 前抢连导致回放上轮残留事件」的竞态。
+                _sseConnectionManager.resetBuffer(sessionId)
+
                 // 写入 SSE 响应头（Content-Type: text/event-stream）
                 // 参考 handleSSE 第 743 行，不声明 chunked，用 Connection: close 让浏览器按裸字节流模式解析
-                let sseHeader = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
+                let sseHeader = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nX-Accel-Buffering: no\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
                 controller.write(unsafe { sseHeader.rawData() })
                 req.takenOver = true
 
@@ -340,19 +381,15 @@ public class WebMCPController {
 
                 // 注册 sessionId→writer 回调到 SSEConnectionManager
                 // writer 回调：将 SSE 消息字符串写入连接并 flush
-                // SSEConnectionManager.pushMessage 内部构建 "event: ${eventType}\ndata: ${data}\n\n" 格式
-                _sseConnectionManager.registerConnection(sessionId, { message: String =>
-                    try {
-                        conn.write(unsafe { message.rawData() })
-                        conn.flush()
-                    } catch (e: Exception) {
-                        LogUtils.warn("[WebMCPController] Real stream SSE write failed: ${e.message}")
-                    }
+                // 注意：此处**不**捕获写入异常——连接断开时让异常向外传播，
+                // 由 SSEConnectionManager.pushMessage 捕获并精确移除该失效订阅，
+                // 避免旧实现中「静默吞掉异常 → 持续向已关闭 socket 写入 → 刷屏 Socket is already closed」的问题。
+                let realSubId = _sseConnectionManager.registerConnection(sessionId, { message: String =>
+                    writeSSE(message)
                 })
 
                 // 推送 connected 事件，通知前端 SSE 连接已建立
-                conn.write(unsafe { "event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n".rawData() })
-                conn.flush()
+                writeSSE("event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n")
 
                 // 启动 SSE 心跳保活协程（每 15 秒推送 ": ping\n\n"）
                 // 参考 handleSSE 第 760-772 行的心跳保活模式
@@ -363,10 +400,7 @@ public class WebMCPController {
                         if (stopHeartbeat.load()) {
                             break
                         }
-                        try {
-                            conn.write(unsafe { ": ping ${DateTime.now()}\n\n".rawData() })
-                            conn.flush()
-                        } catch (e: Exception) {
+                        if (!writeSSE(": ping ${DateTime.now()}\n\n")) {
                             LogUtils.info("[WebMCPController] Real stream heartbeat failed, connection closed: sessionId=${sessionId}")
                             break
                         }
@@ -388,16 +422,14 @@ public class WebMCPController {
                         LogUtils.debug("[WebMCPController] Real stream response: ${streamResponse}")
                     } else {
                         LogUtils.error("[WebMCPController] Real stream: invalid JSON body")
-                        // 推送错误事件到前端
-                        conn.write(unsafe { "event: response.failed\ndata: {\"error\":\"Invalid JSON body\"}\n\n".rawData() })
-                        conn.flush()
+                        // 通过 pushMessage 推送（自动缓冲 + 转发到所有活跃订阅者）
+                        _sseConnectionManager.pushMessage(sessionId, "response.failed", "{\"error\":\"Invalid JSON body\"}")
                     }
                 } catch (e: Exception) {
                     LogUtils.error("[WebMCPController] Real stream error: ${e.message}")
-                    // 推送错误事件到前端
+                    // 通过 pushMessage 推送（自动缓冲 + 转发）
                     let errorMsg = e.message
-                    conn.write(unsafe { "event: response.failed\ndata: {\"error\":\"${errorMsg}\"}\n\n".rawData() })
-                    conn.flush()
+                    _sseConnectionManager.pushMessage(sessionId, "response.failed", "{\"error\":\"${errorMsg}\"}")
                 }
 
                 // 停止心跳保活协程
@@ -405,19 +437,19 @@ public class WebMCPController {
 
                 // 流式完成后，写入最终的 MCP JSON-RPC 2.0 响应
                 // 响应格式：event: response.completed\ndata: ${MCP响应}\n\n
+                // v26 改为经由 pushMessage：既转发到实时订阅者，也写入环形缓冲，
+                // 使断线后连接的客户端可通过 GET /events 回放拿到最终答复。
                 if (streamSucceeded && !streamResponse.isEmpty()) {
-                    try {
-                        let finalEvent = "event: response.completed\ndata: ${streamResponse}\n\n"
-                        conn.write(unsafe { finalEvent.rawData() })
-                        conn.flush()
+                    let pushed = _sseConnectionManager.pushMessage(sessionId, "response.completed", streamResponse)
+                    if (pushed) {
                         LogUtils.info("[WebMCPController] Real stream completed: sessionId=${sessionId}")
-                    } catch (e: Exception) {
-                        LogUtils.error("[WebMCPController] Real stream final write failed: ${e.message}")
+                    } else {
+                        LogUtils.info("[WebMCPController] Real stream completed (no live connection, buffered for replay): sessionId=${sessionId}")
                     }
                 }
 
-                // 注销 SSEConnectionManager 回调，关闭连接
-                _sseConnectionManager.removeConnection(sessionId)
+                // 仅注销本真实流式连接的订阅（不影响可能并存的 /events 重连订阅）
+                _sseConnectionManager.unregister(sessionId, realSubId)
                 try {
                     conn.close()
                 } catch (e: Exception) {
@@ -848,38 +880,45 @@ public class WebMCPController {
         match (req.connection) {
             case Some(conn) =>
                 let controller = ConnectionController(conn)
+                // 连接级写锁：串行化 heartbeat / connected / 实时 writer 回调的 write+flush，
+                // 杜绝 concurrent write is not allowed → TLS 写失败 → 浏览器 ERR_SSL_PROTOCOL_ERROR。
+                let writeLock = Mutex()
+                let writeSSE = { message: String =>
+                    writeLock.lock()
+                    try {
+                        conn.write(unsafe { message.rawData() })
+                        conn.flush()
+                        true
+                    } catch (e: Exception) {
+                        false
+                    } finally {
+                        writeLock.unlock()
+                    }
+                }
                 // v18修复：去掉裸写的 Transfer-Encoding: chunked 头，改用 SSE 标准的裸 keep-alive 字节流
                 // 根因：原裸写 chunked 头但后续 conn.write()+flush() 从不按 chunked 分块格式封装
                 //       （每块需 \r\n<块大小>\r\n 前缀 + \r\n 后缀，结束需 0\r\n\r\n），
                 //       浏览器按 chunked 解析时遇到裸 SSE 字节 → 非法分块 → net::ERR_INVALID_CHUNKED_ENCODING
                 // 修复：SSE 是无限流，不应声明 chunked（除非每块手动封装）。改用 Connection: close 让
                 //       浏览器按"读到连接关闭即响应结束"的裸字节流模式解析，避免分块编码校验失败。
-                controller.write(unsafe { "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n".rawData() })
+                controller.write(unsafe { "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nX-Accel-Buffering: no\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n".rawData() })
                 req.takenOver = true
 
-                _sseConnectionManager.registerConnection(sessionId, { message: String =>
-                    try {
-                        conn.write(unsafe { message.rawData() })
-                        conn.flush()
-                    } catch (e: Exception) {
-                        LogUtils.warn("[WebMCPController] SSE write failed: ${e.message}")
-                    }
+                let sseSubId = _sseConnectionManager.registerConnection(sessionId, { message: String =>
+                    // 写入失败返回 false，由 pushMessage 精确移除该失效订阅
+                    writeSSE(message)
                 })
 
                 LogUtils.info("[WebMCPController] SSE connection registered: sessionId=${sessionId}")
 
-                conn.write(unsafe { "event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n".rawData() })
-                conn.flush()
+                writeSSE("event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n")
 
                 spawn {
                     while (true) {
                         sleep(Duration.second * 15)
-                        try {
-                            conn.write(unsafe { ": ping ${DateTime.now()}\n\n".rawData() })
-                            conn.flush()
-                        } catch (e: Exception) {
+                        if (!writeSSE(": ping ${DateTime.now()}\n\n")) {
                             LogUtils.info("[WebMCPController] SSE connection closed: sessionId=${sessionId}")
-                            _sseConnectionManager.removeConnection(sessionId)
+                            _sseConnectionManager.unregister(sessionId, sseSubId)
                             break
                         }
                     }
@@ -891,6 +930,7 @@ public class WebMCPController {
                 res.status(200)
                    .header("Content-Type", "text/event-stream")
                    .header("Cache-Control", "no-cache")
+                   .header("X-Accel-Buffering", "no")
                    .header("Connection", "close")
                 setCorsHeaders(req, res)
 
@@ -898,12 +938,144 @@ public class WebMCPController {
                 LogUtils.warn("[WebMCPController] SSE fallback: connection not hijackable, real-time events will not be pushed (use main branch instead)")
                 _sseConnectionManager.registerConnection(sessionId, { message: String =>
                     LogUtils.info("[WebMCPController] SSE fallback register (events will not be delivered without hijackable connection): ${message}")
+                    true
                 })
 
                 LogUtils.info("[WebMCPController] SSE connection registered (fallback): sessionId=${sessionId}")
 
                 let initEvent = "event: connected\ndata: {\"sessionId\":\"${sessionId}\"}\n\n"
                 res.send(initEvent)
+        }
+    }
+
+    /**
+     * 可重连 SSE 事件端点（GET /api/v1/uctoo/webmcp/events）
+     *
+     * 断线续传的核心。配合 SSEConnectionManager 的环形缓冲 + 单调 eventId 使用：
+     *   1. 先注册一个实时 writer（后续新事件经此实时推送到本连接）
+     *   2. 再回放缓冲中 id > lastEventId 的历史事件（断线期间错过的部分）
+     *   3. 保持连接（15s 心跳保活），直到对端关闭或本轮 agent 运行结束
+     *
+     * 客户端约定：
+     *   - 请求 query：sessionId（默认 webmcp-default）、lastEventId（已收到的最大事件 id，默认 0）
+     *   - 每个 SSE 帧都带 "id: N"，客户端按 id 去重，断线后携最后 id 重连即可续传
+     *   - 收到 event: response.completed / response.failed / abort 即本轮结束，客户端可主动关闭
+     *
+     * 与 handleSSE 的差异：handleSSE 是「工具调用指令」通道（前端 EventSource 长连），
+     * 本端点是「agent 运行事件」的**可重连回放**通道，专为 POST 真流式中断后的续传设计。
+     */
+    public func handleEventsReplay(req: HttpRequest, res: HttpResponse): Unit {
+        LogUtils.info("[WebMCPController] Events replay (reconnectable SSE) request received")
+
+        setCorsHeaders(req, res)
+           .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+           .header("Access-Control-Allow-Headers", "*")
+
+        let sidOpt = req.queryParam("sessionId")
+        let sessionId = if (let Some(s) <- sidOpt) { s } else { "webmcp-default" }
+
+        var lastEventId: Int64 = 0
+        let lastOpt = req.queryParam("lastEventId")
+        if (let Some(s) <- lastOpt) {
+            try {
+                lastEventId = Int64.parse(s)
+            } catch (_: Exception) {
+                lastEventId = 0
+            }
+        }
+
+        // fromTail=1：本轮「首次连接」语义——只接收连接之后产生的新事件，不回放历史缓冲。
+        // 目的：避免把上一轮（或其它并发运行）遗留在缓冲里的事件回放进本轮显示
+        // （表现为「显示出上一轮的结果」），更避免被回放到的 response.completed 提前终止
+        // 本轮事件流（表现为「新一轮内容完全不显示」）。断线续传时前端不带 fromTail，
+        // 而是携带 lastEventId，仍走回放补发路径。
+        var fromTail = false
+        let fromTailOpt = req.queryParam("fromTail")
+        if (let Some(v) <- fromTailOpt) {
+            if (v == "1" || v == "true") {
+                fromTail = true
+            }
+        }
+
+        match (req.connection) {
+            case Some(conn) =>
+                let controller = ConnectionController(conn)
+                // 连接级写锁：串行化 heartbeat / connected / 实时 writer 回调 / 回放循环的 write+flush，
+                // 杜绝 concurrent write is not allowed → TLS 写失败 → 浏览器 ERR_SSL_PROTOCOL_ERROR（重连必死）。
+                let writeLock = Mutex()
+                let writeSSE = { message: String =>
+                    writeLock.lock()
+                    try {
+                        conn.write(unsafe { message.rawData() })
+                        conn.flush()
+                        true
+                    } catch (e: Exception) {
+                        false
+                    } finally {
+                        writeLock.unlock()
+                    }
+                }
+                // SSE 头 + retry 提示（浏览器 EventSource 用；本场景前端用 fetch 自行维护 lastEventId 重连）
+                let sseHeader = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nX-Accel-Buffering: no\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nretry: 3000\r\n\r\n"
+                controller.write(unsafe { sseHeader.rawData() })
+                req.takenOver = true
+
+                // 1. 先注册实时 writer（后续新事件经此实时推送）
+                let subId = _sseConnectionManager.registerConnection(sessionId, { message: String =>
+                    writeSSE(message)
+                })
+
+                // 2. 回放断线期间错过的事件（客户端侧按 id 去重，故此处直接回放 id>lastEventId 全量即可）
+                //    fromTail 时跳过回放：本轮首次连接只要「连接之后」的新事件，避免回放上轮残留。
+                var missed = ArrayList<String>()
+                if (!fromTail) {
+                    missed = _sseConnectionManager.replayEvents(sessionId, lastEventId)
+                }
+                for (frame in missed) {
+                    if (!writeSSE(frame)) {
+                        LogUtils.warn("[WebMCPController] Events replay write failed")
+                        _sseConnectionManager.unregister(sessionId, subId)
+                        return
+                    }
+                }
+                LogUtils.info("[WebMCPController] Events replay connection established: sessionId=${sessionId}, lastEventId=${lastEventId.toString()}, replayed=${missed.size.toString()}")
+
+                // 3. 保活心跳（防止代理/浏览器因空闲关闭连接）
+                //
+                // 心跳必须有**次数上限**。对端断开后，内核发送缓冲往往还能让
+                // `conn.write` 继续"成功"一段时间甚至一直成功，于是这个协程和它
+                // 持有的连接永远不会退出。前端每次重连都会新开一条 /events，
+                // 泄漏逐条累积，最终把 HTTP 服务的可用连接耗光 ——
+                // 表现为前端新请求 `net::ERR_TIMED_OUT`（见 web/log/web_connection.md）。
+                // 到点后主动收摊：注销订阅 + 关闭连接，让客户端带 lastEventId 重连。
+                spawn {
+                    var ticks: Int64 = 0
+                    while (ticks < WebMCPController.EVENTS_HEARTBEAT_MAX_TICKS) {
+                        sleep(Duration.second * 15)
+                        if (!writeSSE(": ping ${DateTime.now()}\n\n")) {
+                            LogUtils.info("[WebMCPController] Events replay connection closed: sessionId=${sessionId}")
+                            _sseConnectionManager.unregister(sessionId, subId)
+                            break
+                        }
+                        ticks++
+                    }
+                    if (ticks >= WebMCPController.EVENTS_HEARTBEAT_MAX_TICKS) {
+                        LogUtils.info("[WebMCPController] Events replay heartbeat budget exhausted, closing: sessionId=${sessionId}")
+                        _sseConnectionManager.unregister(sessionId, subId)
+                        try {
+                            conn.close()
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+                // 注意：方法在此返回后，连接仍由 req.takenOver 持有，实时 writer + 心跳协程维持推送；
+                // writer 或心跳写失败时会注销 subId，连接最终由对端关闭。
+
+            case None =>
+                LogUtils.warn("[WebMCPController] Events replay: connection not hijackable")
+                res.status(200)
+                   .header("Content-Type", "application/json")
+                   .json("{\"error\":\"Events replay requires a hijackable connection\"}")
         }
     }
 

@@ -1,0 +1,29 @@
+{
+  "artifact_path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\_it_sop\\parsed\\goal.json",
+  "artifact_type": "json",
+  "passed": true,
+  "checks": [
+    {
+      "name": "existence",
+      "passed": true,
+      "detail": "文件存在且非空"
+    },
+    {
+      "name": "json_valid",
+      "passed": true,
+      "detail": "合法 JSON"
+    },
+    {
+      "name": "no_secret_leak",
+      "passed": true,
+      "detail": "未发现高危密钥字面量"
+    },
+    {
+      "name": "size",
+      "passed": true,
+      "detail": "体积 257 字节（<20MB）"
+    }
+  ],
+  "summary": "通过",
+  "checked_at": "2026-09-15T06:39:05+08:00"
+}

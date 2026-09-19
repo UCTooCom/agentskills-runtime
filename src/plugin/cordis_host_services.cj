@@ -10,6 +10,7 @@ import std.time.DateTime
 import std.core.Duration
 import magic.log.LogUtils
 import magic.app.services.mcp.{McpOpenService, McpCallResult}
+import magic.app.services.uctoo.OperateLogService
 import jsonvalue.JsonValue
 import stdx.serialization.serialization.{DataModel, DataModelNull, DataModelInt, DataModelString, DataModelBool, DataModelSeq}
 import ystyle::cordis_host.PluginInstance
@@ -23,16 +24,22 @@ import f_orm.wrap.Propagation
  * 宿主在 RPC 连接上注册的服务 handler，插件进程经 ctx.invoke 反向调用——
  * 插件访问宿主能力的**唯一**入口（design §5.2.3 / §5.6 安全边界）。
  *
- * 三个 host service：
+ * 六个 host service：
  * - **host.db**：query/execute 两方法；参数为受限查询描述（参数化 + 表白名单，禁透传任意 SQL 文本）；
  *   实现委托宿主 f_orm 数据源/连接池；**行级权限条件由宿主侧强制附加**（插件无法绕过）
  * - **host.log**：日志转发 LogUtils（级别/消息/插件名前缀）
  * - **host.cache**：键值缓存委托宿主 CacheManager；键空间以插件名隔离（防跨插件越权）
  * - **host.mcp**：统一 MCP 开放服务；插件经 ctx.invoke("host.mcp","call",args) 调用外部 MCP（天眼查等），
  *   宿主侧 McpOpenService 集中管理凭证（EnvFileService），插件不接触凭证本体（design §2.0 方案 B）
+ * - **host.event**：长程任务事件上报（spec §9.2）；插件经 ctx.invoke("host.event","emit",args)
+ *   把 8 类事件交给宿主 LrtEventBridge 广播（WS + SSE）。插件进程拿不到宿主的连接表，
+ *   事件出口必须收敛在宿主，故不提供插件直发通道
+ * - **host.db_schema_lookup**：数据契约查询（spec §14.2）；返回表结构（pg_catalog 元数据）+
+ *   幂等键（主键/唯一约束）+ 示例行。**复用 host.db 同一套 tableWhitelist + 行级权限实现**，
+ *   不另起一套；插件经 ctx.invoke("host.db_schema_lookup","lookup",{table}) 调用，供 AI 先查后写
  *
  * 注册时机：CordisHostManager 启动进程插件后，调用 registerFor(instance, pluginId)
- * 经 instance.client.registerRequestHandler 注册 4 个 handler。
+ * 经 instance.client.registerRequestHandler 注册 5 个 handler。
  *
  * 契约（JSON-RPC method/params/result 签名）作为插件 SDK 契约文档随 cordis_plugin
  * 模板分发（PS-T026 子任务 4）。
@@ -52,7 +59,7 @@ public class CordisHostServices {
     public init() {}
 
     /**
-     * 为进程插件实例注册 3 个 host service handler
+     * 为进程插件实例注册 5 个 host service handler
      *
      * @param instance cordis 插件实例（client 公开，可直接注册 handler）
      * @param pluginId 插件名（键空间隔离用）
@@ -63,7 +70,9 @@ public class CordisHostServices {
         client.registerRequestHandler("host.log", this.createLogHandler(pluginId))
         client.registerRequestHandler("host.cache", this.createCacheHandler(pluginId))
         client.registerRequestHandler("host.mcp", this.createMcpHandler(pluginId))
-        LogUtils.info("[CordisHostServices] registered host.db/host.log/host.cache/host.mcp for plugin '${pluginId}'")
+        client.registerRequestHandler("host.event", this.createEventHandler(pluginId))
+        client.registerRequestHandler("host.db_schema_lookup", this.createSchemaLookupHandler(pluginId))
+        LogUtils.info("[CordisHostServices] registered host.db/host.log/host.cache/host.mcp/host.event/host.db_schema_lookup for plugin '${pluginId}'")
     }
 
     /**
@@ -121,6 +130,186 @@ public class CordisHostServices {
                     this.dbError("missing params")
             }
         }
+    }
+
+    // ── host.db_schema_lookup handler ───────────────────────────────
+    //
+    // 数据契约查询服务（spec §14.2）：返回「表结构 + 幂等键 + 示例行」。
+    // 复用 host.db 同一套 tableWhitelist + 行级权限实现，不另起一套。
+    // 插件经 ctx.invoke("host.db_schema_lookup", "lookup", { table }) 调用；
+    // 返回的 columns / idempotency_keys / sample_rows 供 AI 在写库前「先查后写」。
+
+    /**
+     * 创建 host.db_schema_lookup handler
+     *
+     * params 结构：
+     * ```json
+     * { "table": "agent_tasks", "userId": "...", "permissions": ["admin"], "sampleLimit": 3 }
+     * ```
+     *
+     * result 结构：
+     * ```json
+     * {
+     *   "table": "agent_tasks",
+     *   "columns": [ { "name": "...", "type": "...", "nullable": "YES|NO", "comment": "..." } ],
+     *   "idempotency_keys": [ { "type": "PRIMARY KEY|UNIQUE", "columns": ["id"] } ],
+     *   "sample_rows": [ { ... }, ... ]
+     * }
+     * ```
+     * 错误：{ "error": "message" }
+     */
+    private func createSchemaLookupHandler(pluginId: String): RequestCallback {
+        return { req =>
+            LogUtils.info("[CordisHostServices][host.db_schema_lookup] plugin '${pluginId}' request, method=${req.method}")
+            match (req.params) {
+                case Some(p) =>
+                    let actualParams = this.unwrapInvokeParams(p)
+                    LogUtils.info("[CordisHostServices][host.db_schema_lookup] actualParams=${actualParams.stringify()}")
+                    let result = this.executeSchemaLookup(pluginId, actualParams)
+                    LogUtils.info("[CordisHostServices][host.db_schema_lookup] result=${match (result) { case Some(v) => v.stringify(); case None => "None" }}")
+                    result
+                case None =>
+                    LogUtils.error("[CordisHostServices][host.db_schema_lookup] plugin '${pluginId}' missing params")
+                    this.dbError("missing params")
+            }
+        }
+    }
+
+    /// 执行数据契约查询：表结构（pg_catalog 元数据）+ 幂等键（主键/唯一约束）+ 示例行
+    private func executeSchemaLookup(pluginId: String, params: JsonValue): ?JsonValue {
+        let fields = this.extractFields(params)
+        let table = this.extractStringValue(fields, "table")
+        LogUtils.info("[CordisHostServices][host.db_schema_lookup] plugin='${pluginId}', table='${table}'")
+
+        // 复用 host.db 表白名单：仅允许查询白名单内表的结构（防越权探查元数据）
+        match (this.tableWhitelist.get(pluginId)) {
+            case Some(allowed) =>
+                if (!allowed.contains(table)) {
+                    LogUtils.error("[CordisHostServices][host.db_schema_lookup] table '${table}' not in whitelist for plugin '${pluginId}'")
+                    return this.dbError("table '${table}' not in whitelist for plugin '${pluginId}'")
+                }
+            case None =>
+                LogUtils.error("[CordisHostServices][host.db_schema_lookup] no table whitelist configured for plugin '${pluginId}'")
+                return this.dbError("no table whitelist configured for plugin '${pluginId}'")
+        }
+
+        let userId = this.extractStringValue(fields, "userId")
+        let permissions = this.extractStringArray(fields, "permissions")
+        let sampleLimit = this.extractInt(fields, "sampleLimit")
+
+        try {
+            let executor = ORM.executor()
+            let columns = this.querySchemaColumns(executor, table)
+            let idempotencyKeys = this.queryIdempotencyKeys(executor, table)
+            let sampleRows = this.querySampleRows(executor, table, userId, permissions, sampleLimit)
+            let resultObj = HashMap<String, JsonValue>()
+            resultObj["table"] = JsonValue.fromDataModel(DataModelString(table))
+            resultObj["columns"] = this.arrayToJsonValue(columns)
+            resultObj["idempotency_keys"] = this.arrayToJsonValue(idempotencyKeys)
+            resultObj["sample_rows"] = this.arrayToJsonValue(sampleRows)
+            return Some(JsonValue.from(resultObj))
+        } catch (e: Exception) {
+            LogUtils.error("[CordisHostServices][host.db_schema_lookup] plugin '${pluginId}' error: ${e.message}")
+            LogUtils.error("[CordisHostServices][host.db_schema_lookup] exception type: ${e.toString()}")
+            return this.dbError("schema lookup error: ${e.message}")
+        }
+    }
+
+    /// 查询表字段结构（列名/类型/可空/注释），从 pg_catalog 取元数据
+    private func querySchemaColumns(executor: SqlExecutor, table: String): ArrayList<JsonValue> {
+        let sql = "SELECT row_to_json(t)::text AS row_data FROM ("
+            + "SELECT a.attname AS name, "
+            + "pg_catalog.format_type(a.atttypid, a.atttypmod) AS type, "
+            + "CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS nullable, "
+            + "COALESCE(d.description, '') AS comment "
+            + "FROM pg_catalog.pg_attribute a "
+            + "JOIN pg_catalog.pg_class cl ON cl.oid = a.attrelid "
+            + "JOIN pg_catalog.pg_namespace n ON n.oid = cl.relnamespace "
+            + "LEFT JOIN pg_catalog.pg_description d ON d.objoid = a.attrelid AND d.objsubid = a.attnum "
+            + "WHERE cl.relname = '${table}' AND n.nspname = 'public' AND a.attnum > 0 AND NOT a.attisdropped "
+            + "ORDER BY a.attnum) t"
+        LogUtils.info("[CordisHostServices][host.db_schema_lookup] columns SQL: ${sql}")
+        let jsonStrings = executor.setSql(sql).singleList<String>(0)
+        let rows = ArrayList<JsonValue>()
+        for (s in jsonStrings) {
+            rows.add(JsonValue.parse(s))
+        }
+        return rows
+    }
+
+    /// 查询主键/唯一约束作为幂等键（复合约束的多个列归并到同一组）
+    private func queryIdempotencyKeys(executor: SqlExecutor, table: String): ArrayList<JsonValue> {
+        let sql = "SELECT row_to_json(t)::text AS row_data FROM ("
+            + "SELECT tc.constraint_name AS constraint_name, "
+            + "tc.constraint_type AS type, "
+            + "kcu.column_name AS column_name "
+            + "FROM information_schema.table_constraints tc "
+            + "JOIN information_schema.key_column_usage kcu "
+            + "ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema "
+            + "WHERE tc.table_schema = 'public' AND tc.table_name = '${table}' "
+            + "AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE') "
+            + "ORDER BY tc.constraint_type DESC, tc.constraint_name, kcu.ordinal_position) t"
+        LogUtils.info("[CordisHostServices][host.db_schema_lookup] idempotency SQL: ${sql}")
+        let jsonStrings = executor.setSql(sql).singleList<String>(0)
+        // 按 constraint_name 归并列：复合约束的多列合并进同一组
+        let grouped = HashMap<String, JsonValue>()
+        for (s in jsonStrings) {
+            match (JsonValue.parse(s)) {
+                case JsonValue.Map(m) =>
+                    let cname = match (m.get("constraint_name")) { case Some(JsonValue.String(v)) => v; case _ => "" }
+                    let ctype = match (m.get("type")) { case Some(JsonValue.String(v)) => v; case _ => "" }
+                    let col = match (m.get("column_name")) { case Some(JsonValue.String(v)) => v; case _ => "" }
+                    if (cname.isEmpty()) {
+                        continue
+                    }
+                    let entry: ?JsonValue = grouped.get(cname)
+                    let colsArr: ArrayList<JsonValue> = match (entry) {
+                        case Some(JsonValue.Map(em)) => match (em.get("columns")) {
+                            case Some(JsonValue.Array(a)) => a
+                            case _ => ArrayList<JsonValue>()
+                        }
+                        case _ => ArrayList<JsonValue>()
+                    }
+                    colsArr.add(JsonValue.fromDataModel(DataModelString(col)))
+                    let objMap = HashMap<String, JsonValue>()
+                    objMap["type"] = JsonValue.fromDataModel(DataModelString(ctype))
+                    objMap["columns"] = this.arrayToJsonValue(colsArr)
+                    grouped[cname] = JsonValue.from(objMap)
+                case _ => ()
+            }
+        }
+        let result = ArrayList<JsonValue>()
+        for (k in grouped.keys()) {
+            result.add(grouped.get(k) ?? JsonValue.Null)
+        }
+        return result
+    }
+
+    /// 查询示例行（受行级权限约束，默认上限 3 行，避免 token 膨胀）
+    private func querySampleRows(
+        executor: SqlExecutor,
+        table: String,
+        userId: String,
+        permissions: ArrayList<String>,
+        sampleLimit: ?Int64
+    ): ArrayList<JsonValue> {
+        let rowLevelWhere = this.buildRowLevelCondition(userId, permissions, table)
+        var innerSql = "SELECT * FROM ${table}"
+        if (!rowLevelWhere.isEmpty()) {
+            innerSql = innerSql + " WHERE " + rowLevelWhere
+        }
+        var sql = "SELECT row_to_json(t)::text AS row_data FROM (${innerSql}) t LIMIT "
+        match (sampleLimit) {
+            case Some(l) => sql = sql + l.toString()
+            case None => sql = sql + "3"
+        }
+        LogUtils.info("[CordisHostServices][host.db_schema_lookup] sample SQL: ${sql}")
+        let jsonStrings = executor.setSql(sql).singleList<String>(0)
+        let rows = ArrayList<JsonValue>()
+        for (s in jsonStrings) {
+            rows.add(JsonValue.parse(s))
+        }
+        return rows
     }
 
     /**
@@ -185,6 +374,20 @@ public class CordisHostServices {
         } catch (e: Exception) {
             LogUtils.error("[CordisHostServices][host.db] plugin '${pluginId}' db error: ${e.message}")
             LogUtils.error("[CordisHostServices][host.db] exception type: ${e.toString()}")
+            // 写入失败也要留痕（spec 5.12.1 规则 5 的「审计留痕」包含影响记录，
+            // 失败同样是「影响 0 条」的事实）；query/count 不属写入，不打点。
+            if (operation == "execute") {
+                OperateLogService.recordPluginLog(
+                    pluginId,
+                    table,
+                    this.extractStringValue(fields, "subOp"),
+                    "",
+                    0,
+                    userId: userId,
+                    status: "failed",
+                    errorMessage: e.message
+                )
+            }
             return this.dbError("db error: ${e.message}")
         }
     }
@@ -287,9 +490,45 @@ public class CordisHostServices {
         LogUtils.info("[CordisHostServices][host.db] executeExecute SQL: ${sql}")
         let affected = executor.setSql(sql).update
 
+        // 审计留痕（spec 5.12.1 规则 5）：本方法是 L3 插件 insert/update/delete 出来的
+        // 唯一通道，在此统一打点——插件不必各自实现，也不存在「某个插件漏写」的可能。
+        // 写审计失败不影响业务（OperateLogService.recordLog 内部吞异常只记 warn）。
+        let auditOperation = if (subOp.isEmpty()) { "execute" } else { subOp }
+        OperateLogService.recordPluginLog(
+            pluginId,
+            table,
+            auditOperation,
+            this.summarizeData(dataMap),
+            affected,
+            userId: userId,
+            traceId: this.extractStringValue(fields, "traceId")
+        )
+
         let resultObj = HashMap<String, JsonValue>()
         resultObj["affected"] = JsonValue.fromDataModel(DataModelInt(affected))
         return Some(JsonValue.from(resultObj))
+    }
+
+    /// 把待写入的列值拼成 JSON 文本，供审计摘要使用（脱敏与截断在 OperateLogService 内做）
+    private func summarizeData(data: HashMap<String, JsonValue>): String {
+        if (data.size == 0) {
+            return "{}"
+        }
+        let sb = StringBuilder()
+        sb.append("{")
+        var first = true
+        for (key in data.keys()) {
+            if (!first) {
+                sb.append(",")
+            }
+            match (data.get(key)) {
+                case Some(v) => sb.append("\"${key}\":${v.stringify()}")
+                case None => sb.append("\"${key}\":null")
+            }
+            first = false
+        }
+        sb.append("}")
+        sb.toString()
     }
 
     /// 执行 count 操作
@@ -618,6 +857,81 @@ public class CordisHostServices {
         return Some(JsonValue.from(errorObj))
     }
 
+    // ── host.event handler ───────────────────────────────────────────
+
+    /**
+     * 创建 host.event handler
+     *
+     * 用途：让**进程隔离插件**把长程任务事件（8 类，spec §9.2）推给宿主，
+     * 由宿主 `LrtEventBridge` 统一广播到 WebSocket / SSE。
+     *
+     * 为什么不让插件自己发 SSE：SSE 连接表与 WebSocket 广播缓冲都在宿主进程内，
+     * 插件进程拿不到；且 issue 一条"事件只能经宿主出口"的边界，前端只需一套订阅。
+     *
+     * params 结构（走 `ctx.invoke("host.event","emit",args)`，`unwrapInvokeParams`
+     * 会把 args[0] 拆出来）：
+     * ```json
+     * {
+     *   "type": "step_start",              // LrtEventType.wireName() 之一
+     *   "taskId": "...", "sessionId": "...", "agentId": "...", "traceId": "...",
+     *   "payload": { ... }                 // 事件专有字段（如 stepName/stepIndex）
+     * }
+     * ```
+     *
+     * result 结构：`{ "ok": true }`；事件类型不识别时 `{ "ok": false, "error": "..." }`
+     * ——不抛异常，事件投递失败不该打断插件的主流程。
+     */
+    private func createEventHandler(pluginId: String): RequestCallback {
+        return { req =>
+            match (req.params) {
+                case Some(p) =>
+                    let payload = this.unwrapInvokeParams(p)
+                    let fields = this.extractFields(payload)
+                    let eventType = this.extractStringValue(fields, "type")
+                    let taskId = this.extractStringValue(fields, "taskId")
+                    let sessionId = this.extractStringValue(fields, "sessionId")
+                    let agentId = this.extractStringValue(fields, "agentId")
+                    let traceId = this.extractStringValue(fields, "traceId")
+                    let extra = match (fields.get("payload")) {
+                        case Some(v) => v
+                        case None => JsonValue.Map(HashMap<String, JsonValue>())
+                    }
+                    this.emitLrtEvent(pluginId, eventType, taskId, sessionId, agentId, traceId, extra)
+                case None =>
+                    this.eventError("missing params")
+            }
+        }
+    }
+
+    /// 分派到 LrtEventBridge；未知类型记日志并返回 ok=false
+    private func emitLrtEvent(
+        pluginId: String,
+        eventType: String,
+        taskId: String,
+        sessionId: String,
+        agentId: String,
+        traceId: String,
+        extra: JsonValue
+    ): ?JsonValue {
+        let ok = LrtEventRelay.emit(eventType, taskId, sessionId, agentId, traceId, extra)
+        if (!ok) {
+            LogUtils.warn("[CordisHostServices][host.event] plugin '${pluginId}' 发送未知事件类型 '${eventType}'，已忽略")
+            this.eventError("unknown event type: ${eventType}")
+        } else {
+            let resultObj = HashMap<String, JsonValue>()
+            resultObj["ok"] = JsonValue.fromDataModel(DataModelBool(true))
+            Some(JsonValue.from(resultObj))
+        }
+    }
+
+    /// 返回 event 错误响应
+    private func eventError(message: String): ?JsonValue {
+        let errorObj = HashMap<String, JsonValue>()
+        errorObj["ok"] = JsonValue.fromDataModel(DataModelBool(false))
+        errorObj["error"] = JsonValue.fromDataModel(DataModelString(message))
+        Some(JsonValue.from(errorObj))
+    }
+
     // ── host.mcp handler ─────────────────────────────────────────────
 
     /**
@@ -678,7 +992,13 @@ public class CordisHostServices {
                         case None => "{}"
                     }
                     LogUtils.info("[CordisHostServices][host.mcp] calling mcpAlias='${mcpAlias}', tool='${tool}', argumentsJson='${argumentsJson}'")
-                    let result = this.mcpOpenService.callWithJsonString(mcpAlias, tool, argumentsJson)
+                    // 审计上下文（spec 5.13.1 规则 3）：操作人取自插件入参，来源标记 host.mcp。
+                    // 实际落库由 McpOpenService.call 统一完成，此处只负责把上下文传下去。
+                    let mcpActorId = this.extractStringValue(fields, "userId")
+                    let result = this.mcpOpenService.callWithJsonString(
+                        mcpAlias, tool, argumentsJson,
+                        actorId: mcpActorId, pluginId: pluginId, source: "host.mcp"
+                    )
                     return this.buildMcpCallResult(result)
                 case "listTools" =>
                     let tools = this.mcpOpenService.listTools(mcpAlias)

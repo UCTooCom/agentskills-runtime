@@ -1,0 +1,63 @@
+		<a href="https://mnzy.gaokao.cn/?channelCode=yyb">
+
+					<!--<div onclick='handleZy()'>-->
+
+						<!--<img src="/e_html/gk/gxmd/images/icon1.png" /> -->
+
+						<img src="https://www.eol.cn/e_html/gk/tongyong/img/ai.jpg">
+
+						<p><font color="red">模拟报志愿</font></p>
+
+					</a>
+
+				</div>
+
+				
+
+				<div class="gj-li">
+
+					<a href="https://daxue.eol.cn">
+
+						<img src="/e_html/gk/gxmd/images/icon2.png" />
+
+						<p>正规高校</p>
+
+					</a>
+
+				</div>
+
+
+
+				<div class="gj-li">
+
+					<a href="https://www.gaokao.cn/guide?fromcoop=yyb2">
+
+						<img src="/e_html/gk/gxmd/images/icon7.png" />
+
+						<p><font color="red">掌上高考app</font></p>
+
+					</a>
+
+				</div>
+
+			
+
+				<div class="gj-li">
+
+					<a href="https://g.eol.cn/shareapp?fromapk=center">
+
+						<img src="/e_html/gk/gxmd/images/icon3.png" />
+
+						<p>查询专业</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/wap/gxxzzy/index.html">
+
+						<img src="/e_html/gk/gxmd/images/icon4.png" />
+
+					

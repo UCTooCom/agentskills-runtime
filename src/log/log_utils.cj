@@ -154,4 +154,12 @@ public struct LogUtils {
     public static func error(ex: Exception): Unit {
         error(buildExceptionMessage(ex))
     }
+
+    //------------------------------------------------------------
+    /// §11.3：注入磁盘水位告警出口（组合根 main.cj 调用）。
+    /// magic.log 不直接依赖桥接层，改由组合根注入 LrtEventBridge.pushMonitorAlert，
+    /// 避免包环（桥接层已 import magic.log.LogUtils）。
+    public static func setWatermarkAlerter(f: (String, Int64, Int64) -> Unit): Unit {
+        LogUtilsImpl.setWatermarkAlerter(f)
+    }
 }

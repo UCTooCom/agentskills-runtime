@@ -1,0 +1,43 @@
+               var a5_imgarr = [{ group5: [] }, { group5: [] }];
+
+                    var a5_res = data.data[9582] || [];
+
+                    var sucai_2 = [];
+
+                    for (var i = 0; i < a5_res.length; i++) {
+
+                        if (Number(a5_res[i].publish_id) != 0) {
+
+                            sucai_2.push(a5_res[i])
+
+                        }
+
+                    }
+
+                    if (sucai_2.length == 0) {
+
+                        $('.a5ad').hide();
+
+                    } else {
+
+                        $('.a5ad').show();
+
+                        if (a5_res) {
+
+                            a5_res.forEach(function (item, index) {
+
+                                if (index < 2) {
+
+                                    a5_imgarr[0].group5.push(item);
+
+                                } else {
+
+                                    a5_imgarr[1].group5.push(item)
+
+                                }
+
+                            })
+
+                        }
+
+         

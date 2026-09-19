@@ -26,6 +26,20 @@ import std.collection.{HashMap, ArrayList}
 
 import std.sync.AtomicBool
 
+// Ch9：长程任务意图路由依赖
+import magic.app.services.lrt.LongTaskApiService
+
+/**
+ * 长程任务触发前缀（Ch9 意图路由）
+ *
+ * 模块级常量而非类字段：这些前缀是**协议约定**，不随实例变化。
+ * 放在类里会成为每个 WebMCPProtocol 实例的一份拷贝。
+ *
+ * 含中英文冒号两种写法（`: ` 与 `：`），以及 `/lrt` 简写。
+ * 顺序无关（都是 startsWith 判定），但保持"人类写法在前"便于阅读。
+ */
+let LRT_TRIGGER_PREFIXES: Array<String> = ["长程任务:", "长程任务：", "/lrt"]
+
 /**
  * WebMCP 协议处理器
  * 实现 Model Context Protocol 核心协议处理逻辑
@@ -1518,6 +1532,20 @@ public class WebMCPProtocol {
         // 初始化 SSEEventBridge（在 ReAct 执行过程中实时推送 reasoning 到 SSE）
         SSEEventBridge.instance.initialize(_sseConnectionManager, _sessionId)
 
+        // ── Ch9：长程任务意图路由（Ch0.5 遗留项在此落地）─────────────────
+        // 用户以显式前缀表达"这是一个长程任务"时，不走普通 ReAct，
+        // 改为提交到长程任务插件（规划 → 建调度 → 立即首回合）。
+        //
+        // 为什么用"显式前缀"而不是让模型自己判断：
+        // 长程任务会写库、建 crontab、拉起后台长时间运行的回合循环，
+        // 属于**副作用很强**的操作。让模型从任意一句"帮我做个研究"里
+        // 自己推断，会出现"用户只是闲聊却被建了一条调度"的问题。
+        // 显式前缀把触发权交回用户，代价是用户要多打四个字——
+        // 相对"误触发"的代价，这个交换是划算的。
+        if (let Some(goal) <- extractLrtGoal(userMessage)) {
+            return handleLongRunningTaskRoute(goal, requestId)
+        }
+
         // 异步执行 agent.asyncChat，迭代 chunks 实时推送
         var responseContent = ""
         var reasoningContentStr = ""
@@ -1605,6 +1633,123 @@ public class WebMCPProtocol {
         result.put("completion", completion)
 
         return createSuccessResponse(result, requestId)
+    }
+
+    // ── Ch9：长程任务意图路由 ────────────────────────────────────────
+
+    /**
+     * 从用户消息里识别长程任务意图，抽出目标原文
+     *
+     * 触发判据（tasks.md Ch9 / Ch0.5 §4.2 约定）：**用户显式前缀**。
+     * 支持两种写法：
+     *   - `长程任务: <目标>` / `长程任务：<目标>`（中英文冒号都认）
+     *   - `/lrt <目标>`
+     *
+     * 返回 `Some(目标)` 表示"这是长程任务请求"；`None` 表示走普通 ReAct。
+     *
+     * 边界约定：
+     * - 前缀后目标为空（用户只打了前缀没写目标）→ 返回 `None`，
+     *   让这句话走普通对话，由模型自然回应"你想让我做什么"。
+     *   这比在这里硬造一条没有目标的任务记录要好。
+     * - 前缀必须在**开头**（trim 后）。句中出现"长程任务"四个字不算——
+     *   那更可能是用户在提问"长程任务是什么"，而不是在提交任务。
+     */
+    private func extractLrtGoal(userMessage: String): ?String {
+        let text = userMessage.trimAscii()
+        if (text.isEmpty()) {
+            return None
+        }
+        for (prefix in LRT_TRIGGER_PREFIXES) {
+            if (text.startsWith(prefix)) {
+                let goal = text[prefix.size..].trimAscii()
+                if (goal.isEmpty()) {
+                    LogUtils.info("[WebMCPProtocol] 检测到长程任务前缀但目标为空，按普通对话处理")
+                    return None
+                }
+                return Some(goal)
+            }
+        }
+        None
+    }
+
+    /**
+     * 处理长程任务路由
+     *
+     * 调用宿主侧的 `LongTaskApiService.submitTask`（该服务内部会：
+     * 建根任务 → 建 crontab 调度 → 回调插件规划 → 立即触发首回合），
+     * 然后把结果按 completion 协议包装返回，使前端无需区分两条链路。
+     *
+     * 失败时**降级为一条普通文本回复**而不是抛错：
+     * 用户看到"长程任务创建失败：<原因>"比看到一个 500 更有用。
+     */
+    private func handleLongRunningTaskRoute(goal: String, requestId: Option<JsonValue>): String {
+        LogUtils.info("[WebMCPProtocol] 命中长程任务路由: goal=${goal}")
+
+        // agentId：优先用当前会话绑定的 agent；缺省回退到技能名，
+        // 保证 `lrt://<agentId>` 的路径段非空（SchedulerEngine 的 parsePath 要求）。
+        // 注：2026-09-15 起长程任务的 crontab scheme 由 agent_execution:// 改为 lrt://，
+        // 由 LrtPluginExecutor 承接（宿主不再置 status=2，符合 spec 5.6.1 规则 7）。
+        var agentId = _agentId
+        if (agentId.isEmpty()) {
+            agentId = "long-running-task"
+        }
+
+        let service = LongTaskApiService()
+        // sessionId 透传给插件侧：插件完成一轮后经 host.event 上报事件，
+        // 宿主再按这个 sessionId 走 SSE 推给当前前端会话（Ch9.2 的实时进度通道）。
+        // 为空时降级为只走 WebSocket 广播，不影响提交本身。
+        let result = service.submitTask(
+            goal,
+            agentId,
+            None<Int32>,
+            None<String>,
+            ArrayList<String>(),
+            _userId,
+            _sessionId,
+            ""
+        )
+
+        let values = JsonArray()
+        if (result.success) {
+            let outText = match (result.data) {
+                case Some(d) =>
+                    let taskId = _readJsonString(d, "taskId")
+                    let crontabId = _readJsonString(d, "crontabId")
+                    "已提交长程任务。\n任务 ID：${taskId}\n调度 ID：${crontabId}\n" +
+                        "系统已完成目标解析与规划，并立即触发首回合；后续回合由调度器按周期续跑。"
+                case None => "已提交长程任务。"
+            }
+            values.add(JsonString(outText))
+        } else {
+            let reason = match (result.reason) {
+                case Some(r) => r
+                case None => "未知原因"
+            }
+            LogUtils.warn("[WebMCPProtocol] 长程任务提交失败: ${reason}")
+            values.add(JsonString("长程任务创建失败：${reason}"))
+        }
+
+        let completion = JsonObject()
+        completion.put("values", values)
+        completion.put("total", JsonInt(1))
+        completion.put("hasMore", JsonBool(false))
+
+        let result2 = JsonObject()
+        result2.put("completion", completion)
+        return createSuccessResponse(result2, requestId)
+    }
+
+    /// 从 JsonObject 里读字符串字段（缺失/非字符串返回空串）
+    private func _readJsonString(obj: JsonObject, key: String): String {
+        let v = obj.get(key)
+        if (v.isNone()) {
+            return ""
+        }
+        let jv = v.getOrThrow()
+        if (jv is JsonString) {
+            return jv.asString().getValue()
+        }
+        ""
     }
 
     /**

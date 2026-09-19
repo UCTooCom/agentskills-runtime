@@ -1,0 +1,172 @@
+# 数据契约（DATA_CONTRACT.yaml）
+# 声明本技能用到的表、字段、幂等键、写入规则与示例行。
+#
+# 用途：① 单回合注入 token 约束（只注入步骤声明用到的表，spec §5.16 规则 4）；
+#       ② 插件发现与 tableWhitelist 校验；③ crudgen / loaddbinfo 生成依据。
+# 详见 tasks.md 第 14 章（数据契约）。
+#
+# ── schema（tasks.md #582）─────────────────────────────────────────────────
+#   tables[]:
+#     name / access / role
+#     idempotent_key: []        先按幂等键查再写，查到多条必须拒绝（不得静默覆盖）
+#     columns[]:                每项含 name/type/required/enum/fk/example/comment
+#     write_rule: []            写入纪律
+#     sample_rows: []           真实示例值 —— **不是可选项**
+#
+# ── 为什么 sample_rows 不能省 ──────────────────────────────────────────────
+# spec §5.16 要的是"让大模型准确 CRUD"。光有字段名和类型，模型只能猜格式：
+# uuid 的形态、时间戳的精度、jsonb 里面套几层、枚举到底写 'passed' 还是 'PASS'。
+# 契约里没有示例行，等于把这些问题留给模型临场发挥，而这正是写入错列的根因。
+# 上一版契约只有 `example_row` 单条且不覆盖全部表，故此处按 #582 归一。
+#
+# ── 本契约与实际实现的一致性 ───────────────────────────────────────────────
+# 两张新增表的列取自 PO 实现：LongRunningTaskArtifactPO.cj / LongRunningTaskEvolutionPO.cj，
+# 未凭记忆补列。后续改表必须同步改这里，并由 #600 的契约漂移检测比对告警。
+
+tables:
+  # ── 既有表（读写 / 只读，不含在本插件新增 DDL）──
+  - name: agent_tasks
+    access: read_write
+    role: 任务树与执行状态持久化（根任务 parent_task_id 为 null，子任务指向父任务）
+    idempotent_key: ["id"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b", comment: 主键}
+      - {name: parent_task_id, type: uuid, required: false, fk: agent_tasks.id, example: null, comment: 根任务为 null}
+      - {name: status, type: int4, required: true, enum: [0, 1, 2, 3, 4, 5, 6], example: 1, comment: "0待处理/1进行中/2完成/3失败/4取消/5暂停/6等待下回合"}
+      - {name: priority, type: int4, required: false, example: 0, comment: 数值越大越优先}
+      - {name: payload, type: jsonb, required: false, example: '{"goal":"把融资对接 SOP 写成技能","plan":{"sub_goals":["收集字段","生成技能骨架"]}}', comment: 含原始目标 goal}
+      - {name: result, type: text, required: false, example: "交付 3 份文档 + 1 个技能包", comment: 完成后回填}
+      - {name: error_message, type: text, required: false, example: "round 3 验核失败：缺 2 份 deliverable", comment: 失败原因}
+      - {name: agent_id, type: uuid, required: false, example: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", comment: 归属 Agent}
+      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人}
+      - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删；查询一律带 deleted_at IS NULL}
+    write_rule:
+      - 创建根任务：parent_task_id 为 null, status=0
+      - 干预：仅更新 status，**不得倒退为 0**（spec §6.1：置 0 会被当新任务重复派发并丢失上下文）
+      - 回合超时：status=6（等待下回合），不得置 0
+      - 按幂等键 id 先查后写；查到多条立即报错，不得取第一条蒙过去
+    sample_rows:
+      - {id: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b", parent_task_id: null, status: 1, priority: 0,
+         agent_id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+         payload: '{"goal":"把融资对接 SOP 写成技能","created_via":"lrt-plan"}', result: null, error_message: null}
+      - {id: "7b6c5d4e-3f2a-4b19-8c7d-6e5f4a3b2c1d", parent_task_id: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b",
+         status: 2, priority: 0, payload: '{"name":"收集融资字段","skill_sequence":["python_execute"]}',
+         result: "已产出 finance_fields.json", error_message: null}
+
+  - name: agent_contexts
+    access: read_write
+    role: 回合检查点快照（插件 LrtCheckpointStore 与宿主 CheckpointManager 共用一张表、同一套 metadata 约定）
+    idempotent_key: ["id"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "aa11bb22-cc33-4d44-8e55-ff66aabbccdd", comment: 主键}
+      - {name: agent_id, type: uuid, required: true, example: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", comment: 检查点按 agent 维度索引}
+      - {name: messages, type: jsonb, required: false, example: '[{"role":"assistant","content":"已完成 2/5 步"}]', comment: 文本列存 JSON 串，读取需二次解析}
+      - {name: metadata, type: jsonb, required: false, example: '{"taskId":"3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b","chatRound":"3","savedAt":"2026-09-13T04:00:00+08:00"}', comment: "字段名沿用宿主 camelCase 约定，宿主 listCheckpoints 与本插件 loadLatest 互相可读"}
+    write_rule:
+      - 每回合结束写一条；只在执行器判定"有进展"时写
+      - 恢复时按 metadata.taskId 过滤——**只按 agent_id 取会拿到别的任务的检查点**，恢复后上下文错位
+      - metadata 解析失败的行直接跳过，脏数据不得拖垮恢复流程
+    sample_rows:
+      - {agent_id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+         messages: '[{"role":"user","content":"把融资对接 SOP 写成技能"},{"role":"assistant","content":"已拆出 4 个子目标"}]',
+         metadata: '{"taskId":"3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b","chatRound":"1","savedAt":"2026-09-13T04:02:11+08:00"}'}
+
+  - name: crontab
+    access: read_write
+    role: 调度触发与暂停/恢复控制
+    idempotent_key: ["id"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "5c4b3a29-1827-4d6e-8f50-a1b2c3d4e5f6", comment: 主键}
+      - {name: status, type: int4, required: true, enum: [1, 2], example: 1, comment: "1正常/2禁用"}
+      - {name: concurrentable, type: bool, required: false, example: false, comment: "false 时同一任务新触发必须等待前一次完成"}
+    write_rule:
+      - 暂停/恢复只改 status，不改任务本身
+      - concurrentable=false 时必须串行；并发触发属于实现缺陷，不是配置项
+    sample_rows:
+      - {id: "5c4b3a29-1827-4d6e-8f50-a1b2c3d4e5f6", status: 1, concurrentable: false}
+
+  - name: agent_skills
+    access: read
+    role: 已安装技能清单，供 extend-capability 步骤比对能力缺口
+    idempotent_key: ["name"]
+    columns:
+      - {name: name, type: varchar(100), required: true, example: "long-running-task", comment: 技能名，缺口比对用这个字段}
+      - {name: status, type: int4, required: false, example: 1, comment: 1正常/2禁用}
+      - {name: runtime_status, type: varchar(20), required: false, example: "running", comment: 插件加载后的运行状态}
+    write_rule:
+      - 本表只读；注册新技能经 #220 的能力缺口编排 + 质量闸门，不在常规回合里写
+    sample_rows:
+      - {name: "long-running-task", status: 1, runtime_status: "running"}
+      - {name: "cangjie-coder", status: 1, runtime_status: "stopped"}
+  - name: agent_loop_metrics
+    access: read
+    role: 验核指标与自进化证据来源（success_rate / total_tokens / tool_call_count）
+    idempotent_key: ["id"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "6d5e4f30-2918-4a7b-8c6d-5e4f3a2b1c0d", comment: 主键}
+      - {name: agent_id, type: uuid, required: true, example: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", comment: 按 agent 取最新一条}
+      - {name: success_rate, type: numeric, required: false, example: 0.82, comment: "0-1 小数，不是百分比"}
+      - {name: total_tokens, type: int8, required: false, example: 128450, comment: 累计 token}
+      - {name: tool_call_count, type: int4, required: false, example: 37, comment: 工具调用次数；自进化按它识别 tool_call_storm}
+    write_rule:
+      - 本表只读；指标缺失时自进化按"无数据"处理并在事件中显式记录，不得假装 healthy
+    sample_rows:
+      - {agent_id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", success_rate: 0.82, total_tokens: 128450, tool_call_count: 37}
+
+  # ── 本插件新增表 ──
+  - name: long_running_task_artifact
+    access: write
+    role: 产物表（append-only 审计）
+    idempotent_key: ["id"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e", comment: 主键}
+      - {name: task_id, type: uuid, required: false, fk: agent_tasks.id, example: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b", comment: 反查用}
+      - {name: artifact_path, type: text, required: true, example: "output/executed/plan.json", comment: 相对技能根的路径}
+      - {name: artifact_type, type: varchar(50), required: true, enum: [code, config, doc, test, report, data, artifact], example: "doc", comment: 小写枚举值}
+      - {name: verification_status, type: varchar(20), required: true, enum: [pending, verifying, passed, failed], example: "passed", comment: 默认 pending}
+      - {name: verification_result, type: jsonb, required: false, example: '{"checks":[{"name":"exists","passed":true},{"name":"not_empty","passed":true}],"summary":"ok","passed":true}', comment: 文本列存 JSON 串}
+      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人}
+      - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删}
+    write_rule:
+      - 每步产出后追加一条记录，**不做 UPDATE 覆盖**（append-only 审计，spec §5.13）
+      - verification_status 默认 pending，校验后更新为 passed/failed
+      - logArtifact / logEvolution 必须幂等：先 queryOne，存在则更新，不存在才插入
+      - 缺件（usage=deliverable 未产出）时任务置 6 等待补件，不得置 2 完成
+    sample_rows:
+      - {task_id: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b", artifact_path: "output/executed/plan.json",
+         artifact_type: "doc", verification_status: "passed",
+         verification_result: '{"checks":[{"name":"exists","passed":true},{"name":"not_empty","passed":true}],"summary":"ok","passed":true}'}
+      - {task_id: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b", artifact_path: "output/executed/round-2-report.md",
+         artifact_type: "report", verification_status: "failed",
+         verification_result: '{"checks":[{"name":"not_empty","passed":false}],"summary":"空文件","passed":false}'}
+
+  - name: long_running_task_evolution
+    access: write
+    role: 自进化记录表（五环节闭环：证据→分级→方案→防回退→约束注入）
+    idempotent_key: ["id"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f", comment: 主键}
+      - {name: agent_id, type: uuid, required: false, example: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", comment: 归属 Agent}
+      - {name: round, type: int4, required: true, example: 3, comment: 自进化轮次，同一 agent 下递增}
+      - {name: root_cause, type: text, required: false, example: "round 3 产物验核失败：2 份 deliverable 为空文件", comment: 根因，空串表示无证据，不得编造}
+      - {name: optimization_plan, type: text, required: false, example: "产出前强制检查非空，并对空文件触发补执行", comment: "只出方案，不自动改代码/配置（tasks.md 7.3 环节 3）"}
+      - {name: anti_regression, type: text, required: false, example: "[P1] 空文件未拦截 → 补 '产出后必校验非空' 到 SKILL.md 约束区\n（约束注入失败：SKILL.md 缺少 BEGIN: AUTO-CONSTRAINTS 标记块）", comment: 脚本产出 + 分级结论 + 注入结果}
+      - {name: skill_md_updates, type: jsonb, required: false, example: '[{"skill":"long-running-task","section":"约束","before":"","after":"产出后立即校验非空"}]', comment: 文本列存 JSON 串}
+      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人}
+      - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删}
+    write_rule:
+      - 每个自进化轮次追加一条，round 同一 agent 下递增
+      - logEvolution 幂等：同一 (agent_id, round) 重复触发时更新而不是插入多条
+      - 环节 3 只产出改动方案，禁止在无人值守时直接修改仓库源码或配置
+      - 环节 4：P0/P1 进防回退注册表；P2/P3 只做建议，不污染 SKILL.md 约束区
+    sample_rows:
+      - {agent_id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", round: 3,
+         root_cause: "round 3 产物验核失败：2 份 deliverable 为空文件",
+         optimization_plan: "产出前强制检查非空，并对空文件触发补执行",
+         anti_regression: "[P1] 空文件未拦截 → 补 '产出后必校验非空' 到 SKILL.md 约束区",
+         skill_md_updates: '[{"skill":"long-running-task","section":"约束","before":"","after":"产出后立即校验非空"}]'}
+      - {agent_id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", round: 4,
+         root_cause: "",
+         optimization_plan: "",
+         anti_regression: "[P3] no_evidence：三个证据来源均无数据（首次运行），本轮不出方案",
+         skill_md_updates: '[]'}

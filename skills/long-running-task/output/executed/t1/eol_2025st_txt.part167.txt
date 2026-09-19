@@ -1,0 +1,83 @@
+ktoudang/">
+
+						<img src="/e_html/gk/gxmd/images/icon11.png" />
+
+						<p> 投 档 线</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/baike/">
+
+						<img src="/e_html/gk/gxmd/images/icon12.png" />
+
+						<p>高考百科</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/gkzytbzn/index.shtml">
+
+						<img src="/e_html/gk/gxmd/images/icon13.png" />
+
+						<p> 填报指南</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.gaokao.cn/sphtm/click_ben_zhuan_top100.htm">
+
+						<img src="/e_html/gk/gxmd/images/icon14.png" />
+
+						<p>专业热度</p>
+
+					</a>
+
+				</div>
+
+			</div>
+
+		</div>
+
+
+
+		<script>
+
+			function handleZy(){
+
+				window.open('https://datayi.cn/w/LPdZ3Vq9')
+
+			}
+
+		</script>
+
+
+
+		<style>
+
+			.gj-li-first{
+
+				float: left;
+
+				width: 125px;
+
+				height: 135px;
+
+				box-sizing: border-box;
+
+				border: 1px solid #eeeeee;
+
+				background: #fff;
+
+				text-align: center;
+
+				font-s

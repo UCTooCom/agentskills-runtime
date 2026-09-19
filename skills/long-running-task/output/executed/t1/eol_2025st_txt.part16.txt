@@ -1,0 +1,26 @@
+-wz .divstates").show();
+        var spanlist = $(".nav-head-wz .divstates").find("span");
+        $(".maskdiv").show();
+        $("html").css('overflow', 'hidden');
+        $(".nav-head-wz").find('.imgselpos').attr('src', '/e_images/gk/2020/arrow-s.png');
+    })
+    // 点击省份单例
+    $('.nav-head-wz .divstates span').click(function (event) {
+        $('.nav-head-wz .divstates').hide();
+        $(".maskdiv").hide();
+        $("html").css('overflow', 'scroll');
+        var name = event.currentTarget.innerText
+        var code = event.currentTarget.id.toString();
+        // 改变页面状态
+        $("#spanpos")[0].innerText = name;
+        $(".nav-head-wz").find('.imgselpos').attr('src', '/e_images/gk/2020/arrow.png');
+        // 储存定位并请求广告
+        // 储存省份id
+        var adProvince = localStorage.getItem('adProvince');
+        localStorage.setItem('adProvince', code);
+        // 当省份不一样时，获取省份广告
+        // if (code !== adProvince) adshow(code);
+        adshow(code);
+    });
+</script>
+<script type="text/j

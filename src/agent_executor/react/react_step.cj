@@ -83,6 +83,34 @@ protected enum ReactStep <: Hashable & Equatable<ReactStep> & ToString {
     static func fromStr(content: String): ReactStep {
         let thought = Tag.extract(content, Tag.Thought)
         if (let Some(answer) <- Tag.extract(content, Tag.Answer)) {
+            // 修复：检测 Answer 内嵌套 Action 的情况
+            // LLM 可能生成 <answer>...<thinking>...</thinking><action>...</action></answer>
+            // 此时应优先解析为 Action，否则工具调用会被忽略导致只思考一轮就停止
+            if (let Some(action) <- Tag.extract(answer, Tag.Action)) {
+                LogUtils.info("ReactStep: detected nested <action> inside <answer>, parsing as Action")
+                try {
+                    let trimmedAction = action.trimAscii()
+                    let toolCalls = if (Config.enableParallelToolCall && trimmedAction.startsWith("[")) {
+                        try {
+                            ParserUtils.extractToolRequestArray(action)
+                        } catch (ex: ParserException) {
+                            LogUtils.info("Failed to parse as tool array, falling back to single tool request: ${ex.reason}")
+                            [ParserUtils.extractToolRequest(action)]
+                        }
+                    } else {
+                        [ParserUtils.extractToolRequest(action)]
+                    }
+                    return ReactStep.Action(
+                        ToolCall(
+                            text: action,
+                            thought: thought ?? "",
+                            requests: toolCalls
+                        )
+                    )
+                } catch (ex: ParserException) {
+                    LogUtils.error("Parsing nested action failed: ${ex.reason}")
+                }
+            }
             return ReactStep.Answer(
                 FinalAnswer(thought: thought ?? "",
                             content: answer)

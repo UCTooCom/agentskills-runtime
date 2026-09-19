@@ -82,7 +82,8 @@ public class McpCallCLI {
 
     private func executeCall(mcpAlias: String, tool: String, argumentsJson: String): Unit {
         LogUtils.info("[McpCallCLI] calling mcpAlias='${mcpAlias}', tool='${tool}'")
-        let result = mcpOpenService.callWithJsonString(mcpAlias, tool, argumentsJson)
+        // source 标记 CLI 入口，便于在审计表里区分调用形态（spec 5.13.1 规则 3）
+        let result = mcpOpenService.callWithJsonString(mcpAlias, tool, argumentsJson, source: "mcp_cli")
 
         // 构建 JSON 输出：{"data":"...","isError":false,"meta":{"tool":"...","durationMs":0,"status":"success","errorMessage":""}}
         let resultObj = HashMap<String, JsonValue>()

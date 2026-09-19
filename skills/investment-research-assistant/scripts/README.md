@@ -48,7 +48,7 @@ python save_report_to_db.py --report output/brief/2026-08-11.md --factors output
 |------|------|--------|
 | `LLM_BASE_URL` / `OPENAI_BASE_URL` | LLM API 基址 | `https://api-ai.gitcode.com/v1`（AtomGit 昇腾 API） |
 | `LLM_API_KEY` / `OPENAI_API_KEY` | API 密钥 | 未设置时降级为模板化简报 |
-| `LLM_MODEL` | 模型名 | `deepseek-v4-flash` |
+| `LLM_MODEL` | 模型名 | `deepseek-flash` |
 
 ## 环境变量（save_report_to_db.py 直连 DB 时）
 

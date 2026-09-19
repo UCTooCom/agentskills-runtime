@@ -1,0 +1,101 @@
+) {
+
+            margin-right: 10px;
+
+        }
+
+
+
+        /* A6广告 */
+
+        .a6ad {
+
+            width: 1190px;
+
+            margin: 0px auto;
+
+            clear: both;
+
+            overflow: hidden;
+
+            margin-top: 55px;
+
+        }
+
+
+
+        .a6ad img {
+
+            width: 1190px;
+
+            display: block;
+
+        }
+
+
+
+        .a6ad a {
+
+            display: block;
+
+        }
+
+
+
+        .set_listAd {
+
+            margin-bottom: 20px;
+
+        }
+
+
+
+        .set_listAd .listAd-lf li {
+
+            white-space: nowrap;
+
+            overflow: hidden;
+
+            text-overflow: ellipsis;
+
+        }
+
+
+
+        .set_listAd .listAd-lf li:first-child {
+
+            margin-top: 0;
+
+        }
+
+    </style>
+
+
+
+</head>
+
+
+
+<body>
+
+     <style>
+    * {
+        padding: 0;
+        margin: 0;
+        user-select: none;
+    }
+
+    a {
+        text-decoration: none;
+        color: #000;
+    }
+
+    .clearfix {
+        zoom: 1;
+    }
+
+    .float_l {
+        float: left;
+    }
+
+    .float

@@ -1,0 +1,53 @@
+                 <a href="#st33" target="_self">宁夏卷</a>
+
+                </div>
+
+                
+
+
+
+
+
+                <div class="fenl">
+
+                    <a href="https://gaokao.eol.cn/e_html/gk/mfzw/index.shtml">高考作文</a>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- <div class="search-input">
+
+                <input placeholder="输入分数，模拟报志愿">
+
+                <button onClick="handleZy()">报志愿</button>
+
+            </div>-->
+
+            <div class="search-input">
+
+                <input placeholder="输入分数，一键智能填报">
+
+                <a href="https://mnzy.gaokao.cn/?channelCode=yyb"> <button> 报志愿</button></a>
+
+            </div>
+
+
+
+
+
+            <!-- A5广告栏-->
+
+            <div class="a5ad"></div>
+
+
+
+            <div class="select-body">
+
+                <div class='select-active'><a href="">2025</a></div>
+
+                <div class='select-active'><a href="https://gaokao.eol.cn/e_html/gk/gkst/2024st.shtml">2024</a></div>
+
+                <div class='select-active'><a

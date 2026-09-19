@@ -1168,19 +1168,17 @@ private func findCoalescedH2Connection(targetHost: String, targetPort: UInt16): 
         if (isChunked) {
             let prefetched = readPrefetchedBody(data, totalRead, bodyStart)
             let readerFn = {buf => conn.read(buf)}
-            // 读取所有剩余分块数据，然后用 decodeWithTrailers 解析
-            let extra = readAllFromConn(conn)
-            let combinedSize = prefetched.size + extra.size
-            let combined = Array<UInt8>(combinedSize, repeat: 0)
-            var ci: Int64 = 0
-            while (ci < prefetched.size) { combined[ci] = prefetched[ci]; ci = ci + 1 }
-            var ei: Int64 = 0
-            while (ei < extra.size) { combined[prefetched.size + ei] = extra[ei]; ei = ei + 1 }
-            let result = ChunkedDecoder.decodeWithTrailers(combined)
-            response.body = ByteBuffer.fromOwned(result.data)
-            if (!result.trailers.isEmpty()) {
-                response.trailers = result.trailers
-            }
+            // 增量流式解码：边读边解析，遇到终止块（大小为 0 的分块）即返回。
+            //
+            // 旧实现是「先 readAllFromConn 阻塞读到连接关闭，再一次性 decodeWithTrailers」，
+            // 有两个致命前提：①服务端必须主动关闭连接；②拿到的字节必须是完整的分块序列。
+            // 只要服务端保持 keep-alive（连接不关，读到读超时才返回）或提前断连，
+            // 就会拿到半截分块 → decodeWithTrailers 抛 "incomplete chunk data"。
+            // 实测 360 搜索(so.com)、神马(m.sm.cn) 等 chunked 响应即因此全部失败。
+            //
+            // 代价：不再解析 HTTP trailers。生产代码无读取方（仅测试用到），可接受。
+            let decoded = ChunkedDecoder.readStreaming(readerFn, prefetched: prefetched)
+            response.body = ByteBuffer.fromOwned(decoded)
         } else {
             match (response.headers.get("content-length")) {
                 case Some(cl) =>

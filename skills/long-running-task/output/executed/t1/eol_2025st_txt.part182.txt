@@ -1,0 +1,33 @@
+        for (var i = 0; i < group3.length; i++) {
+
+                        if (i >= 0 && i < 4) {
+
+                            $('.listAd-lf0').append('<li><a target="_blank" href="' + group3[i].href + '">' + group3[i].title + '</a></li>');
+
+                        }
+
+                        if (i >= 4 && i < 8) {
+
+                            $('.listAd-lf1').append('<li><a target="_blank" href="' + group3[i].href + '">' + group3[i].title + '</a></li>');
+
+                        }
+
+                        if (i >= 8 && i < 12) {
+
+                            $('.listAd-lf2').append('<li><a target="_blank" href="' + group3[i].href + '">' + group3[i].title + '</a></li>');
+
+                        }
+
+                        if (i >= 12 && i < 16) {
+
+                            $('.listAd-lf3').append('<li><a target="_blank" href="' + group3[i].href + '">' + group3[i].title + '</a></li>');
+
+                        }
+
+                    }
+
+
+
+                    // A5广告--二屏半通栏9582--切帧
+
+     

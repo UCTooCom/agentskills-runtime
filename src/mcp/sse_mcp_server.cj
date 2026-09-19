@@ -8,6 +8,7 @@ import http_lib.connection.Connection
 import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.time.*
+import std.sync.Mutex
 import magic.core.agent.Agent
 import magic.tool.AgentAsTool
 import magic.log.LogUtils
@@ -17,6 +18,7 @@ import magic.utils.{randomString}
 
 public class SseMCPServer <: AbsMCPServer {
     var client_map = ConcurrentHashMap<String, Connection>()
+    private let writeLock = Mutex()
 
     public init(tools: Array<Tool>) {
         super(tools)
@@ -42,10 +44,15 @@ public class SseMCPServer <: AbsMCPServer {
                     spawn {
                         while (true) {
                             sleep(Duration.second * 8)
+                        try {
+                            writeLock.lock()
                             try {
                                 conn.write(unsafe { ": ping - ${DateTime.now()}\n\n".rawData() })
                                 conn.flush()
-                            } catch (e: Exception) {
+                            } finally {
+                                writeLock.unlock()
+                            }
+                        } catch (e: Exception) {
                                 LogUtils.error("Client: ${uuid} ${e.message}")
                                 this.client_map.remove(uuid)
                                 break
@@ -100,8 +107,13 @@ public class SseMCPServer <: AbsMCPServer {
         LogUtils.info("Send: ${uuid}: ${msg}")
         match (client_map.get(uuid)) {
             case Some(conn) =>
-                conn.write(unsafe { "event: message\ndata: ${msg}\n\n".rawData() })
-                conn.flush()
+                writeLock.lock()
+                try {
+                    conn.write(unsafe { "event: message\ndata: ${msg}\n\n".rawData() })
+                    conn.flush()
+                } finally {
+                    writeLock.unlock()
+                }
             case None =>
                 LogUtils.error("Client not found: ${uuid}")
         }

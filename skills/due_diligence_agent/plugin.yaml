@@ -2,8 +2,20 @@ name: due_diligence_agent
 version: 1.0.0
 mode: process
 protocol: jsonrpc-stdio
-command: ./target/release/bin/skill_due_diligence_agent.exe
+# command 相对**宿主工作目录**解析（CordisHostManager.resolvePluginCommand = `${cwd}/${command}`，
+# 无校验无兜底），必须带 skills/{name}/ 前缀，发布包里 exe 也落在 bin/skills/{name}/ 下。
+command: ./skills/due_diligence_agent/target/release/bin/skill_due_diligence_agent.exe
 description: 企业信用与风控尽调智能体 L3 进程隔离轨插件（6 表 CRUD + dd-fetch 采集聚合 + dd-save 落库）
+enabled: true
+order: 6
+autoRestart: true
+tableWhitelist:
+  - due_diligence_task
+  - due_diligence_enterprise
+  - due_diligence_equity
+  - due_diligence_risk
+  - due_diligence_report
+  - due_diligence_mcp_call_log
 routes:
   # due_diligence_task CRUD
   - method: POST

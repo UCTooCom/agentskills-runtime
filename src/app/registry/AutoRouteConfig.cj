@@ -159,6 +159,12 @@ import magic.app.routes.uctoo.skill_usage_stats.SkillUsageStatsRoute
 import magic.app.controllers.uctoo.skill_usage_stats.SkillUsageStatsController
 import magic.app.routes.uctoo.agent_kanban_tasks.AgentKanbanTasksRoute
 import magic.app.controllers.uctoo.agent_kanban_tasks.AgentKanbanTasksController
+import magic.app.routes.uctoo.long_running_task_artifact.LongRunningTaskArtifactRoute
+import magic.app.controllers.uctoo.long_running_task_artifact.LongRunningTaskArtifactController
+import magic.app.routes.uctoo.long_running_task.LongRunningTaskRoute
+import magic.app.controllers.uctoo.long_running_task.LongRunningTaskController
+import magic.app.routes.uctoo.long_running_task_evolution.LongRunningTaskEvolutionRoute
+import magic.app.controllers.uctoo.long_running_task_evolution.LongRunningTaskEvolutionController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -231,7 +237,9 @@ import magic.app.services.uctoo.{
     AgentLoopMetricsService,
     AgentLoopTuningConfigsService,
     SkillUsageStatsService,
-    AgentKanbanTasksService,}
+    AgentKanbanTasksService,
+    LongRunningTaskArtifactService,
+    LongRunningTaskEvolutionService,}
 import magic.app.services.crontab.SchedulerService
 
 
@@ -592,6 +600,50 @@ public class AutoRouteConfig {
         ))
         
         // ==================== CRUD 路由配置 ====================
+        // LongRunningTaskEvolution 路由
+        registry.add(RouteEntry(
+            "long_running_task_evolution",
+            "/api/v1/uctoo/long_running_task_evolution",
+            10,
+            true,
+            { router: Router =>
+                let service = LongRunningTaskEvolutionService()
+                let controller = LongRunningTaskEvolutionController(service)
+                let route = LongRunningTaskEvolutionRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // LongRunningTaskArtifact 路由
+        registry.add(RouteEntry(
+            "long_running_task_artifact",
+            "/api/v1/uctoo/long_running_task_artifact",
+            10,
+            true,
+            { router: Router =>
+                let service = LongRunningTaskArtifactService()
+                let controller = LongRunningTaskArtifactController(service)
+                let route = LongRunningTaskArtifactRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // LongRunningTask 路由 (spec §9.1：7 个用户 API + trace)
+        registry.add(RouteEntry(
+            "long_running_task",
+            "/api/v1/uctoo/long_running_task",
+            10,
+            true,
+            { router: Router =>
+                let controller = LongRunningTaskController()
+                let route = LongRunningTaskRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
         // AgentKanbanTasks 路由
         registry.add(RouteEntry(
             "agent_kanban_tasks",

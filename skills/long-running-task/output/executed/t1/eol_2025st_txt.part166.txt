@@ -1,0 +1,71 @@
+	<p>专业变更</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/tszy/">
+
+						<img src="/e_html/gk/gxmd/images/icon5.png" />
+
+						<p>特色专业</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/wap/gjzdxk/index.shtml">
+
+						<img src="/e_html/gk/gxmd/images/icon6.png" />
+
+						<p>重点学科</p>
+
+					</a>
+
+				</div>
+
+				
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/gkst/">
+
+						<img src="/e_html/gk/gxmd/images/icon8.png" />
+
+						<p>真题答案</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/fsx/index.shtml">
+
+						<img src="/e_html/gk/gxmd/images/icon9.png" />
+
+						<p>高考分数线</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/gkfsd/index.shtml">
+
+						<img src="/e_html/gk/gxmd/images/icon10.png" />
+
+						<p>一分一段</p>
+
+					</a>
+
+				</div>
+
+				<div class="gj-li">
+
+					<a href="https://www.eol.cn/html/g/g

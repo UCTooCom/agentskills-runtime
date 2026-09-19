@@ -1,0 +1,46 @@
+ox-sizing: border-box;
+    }
+
+    .zyx-main-nav .mainnav_center li.nav-li a {
+        color: #000;
+    }
+
+    .zyx-main-nav .mainnav_center li.nav-li .bzy_item {
+        position: relative;
+    }
+
+    .zyx-main-nav .mainnav_center li.nav-li .bzy_item:after {
+        content: "";
+        position: absolute;
+        right: -22px;
+        top: -6px;
+        width: 21px;
+        height: 21px;
+        background: url(https://static-gkcx.gaokao.cn//upload/image/202211/gkcx_1668479721_1546_thumb.gif) no-repeat;
+        background-size: contain;
+    }
+
+    .navUrlActive,
+    .navUrlActive a {
+        color: #ff6602 !important;
+    }
+
+    .navUrlActive {
+        border-bottom: 2px solid #ff6602;
+    }
+
+    /* 定位 */
+
+    .nav-head-wz {
+        margin-top: 20px;
+        position: relative;
+        cursor: pointer;
+        padding: 0 !important;
+        /*margin: 0 !important;*/
+        border: none;
+    }
+
+    .nav-head-wz .change_icon {
+        font-size: 16px;
+        font-weight: normal;
+     

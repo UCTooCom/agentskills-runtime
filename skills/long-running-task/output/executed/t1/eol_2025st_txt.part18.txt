@@ -1,0 +1,69 @@
+         </div>
+
+        </div>
+
+    </div>-->
+
+
+
+    <!-- A4广告栏 -->
+
+    <div class="focus">
+
+        <div class="center">
+
+            <!-- 品牌露出 不可点击跳转 -->
+
+        </div>
+
+    </div>
+
+    <div class="point">
+
+        <div class="center point-center">
+
+            <div class="topline clearfix fenl-box">
+
+                <div class="fenl">
+
+                    <a href="#st1" target="_self">全国一卷</a>
+
+                </div>
+
+               
+
+
+
+                <div class="fenl">
+
+                    <a href="#st3" target="_self">全国二卷</a>
+
+                </div>
+
+               
+
+              
+
+                <div class="fenl">
+
+                    <a href="#st5" target="_self">北京卷</a>
+
+                </div>
+
+                <div class="fenl">
+
+                    <a href="#st6" target="_self">天津卷</a>
+
+                </div>
+
+
+
+                <div class="fenl">
+
+                    <a href="#st7" target="_self">浙江卷</a>
+
+                </div>
+
+                <div class="fenl">
+
+     

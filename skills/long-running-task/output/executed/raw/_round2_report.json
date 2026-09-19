@@ -1,0 +1,44 @@
+[
+  {
+    "name": "bing_rss_1",
+    "url": "https://cn.bing.com/search?q=2025%E5%B9%B4%E9%AB%98%E8%80%83%E6%95%B0%E5%AD%A6%E6%96%B0%E8%AF%BE%E6%A0%87I%E5%8D%B7%E5%8E%8B%E8%BD%B4%E9%A2%98&format=rss",
+    "ok": false,
+    "error": "ModuleNotFoundError: No module named 'requests'"
+  },
+  {
+    "name": "bing_rss_2",
+    "url": "https://cn.bing.com/search?q=2025%E9%AB%98%E8%80%83%E6%95%B0%E5%AD%A6%E6%9C%80%E5%90%8E%E4%B8%80%E9%A2%98%E9%A2%98%E5%B9%B2&format=rss",
+    "ok": false,
+    "error": "ModuleNotFoundError: No module named 'requests'"
+  },
+  {
+    "name": "bing_rss_3",
+    "url": "https://cn.bing.com/search?q=2025%E5%B9%B4%E9%AB%98%E8%80%83%E6%95%B0%E5%AD%A6%E5%85%A8%E5%9B%BD%E4%B8%80%E5%8D%B719%E9%A2%98&format=rss",
+    "ok": false,
+    "error": "ModuleNotFoundError: No module named 'requests'"
+  },
+  {
+    "name": "baike_gaokao2025",
+    "url": "https://baike.baidu.com/item/2025%E5%B9%B4%E6%99%AE%E9%80%9A%E9%AB%98%E7%AD%89%E5%AD%A6%E6%A0%A1%E6%8B%9B%E7%94%9F%E5%85%A8%E5%9B%BD%E7%BB%9F%E4%B8%80%E8%80%83%E8%AF%95%E6%95%B0%E5%AD%A6",
+    "ok": false,
+    "error": "ModuleNotFoundError: No module named 'requests'"
+  },
+  {
+    "name": "eol_zhenti",
+    "url": "https://gaokao.eol.cn/e_html/gk/zhenti/index.shtml",
+    "ok": false,
+    "error": "ModuleNotFoundError: No module named 'requests'"
+  },
+  {
+    "name": "sina_zhenti",
+    "url": "https://edu.sina.com.cn/gaokao/2025-06-07/doc-gaokao-math.shtml",
+    "ok": false,
+    "error": "ModuleNotFoundError: No module named 'requests'"
+  },
+  {
+    "name": "xinhuanet_gaokao",
+    "url": "http://www.news.cn/edu/20250607/index.htm",
+    "ok": false,
+    "error": "ModuleNotFoundError: No module named 'requests'"
+  }
+]

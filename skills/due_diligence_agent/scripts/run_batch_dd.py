@@ -13,7 +13,10 @@
   python run_batch_dd.py --enterprises-file enterprises.txt --scene credit --outdir output/
 
 环境变量：
-  HOST_BASE_URL：宿主 API 基地址（默认 http://localhost:8080）
+  HOST_BASE_URL：宿主 API 基地址（默认取仓库 .env 的 BACKEND_URL，取不到则回退
+                 https://javatoarktsapi.uctoo.com）。本框架的开发/测试/线上环境
+                 统一为带真实证书的 HTTPS（.env: PORT=443 + hosts 域名映射），
+                 因此不提供明文 http 默认地址。
   MCP_ALIAS：MCP 别名（默认 tianyancha）
 """
 import argparse
@@ -27,6 +30,42 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DEFAULT_HOST_BASE_URL = "https://javatoarktsapi.uctoo.com"
+
+
+def resolve_base_url() -> str:
+    """解析宿主 API 基地址：HOST_BASE_URL 环境变量 > 仓库 .env 的 BACKEND_URL > 线上默认值。
+
+    为什么不用明文 localhost 默认值：本框架的开发、测试与线上环境
+    统一是带真实证书的 HTTPS（.env 里 PORT=443，配合 hosts 域名映射指到本机），
+    明文默认值一旦生效只会把排障引向「连不上」的假象。
+    """
+    env_value = os.environ.get("HOST_BASE_URL", "").strip()
+    if env_value:
+        return env_value.rstrip("/")
+
+    # 脚本位于 skills/<skill>/scripts/ 下，向上逐级找仓库根的 .env
+    current = SCRIPTS_DIR
+    for _ in range(6):
+        candidate = os.path.join(current, ".env")
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("BACKEND_URL="):
+                            value = line.split("=", 1)[1].strip().strip('"').strip("'")
+                            if value:
+                                return value.rstrip("/")
+            except OSError:
+                pass
+            break
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    return DEFAULT_HOST_BASE_URL
 
 
 def call_host_api(base_url: str, path: str, body: Dict) -> Dict[str, Any]:
@@ -160,7 +199,7 @@ def main():
     parser.add_argument("--outdir", type=str, default="output", help="输出根目录")
     args = parser.parse_args()
 
-    base_url = os.environ.get("HOST_BASE_URL", "http://localhost:8080")
+    base_url = resolve_base_url()
     mcp_alias = os.environ.get("MCP_ALIAS", "tianyancha")
 
     # 1. 名单校验

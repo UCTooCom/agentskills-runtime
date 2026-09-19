@@ -23,7 +23,7 @@ import magic.utils.*
  */
 public class ToolLoopExecutor <: AgentExecutor {
     public ToolLoopExecutor(
-        private let loop!: Int64 = Config.maxReactNumber
+        private let loop!: Int64 = Config.normalReactSteps
     ) { }
 
      override public prop name: String {

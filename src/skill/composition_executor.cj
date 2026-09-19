@@ -1,5 +1,15 @@
 /*
  * Copyright (c) UCToo Co., Ltd. 2026. All rights reserved.
+ *
+ * ⚠️ 元数据 schema 归属声明（2026-09-12，long-running-task design 2.4.4）：
+ * 本文件的 CompositionExecutor 消费 CompositionDefinition（DB 存储态 schema），
+ * 仅供 SkillCompositionsService 使用；其 executeStep 按 `skillName` 查找技能的语义
+ * 与技能文件态 COMPOSITION.yaml（script / plugin / output）**不同源**。
+ *
+ * 其骨架能力（topologicalSort 拓扑排序与环检测、失败后续步骤 Skipped 传播、
+ * evaluateCondition 条件跳过、buildCacheKey 步骤级缓存、buildFinalOutput 产出聚合）
+ * 已由 src/skill/lrt_composition_runner.cj 的 LrtCompositionRunner 借鉴复用。
+ * 长程任务编排请使用 LrtCompositionRunner，**不要**直接接入本类。
  */
 package magic.skill
 

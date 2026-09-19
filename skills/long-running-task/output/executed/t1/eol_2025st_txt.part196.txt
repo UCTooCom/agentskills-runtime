@@ -1,0 +1,27 @@
+      cursor: pointer;
+
+        }
+
+    </style>
+
+    <!-- <link rel="stylesheet" href="https://static-gkcx.gaokao.cn/iconfont/iconfont.css"> -->
+
+<style>
+
+    /* 左侧悬浮 */
+
+    .left-nav-wrapper { position: fixed; width: 65px; bottom: 30%; left: 30px; padding: 40px 0 24px; background: #fff4ee; border-radius: 33px; border: 1px solid #ffbc98; z-index: 1002; }
+
+    .left-nav-wrapper .position-box { position: relative; }
+
+    .left-nav-wrapper .left-nav-fixed { height: 340px; overflow: hidden; }
+
+    .left-nav-fixed .swiper-slide { text-align: center; }
+
+    .left-nav-fixed .swiper-slide a { text-decoration: none; }
+
+    .left-nav-fixed .swiper-slide .title { height: 17px; line-height: 17px; margin: 1px 0 0; color: rgba(0,0,0,.65); font-size: 12px; }
+
+    .left-nav-wrapper .check-more { text-decoration: none; margin-top: 36px; display: block; color: rgba(0,0,0,.65); font-size: 12px; text-align: center; }
+
+    .left-nav-wrapper .arrow { color: #595959; position: absolute; left: 27px; cursor: 

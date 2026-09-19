@@ -1,0 +1,31 @@
+ '<div class="left-nav-fixed">' + 
+
+                                    '<div class="swiper-container leftnav-fix-container">' + 
+
+                                        '<div class="swiper-wrapper"></div>' +
+
+                                        '<div class="swiper-pagination"></div>' +
+
+                                    '</div>' + 
+
+                                '</div>' +
+
+                                '<a href="https://www.gaokao.cn/quanzhidao" class="check-more" target="_blank">查看更多</a>' + 
+
+                                '<i class="iconfont icon_dafangxiang_up arrow"></i>' +
+
+                                '<i class="iconfont icon_dafangxiang_down arrow"></i>' +
+
+                                '<div class="bottom-icon">' +
+
+                                    '<span class="closeimg"></span>' +
+
+                                '</div>' +
+
+                            '</div>' + 
+
+                        '</div>'
+
+                    )
+
+                    $('.left-fix-

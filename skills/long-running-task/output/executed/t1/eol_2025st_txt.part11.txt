@@ -1,0 +1,20 @@
+t_l">
+                <a target="_blank" href="https://www.eol.cn/">
+                    <img class="head_logo head_logo1"
+                        src="https://gaokao.eol.cn/e_include/gk/ceshi/header_log.jpg" alt="">
+                </a>
+                <span class="logo_line">
+                </span>
+                <a target="_blank" href="https://www.gaokao.cn/?fromcoop=pddh">
+                    <img class="head_logo head_logo2"
+                        src="https://static-gkcx.gaokao.cn//upload/image/202211/gkcx_1668479720_8966_thumb.png" alt="">
+                </a>
+            </div>
+            <div class="head_searchIpt_wrap clearfix float_l">
+                <div class="search_box">
+                    <input id="headsearch" class="search_ipt head_h_search" placeholder="查大学、查专业、查资讯" maxlength="100"
+                        autocomplete="off" value="">
+                    <button class="search_icon" id="search_icon">搜索</button>
+                </div>
+            </div>
+         

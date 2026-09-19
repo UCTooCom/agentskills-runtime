@@ -1,0 +1,84 @@
+{
+  "fetch": [
+    {
+      "name": "qg1_st",
+      "url": "http://gaokao.eol.cn/shiti/sx/202506/t20250607_2673303.shtml",
+      "ok": true,
+      "fetched_at": "2026-09-15 22:30:13",
+      "status": 200,
+      "encoding": "utf-8",
+      "length": 156704,
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\qg1_st.html",
+      "desc": "2025年全国统一高考数学试卷（新高考I卷）试题",
+      "hits": {
+        "19": 0,
+        "压轴": 0,
+        "参考答案": 0,
+        "解析": 3,
+        "如图": 0,
+        "抛物线": 0,
+        "椭圆": 0,
+        "导数": 0
+      }
+    },
+    {
+      "name": "qg2_st",
+      "url": "http://gaokao.eol.cn/shiti/sx/202506/t20250608_2673332.shtml",
+      "ok": true,
+      "fetched_at": "2026-09-15 22:30:14",
+      "status": 200,
+      "encoding": "utf-8",
+      "length": 157892,
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\qg2_st.html",
+      "desc": "2025年全国统一高考数学试卷（新高考II卷）试题",
+      "hits": {
+        "19": 0,
+        "压轴": 0,
+        "参考答案": 0,
+        "解析": 3,
+        "如图": 0,
+        "抛物线": 0,
+        "椭圆": 0,
+        "导数": 0
+      }
+    }
+  ],
+  "report": [
+    {
+      "name": "qg1_st",
+      "url": "http://gaokao.eol.cn/shiti/sx/202506/t20250607_2673303.shtml",
+      "desc": "2025年全国统一高考数学试卷（新高考I卷）试题",
+      "fetched_at": "2026-09-15 22:30:13",
+      "text_file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\qg1_st.txt",
+      "text_len": 8005,
+      "hits": {
+        "19": 0,
+        "压轴": 0,
+        "参考答案": 0,
+        "解析": 3,
+        "如图": 0,
+        "抛物线": 0,
+        "椭圆": 0,
+        "导数": 0
+      }
+    },
+    {
+      "name": "qg2_st",
+      "url": "http://gaokao.eol.cn/shiti/sx/202506/t20250608_2673332.shtml",
+      "desc": "2025年全国统一高考数学试卷（新高考II卷）试题",
+      "fetched_at": "2026-09-15 22:30:14",
+      "text_file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\qg2_st.txt",
+      "text_len": 8027,
+      "hits": {
+        "19": 0,
+        "压轴": 0,
+        "参考答案": 0,
+        "解析": 3,
+        "如图": 0,
+        "抛物线": 0,
+        "椭圆": 0,
+        "导数": 0
+      }
+    }
+  ]
+}

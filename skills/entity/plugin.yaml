@@ -1,13 +1,11 @@
-# 插件清单（design.md §2.5）——插件自描述，分发与 build-sync 同步用
-# 与宿主加载清单 config/plugins.yaml 职责分离：本文件是插件静态元数据
-#
-# 独立插件形态（PS-T012 L2 动态库加载）：
-# - 独立 cjpm 包（skills/entity/cjpm.toml，name="skill_entity"，output-type="dynamic"）
-# - 编译产物 libskill_entity.so（PackageInfo.load 按文件名判断包名）
-# - 宿主经 PluginDylibLoader.loadFromDylib(libskill_entity.so, entity) 动态加载
 name: entity
 version: 1.0.0
-description: "entity 表 CRUD 技能插件（独立动态库形态，PS-T012 L2 动态库加载）"
+mode: sync
+className: magic.plugins.entity.EntityPlugin
+routeClass: magic.plugins.entity.EntityRoute
+description: entity 表 CRUD 技能插件（独立动态库形态，PS-T012 L2 动态库加载）
+enabled: true
+order: 3
 entry: magic.plugins.entity.EntityPlugin
 dependencies: ""
 dylib: libskill_entity.so

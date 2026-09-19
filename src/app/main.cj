@@ -22,9 +22,16 @@ import magic.app.routes.mcpopen.McpOpenRoutes
 import magic.app.controllers.uctoo.mcpopen.McpOpenController
 import magic.app.services.mcp.McpOpenService
 import magic.tool.{ToolDispatcher, BuiltinToolsRegistry, SimpleToolManager}
+// Ch13.4：人在回路审批结果落库。审批工具在 tool 层产出 ApprovalDecisionRecord 快照，
+// 组合根在此把「写入 agent_approvals」的实现注入给它（同 v15 决策点校验的回调注入模式，
+// 避免 tool.webmcp → app.services.uctoo 的反向依赖）。
+import magic.tool.webmcp.{WebRequestApprovalTool, ApprovalDecisionRecord}
+import magic.app.services.uctoo.AgentApprovalsService
 import magic.app.services.tool.ToolAuditService
 import magic.app.services.uctoo.OperateLogService
 import magic.config.{Config as AppConfig}
+// 提示词可视化配置（组合根注入，避免 compactor 反向依赖 config；见 PromptConfig 类注释）
+import magic.compactor.PromptConfig
 import magic.core.skill.SkillManager
 import magic.skill.CompositeSkillToolManager
 import magic.skill.application.{ProgressiveSkillLoader, SkillManagementService}
@@ -39,6 +46,7 @@ import magic.plugins.hello.HelloPlugin
 import magic.plugins.doc_helper.{DocHelperPlugin, DocHelperRoute}
 import magic.plugins.GeneratedPluginAnchors // L1 自动反射锚点（build-sync 数据驱动生成，新插件上线零框架改动）
 import std.convert.*
+import std.collection.ArrayList
 import std.env.{getWorkingDirectory, getVariable}
 import std.fs.*
 import std.fs.Path
@@ -53,9 +61,9 @@ import magic.app.services.sync.model.TriggerSource // 导入同步触发源
 import magic.app.services.uctoo.ConfigSyncHandler // 导入配置同步处理器
 import magic.app.routes.uctoo.sync.SyncRoute // 导入同步路由
 import magic.app.services.billing.{BillingEventHandler, QuotaCheckHandler} // 导入计费事件处理器
-import magic.app.services.bridge.{WebSocketEventBridge, AgentRuntimeBridge} // 导入桥接层
+import magic.app.services.bridge.{WebSocketEventBridge, AgentRuntimeBridge, LrtEventBridge} // 导入桥接层
 import magic.app.services.bridge.AgentPersistenceEventHandler // 导入持久化事件处理器
-import magic.plugin.{PluginHostManager, PluginRegistry, PluginLoader, PluginEventBus, PluginConfigParser, PluginRouteScanner, SkillBridge, PluginAgentTools, PluginInspectTool, PluginActivateTool, PluginDeactivateTool, PluginSyncBridge} // 导入插件系统
+import magic.plugin.{PluginHostManager, PluginRegistry, PluginLoader, PluginEventBus, PluginRouteScanner, SkillBridge, PluginAgentTools, PluginInspectTool, PluginActivateTool, PluginDeactivateTool, PluginSyncBridge} // 导入插件系统
 import std.core.Duration
 
 /**
@@ -109,6 +117,16 @@ public class Application {
     public init(port: Int32, host: String, requestTimeout: Duration) {
         logger = LoggerFactory.getInstance().getLogger("uctoo.app")
         this._requestTimeout = requestTimeout
+
+        // §11.3 磁盘水位告警出口注入：magic.log 不反向依赖桥接层（避免包环），
+        // 由组合根把 LrtEventBridge.pushMonitorAlert 挂上去。系统级告警无会话，
+        // sessionId 传空 → dispatch 仅走 WebSocket 广播。
+        LogUtils.setWatermarkAlerter({ msg: String, used: Int64, limit: Int64 =>
+            LrtEventBridge.instance.pushMonitorAlert(
+                "", "", "", "log_disk_watermark",
+                Float64(used), Float64(limit), "warning", msg, 0, ""
+            )
+        })
 
         let dbConfig = DatabaseConfig.fromEnv()
         let databaseUrl = dbConfig.url
@@ -492,6 +510,17 @@ public class Application {
     private func setupRoutes(): Unit {
         // 注册全局Router引用（供loadRouteFromApp等接口在运行时获取所有路由）
         router.registerAsGlobal()
+
+        // Ch13.4：为 `web_request_approval` 注入「审批结果写入 agent_approvals」的实现。
+        // 与 v15 注入决策点校验器同构：工具在 tool 层只产出 ApprovalDecisionRecord 快照，
+        // 由宿主在此提供真正落库的一侧，从而不新增 tool.webmcp → app.services.uctoo 的反向依赖。
+        // 刻意放在路由注册**之前**且不受 ChatModel 是否配置影响：
+        // 审批可能经 WS 聊天、WebMCP、Agent 自运行等不同通道触发，任何一条都要能落库。
+        let approvalsService = AgentApprovalsService()
+        WebRequestApprovalTool.setApprovalRecorder({ record: ApprovalDecisionRecord =>
+            approvalsService.recordDecision(record)
+        })
+        LogUtils.info("Approval decision recorder wired into web_request_approval (Ch13.4)")
         
         // 使用自动路由注册器注册所有路由
         let routeRegistry = AutoRouteRegistry(router)
@@ -654,19 +683,17 @@ public class Application {
         }
 
         // 插件系统启动（双轨接入：在全部存量路由之后，只追加不修改）
-        // 单插件失败不阻断启动；plugins.yaml 缺失时插件系统静默关闭
+        // 去中心化自动发现：扫描 skills/ 目录子目录的 plugin.yaml，单插件失败不阻断启动
         try {
             let pluginRegistry = PluginRegistry()
             let pluginEventBus = PluginEventBus()
             let pluginSkillBridge = SkillBridge(skillManagementService, _skillManager)
             let pluginLoader = PluginLoader(pluginRegistry)
-            let pluginConfigParser = PluginConfigParser()
             let pluginManager = PluginHostManager(
                 registry: pluginRegistry,
                 loader: pluginLoader,
                 eventBus: pluginEventBus,
                 skillBridge: pluginSkillBridge,
-                configParser: pluginConfigParser,
                 pluginsRoot: "./plugins",
                 router: Some(router)
             )
@@ -674,7 +701,12 @@ public class Application {
             // 观测面非控制面：回写失败仅记日志，不阻断插件生命周期
             let pluginSyncBridge = PluginSyncBridge()
             pluginSyncBridge.bind(pluginEventBus)
-            let loadResult = pluginManager.loadAll("config/plugins.yaml")
+            let currentDir = getWorkingDirectory().toString()
+            let skillDirs = [
+                _skillInstallPath,
+                "${currentDir}/src/examples"
+            ]
+            let loadResult = pluginManager.loadAll(skillDirs)
             this._pluginManager = Some(pluginManager)
             // 注入插件管理器供 Agent 自引用工具调用（plugin_inspect/activate/deactivate）
             PluginAgentTools.setPluginManager(pluginManager)
@@ -730,6 +762,44 @@ public class Application {
     }
 }
 
+/// 发现所有「技能内 prompts 目录」：遍历技能基目录的每个子目录，
+/// 若其子目录含 `prompts/` 则加入结果；枚举顺序即跨技能优先级（先枚举者优先）。
+///
+/// 技能基目录与 ProgressiveSkillLoader 保持一致：
+///   - ${SKILL_INSTALL_PATH} 或 ${currentDir}/skills
+///   - ${currentDir}/src/examples
+func discoverSkillPromptDirs(): ArrayList<String> {
+    let currentDir = getWorkingDirectory().toString()
+    let skillInstallPath = if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
+        if (!configuredPath.isEmpty()) { configuredPath } else { "${currentDir}/skills" }
+    } else {
+        "${currentDir}/skills"
+    }
+    let skillBaseDirs = [skillInstallPath, "${currentDir}/src/examples"]
+
+    let result = ArrayList<String>()
+    for (base in skillBaseDirs) {
+        if (!exists(base)) {
+            continue
+        }
+        try {
+            let entries = Directory.readFrom(base)
+            for (fileInfo in entries) {
+                if (fileInfo.isDirectory()) {
+                    let subName = fileInfo.path.fileName
+                    let promptsDir = "${base}/${subName}/prompts"
+                    if (exists(promptsDir)) {
+                        result.add(promptsDir)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            LogUtils.warn("PromptConfig", "枚举技能提示词目录失败（跳过）: ${base}, ${e.message}")
+        }
+    }
+    result
+}
+
 main() {
     let envPaths = [Path("./.env"), Path("../.env")]
     for (envPath in envPaths) {
@@ -761,6 +831,29 @@ main() {
 
     AppConfig.logLevel = AppConfig.env["LOG_LEVEL"].getOrDefault({ => "debug" })  //warn
     AppConfig.logFile = AppConfig.env["LOG_FILE"].getOrDefault({ => "./logs/agentskills-runtime.log" })
+    // Ch0.3（spec 5.18 / design 2.5.1）：日志可回溯。
+    //   LOG_FILE_TIMESTAMPED=true → 实际写入 <basename>-<yyyyMMdd>-<HHmmss>.log，历史不覆盖
+    //   LOG_RETENTION_DAYS=14     → 启动时清理超期的带时间戳日志（只删符合模板的文件）
+    AppConfig.logFileTimestamped = AppConfig.env["LOG_FILE_TIMESTAMPED"].getOrDefault({ => "true" }) != "false"
+    // Int64.parse 返回 Result；沿用本文件既有范式（Result 与 Int64 的重载运算符可直接参与运算）。
+    // LOG_RETENTION_DAYS 解析失败时取兜底值 14；填 0 或负数则关闭清理。
+    AppConfig.logRetentionDays = Int64.parse(AppConfig.env["LOG_RETENTION_DAYS"].getOrDefault({ => "14" }))
+
+    // 提示词可视化配置（设计哲学：尽量可视化配置而不硬编码）。
+    // 多目录扫描，优先级从高到低：各 skills/<name>/prompts（技能内配置）→ PROMPTS_DIR（默认 ./prompts）。
+    // 机制对齐 AgentLoadManager.loadFromDirs（有序目录列表依次加载，首个命中即生效）。
+    // 覆盖文件：
+    //   tool-summarize.system.md                   工具结果压缩 system
+    //   tool-summarize.user.md                     工具结果压缩 user（须保留 {tool_call}/{tool_result}）
+    //   tool-summarize.user.<profile>.md           按 profile（通常是 agent.name / 技能名）覆盖 user
+    //   conversation-summary.system.md             会话压缩 system
+    // 详见 magic.compactor.PromptConfig 与 skills/long-running-task/OPS.md §2.5。
+    let promptsDir = AppConfig.env["PROMPTS_DIR"].getOrDefault({ => "./prompts" })
+    let skillPromptDirs = discoverSkillPromptDirs()
+    let orderedPromptDirs = ArrayList<String>()
+    for (d in skillPromptDirs) { orderedPromptDirs.add(d) }
+    orderedPromptDirs.add(promptsDir)   // 全局兜底放最后（最低优先级）
+    PromptConfig.loadFromDirs(orderedPromptDirs.toArray())
 
     // 读取端口配置
     let portStr = AppConfig.env["PORT"]

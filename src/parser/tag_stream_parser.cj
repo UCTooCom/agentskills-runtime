@@ -82,10 +82,76 @@ protected class TagStreamParser {
                 }
             }
             if (!content.isEmpty()) {
-                throw ParserException("Fail to peek tag. Invalid content: `${this.currContent}`")
+                // Round2 修复：内容不以任何已知标签开头属于**格式错误**，
+                // 上一轮这里兜底成 `return Tag.Answer`，导致畸形输出被静默判定为最终答案。
+                //
+                // Round3 补充容错：先继续往后读，尝试在缓冲区里定位第一个开标签。
+                // 定位到就把标签之前的散文前缀丢掉（推理模型常见行为），
+                // 读完整条流还是没有任何标签，才判定为格式错误抛 ParserException，
+                // 由上层 asyncRunOnce 的 catch 分支追加修复提示后重试（Repairable）。
+                var pos = this.indexOfFirstOpenTag()
+                while (pos.isNone()) {
+                    if (!this.readChunk()) {
+                        break
+                    }
+                    pos = this.indexOfFirstOpenTag()
+                }
+                if (let Some(p) <- pos) {
+                    if (p > 0) {
+                        LogUtils.info(
+                            "TagStreamParser: skipped ${p} byte(s) of untagged prose before the first tag"
+                        )
+                        this.resetBuffer(this.currContent[p..])
+                    }
+                    let trimmed = this.currContent.trimAscii()
+                    for (tag in Tag.allTags) {
+                        if (trimmed.startsWithTag(tag)) {
+                            return tag
+                        }
+                    }
+                }
+                throw ParserException(
+                    "Output does not start with any known tag (${Tag.Thought}/${Tag.Action}/${Tag.Answer}): `${this.currContent}`"
+                )
             }
             return None
         }
+    }
+
+    /**
+     * Round3: 在**已缓冲内容**里定位第一个已知开标签的起始下标。
+     *
+     * 用途：部分模型（尤其是推理模型）会先输出一段散文（复述问题、自言自语），
+     * 之后才给出 `<thinking>/<action>/<answer>`。只要缓冲区里已经能看到开标签，
+     * 就把标签之前的散文丢弃、从标签处开始解析；一个标签都找不到才是格式错误。
+     */
+    private func indexOfFirstOpenTag(): Option<Int64> {
+        var found: Option<Int64> = None
+        for (tag in Tag.allTags) {
+            let regex = Regex("\\${OPEN_TAG_SYMBOL}\\s*${tag.name}\\s*\\${CLOSE_TAG_SYMBOL}")
+            if (let Some(md) <- regex.find(this.currContent)) {
+                let start = md.matchPosition().start
+                if (let Some(v) <- found) {
+                    if (start < v) {
+                        found = Some(start)
+                    }
+                } else {
+                    found = Some(start)
+                }
+            }
+        }
+        return found
+    }
+
+    /**
+     * Round3: 读完剩余所有 chunk 并返回完整缓冲内容。
+     *
+     * 兜底路径专用。此前 asyncSummarize 只回传 `currContent`，
+     * 而那时只读到第一个 chunk，前端就只收到 "The user wants" 这种半句话。
+     */
+    protected func readAllRemaining(): String {
+        this.readAllChunk()
+        return this.currContent
     }
 
     protected func readTagAndContent(tag: Tag): String {

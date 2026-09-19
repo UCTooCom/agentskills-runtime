@@ -1,0 +1,73 @@
+mes animation-bg-liveImg {
+
+        0% {
+
+            left: -178px;
+
+        }
+
+
+
+        100% {
+
+            left: 0px;
+
+        }
+
+    }
+
+
+
+    .leftGif.end {
+
+        animation: animation-bg-liveImg-end 1s linear;
+
+    }
+
+
+
+    @keyframes animation-bg-liveImg-end {
+
+        0% {
+
+            left: 0px;
+
+        }
+
+
+
+        100% {
+
+            left: -178px;
+
+        }
+
+    }
+
+</style>
+
+
+
+<div class="leftGif" id="leftGif">
+
+    <a href="https://gaokao.eol.cn/e_html/gk/zhibo/index.html">
+
+        <img class="leftGifPng" src="https://img.eol.cn/e_images/gk/2020/gkzxhtc1.png">
+
+        <img class="leftGifGif" src="https://img.eol.cn/e_images/gk/2020/gkzxhtc2.gif">
+
+    </a>
+
+    <span class='leftGifclose_btn' id="leftGifclose_btn">关闭</span>
+
+</div>
+
+<script>
+
+    $(document).ready(function () {
+
+        var show_liveImg_time = localStorage.getItem('show_liveImg_time');
+
+        if (!show_liveImg_time || (new Date().getTime() - Number(show_liveImg_time)) > 3600000) {
+
+            $('#lef

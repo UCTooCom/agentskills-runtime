@@ -153,7 +153,14 @@ public struct ParserUtils {
                 return ToolRequest(name: name, args: args.getOrThrow())
             }
         }
-        throw ParserException("Failed to parse tool request: arguments are missing (expected one of arguments/parameters/argument/parameter/args, tool name was: ${name})")
+        // 容错：模型有时只给 `{"name":"file_write"}` 而不带参数。
+        // 以前在这里直接抛解析异常，agent 收到的反馈是「解析失败」，
+        // 既看不到缺哪个参数，又要白烧一轮 ReAct 重试（日志里
+        // `Parsing action failed: ... tool name was: file_write` 即此类）。
+        // 改为按空参数放行，由工具自己返回 "Parameter 'path' is required"
+        // 这类可操作错误，agent 下一轮就能补齐参数。
+        LogUtils.info("[ParserUtils] tool request without arguments, treating as empty args: ${name}")
+        return ToolRequest(name: name, args: JsonObject())
     }
 
     public static func extractToolRequest(str: String): ToolRequest {

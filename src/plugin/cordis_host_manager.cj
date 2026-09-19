@@ -7,6 +7,7 @@ import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 import std.core.Duration
 import std.env.getWorkingDirectory
+import std.fs.{Path, exists}
 import magic.log.LogUtils
 import f_base.Result
 import plugin_spi.{Plugin, PluginState, PluginError, PluginContext, LoadResult}
@@ -18,7 +19,7 @@ import ystyle::cordis_host.{PluginHost, PluginInstance, HostState, PluginManager
  * CordisHostManager - L3 进程隔离轨宿主侧总控（PS-T025）
  *
  * 职责（spec REQ-PS-015 / design §5.2）：
- * 1. 从 plugins.yaml 的 mode:process 条目构造 cordis PluginEntry 期望状态
+ * 1. 从 plugin.yaml 的 mode:process 条目构造 cordis PluginEntry 期望状态
  * 2. 包装 ystyle::cordis_host PluginManager(stdio)/PluginHost/reconcile 循环
  * 3. InstanceStatus → PluginState 映射 + PluginSyncBridge 回写 agent_skills.runtime_status
  * 4. 优雅停机：宿主退出时按依赖逆序 terminate 全部 process 插件
@@ -88,10 +89,16 @@ public class CordisHostManager {
                 match (this.cordisHost.state.getInstance(pluginId)) {
                     case Some(instance) =>
                         this.hostServices.registerFor(instance, pluginId)
-                        // 设置 codelabs 插件的表白名单
-                        if (pluginId == "codelabs") {
-                            let tables = ArrayList<String>(1, { _ => "codelabs" })
-                            this.hostServices.setTableWhitelist(pluginId, tables)
+                        // 从 plugin.yaml 声明式配置读取表白名单（替代硬编码）
+                        synchronized(this.processLock) {
+                            match (this.processEntries.get(pluginId)) {
+                                case Some(entry) =>
+                                    if (entry.tableWhitelist.size > 0) {
+                                        this.hostServices.setTableWhitelist(pluginId, entry.tableWhitelist)
+                                        LogUtils.info("[CordisHostManager] table whitelist for '${pluginId}': ${entry.tableWhitelist.toString()}")
+                                    }
+                                case None => ()
+                            }
                         }
                     case None => ()
                 }
@@ -104,7 +111,7 @@ public class CordisHostManager {
     /**
      * 从 PluginList 启动所有 mode:process 条目（期望状态生成 → reconcile）
      *
-     * @param list plugins.yaml 解析产物
+     * @param list plugin.yaml 自动发现产物
      * @return LoadResult（loaded/skipped/failed，与 PluginHostManager.loadAll 同构）
      */
     public func loadProcessPlugins(list: PluginList): LoadResult {
@@ -196,7 +203,7 @@ public class CordisHostManager {
     /**
      * 把 plugin.yaml 中的 command 路径转换为绝对路径。
      *
-     * config/plugins.yaml 中 command 字段是相对于宿主工作目录的路径，
+     * plugin.yaml 中 command 字段是相对于插件目录的路径，
      * 如 ./skills/codelabs/target/release/bin/skill_codelabs.exe
      *
      * launch() 从宿主工作目录解析相对路径，
@@ -221,7 +228,24 @@ public class CordisHostManager {
         } else {
             command
         }
-        return "${cwd}/${normalizedCmd}"
+        let primary = "${cwd}/${normalizedCmd}"
+        // 兜底 1：大量既有 plugin.yaml（含本机 CrudPluginGenerator / PluginGenerator 生成的）
+        // 写的是**相对插件目录**的短路径 `./target/release/bin/skill_x.exe`，
+        // 与本函数的 cwd 拼接语义并不匹配，直接拼出来的路径不存在。
+        // launch() 对不存在的路径不会给出可读错误，只会表现为「插件拉不起来」，
+        // 排障成本极高。这里按 skills/{name}/ 前缀再探一次，让两种写法都可用。
+        if (exists(Path(primary))) {
+            return primary
+        }
+        let skillPrefixed = "${cwd}/skills/${name}/${normalizedCmd}"
+        if (exists(Path(skillPrefixed))) {
+            LogUtils.warn("CordisHostManager: plugin_command_relative_fallback name=${name} used=${skillPrefixed}")
+            LogUtils.warn("[CordisHostManager] plugin '${name}' command 是相对插件目录的短路径，"
+                + "已按 skills/{name}/ 前缀兜底解析；建议把 command 改写成 "
+                + "./skills/${name}/${normalizedCmd}")
+            return skillPrefixed
+        }
+        return primary
     }
 
     // ── Agent 工具映射 ─────────────────────────────────────────────────

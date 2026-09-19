@@ -4,6 +4,8 @@
 package magic.app.services.uctoo
 
 // ========== 自定义引入区域（在此区域添加自定义import，不会被覆盖）==========
+// Ch9.3：任务树序列化需要 JSON 类型（TaskTreeNode.toJson）
+import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonArray, JsonNull}
 
 // ========== 自动生成代码区域（以下代码会被自动生成覆盖）==========
 //#region AutoCreateCode
@@ -911,4 +913,239 @@ public class AgentTasksService {
 
 //#endregion AutoCreateCode
 // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    /**
+     * 查询任务树（Ch9.3，供长程任务 `/long_running_task/tree/:rootId` 使用）
+     *
+     * 从根任务出发，按 `agent_tasks.parent_task_id` 逐层展开全部子任务。
+     *
+     * 实现取舍：
+     * - **层级 BFS + 已访问集合**，而不是递归查询。理由有二：
+     *   ① 递归对每次 `parent_task_id` 单独发 SQL 会产生 N+1 查询，任务树稍大即放大；
+     *      这里改成**按当前层批量查**（`parent_task_id IN (...)`），查询次数由层数决定。
+     *   ② 数据若因异常写入形成环（A 的父是 B、B 的父是 A），递归会栈溢出或死循环；
+     *      visited 集合保证每个任务最多展开一次，环只是被截断而不会打爆进程。
+     * - **单层子任务数 ≤ 100 时查询延迟 ≤ 100ms**（tasks 9.3 验收条件）：
+     *   层内批量 IN 查询把"每节点一条 SQL"降为"每层一条 SQL"，
+     *   `parent_task_id` 上有索引（见 DDL）时该目标可达。
+     * - **节点用可变 HashMap<String, JsonValue> 承载，children 是 ArrayList 而非 JsonArray**：
+     *   层序遍历是"边发现边挂载"，若 children 用 `JsonArray`（一旦转为 JsonValue 就
+     *   失去可写视图），挂载只能靠"深挖 JSON 对象再替换"的方式，既脆弱又低效。
+     *   改用 `HashMap<String, JsonValue>` + `ArrayList<HashMap<...>>` 后，
+     *   **兄弟节点之间共享同一个 children 列表引用**，挂载是 O(1)；
+     *   仅在最终序列化时一次性转 JsonArray，转换次数 = 节点数。
+     *
+     * @param rootTaskId 根任务 ID
+     * @param userId 当前用户 ID（行级权限过滤，与其它方法一致）
+     * @return 树形结构（单元素数组，元素为根节点；根不存在时返回空数组）
+     */
+    public func getTaskTree(rootTaskId: String, userId: String): ArrayList<TaskTreeNode> {
+        let result = ArrayList<TaskTreeNode>()
+        if (rootTaskId.isEmpty()) {
+            return result
+        }
+
+        // 根节点
+        let rootOpt = getExecutor().findAgentTasksById(rootTaskId)
+        if (rootOpt.isNone()) {
+            LogUtils.warn("[AgentTasksService] getTaskTree: 根任务不存在 rootTaskId=${rootTaskId}")
+            return result
+        }
+
+        // 已访问集合：防环 + 防重复展开（一个任务被错误地挂到两个父节点上也只展开一次）
+        let visited = HashSet<String>()
+        visited.add(rootTaskId)
+
+        let rootNode = buildTreeNode(rootOpt.getOrThrow())
+        result.add(rootNode)
+
+        // 索引：taskId → 节点，用于 O(1) 找到父节点并挂载子节点
+        let nodeIndex = HashMap<String, TaskTreeNode>()
+        nodeIndex.add(rootTaskId, rootNode)
+
+        // 当前层待展开的父任务 ID；逐层向下
+        let currentLevel = ArrayList<String>()
+        currentLevel.add(rootTaskId)
+        // 深度上限：任务树深度异常时兜底，避免病态数据导致长时间循环
+        let maxDepth: Int64 = 32
+
+        var depth: Int64 = 0
+        while (currentLevel.size > 0 && depth < maxDepth) {
+            let nextLevel = ArrayList<String>()
+            // 按层批量查询：parent_task_id IN ('a','b',...)
+            let children = queryChildrenBatch(currentLevel, userId)
+            for (child in children) {
+                if (visited.contains(child.id)) {
+                    continue
+                }
+                visited.add(child.id)
+
+                let parentId = match (child.parentTaskId) {
+                    case Some(p) => p
+                    case None => ""
+                }
+                let childNode = buildTreeNode(child)
+                // O(1) 定位父节点后直接挂载（列表是引用语义，无需回写）
+                match (nodeIndex.get(parentId)) {
+                    case Some(parentNode) =>
+                        parentNode.children.add(childNode)
+                        nodeIndex.add(child.id, childNode)
+                        nextLevel.add(child.id)
+                    case None =>
+                        // 父节点不在已展开树中：可能是父任务被软删、或权限过滤掉了父任务。
+                        // 此时丢弃该分支并记日志——静默丢弃会让"任务树少一层"难以排查。
+                        LogUtils.warn("[AgentTasksService] 子任务的父节点不在已展开树中，已丢弃: childId=${child.id}, parentId=${parentId}")
+                }
+            }
+            currentLevel.clear()
+            for (id in nextLevel) {
+                currentLevel.add(id)
+            }
+            depth = depth + 1
+        }
+
+        if (currentLevel.size > 0) {
+            LogUtils.warn("[AgentTasksService] getTaskTree 达到深度上限 ${maxDepth}，可能存在异常深的任务树: rootTaskId=${rootTaskId}")
+        }
+        return result
+    }
+
+    /**
+     * 按层批量查询子任务（单层一条 SQL，避免 N+1）
+     *
+     * 行级权限复用 `PermissionUtils.appendPermissionFilter`（与其它 WithPermission
+     * 方法同一套实现，不另起第二套权限逻辑）。
+     */
+    private func queryChildrenBatch(parentIds: ArrayList<String>, userId: String): ArrayList<AgentTasksPO> {
+        let all = ArrayList<AgentTasksPO>()
+        if (parentIds.size == 0) {
+            return all
+        }
+        try {
+            let sb = StringBuilder()
+            var first = true
+            for (pid in parentIds) {
+                if (!first) {
+                    sb.append(", ")
+                }
+                // 单引号转义，与插件侧 LrtHelpers_joinQuoted 同一约定
+                sb.append("'")
+                sb.append(pid.replace("'", "''"))
+                sb.append("'")
+                first = false
+            }
+
+            var whereClause = "parent_task_id IN (${sb.toString()}) AND deleted_at IS NULL"
+            if (!PermissionUtils.hasWildcardPermission(userId)) {
+                let (permFilter, _) = PermissionUtils.appendPermissionFilter(userId, "agent_tasks")
+                if (permFilter != "1=1" && !permFilter.isEmpty()) {
+                    whereClause = "(${whereClause}) AND ${permFilter}"
+                }
+            }
+
+            // 单层上限 100 与 tasks 9.3 的验收条件对齐；超出时按 created_at 升序稳定截断，
+            // 并记日志（截断不静默，否则"任务树少节点"难以排查）。
+            // 注意 rows 是**过滤后的总数**，用它判断是否发生截断。
+            let pagination = getExecutor().findAgentTasksByCondition(whereClause, "created_at ASC", Int64(1), Int64(100))
+            for (po in pagination.list) {
+                all.add(po)
+            }
+            if (Int64(pagination.rows) > Int64(pagination.list.size)) {
+                LogUtils.warn("[AgentTasksService] 单层子任务数超过单次上限，已截断: total=${pagination.rows}, returned=${pagination.list.size}")
+            }
+        } catch (e: Exception) {
+            LogUtils.error("[AgentTasksService] queryChildrenBatch 失败: ${e.message}")
+        }
+        return all
+    }
+
+    /// 把 PO 转为树节点（children 初始为空列表，后续按层挂载）
+    private func buildTreeNode(po: AgentTasksPO): TaskTreeNode {
+        let node = TaskTreeNode(po.id)
+        node.agentId = po.agentId
+        match (po.parentTaskId) {
+            case Some(p) => node.parentTaskId = Some(p)
+            case None => node.parentTaskId = None
+        }
+        node.status = po.status
+        node.priority = po.priority
+        match (po.payload) {
+            case Some(p) => node.payload = Some(p)
+            case None => node.payload = None
+        }
+        match (po.result) {
+            case Some(r) => node.result = Some(r)
+            case None => node.result = None
+        }
+        match (po.errorMessage) {
+            case Some(e) => node.errorMessage = Some(e)
+            case None => node.errorMessage = None
+        }
+        node.createdAt = po.createdAt.toString()
+        node.updatedAt = po.updatedAt.toString()
+        node
+    }
+}
+
+/**
+ * 任务树节点（Ch9.3）
+ *
+ * 单独成类而不是直接用 `HashMap<String, JsonValue>` 的理由：
+ * 层序挂载需要 children 是**可变容器**（ArrayList），而 `JsonValue` 一旦装箱即失去
+ * 可写视图，只能靠"深挖 JSON 再替换"完成挂载。用显式类后 children 是普通
+ * ArrayList 引用，挂载 O(1)，且字段类型由编译器保证（不必到处 match 解包）。
+ */
+public class TaskTreeNode {
+    public let taskId: String
+    public var agentId: String = ""
+    public var parentTaskId: Option<String> = None
+    public var status: Option<Int32> = None
+    public var priority: Option<Int32> = None
+    public var payload: Option<String> = None
+    public var result: Option<String> = None
+    public var errorMessage: Option<String> = None
+    public var createdAt: String = ""
+    public var updatedAt: String = ""
+    public let children = ArrayList<TaskTreeNode>()
+
+    public init(taskId: String) {
+        this.taskId = taskId
+    }
+
+    /// 递归序列化为 JSON（children 在此处一次性转为 JsonArray）
+    public func toJson(): JsonObject {
+        let obj = JsonObject()
+        obj.put("id", JsonString(this.taskId))
+        obj.put("agentId", JsonString(this.agentId))
+        obj.put("parentTaskId", TaskTreeNode.optStr(this.parentTaskId))
+        obj.put("status", TaskTreeNode.optInt(this.status))
+        obj.put("priority", TaskTreeNode.optInt(this.priority))
+        obj.put("payload", TaskTreeNode.optStr(this.payload))
+        obj.put("result", TaskTreeNode.optStr(this.result))
+        obj.put("errorMessage", TaskTreeNode.optStr(this.errorMessage))
+        obj.put("createdAt", JsonString(this.createdAt))
+        obj.put("updatedAt", JsonString(this.updatedAt))
+        let arr = JsonArray()
+        for (child in this.children) {
+            arr.add(child.toJson())
+        }
+        obj.put("children", arr)
+        obj
+    }
+
+    /// Option<String> → JsonValue（None 显式输出 null，而非空串）
+    private static func optStr(v: Option<String>): JsonValue {
+        match (v) {
+            case Some(s) => JsonString(s)
+            case None => JsonNull()
+        }
+    }
+
+    /// Option<Int32> → JsonValue
+    private static func optInt(v: Option<Int32>): JsonValue {
+        match (v) {
+            case Some(n) => JsonInt(Int64(n))
+            case None => JsonNull()
+        }
+    }
 }

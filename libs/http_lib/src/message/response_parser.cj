@@ -108,7 +108,21 @@ public class HttpResponseParser {
                     let bodyLen = totalLen - headerEnd
                     let bodyData = Array<UInt8>(bodyLen, repeat: 0)
                     data.copyTo(bodyData, headerEnd, 0, bodyLen)
-                    let decoded = ChunkedDecoder.decode(bodyData)
+                    // 本函数只被「刚读完响应头」的调用方使用，此时缓冲区里通常只有
+                    // 第一块的开头几个字节。拿半截分块去做一次性解码必然抛
+                    // "incomplete chunk data" / "invalid chunk terminator"
+                    // （实测百度、360、搜狗的搜索结果页全部命中）。
+                    //
+                    // 解析失败不再硬抛，改为把**原始分块字节**交回调用方：
+                    // client.cj / transport.cj 随后都会用
+                    // ChunkedDecoder.readStreaming(reader, prefetched:) 增量续读完整主体。
+                    // 只有在缓冲区里恰好就是一条完整分块报文时才真的解出正文，
+                    // 这样对「一次性拿到完整响应」的老调用方行为不变。
+                    let decoded = try {
+                        ChunkedDecoder.decode(bodyData)
+                    } catch (_: Exception) {
+                        bodyData
+                    }
                     return ByteBuffer.fromOwned(decoded)
                 }
             case None => ()

@@ -1,0 +1,89 @@
+[
+  {
+    "name": "eol_gaokao",
+    "url": "https://gaokao.eol.cn/",
+    "ok": true,
+    "status": 200,
+    "length": 532379,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\eol_gaokao.html",
+    "head": "<!DOCTYPE html> <html> <head> <meta charset=\"utf-8\"> <title>教育在线高考服务平台|2026高考志愿填报|2026高考专业|高考分数线|2026高考―教育在线</title> <meta name=\"keywords\" content=\"高考,高考网,高考分数线,高考志愿填报,高考报名,高考复习,高考作文,高考试题,高考真题,高考专业,大学名单,高考查分,艺术高考,民办高校,高职高专,独立学院,中外合作办学,高校 招办主任访谈,高考数据库\" /> <meta name=\"description\" con"
+  },
+  {
+    "name": "eol_news",
+    "url": "https://news.eol.cn/",
+    "ok": true,
+    "status": 200,
+    "length": 62770,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\eol_news.html",
+    "head": "<!DOCTYPE html> <html> <head> <meta charset=\"UTF-8\"> <title>新闻中心—教育在线</title> <meta name=\"keywords\" content=\"教育新闻,教育,教育评论,教育部,中国教育,教育新闻热点,教育新闻报道,教育新闻滚动,新闻中心,教育新闻评论,最新教育新闻,时政,时评,益言堂,教育资讯,高考,考研,留学,教师,中小学,教育人,教育名人.\" /> <meta name=\"description\" content=\"教育在线新闻中心，每日滚动最新教育资讯，深度看教育"
+  },
+  {
+    "name": "people_edu",
+    "url": "http://edu.people.com.cn/",
+    "ok": true,
+    "status": 200,
+    "length": 34169,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\people_edu.html",
+    "head": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\"> <html xmlns=\"http://www.w3.org/1999/xhtml\"> <head> <meta http-equiv=\"content-type\" content=\"text/html;charset=UTF-8\"/> <meta http-equiv=\"Content-Language\" content=\"utf-8\" /> <met"
+  },
+  {
+    "name": "xinhua_edu",
+    "url": "http://education.news.cn/",
+    "ok": true,
+    "status": 200,
+    "length": 32348,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\xinhua_edu.html",
+    "head": "<!DOCTYPE html><html><head><meta name=\"catalogs\" content=\"01003010101\"> <meta name=\"publishedtype\" content=\"1\"> <meta name=\"filetype\" content=\"0\"> <meta name=\"pagetype\" content=\"2\"> <meta name=\"templateId\" content=\"270412d8f2344766beb8c95d18f34314\"> <link href=\"/favicon.ico\" rel=\"shortcut icon\" type"
+  },
+  {
+    "name": "sina_edu",
+    "url": "https://edu.sina.com.cn/",
+    "ok": true,
+    "status": 200,
+    "length": 122474,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\sina_edu.html",
+    "head": "<!DOCTYPE html> <!-- [ published at 2026-09-15 22:00:00 ] --> <html> <head> <title>教育频道_新浪教育_新浪网</title> <meta name=\"keywords\" content=\"高考,考研,公务员考试,小升初,中考,自考,成考,注会,司法考试,四六级,校园,托福,雅思,英语,出国留学,MBA,商学院,中小学,新浪教育_新浪网\"> <meta name=\"description\" content=\"新浪教育频道是互联网第一教育门户，为学生及其家长提供一站式考试、升学、择校、家庭教育等资讯、新媒"
+  },
+  {
+    "name": "tencent_edu",
+    "url": "https://edu.qq.com/",
+    "ok": true,
+    "status": 200,
+    "length": 16671,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\tencent_edu.html",
+    "head": "<!DOCTYPE html> <html lang=\"zh-CN\"> <head> <title>腾讯网</title> <meta name=\"keywords\" content=\"资讯,新闻,财经,房产,视频,NBA,科技,腾讯网,腾讯,QQ,Tencent\"> <meta name=\"description\" content=\"腾讯网从2003年创立至今，已经成为集新闻信息，区域垂直生活服务、社会化媒体资讯和产品为一体的互联网媒体平台。腾讯网下设新闻、科技、财经、娱乐、体育、汽车、时尚等多个频道，充分满足用户对不同类型资讯的需求。同时专注不同领域内容，打造精品栏目，并顺应技"
+  },
+  {
+    "name": "sohu_edu",
+    "url": "https://learning.sohu.com/",
+    "ok": true,
+    "status": 200,
+    "length": 392813,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\sohu_edu.html",
+    "head": "<!DOCTYPE html><html lang=zh-CN><head><script>if(window&&window.performance&&typeof window.performance.now==='function'){!window.MptcfePerf?window.MptcfePerf={headst:+new Date()}:window.MptcfePerf.headst=+new Date()}</script><meta charset=utf-8><meta http-equiv=X-UA-Compatible content=\"IE=edge\"><met"
+  },
+  {
+    "name": "baidu_s",
+    "url": "https://www.baidu.com/s?wd=2025%E5%B9%B4%E9%AB%98%E8%80%83%E6%95%B0%E5%AD%A6%E5%8E%8B%E8%BD%B4%E9%A2%98",
+    "ok": true,
+    "status": 200,
+    "length": 1438,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\baidu_s.html",
+    "head": "<!DOCTYPE html> <html lang=\"zh-CN\"> <head> <meta charset=\"utf-8\"> <title>百度安全验证</title> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"> <meta name=\"apple-mobile-web-app-capable\" content=\"yes\"> <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black\">"
+  },
+  {
+    "name": "bing_s",
+    "url": "https://cn.bing.com/search?q=2025%E5%B9%B4%E9%AB%98%E8%80%83%E6%95%B0%E5%AD%A6%E6%96%B0%E8%AF%BE%E6%A0%87I%E5%8D%B7%E5%8E%8B%E8%BD%B4%E9%A2%98",
+    "ok": true,
+    "status": 200,
+    "length": 99356,
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\executed\\raw\\bing_s.html",
+    "head": "<!DOCTYPE html><html dir=\"ltr\" lang=\"zh\" xml:lang=\"zh\" xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:Web=\"http://schemas.live.com/Web/\"><script type=\"text/javascript\" nonce=\"uZGScVSOOdb1tx8MhnPZfuoVccdsNFlKf8vyK3Xgw2E=\" >//<![CDATA[ window.si_ST=new Date //]]></script><head><!--pc--><title>2025年高考数学新"
+  },
+  {
+    "name": "ddg",
+    "url": "https://duckduckgo.com/html/?q=2025+gaokao+math+final+problem",
+    "ok": false,
+    "error": "URLError: <urlopen error timed out>"
+  }
+]

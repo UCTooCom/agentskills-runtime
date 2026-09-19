@@ -6,7 +6,7 @@ package magic.skill.api
 import magic.core.skill.{Skill, SkillExecutionResult, ExecutionStatus}
 import std.collection.HashMap
 import stdx.encoding.json.JsonValue
-import std.time.*
+import std.time.DateTime
 
 /**
  * Request object for skill execution

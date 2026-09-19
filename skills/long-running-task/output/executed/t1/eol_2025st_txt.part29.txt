@@ -1,0 +1,47 @@
+                  <div class="gkzt-xueke mtT_30 clearfix">
+
+    <li>
+
+        <div class="word-xueke">语文</span>
+
+            <div class="xueke-a">
+
+                <a href=""><font color="grey">试题</font></a>
+
+                <span>|</span>
+
+                <a href=""><font color="grey">答案</font></a>
+
+                <span>|</span>
+
+                <a href="" ><font color="grey">解析</font></a>
+
+                
+
+            </div>
+
+    </li>
+
+    <li>
+
+        <div class="word-xueke">数学</span>
+
+            <div class="xueke-a">
+
+                <a href="https://gaokao.eol.cn/shiti/sx/202506/t20250612_2674359.shtml"><font color="red">试题</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/sx/202506/t20250612_2674359.shtml"><font color="red">答案</font></a>
+
+                <span>|</span>
+
+                <a href="https://gaokao.eol.cn/shiti/sx/202506/t20250612_2674359.shtml" ><font color="red">解析</font></a>
+
+            </div>
+
+    </li>
+
+
+
+    <l

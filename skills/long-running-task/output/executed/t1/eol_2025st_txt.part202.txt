@@ -1,0 +1,57 @@
+)
+
+    }
+
+
+
+    // 获取cookie
+
+    function getCookie(name) { 
+
+        var reg = new RegExp("(^| )" + name + "=([^;]*)(;|$)")
+
+        var arr = document.cookie.match(reg)
+
+        if(arr) {
+
+            return unescape(arr[2])
+
+        } else {
+
+            return null
+
+        }
+
+    }
+
+
+
+    // 左侧工具箱悬浮导航
+
+    var left_fix_cookie = getCookie('fixed_tool_nav')
+
+    if(!left_fix_cookie) {
+
+        $.ajax({
+
+            type: "GET",
+
+            // url: 'http://static-gkcx.dev.gaokao.cn/www/2.0/json/operate/2/11/3.json', // 测试
+
+            url: 'https://static-gkcx.gaokao.cn/www/2.0/json/operate/2/21/3.json' + '?a=' + window.location.host, // 正式
+
+            crossDomain: true,
+
+            dataType: 'json',
+
+            success: function (res) {
+
+                if(res.data.operate[4][13].status) {
+
+                    var leftFixDom = (
+
+                        '<div class="left-nav-wrapper">'+
+
+                            '<div class="position-box">' + 
+
+                               

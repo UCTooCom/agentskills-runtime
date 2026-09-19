@@ -4,12 +4,9 @@
 package magic.plugin
 
 import std.collection.{ArrayList, HashMap}
-import std.fs.{exists, File, OpenMode}
-import std.io.StringReader
 import f_base.Result
 import magic.log.LogUtils
 import magic.app.core.router.Router
-import magic.app.core.http.HttpMethod
 import stdx.encoding.json.{JsonObject, JsonString}
 import plugin_spi.{Plugin, PluginState, PluginError, LoadResult, PluginContext, ServiceRegistry, PluginSpiLogger}
 
@@ -17,7 +14,7 @@ import plugin_spi.{Plugin, PluginState, PluginError, LoadResult, PluginContext, 
  * PluginHostManager - 插件生命周期编排器
  *
  * 启动期（main.cj 在存量路由注册之后调用 loadAll）：
- * 读 plugins.yaml -> 依 order 逐个（load -> onLoad -> onActivate
+     * 自动发现 plugin.yaml -> 依 order 逐个（load -> onLoad -> onActivate
  * -> 注册 -> 技能注册），单插件失败不阻断其他插件（记 failed 继续）。
  *
  * 状态机触发条件（design.md §2.1.4）：
@@ -30,7 +27,7 @@ public class PluginHostManager {
     private let loader: PluginLoader
     private let eventBus: PluginEventBus
     private let skillBridge: SkillBridge
-    private let configParser: PluginConfigParser
+
 
     /// 插件根目录（插件目录约定 plugins/<name>/，内含 plugin.yaml 与 SKILL.md）
     private let pluginsRoot: String
@@ -51,7 +48,7 @@ public class PluginHostManager {
     private let routeClasses: HashMap<String, String>
 
     /// L3 进程隔离轨总控（cordis-cj 集成，PS-T025）
-    /// 懒初始化：仅当 plugins.yaml 含 mode:process 条目时才创建
+    /// 懒初始化：仅当发现的 plugin.yaml 含 mode:process 条目时才创建
     private var cordisHostManager: ?CordisHostManager = None
 
     public init(
@@ -59,7 +56,6 @@ public class PluginHostManager {
         loader!: PluginLoader,
         eventBus!: PluginEventBus,
         skillBridge!: SkillBridge,
-        configParser!: PluginConfigParser,
         pluginsRoot!: String = "./plugins",
         router!: ?Router = None
     ) {
@@ -67,7 +63,6 @@ public class PluginHostManager {
         this.loader = loader
         this.eventBus = eventBus
         this.skillBridge = skillBridge
-        this.configParser = configParser
         this.pluginsRoot = pluginsRoot
         this.router = router
         this.serviceRegistry = BeanFactoryServiceRegistry()
@@ -84,7 +79,7 @@ public class PluginHostManager {
     /**
      * 获取或懒初始化 CordisHostManager（三轨分发 process 轨用）
      *
-     * 仅当 plugins.yaml 含 mode:process 条目时才创建实例，
+     * 仅当发现的 plugin.yaml 含 mode:process 条目时才创建实例，
      * 避免无进程插件时引入 cordis_host 依赖开销。
      */
     private func ensureCordisHostManager(): CordisHostManager {
@@ -107,68 +102,56 @@ public class PluginHostManager {
     }
 
     /**
-     * 启动时全量加载（读 plugins.yaml -> 依序加载 -> 激活 -> 注册技能）
+     * 启动时全量加载（自动发现 plugin.yaml -> 依序加载 -> 激活 -> 注册技能）
      *
-     * 单插件失败不阻断其他插件；plugins.yaml 缺失时静默返回空结果
-     * （插件系统为可选增强，未配置即无插件）
+     * 去中心化自动发现：扫描技能基目录子目录，发现 plugin.yaml 并加载。
+     * 单插件失败不阻断其他插件；无 plugin.yaml 时静默返回空结果。
      */
-    public func loadAll(configPath: String): LoadResult {
+    public func loadAll(skillBaseDirectories: Array<String>): LoadResult {
         let result = LoadResult()
 
-        if (!exists(configPath)) {
-            LogUtils.info("[PluginHostManager] plugins.yaml not found at ${configPath}, plugin system disabled")
+        let discoveryService = PluginDiscoveryService()
+        let list = discoveryService.discover(skillBaseDirectories)
+
+        if (list.plugins.size == 0) {
+            LogUtils.info("[PluginHostManager] no plugins discovered, plugin system disabled")
             return result
         }
 
-        let parsed = this.configParser.parseFromFile(configPath)
-        match (parsed) {
-            case Err(err) =>
-                LogUtils.error("[PluginHostManager] failed to parse plugins.yaml: ${err.message()}")
-                return result
-            case Ok(list) =>
-                LogUtils.info(
-                    "[PluginHostManager] loading plugins: total=${list.plugins.size}, enabled=${list.enabledCount()}")
-                // 三轨分发：sync/dylib 走 loadSingle（反射实例化）；
-                // process 委托 CordisHostManager（cordis-cj 进程隔离轨，PS-T025）
-                var hasProcess = false
-                for (entry in list.plugins) {
-                    if (!entry.enabled) {
-                        result.skipped.add("${entry.name}(disabled)")
-                        continue
-                    }
-                    match (entry.mode) {
-                        case PluginMode.Sync | PluginMode.Dylib =>
-                            this.loadSingle(entry, result)
-                        case PluginMode.Process =>
-                            hasProcess = true
-                    }
-                }
-                // process 轨批量启动（期望状态生成 → reconcile → awaitActive）
-                if (hasProcess) {
-                    let mgr = this.ensureCordisHostManager()
-                    let procResult = mgr.loadProcessPlugins(list)
-                    for (name in procResult.loaded) {
-                        result.loaded.add(name)
-                    }
-                    for (name in procResult.failed) {
-                        result.failed.add(name)
-                    }
-                    for (name in procResult.skipped) {
-                        result.skipped.add(name)
-                    }
-                    // process 轨 V4 CRUD 路由注册（ExternalPluginRouteGateway）
-                    this.registerProcessPluginRoutes(list, mgr)
-                }
-                LogUtils.info("[PluginHostManager] load finished: ${result.summary()}")
-                return result
-            case _ =>
-                LogUtils.error("[PluginHostManager] unexpected parse result for plugins.yaml")
-                return result
+        LogUtils.info("[PluginHostManager] loading plugins: total=${list.plugins.size}, enabled=${list.enabledCount()}")
+        var hasProcess = false
+        for (entry in list.plugins) {
+            if (!entry.enabled) {
+                result.skipped.add("${entry.name}(disabled)")
+                continue
+            }
+            match (entry.mode) {
+                case PluginMode.Sync | PluginMode.Dylib =>
+                    this.loadSingle(entry, result)
+                case PluginMode.Process =>
+                    hasProcess = true
+            }
         }
+        if (hasProcess) {
+            let mgr = this.ensureCordisHostManager()
+            let procResult = mgr.loadProcessPlugins(list)
+            for (name in procResult.loaded) {
+                result.loaded.add(name)
+            }
+            for (name in procResult.failed) {
+                result.failed.add(name)
+            }
+            for (name in procResult.skipped) {
+                result.skipped.add(name)
+            }
+            this.registerProcessPluginRoutes(list, mgr)
+        }
+        LogUtils.info("[PluginHostManager] load finished: ${result.summary()}")
+        return result
     }
 
     /// process 轨 V4 CRUD 路由注册
-    /// 读取每个 process 插件 plugin.yaml 的 routes 字段，
+    /// 使用 PluginManifestEntry.httpRoutes（从 plugin.yaml 解析的 HTTP 路由声明），
     /// 经 ExternalPluginRouteGateway 注册到宿主路由表
     private func registerProcessPluginRoutes(list: PluginList, mgr: CordisHostManager): Unit {
         match (this.router) {
@@ -182,106 +165,14 @@ public class PluginHostManager {
                     if (entry.mode != PluginMode.Process || !entry.enabled) {
                         continue
                     }
-                    // 读取 plugin.yaml 的 routes 字段
-                    // process 轨插件在 skills/{name}/ 目录下
-                    let pluginYamlPath = "./skills/${entry.name}/plugin.yaml"
-                    match (this.parsePluginYamlRoutes(pluginYamlPath)) {
-                        case Ok(routes) =>
-                            if (routes.size > 0) {
-                                let count = gateway.registerPluginRoutes(entry.name, routes)
-                                LogUtils.info("[PluginHostManager] process plugin '${entry.name}' routes registered: ${count}/${routes.size}")
-                            }
-                        case Err(msg) =>
-                            LogUtils.warn("[PluginHostManager] process plugin '${entry.name}' routes parse failed: ${msg}")
-                        case _ => ()
+                    if (entry.httpRoutes.size > 0) {
+                        let count = gateway.registerPluginRoutes(entry.name, entry.httpRoutes)
+                        LogUtils.info("[PluginHostManager] process plugin '${entry.name}' routes registered: ${count}/${entry.httpRoutes.size}")
                     }
                 }
         }
     }
 
-    /// 解析 plugin.yaml 的 routes 字段
-    /// @return Ok(ArrayList<ExternalRoute>) 或 Err(错误消息)
-    private func parsePluginYamlRoutes(yamlPath: String): Result<ArrayList<ExternalRoute>, String> {
-        if (!exists(yamlPath)) {
-            return Err("plugin.yaml not found: ${yamlPath}")
-        }
-        // 读取 plugin.yaml 文件内容
-        let content = match (readFileContent(yamlPath)) {
-            case Some(c) => c
-            case None => return Err("failed to read plugin.yaml: ${yamlPath}")
-        }
-        // 解析 YAML routes 字段
-        // plugin.yaml 格式：
-        // routes:
-        //   - method: POST
-        //     path: /api/v1/uctoo/codelabs/add
-        let routes = ArrayList<ExternalRoute>()
-        let lines = content.split("\n")
-        var inRoutesSection = false
-        var i = 0
-        while (i < lines.size) {
-            let line = lines[i]
-            if (line.startsWith("routes:")) {
-                inRoutesSection = true
-                i += 1
-                continue
-            }
-            if (inRoutesSection) {
-                // routes section 结束条件：遇到非缩进的顶层 key
-                if (line.size > 0 && !line.startsWith(" ") && !line.startsWith("\t") && !line.startsWith("-")) {
-                    inRoutesSection = false
-                    i += 1
-                    continue
-                }
-                // 解析 "- method: XXX" 行
-                if (line.contains("- method:") || line.contains("-   method:")) {
-                    var methodStr = ""
-                    var pathStr = ""
-                    // 提取 method
-                    let methodIdx = match (line.indexOf("method:")) { case Some(i) => i + 7; case None => line.size }
-                    let methodPart = if (methodIdx < line.size) { line[methodIdx..] } else { "" }
-                    methodStr = methodPart.trimStart(" \t\r\n").trimEnd(" \t\r\n")
-                    // 下一行应该是 path
-                    if (i + 1 < lines.size) {
-                        let nextLine = lines[i + 1]
-                        if (nextLine.contains("path:")) {
-                            let pathIdx = match (nextLine.indexOf("path:")) { case Some(i) => i + 5; case None => nextLine.size }
-                            let pathPart = if (pathIdx < nextLine.size) { nextLine[pathIdx..] } else { "" }
-                            pathStr = pathPart.trimStart(" \t\r\n").trimEnd(" \t\r\n")
-                            i += 2
-                            // 构造 ExternalRoute
-                            let httpMethod = match (methodStr) {
-                                case "GET" => HttpMethod.GET
-                                case "POST" => HttpMethod.POST
-                                case "PUT" => HttpMethod.PUT
-                                case "DELETE" => HttpMethod.DELETE
-                                case _ => HttpMethod.POST
-                            }
-                            routes.add(ExternalRoute(httpMethod, pathStr))
-                            continue
-                        }
-                    }
-                    i += 1
-                    continue
-                }
-            }
-            i += 1
-        }
-        return Ok(routes)
-    }
-
-    /// 读取文件内容（辅助方法）
-    private func readFileContent(path: String): ?String {
-        try {
-            let file = File(path, OpenMode.Read)
-            let reader = StringReader(file)
-            let content = reader.readToEnd()
-            file.close()
-            return Some(content)
-        } catch (e: Exception) {
-            return None
-        }
-    }
 
     /// 加载单个插件条目（load -> onLoad -> onActivate -> 注册 -> 技能）
     private func loadSingle(entry: PluginManifestEntry, result: LoadResult): Unit {
@@ -498,7 +389,7 @@ public class PluginHostManager {
     /**
      * 已激活插件声明的 Route 类全名清单（PluginRouteScanner 消费）
      *
-     * 仅返回 Active 插件在 plugins.yaml 中声明的 routeClass；
+     * 仅返回 Active 插件在 plugin.yaml 中声明的 routeClass；
      * 插件停用后对应条目随之移除（未声明 routeClass 的插件不出现在清单中）
      */
     public func routeClassNames(): ArrayList<String> {

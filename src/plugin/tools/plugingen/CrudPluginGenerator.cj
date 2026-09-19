@@ -44,7 +44,7 @@ public class CrudPluginGenerator {
         let cjDir = "${pluginDir}/src"
 
         // 1. plugin.yaml（V4 API 路由）
-        this.writePluginYaml(name, pluginDir)
+        this.writePluginYaml(name, tableName, pluginDir)
 
         // 2. cjpm.toml（独立 executable 工程）
         this.writeCjpmToml(name, pluginDir)
@@ -67,14 +67,29 @@ public class CrudPluginGenerator {
     }
 
     /// 写入 plugin.yaml（V4 API 路由，对标 codelabs）
-    private func writePluginYaml(name: String, pluginDir: String): Unit {
+    ///
+    /// §14.1 同步（2026-09-15）：字段面与宿主实际解析的 `plugin_config.cj` 对齐——
+    ///   - **删除 `protocol`**：plugin_config 无该字段解析逻辑，写了只会被静默忽略；
+    ///     且会误导后来者以为传输层可切换（L3 进程轨固定 stdio）。
+    ///   - **补 `tableWhitelist`**：功能必需。生成的 handler 经 `ctx.invoke("host.db", ...)`
+    ///     访问数据，未列入白名单的表会被宿主直接拒绝——缺它等于生成即不可用。
+    ///   - 补 `enabled` / `autoRestart` / `order`：显式化，避免依赖隐式默认值。
+    private func writePluginYaml(name: String, tableName: String, pluginDir: String): Unit {
         let sb = StringBuilder()
         sb.append("name: ${name}\n")
         sb.append("version: 1.0.0\n")
         sb.append("mode: process\n")
-        sb.append("protocol: jsonrpc-stdio\n")
-        sb.append("command: ./target/release/bin/skill_${name}.exe\n")
+        // command 是相对**宿主工作目录**的路径（CordisHostManager.resolvePluginCommand
+        // 直接 `${cwd}/${command}`，无校验、无兜底），必须带 skills/{name}/ 前缀，
+        // 否则开发态（cwd=仓库根）与发布态（cwd=bin）都定位不到 exe。
+        sb.append("command: ./skills/${name}/target/release/bin/skill_${name}.exe\n")
         sb.append("description: L3 进程隔离轨插件 ${name}\n")
+        sb.append("enabled: true\n")
+        sb.append("order: 10\n")
+        sb.append("autoRestart: true\n")
+        // 未在白名单的表，host.db 调用会被宿主拒绝（不是可选项）
+        sb.append("tableWhitelist:\n")
+        sb.append("  - ${tableName}\n")
         sb.append("routes:\n")
         sb.append("  - method: POST\n")
         sb.append("    path: /api/v1/uctoo/${name}/add\n")
@@ -401,7 +416,7 @@ public class CrudPluginGenerator {
         sb.append("                        }\n")
         sb.append("                        let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })\n")
         sb.append("                        execArgs[0] = JsonValue.from(execParam)\n")
-        sb.append("                        let execResult = ctx.invoke(\"host.db\", \"execute\", execArgs)\n")
+        sb.append("                        let execResult = ctx.invoke<JsonValue, JsonValue>(\"host.db\", \"execute\", execArgs)\n")
         sb.append("                        eprintln(\"[${name}] host.db insert result: \${execResult.stringify()}\")\n")
         sb.append("                        // 5. 返回成功（INSERT 无 RETURNING，不回读新记录）\n")
         sb.append("                        return ${className}Handlers.okResult(\"add\")\n")
@@ -492,7 +507,7 @@ public class CrudPluginGenerator {
         sb.append("                        }\n")
         sb.append("                        let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })\n")
         sb.append("                        execArgs[0] = JsonValue.from(execParam)\n")
-        sb.append("                        let execResult = ctx.invoke(\"host.db\", \"execute\", execArgs)\n")
+        sb.append("                        let execResult = ctx.invoke<JsonValue, JsonValue>(\"host.db\", \"execute\", execArgs)\n")
         sb.append("                        eprintln(\"[${name}] host.db update result: \${execResult.stringify()}\")\n")
         sb.append("                        // 返回更新后的记录（单条）\n")
         sb.append("                        match (idVal) {\n")
@@ -582,7 +597,7 @@ public class CrudPluginGenerator {
         sb.append("                        }\n")
         sb.append("                        let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })\n")
         sb.append("                        execArgs[0] = JsonValue.from(execParam)\n")
-        sb.append("                        let execResult = ctx.invoke(\"host.db\", \"execute\", execArgs)\n")
+        sb.append("                        let execResult = ctx.invoke<JsonValue, JsonValue>(\"host.db\", \"execute\", execArgs)\n")
         sb.append("                        eprintln(\"[${name}] host.db delete result: \${execResult.stringify()}\")\n")
         sb.append("                        return ${className}Handlers.okResult(\"del\")\n")
         sb.append("                }\n")
@@ -702,7 +717,7 @@ public class CrudPluginGenerator {
         sb.append("                }\n")
         sb.append("                let queryArgs = Array<JsonValue>(1, { _ => JsonValue.Null })\n")
         sb.append("                queryArgs[0] = JsonValue.from(queryParam)\n")
-        sb.append("                let queryResult = ctx.invoke(\"host.db\", \"query\", queryArgs)\n")
+        sb.append("                let queryResult = ctx.invoke<JsonValue, JsonValue>(\"host.db\", \"query\", queryArgs)\n")
         sb.append("                eprintln(\"[${name}] host.db query result: \${queryResult.stringify()}\")\n")
         sb.append("                // 3. 查询总数（使用相同的 where 条件）\n")
         sb.append("                let countParam = HashMap<String, JsonValue>()\n")
@@ -719,7 +734,7 @@ public class CrudPluginGenerator {
         sb.append("                }\n")
         sb.append("                let countArgs = Array<JsonValue>(1, { _ => JsonValue.Null })\n")
         sb.append("                countArgs[0] = JsonValue.from(countParam)\n")
-        sb.append("                let countResult = ctx.invoke(\"host.db\", \"count\", countArgs)\n")
+        sb.append("                let countResult = ctx.invoke<JsonValue, JsonValue>(\"host.db\", \"count\", countArgs)\n")
         sb.append("                eprintln(\"[${name}] host.db count result: \${countResult.stringify()}\")\n")
         sb.append("                // 4. 构造 V4 列表格式响应\n")
         sb.append("                let response = HashMap<String, JsonValue>()\n")
@@ -784,7 +799,7 @@ public class CrudPluginGenerator {
         sb.append("                }\n")
         sb.append("                let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })\n")
         sb.append("                execArgs[0] = JsonValue.from(execParam)\n")
-        sb.append("                let execResult = ctx.invoke(\"host.db\", \"execute\", execArgs)\n")
+        sb.append("                let execResult = ctx.invoke<JsonValue, JsonValue>(\"host.db\", \"execute\", execArgs)\n")
         sb.append("                eprintln(\"[${name}] host.db empty-recycle-bin result: \${execResult.stringify()}\")\n")
         sb.append("                return ${className}Handlers.okResult(\"empty-recycle-bin\")\n")
         sb.append("        }\n")
@@ -837,7 +852,7 @@ public class CrudPluginGenerator {
         sb.append("        }\n")
         sb.append("        let execArgs = Array<JsonValue>(1, { _ => JsonValue.Null })\n")
         sb.append("        execArgs[0] = JsonValue.from(execParam)\n")
-        sb.append("        let execResult = ctx.invoke(\"host.db\", \"execute\", execArgs)\n")
+        sb.append("        let execResult = ctx.invoke<JsonValue, JsonValue>(\"host.db\", \"execute\", execArgs)\n")
         sb.append("        eprintln(\"[${name}] host.db restore result: \${execResult.stringify()}\")\n")
         sb.append("        return ${className}Handlers.okResult(\"restore\")\n")
         sb.append("    }\n\n")
@@ -866,7 +881,7 @@ public class CrudPluginGenerator {
         sb.append("        queryParam[\"permissions\"] = JsonValue.Array(permArr)\n")
         sb.append("        let queryArgs = Array<JsonValue>(1, { _ => JsonValue.Null })\n")
         sb.append("        queryArgs[0] = JsonValue.from(queryParam)\n")
-        sb.append("        let queryResult = ctx.invoke(\"host.db\", \"query\", queryArgs)\n")
+        sb.append("        let queryResult = ctx.invoke<JsonValue, JsonValue>(\"host.db\", \"query\", queryArgs)\n")
         sb.append("        match (queryResult) {\n")
         sb.append("            case JsonValue.Map(qFields) =>\n")
         sb.append("                match (qFields.get(\"rows\")) {\n")

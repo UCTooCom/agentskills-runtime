@@ -1,0 +1,200 @@
+{
+  "date": "2026-09-14",
+  "companies": [
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "quotes": {
+        "code": "600519",
+        "name": "贵州茅台",
+        "price": 127796,
+        "change_pct": 22,
+        "volume": 16571,
+        "amount": 2116621850.0,
+        "pe": 1794,
+        "pb": 636,
+        "market_cap": 1597554282813.96,
+        "high": 128553,
+        "low": 127036,
+        "open": 127727,
+        "prev_close": 127516,
+        "source": "eastmoney"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "300750",
+      "name": "宁德时代",
+      "quotes": {
+        "code": "300750",
+        "name": "宁德时代",
+        "price": 337.11,
+        "change_pct": 2.0,
+        "volume": 26184902,
+        "amount": 8871517268.74,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 341.81,
+        "low": 334.0,
+        "open": 334.51,
+        "prev_close": 330.51,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "002594",
+      "name": "比亚迪",
+      "quotes": {
+        "code": "002594",
+        "name": "比亚迪",
+        "price": 85.43,
+        "change_pct": 1.7,
+        "volume": 28959884,
+        "amount": 2468319296.91,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 85.95,
+        "low": 83.75,
+        "open": 84.01,
+        "prev_close": 84.0,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "600036",
+      "name": "招商银行",
+      "quotes": {
+        "code": "600036",
+        "name": "招商银行",
+        "price": 41.83,
+        "change_pct": 1.16,
+        "volume": 74606686,
+        "amount": 3103375058.0,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 41.83,
+        "low": 41.16,
+        "open": 41.34,
+        "prev_close": 41.35,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "601318",
+      "name": "中国平安",
+      "quotes": {
+        "code": "601318",
+        "name": "中国平安",
+        "price": 54.73,
+        "change_pct": -0.18,
+        "volume": 48623496,
+        "amount": 2660766150.0,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 55.35,
+        "low": 54.29,
+        "open": 54.78,
+        "prev_close": 54.83,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "600030",
+      "name": "中信证券",
+      "quotes": {
+        "code": "600030",
+        "name": "中信证券",
+        "price": 26.61,
+        "change_pct": -1.15,
+        "volume": 78124860,
+        "amount": 2080338252.0,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 26.78,
+        "low": 26.52,
+        "open": 26.78,
+        "prev_close": 26.92,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "000858",
+      "name": "五 粮 液",
+      "quotes": {
+        "code": "000858",
+        "name": "五 粮 液",
+        "price": 69.85,
+        "change_pct": 0.14,
+        "volume": 11734039,
+        "amount": 819060254.75,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 70.0,
+        "low": 69.6,
+        "open": 69.76,
+        "prev_close": 69.75,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    },
+    {
+      "code": "601899",
+      "name": "紫金矿业",
+      "quotes": {
+        "code": "601899",
+        "name": "紫金矿业",
+        "price": 32.25,
+        "change_pct": -0.03,
+        "volume": 154805285,
+        "amount": 4990561575.0,
+        "pe": null,
+        "pb": null,
+        "market_cap": null,
+        "high": 32.49,
+        "low": 31.7,
+        "open": 31.78,
+        "prev_close": 32.26,
+        "source": "sina"
+      },
+      "news": [],
+      "error": null
+    }
+  ],
+  "sources": [
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news",
+    "eastmoney-quote",
+    "eastmoney-news"
+  ],
+  "fetched_at": "2026-09-14T22:04:11.589498"
+}

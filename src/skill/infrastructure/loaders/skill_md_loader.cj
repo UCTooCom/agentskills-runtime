@@ -6,9 +6,11 @@ package magic.skill.infrastructure.loaders
 import std.io.*
 import std.fs.*
 import std.collection.HashMap
-import magic.skill.domain.models.{SkillManifest, SkillParameter}
+import magic.skill.domain.models.{SkillManifest, SkillParameter, DecisionPointParseResult}
 import magic.skill.infrastructure.utils.YamlUtils
 import magic.skill.infrastructure.utils.MarkdownUtils
+import magic.skill.infrastructure.validators.DecisionPointValidator
+import magic.log.LogUtils
 import std.fs.{exists, Directory}
 
 /**
@@ -58,6 +60,21 @@ public class SkillMdLoader {
             let scriptsDirExists = exists("${skillDir}/scripts/")
             let referencesDirExists = exists("${skillDir}/references/")
             let assetsDirExists = exists("${skillDir}/assets/")
+
+            // ── Ch13.1 决策点校验（spec 5.15.1 规则 4 / 5.15.3 异常场景 3）──────
+            // 这里持有 SKILL.md 原文，是唯一能校验 decision-points 的位置。
+            // 校验失败不阻断加载：只告警，并把失效决策点 id 挂进 manifest，
+            // 下游（执行器 / 审批工具）据此跳过 ⇒ "该决策点不生效"。
+            let decisionPointResult = DecisionPointValidator().parseAndValidate(content)
+            for (warning in decisionPointResult.warnings) {
+                LogUtils.warn("Skill '${yamlFrontmatter.name}' 决策点校验告警: ${warning}")
+            }
+            if (decisionPointResult.hasInvalidPoints()) {
+                LogUtils.warn("Skill '${yamlFrontmatter.name}' 有 ${decisionPointResult.invalidPointIds.size} 个决策点因校验失败被禁用（不生效）")
+            }
+            if (decisionPointResult.validPoints.size > 0) {
+                LogUtils.info("Skill '${yamlFrontmatter.name}' 载入 ${decisionPointResult.validPoints.size} 个有效决策点")
+            }
             
             // Create the SkillManifest
             return Some(
@@ -73,7 +90,9 @@ public class SkillMdLoader {
                     scriptsDirExists: scriptsDirExists,
                     referencesDirExists: referencesDirExists,
                     assetsDirExists: assetsDirExists,
-                    parameters: []  // Parameters would be extracted from the markdown content or YAML
+                    parameters: [],  // Parameters would be extracted from the markdown content or YAML
+                    decisionPoints: decisionPointResult.validPoints,
+                    invalidDecisionPointIds: decisionPointResult.invalidPointIds
                 )
             )
         } catch (ex: Exception) {

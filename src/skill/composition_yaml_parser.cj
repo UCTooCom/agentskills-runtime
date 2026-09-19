@@ -1,5 +1,14 @@
 /*
  * Copyright (c) UCToo Co., Ltd. 2026. All rights reserved.
+ *
+ * ⚠️ 元数据 schema 归属声明（2026-09-12，long-running-task design 2.4.4）：
+ * 本解析器（CompositionYamlParser）**只认 DB 存储态 schema**
+ * （skill_name + sequential/parallel/conditional + input_mapping），
+ * 仅供 SkillCompositionsService 使用。
+ *
+ * 技能实际在用的「文件态」COMPOSITION.yaml（script / plugin / output + depends_on + ${step-name.output}）
+ * 由 LrtCompositionRunner（src/skill/lrt_composition_runner.cj）中的文件态解析器负责，
+ * 二者**不同源**。修改任一格式时请勿互相牵连。
  */
 package magic.skill
 

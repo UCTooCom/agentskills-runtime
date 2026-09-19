@@ -67,4 +67,8 @@ struct LogUtilsImpl {
 
     public static func agentError(name: String, msg: String): Unit {
     }
+
+    /// §11.3：OHOS 目标无文件日志水位概念，空实现保证门面符号一致。
+    public static func setWatermarkAlerter(f: (String, Int64, Int64) -> Unit): Unit {
+    }
 }

@@ -1,0 +1,23 @@
+pper .bottom-icon .closeimg::before { transform: rotate(45deg); }
+
+    .left-nav-wrapper .bottom-icon .closeimg::after { transform: rotate(-45deg); }
+
+    .left-nav-wrapper .bottom-icon { position: absolute; left: 50%; transform: translateX(-50%); top: 430px; }
+
+    .left-nav-wrapper .bottom-icon .download-app { margin-top: 20px; width: 65px; height: 119px; cursor: pointer; }
+
+
+
+    /* 右侧报志愿组件 */
+
+    .enter-score-box { position: fixed;right: 6px;bottom: 20%;z-index: 1001; }
+
+    .enter-score-box .inner { position: relative; }
+
+    .enter-score-box .right-bar-bzy { display: block; height: 100%; }
+
+    .enter-score-box .right-bar-bzy img { width: 152px;    height: auto; }
+
+    .enter-score-box .right-bar-bzy .score-enter { position: absolute; left: 50%; transform: translateX(-50%); top: 54px; width: 100%; padding: 0 5%; box-sizing: border-box; }
+
+    .enter-score-box .right-bar-bzy .score-enter input { border: 1px solid #f60; border-radius: 8px; display: block; width: 100%; background: 

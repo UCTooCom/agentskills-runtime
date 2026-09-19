@@ -1,0 +1,148 @@
+name: long-running-task
+description: AI 自主驱动长程任务系统 —— 接收高层目标，AI 自主规划并驱动分钟级到天级长程任务，实现"人设目标、AI 自主规划与执行、人评审交付"闭环
+version: 1.0.0
+
+# 组合步骤：6 步 SOP + 1 个 output 聚合节点（方案 A 文件态格式：script / plugin / output）
+#
+# 解析器：src/skill/lrt_composition_runner.cj（LrtCompositionRunner）。本文件是**技能实际在用**
+# 的文件态格式，与 composition_yaml_parser.cj 所述的 DB 存储态 schema 不同源。
+#
+# ── 本次修订（tasks.md #373/#375/#387）改了什么、为什么 ──────────────────────
+# 1) plan-tasks / execute-rounds 原先声明成 script，指向 **根本不存在的**
+#    scripts/plan_tasks.py 与 scripts/execute_rounds.py —— 声明与实现长期脱节。
+#    这两步的本体早已实现在插件里（LrtPlanner.plan / LrtExecutor.runTask），
+#    故改为 step_type: plugin，指向真实路由 lrt-plan / lrt-execute。
+# 2) 每一步补 acceptance_criteria：无验收条件的步骤等于无法判定成功，
+#    之前的编排靠"脚本退出码 0"顶替验收，掩盖了大量"跑了但没跑到"的情况。
+# 3) execute-rounds 补 degradation_chain（tasks.md #244/#387）：
+#    cli_execute → builtin_tool → llm → template，由 executeStep 在重试耗尽后按序尝试。
+# 4) extend-capability 补 condition：没有 plan 就没必要谈"补能力"。
+#
+# ── 关于 "skill_gaps.json 非空才执行" ──────────────────────────────────────
+# tasks.md #387 原文要求 condition 挂在 skill_gaps.json 上，但这个文件**由本步自己产出**，
+# 外层无法在执行前预判其内容，写成 condition 只会得到"恒跳过"。因此这里把该判定下沉到
+# 脚本内部：scripts/extend_capability.py 在 gap_count=0 时不生成任何补齐命令，
+# commands.txt 为空；外层 condition 只做"plan 是否存在"这一层可判定的前置判断。
+# 宁可在注释里说清楚，也不留一个永不生效的开关。
+
+steps:
+  - name: parse-goal
+    step_type: script
+    script: scripts/parse_goal.py
+    depends_on: []
+    uses_tables:
+      - agent_tasks
+    input:
+      goal: "${input.goal}"
+      outdir: "output/parsed"
+    acceptance_criteria:
+      - 产出 output/parsed/goal.json 且可被 JSON 解析
+      - goal 字段非空；success_criteria 至少 1 条
+      - LLM 不可用时必须降级为确定性骨架并返回 ok=true，不得中断编排
+
+  # 注意：lrt-plan 内部已串起「AI 解析目标 → 规划任务树 → 创建根任务」，
+  # parse-goal 的产出作为可查阅的解析留痕（以及 lrt-plan 失败时的输入依据）保留。
+  - name: plan-tasks
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/long_running_task/lrt-plan"
+    depends_on:
+      - parse-goal
+    uses_tables:
+      - agent_tasks
+    input:
+      goal: "${input.goal}"
+      task_id: "${input.task_id}"
+    acceptance_criteria:
+      - 返回 errno=0 且 task.id 非空（根任务已创建，parent_task_id=NULL）
+      - plan.sub_goals 非空，每个子目标可追溯到 parse-goal 的 success_criteria
+      - 所需技能写入 payload，供 extend-capability 步骤做缺口比对
+
+  - name: execute-rounds
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/long_running_task/lrt-execute"
+    depends_on:
+      - plan-tasks
+    uses_tables:
+      - agent_tasks
+      - agent_contexts
+      - crontab
+      - long_running_task_artifact
+    input:
+      task_id: "${input.task_id}"
+      outdir: "output/executed"
+    # 降级链（遇挫不停）：任何失败先重试 1 次，仍失败才按链换方案；
+    # 全部方案失败时在 answer 中报告各环节尝试次数与失败原因，**不得静默置 success**。
+    degradation_chain:
+      - cli_execute
+      - builtin_tool
+      - llm
+      - template
+    acceptance_criteria:
+      - 每回合至少一个 usage=deliverable 的产物入库 long_running_task_artifact
+      - 回合超时落检查点并置 status=6（等待下回合），**不得置 0**（spec §6.1：置 0 会被重复派发）
+      - 收敛：多轮执行直至产物验核通过或达到 maxRounds（plugin.yaml config.maxRounds）
+
+  - name: notify-progress
+    step_type: script
+    script: scripts/notify_progress.py
+    depends_on:
+      - execute-rounds
+    uses_tables:
+      - agent_tasks
+      - agent_loop_metrics
+    input:
+      task_id: "${input.task_id}"
+      plan_file: "${input.plan_file}"
+      outdir: "output/executed"
+    acceptance_criteria:
+      - 产出 progress.json 且 completedSteps ≤ totalSteps
+      - estimatedRemaining 无基线时必须为显式 null，**不得写 0**（0 会被前端读成"马上完成"，spec §9.1）
+      - 同一 round 重复执行不产生重复事件行（脚本内部做 round 级覆盖）
+      - 推送失败只告警不阻断：通知是旁路，不能把跑得好好的长程任务拖成败
+
+  - name: extend-capability
+    step_type: script
+    script: scripts/extend_capability.py
+    depends_on:
+      - execute-rounds
+    # 没有 plan 就没必要谈"补能力"；${file:xxx} 语义 = 该文件存在且非空
+    condition: "${file:output/planned/plan.json}"
+    uses_tables:
+      - agent_tasks
+      - agent_skills
+    input:
+      plan_file: "${input.plan_file}"
+      outdir: "output/extended"
+    acceptance_criteria:
+      - 产出 skill_gaps.json，且每个缺口必须有 handler（skill-creator / cangjie-coder / builtin）
+      - 命中内置工具白名单的能力不得新建技能（builtin_available=true）
+      - 任何代码生成类缺口必须挂 code-gen-verifier 验证环节（质量闸门，tasks.md #222）
+      - gap_count=0 时不生成 commands.txt 内容，不臆造缺口
+
+  - name: verify-and-deliver
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/long_running_task/lrt-verify"
+    depends_on:
+      - execute-rounds
+      - notify-progress
+      - extend-capability
+    uses_tables:
+      - long_running_task_artifact
+      - agent_tasks
+    input:
+      task_id: "${input.task_id}"
+      artifacts: "${execute-rounds.output}"
+    acceptance_criteria:
+      - 产物齐全性校验通过后才可交付；缺件时置 status=6 等待补件，不得直接置 2
+      - 用户评审可选择确认交付 / 要求改进 / 放弃，三种分支均有落库记录
+      - 要求改进时必须回调 LrtPlanner.replan 而非从头重来（已完成子任务需保留）
+
+  - name: output-result
+    step_type: output
+    depends_on:
+      - verify-and-deliver
+    input:
+      report_dir: "${execute-rounds.output}"
+      verify: "${verify-and-deliver.output}"
+    acceptance_criteria:
+      - 聚合结果必须包含 trace_id，可反查每一步的结构化日志（spec §5.18 规则 5）

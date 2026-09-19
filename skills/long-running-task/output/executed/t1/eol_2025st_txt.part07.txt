@@ -1,0 +1,50 @@
+
+        width: 116px;
+        margin-right: 30px;
+    }
+
+    .zyxheard .head_logo {
+        float: left;
+        height: 35px;
+        margin-top: 14px;
+        cursor: pointer;
+    }
+
+    /* 搜索框 */
+
+    .search_box {
+        width: 425px;
+        height: 40px;
+        line-height: 40px;
+        margin-top: 10px;
+        position: relative;
+        z-index: 399px;
+    }
+
+    .search_box .search_ipt {
+        width: 100%;
+        height: 40px;
+        line-height: 40px;
+        border: 1px solid #eee;
+        text-indent: 15px;
+        font-weight: 400;
+        font-size: 14px;
+        color: #999;
+        outline: none;
+        box-shadow: none;
+        border-radius: 6px;
+    }
+
+    .search_box .search_icon {
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 100%;
+        background: #ff6500;
+        width: 100px;
+        border: none;
+        font-size: 15px;
+        color: #fff;
+        letter-spacing: 1px;
+        cursor: pointer;
+        border-radius:

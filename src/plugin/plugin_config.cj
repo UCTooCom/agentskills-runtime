@@ -4,7 +4,11 @@
 package magic.plugin
 
 import std.collection.{ArrayList, HashMap}
+import std.fs.File
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonBool}
+import yaml4cj.yaml.decode
+import magic.app.core.http.HttpMethod
+import magic.log.LogUtils
 
 /**
  * PluginMode - 插件加载轨（三轨并存，缺省 Sync 向后兼容）
@@ -34,9 +38,9 @@ public enum PluginMode {
 }
 
 /**
- * PluginManifestEntry - plugins.yaml 中的单个插件清单条目
+ * PluginManifestEntry - plugin.yaml 中的单个插件清单条目
  *
- * plugins.yaml 结构示例：
+ * plugin.yaml 结构示例（去中心化自完备描述）：
  * ```yaml
  * plugins:
  *   - name: memory-postgres
@@ -72,7 +76,7 @@ public class PluginManifestEntry {
     /// 插件类全名（PluginLoader 反射用；process 模式下可空，进程插件不经反射实例化）
     public var className: String = ""
 
-    /// 加载轨（缺省 Sync，向后兼容存量 plugins.yaml 条目）
+    /// 加载轨（缺省 Sync）
     public var mode: PluginMode = PluginMode.Sync
 
     /// 是否启用（false 则 loadAll 跳过）
@@ -99,6 +103,14 @@ public class PluginManifestEntry {
     /// L3 进程轨：崩溃自愈开关（缺省 true，reconcile 检测到 stdout EOF 自动重拉）
     public var autoRestart: Bool = true
 
+    /// host.db 表白名单（声明式配置，插件仅可访问白名单内表；缺省空列表=拒绝全部表）
+    /// 在 plugin.yaml 中通过 tableWhitelist: ["table1", "table2"] 声明
+    public var tableWhitelist: ArrayList<String> = ArrayList<String>()
+
+    /// HTTP 路由声明（process 模式插件用，从 plugin.yaml routes 字段解析）
+    /// sync/dylib 模式下为空（路由经 PluginRouteScanner + routeClass 反射注册）
+    public var httpRoutes: ArrayList<ExternalRoute> = ArrayList<ExternalRoute>()
+
     public init() {}
 
     /**
@@ -124,7 +136,7 @@ public class PluginManifestEntry {
             return None
         }
 
-        // mode 解析（缺省 Sync，向后兼容存量 plugins.yaml 条目）
+        // mode 解析（缺省 Sync）
         if (let Some(modeVal) <- fields.get("mode")) {
             entry.mode = parseMode(jsonToString(modeVal))
         }
@@ -176,6 +188,11 @@ public class PluginManifestEntry {
             }
         }
 
+        // host.db 表白名单解析（声明式配置，替代宿主代码硬编码）
+        if (let Some(whitelistVal) <- fields.get("tableWhitelist")) {
+            parseStringArray(whitelistVal, entry.tableWhitelist)
+        }
+
         // process 模式必填校验：command 必须提供
         if (entry.mode == PluginMode.Process) {
             match (entry.command) {
@@ -188,6 +205,65 @@ public class PluginManifestEntry {
         }
 
         return Some(entry)
+    }
+
+    /**
+     * 从 plugin.yaml 文件构建条目（去中心化自动发现用）
+     *
+     * 解析全量字段：基本字段经 fromJsonValue，routes 字段解析为 HTTP 路由声明。
+     * 返回 None 当文件不存在、YAML 解析失败、或必填字段缺失。
+     */
+    public static func fromPluginYaml(yamlPath: String): Option<PluginManifestEntry> {
+        try {
+            let bytes = File.readFrom(yamlPath)
+            let parsedYaml = decode(bytes)
+            match (PluginManifestEntry.fromJsonValue(parsedYaml)) {
+                case Some(entry) =>
+                    if (entry.mode == PluginMode.Process && (parsedYaml is JsonObject)) {
+                        let jsonObj = (parsedYaml as JsonObject).getOrThrow()
+                        let fields = jsonObj.getFields()
+                        if (let Some(routesVal) <- fields.get("routes")) {
+                            if (routesVal is JsonArray) {
+                                let arr = (routesVal as JsonArray).getOrThrow()
+                                for (i in 0..arr.size()) {
+                                    let routeElem = arr[i]
+                                    if (routeElem is JsonObject) {
+                                        let routeObj = (routeElem as JsonObject).getOrThrow()
+                                        let routeFields = routeObj.getFields()
+                                        var methodStr = "POST"
+                                        var pathStr = ""
+                                        if (let Some(mVal) <- routeFields.get("method")) {
+                                            if (mVal is JsonString) {
+                                                methodStr = (mVal as JsonString).getOrThrow().getValue()
+                                            }
+                                        }
+                                        if (let Some(pVal) <- routeFields.get("path")) {
+                                            if (pVal is JsonString) {
+                                                pathStr = (pVal as JsonString).getOrThrow().getValue()
+                                            }
+                                        }
+                                        if (!pathStr.isEmpty()) {
+                                            let httpMethod = match (methodStr) {
+                                                case "GET" => HttpMethod.GET
+                                                case "POST" => HttpMethod.POST
+                                                case "PUT" => HttpMethod.PUT
+                                                case "DELETE" => HttpMethod.DELETE
+                                                case _ => HttpMethod.POST
+                                            }
+                                            entry.httpRoutes.add(ExternalRoute(httpMethod, pathStr))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return Some(entry)
+                case None => return None
+            }
+        } catch (e: Exception) {
+            LogUtils.error("[PluginManifestEntry] failed to parse plugin.yaml: ${yamlPath}, error: ${e.message}")
+            return None
+        }
     }
 
     /// 解析 mode 字符串为 PluginMode（未知值降级为 Sync，保持向后兼容）
@@ -249,7 +325,7 @@ public class PluginManifestEntry {
 }
 
 /**
- * PluginList - plugins.yaml 的完整清单（根节点）
+ * PluginList - 插件清单（去中心化自动发现产物）
  */
 public class PluginList {
     public var plugins: ArrayList<PluginManifestEntry>

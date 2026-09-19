@@ -1,0 +1,41 @@
+              this.remove()
+
+            }
+
+        }
+
+        var coop = getQueryVariable("fromcoop") || "default";
+
+        var pos = "85";
+
+        $('body').append('<div class="right_bar"></div>');
+
+        $.ajax({
+
+            type: "GET",
+
+            url: requestOrigin,
+
+            crossDomain: true,
+
+            dataType: 'json',
+
+            success: function (res) {
+
+                if (res.data[pos] && res.data[pos][coop] && res.data[pos][coop]["status"]) {
+
+                    $('body').append('<a target="_blank" href="' + res.data[pos][coop].link + '"><img src="https://img1.eol.cn/e_images/gk/2020/bd/wbpc2.gif" class="zbimg_bottom" /></a>');
+
+                    window.gio('track', 'mnzy_show85')
+
+                    setTimeout(function () {
+
+                        var img = document.getElementsByClassName('zbimg_bottom')[0]
+
+                        if (img) { createAni(img) }
+
+                    }, 3000)
+
+                } else {
+
+                    if (res.data[pos]

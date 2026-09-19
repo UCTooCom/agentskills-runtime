@@ -278,13 +278,33 @@ public class PluginManager {
             this.logger(entry.id, "[copyDepsToPluginDir] WARNING: cannot find stdx DLL source dir")
             return
         }
-        // 3. 先清理插件 exe 目录中的旧 DLL（避免不兼容的 DLL 干扰）
-        //     只清理 .dll 文件，保留 .exe 和 .cjo 等
+        // 2.5 安全护栏：绝不允许把宿主自己的 exe 目录当成"插件目录"来清理。
+        //     2026-09-15 实测事故：plugin.yaml 的 command 写成插件相对路径
+        //     （./target/release/bin/skill_x.exe），而宿主 cwd 恰在 target/release 下，
+        //     inferPluginExeDir 于是解析到**宿主自己的 bin 目录**，下面的清理逻辑
+        //     开始删除宿主在用的 DLL，第一条就撞上 `libblowfish.dll` 被占用
+        //     （remove 返回 -5）→ 抛异常 → `launch failed` → 插件永远起不来，
+        //     且宿主自身 DLL 已被部分破坏。这里直接拒绝并告警。
+        let pluginDirKey = pluginExeDir.replace("\\", "/").toAsciiLower()
+        let hostDirKey = match (this.getHostExecutableDir()) {
+            case Some(h) => h.replace("\\", "/").toAsciiLower()
+            case None => ""
+        }
+        if (!hostDirKey.isEmpty() && pluginDirKey == hostDirKey) {
+            this.logger(entry.id, "[copyDepsToPluginDir] REFUSED: plugin exe dir == host exe dir (${pluginExeDir})，拒绝清理宿主自身 DLL")
+            return
+        }
+
+        // 3. 清理插件 exe 目录中的旧 DLL（避免不兼容的 DLL 干扰）。
+        //    只清理**下面第 4/5 步会重新复制的那三个族**，其余 DLL 一律保留——
+        //    早期版本是"删掉所有 .dll"，而第 4/5 步只回补 libstdx / libcangjie /
+        //    libboundscheck，于是插件自带的其它依赖（实测 codelabs 的 bin 里有
+        //    180+ 个全静态链接的运行时 DLL）被删后再也补不回来，插件直接起不来。
         let cleanedHolder = ArrayList<Int64>(1, { _ => 0 })
         Directory.walk(pluginExeDir) { fileInfo =>
             if (!fileInfo.isDirectory()) {
                 let name = fileInfo.path.fileName
-                if (name.endsWith(".dll")) {
+                if (name.endsWith(".dll") && PluginManager.isManagedDll(name)) {
                     removeIfExists(fileInfo.path)
                     cleanedHolder[0] = cleanedHolder[0] + 1
                 }
@@ -347,6 +367,19 @@ public class PluginManager {
      *
      * 返回 exe 所在目录的绝对路径（正斜杠格式）。
      */
+    /**
+     * 判断某个 DLL 是否属于"由本类代管"的三个族：
+     * `libstdx*`（第 4 步复制）/ `libcangjie*` + `libboundscheck*`（第 5 步复制）。
+     *
+     * 只有这三个族才允许在清理阶段被删除——它们删掉后一定会被重新复制回来。
+     * 插件自带的其它依赖 DLL（全静态链接打包时常见，实测 codelabs 的 bin 目录下
+     * 有 180+ 个）不属于代管范围，**删了就补不回来**。
+     */
+    private static func isManagedDll(name: String): Bool {
+        let lower = name.toAsciiLower()
+        lower.startsWith("libstdx") || lower.startsWith("libcangjie") || lower.startsWith("libboundscheck")
+    }
+
     private func inferPluginExeDir(source: String): ?String {
         if (source.isEmpty()) {
             return None<String>

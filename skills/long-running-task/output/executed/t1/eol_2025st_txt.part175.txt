@@ -1,0 +1,65 @@
+    return first_imgarr[index];
+
+
+
+                }
+
+            }
+
+        }
+
+
+
+        let storage_ad_obj = {
+
+            a1_ad: '',
+
+            a1_ad_status: false,
+
+            a2_ad: '',
+
+            a2_ad_status: false,
+
+            a5_ad: '',
+
+            a5_ad_status: false,
+
+            a6_ad: '',
+
+            a6_ad_status: false,
+
+        };
+
+
+
+        $('.gj-li').mouseover(function () {
+
+            $(this).css('background', '#0c64cc');
+
+            var imgsrc = 'images/icon' + ($(this).index() + 1) + '-w' + '.png';
+
+            $(this).find('img').attr('src', imgsrc);
+
+            $(this).find('a').css('color', '#fff');
+
+        }).mouseout(function () {
+
+            $(this).css('background', '#fff');
+
+            var imgsrc = 'images/icon' + ($(this).index() + 1) + '.png';
+
+            $(this).find('img').attr('src', imgsrc);
+
+            $(this).find('a').css('color', '#333');
+
+        });
+
+
+
+
+
+        function getCookie(cname) {
+
+            var name = cname + "=";
+
+ 

@@ -89,6 +89,36 @@ public class SkillAwareAgent <: BaseAgent {
     }
 
     /**
+     * 提示词 profile 候选链：`<已注册技能名（逗号分隔）>,<agent 名>`。
+     *
+     * ── 为什么需要它 ────────────────────────────────────────────────
+     * `SimpleToolCompactor` 原先只拿 `agent.name` 当 profile（实测值是 `MainAgent`），
+     * 而长程任务的定制摘要提示词文件叫 `tool-summarize.user.long-running-task.md`
+     * ——技能名与 agent 名对不上，这个文件**从未命中**：2026-09-15 的实测日志里
+     * 「命中 profile 摘要提示词」出现 0 次，全部回落到内置通用措辞
+     * （`Summarize the tool execution result.`）。结果就是长程任务跨回合压缩时
+     * 没有强制保留「目标 / 进度 / 已完成与待办 / 失败项 / 下一步」，
+     * 上下文越跑越薄，最终在半途耗尽步数。
+     *
+     * 这里把已注册的技能名前置，让技能能声明自己的摘要提示词。
+     * 多个候选都有文件时**靠前者优先**；`HashMap` 迭代序不保证，
+     * 因此同一个 agent 上不要给两个技能配同用途的提示词文件。
+     */
+    public func promptProfileCandidates(): String {
+        var chain = ""
+        for (skillName in this.registeredSkills) {
+            if (skillName.isEmpty()) {
+                continue
+            }
+            chain = if (chain.isEmpty()) { skillName } else { "${chain},${skillName}" }
+        }
+        if (!this.name.isEmpty()) {
+            chain = if (chain.isEmpty()) { this.name } else { "${chain},${this.name}" }
+        }
+        chain
+    }
+
+    /**
      * 注册前端工具到 agent
      * @param name 工具名称
      * @param title 工具标题

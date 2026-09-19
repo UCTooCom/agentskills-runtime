@@ -151,7 +151,14 @@ public class HttpRequest {
                         if (n <= 0) {
                             throw ProtocolException("connection closed while reading body")
                         }
-                        tempBuf[0..n].copyTo(bodyBytes, bodyRead, 0, n)
+                        // v21 修复：copyTo 签名为 (destination, srcStart, dstStart, length)。
+                        // 原代码把累计偏移 bodyRead 误传为 srcStart（源数组切片的起始下标），
+                        // 当 body 跨多次 conn.read()（TLS/TCP 分段）时，
+                        // 第二次迭代 bodyRead >= 切片大小，抛出
+                        // "SrcStart is greater than or equal to the size of this array"
+                        // → HTTPServer.readRequestBody 捕获后返回空串 → 400 "Empty request body"。
+                        // 正确语义：从切片 srcStart=0 拷贝 n 字节到 bodyBytes 的 dstStart=bodyRead。
+                        tempBuf[0..n].copyTo(bodyBytes, 0, bodyRead, n)
                         bodyRead += n
                     }
                     body.write(bodyBytes)

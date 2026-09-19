@@ -1,0 +1,113 @@
+{
+  "plan_version": "1.0",
+  "goal_ref": "output/parsed/goal.json",
+  "created_at": "2026-09-16",
+  "strategy_note": "题干检索为公开信息获取（允许）；解答必须由本 Agent 独立推导产出，严禁摘录网络解答。非文本载体先判模型视觉能力。",
+  "total_step_budget": 28,
+  "remaining_after_plan": 25,
+  "convergence_rule": "剩余步数 <=5 时进入收束模式：停止新策略，落盘 checkpoint + blocked 报告",
+  "subtasks": [
+    {
+      "id": "T1",
+      "name": "检索 2025 高考数学压轴题题干原文",
+      "parent_task_id": null,
+      "step_budget": 6,
+      "skill_sequence": ["web-search-assistant", "builtin:web_fetch", "builtin:http_request"],
+      "degradation_chain": [
+        "cli_execute+python(requests 抓取搜索引擎/教育门户)",
+        "builtin:web_fetch 直接抓取搜索 URL",
+        "builtin:http_request 调公开 API / RSS",
+        "llm 依据已知公开高考题型结构重建（须标注不确定）"
+      ],
+      "acceptance_criteria": [
+        "定位到 2025 年高考数学具体卷别与题号（如新课标 I 卷 第 19 题）",
+        "获取到题干完整原文（分值、小问 (1)(2)(3) 齐全）",
+        "记录来源 URL 与抓取时间",
+        "产出 output/executed/raw/t1_source_notes.md（含原文 + 出处）"
+      ],
+      "risk": "部分教育站点反爬/需登录；题目常以图片承载，若为图片则直接用 vision 模型理解"
+    },
+    {
+      "id": "T2",
+      "name": "独立解答该压轴题（禁止抄袭）",
+      "parent_task_id": null,
+      "step_budget": 8,
+      "skill_sequence": ["llm(自主推理)"],
+      "degradation_chain": [
+        "llm 直接推演（主路径）",
+        "分小问拆解，逐问独立求解后合并",
+        "若卡壳：先做特例/数值试探定位思路，再回到一般性证明"
+      ],
+      "acceptance_criteria": [
+        "每个小问均有完整推导链条（含设参、变形、判据、结论）",
+        "明确标注所用定理/公式及其适用条件",
+        "不含任何来自网络的现成解答文字",
+        "产出 output/executed/t2_solution.md"
+      ],
+      "risk": "压轴题难度高可能推导受阻 → 换策略（数值试探/几何直观）而非重复同法"
+    },
+    {
+      "id": "T3",
+      "name": "解答自校验（独立于 T2 的复核）",
+      "parent_task_id": "T2",
+      "step_budget": 3,
+      "skill_sequence": ["cli_execute+python(数值代入)", "llm(另法复核)"],
+      "degradation_chain": [
+        "python 数值代入验证关键中间值与端点",
+        "llm 用第二种方法重新推导关键结论",
+        "边界值/极端情形代入核对"
+      ],
+      "acceptance_criteria": [
+        "关键结论至少经 1 种独立途径验证（数值或另法）",
+        "验证记录含具体数值与推断，非空泛断言",
+        "产出 output/executed/t3_verification.md"
+      ],
+      "risk": "符号运算易出错 → 用数值代入交叉检验"
+    },
+    {
+      "id": "T4",
+      "name": "生成 HTML 报告",
+      "parent_task_id": null,
+      "step_budget": 6,
+      "skill_sequence": ["builtin:file_write", "template_engine(可选)"],
+      "degradation_chain": [
+        "file_write 直接写入自包含 HTML（内联 CSS）",
+        "模板引擎渲染 HTML 骨架后填充",
+        "分段 append 写入再校验"
+      ],
+      "acceptance_criteria": [
+        "产出 output/brief/gaokao-math-final-2025.html",
+        "文件存在且非空（>5KB），含 <html>/<head>/<body> 结构",
+        "内容含：题目原文、出处、独立解题过程、结论、自校验说明、免责/声明",
+        "内联 CSS，可直接浏览器打开无外部依赖"
+      ],
+      "risk": "HTML 中的数学符号需转义（< > &）避免渲染错乱"
+    },
+    {
+      "id": "T5",
+      "name": "验核与交付",
+      "parent_task_id": null,
+      "step_budget": 3,
+      "skill_sequence": ["builtin:file_read", "cli_execute(文件大小/结构校验)"],
+      "degradation_chain": [
+        "file_read 读取 HTML 校验关键小节存在",
+        "cli_execute dir/ls 校验文件大小非空",
+        "检查必需小节标签齐全"
+      ],
+      "acceptance_criteria": [
+        "HTML 文件存在、非空、含全部必需小节",
+        "checkpoint/progress.md 已落盘且反映真实状态",
+        "产出 output/verified/verify_report.json"
+      ],
+      "risk": "无"
+    }
+  ],
+  "artifacts_expected": [
+    "output/executed/raw/t1_source_notes.md",
+    "output/executed/t2_solution.md",
+    "output/executed/t3_verification.md",
+    "output/brief/gaokao-math-final-2025.html",
+    "output/verified/verify_report.json",
+    "output/checkpoint/progress.md"
+  ]
+}

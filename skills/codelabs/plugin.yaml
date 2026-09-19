@@ -2,8 +2,15 @@ name: codelabs
 version: 1.0.0
 mode: process
 protocol: jsonrpc-stdio
-command: ./target/release/bin/skill_codelabs.exe
+# command 相对**宿主工作目录**解析（CordisHostManager.resolvePluginCommand = `${cwd}/${command}`，
+# 无校验无兜底），必须带 skills/{name}/ 前缀，发布包里 exe 也落在 bin/skills/{name}/ 下。
+command: ./skills/codelabs/target/release/bin/skill_codelabs.exe
 description: L3 进程隔离轨插件 codelabs
+enabled: true
+order: 5
+autoRestart: true
+tableWhitelist:
+  - codelabs
 routes:
   - method: POST
     path: /api/v1/uctoo/codelabs/add

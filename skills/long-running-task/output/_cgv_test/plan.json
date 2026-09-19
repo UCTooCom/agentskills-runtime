@@ -1,0 +1,7 @@
+{
+  "skill_sequence": ["cangjie-coder", "pdf_parser"],
+  "steps": [
+    {"name": "生成订单模块", "skill": "cangjie-coder", "language": "cangjie"},
+    {"name": "解析PDF", "skill": "pdf_parser"}
+  ]
+}

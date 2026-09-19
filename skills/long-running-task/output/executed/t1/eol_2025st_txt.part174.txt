@@ -1,0 +1,37 @@
+torage_img[obj_current_key];
+
+                    if (currentIndex > 0) {
+
+                        storage_img[obj_current_key] = 0;
+
+                        localStorage.setItem(ad_key, JSON.stringify(storage_img));
+
+                        return first_imgarr[0];
+
+                    }
+
+                    currentIndex++;
+
+                    storage_img[obj_current_key] = currentIndex;
+
+                    localStorage.setItem(ad_key, JSON.stringify(storage_img));
+
+                    return first_imgarr[currentIndex];
+
+
+
+                } else { //首次进入页面随机选取一张图片存入缓存
+
+
+
+                    let random_img = first_imgarr[Math.floor((Math.random() * first_imgarr.length))]; //如果等于2张随机选择一张
+
+                    let index = first_imgarr.indexOf(random_img); //所选数据下标，保存到缓存中进行切帧使用
+
+                    storage_ad_obj[obj_current_key] = index;
+
+                    storage_ad_obj[status] = true;
+
+                    localStorage.setItem(ad_key, JSON.stringify(storage_ad_obj));
+
+                

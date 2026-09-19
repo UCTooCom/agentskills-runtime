@@ -61,7 +61,26 @@ public class WebSocketSessionManager {
         return ids
     }
 
-    public func sendApprovalRequest(sessionId: String, approvalId: String, question: String, approvalType: String, timeoutMs: Int64): Option<String> {
+    /// 下发审批请求并阻塞等待用户响应。
+    ///
+    /// Ch13.2（design 2.6.3）：新增 `options` / `defaultOption` / `recommended` 三个**可选**入参。
+    ///   - 三者同时缺省时，payload 与改造前**逐字节一致**（不带 options 字段），老前端零影响。
+    ///   - `options` 为 JSON 数组文本，元素形如 `{id,label,description,tradeoff}`；
+    ///     `defaultOption` 为超时后自动采用的选项 id；`recommended` 为前端高亮的推荐项 id。
+    ///
+    /// 注意：超时返回 None 的既有语义**保持不变**。「超时自动采用 default」由调用方
+    /// （WebHumanAgent）负责，因为只有它知道 default 值并需要记录
+    /// `decision_timeout_default_applied` 日志；本方法只负责"有没有等到响应"这一层。
+    public func sendApprovalRequest(
+        sessionId: String,
+        approvalId: String,
+        question: String,
+        approvalType: String,
+        timeoutMs: Int64,
+        options: String,
+        defaultOption: String,
+        recommended: String
+    ): Option<String> {
         match (sessions.get(sessionId)) {
             case Some(session) =>
                 let payload = JsonObject()
@@ -70,6 +89,17 @@ public class WebSocketSessionManager {
                 payload.put("approval_type", JsonString(approvalType))
                 payload.put("timeout_ms", JsonInt(timeoutMs))
                 payload.put("timestamp", JsonInt((DateTime.now() - DateTime.UnixEpoch).toMilliseconds()))
+
+                // Ch13.2：仅在提供 options 时下发，保证无 options 的调用方 payload 不变
+                if (!options.isEmpty()) {
+                    payload.put("options", JsonString(options))
+                    if (!defaultOption.isEmpty()) {
+                        payload.put("default", JsonString(defaultOption))
+                    }
+                    if (!recommended.isEmpty()) {
+                        payload.put("recommended", JsonString(recommended))
+                    }
+                }
 
                 let message = WebSocketMessage("approval_request", payload, (DateTime.now() - DateTime.UnixEpoch).toMilliseconds())
                 session.sendMessage(message)

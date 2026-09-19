@@ -1,0 +1,101 @@
+      background: #497ed4;
+
+        }
+
+
+
+        .select-body .select-active a {
+
+            color: #fff;
+
+        }
+
+
+
+        /* A1广告 */
+
+        .a1ad {
+
+            width: 1190px;
+
+            margin: 0 auto;
+
+            clear: both;
+
+            overflow: hidden;
+
+            margin-top: 10px;
+
+        }
+
+
+
+        .a1ad img {
+
+            width: 590px;
+
+            display: block;
+
+        }
+
+
+
+        .a1ad a {
+
+            display: block;
+
+            float: left;
+
+        }
+
+
+
+        .a1ad a:nth-child(odd) {
+
+            margin-right: 10px;
+
+        }
+
+
+
+        /* A5广告 */
+
+        .a5ad {
+
+            width: 1190px;
+
+            margin: 0 auto;
+
+            clear: both;
+
+            overflow: hidden;
+
+            position: relative;
+
+            top: 25px;
+
+        }
+
+
+
+        .a5ad img {
+
+            width: 590px;
+
+            display: block;
+
+        }
+
+
+
+        .a5ad a {
+
+            display: block;
+
+            float: left;
+
+        }
+
+
+
+        .a5ad a:nth-child(odd

@@ -9,6 +9,7 @@ import magic.agent_executor.react.ReactExecutor
 import magic.agent_executor.plan_react.PlanReactExecutor
 import magic.agent_executor.tool_loop.ToolLoopExecutor
 import magic.agent_executor.dsl.DslExecutor
+import magic.config.Config
 
 import std.collection.ArrayList
 import magic.core.agent.AgentExecutionException
@@ -60,6 +61,9 @@ public struct AgentExecutorManager {
                     } else {
                         return ToolLoopExecutor(loop: num)
                     }
+                } else if (items[0] == "react" && items[1] == "lrt") {
+                    // 长程任务求解器专用：使用独立的较大步数预算（Config.longRunningTaskSteps）
+                    return ReactExecutor(loop: Config.longRunningTaskSteps)
                 }
             }
         }

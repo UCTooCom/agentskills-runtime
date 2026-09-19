@@ -8,6 +8,7 @@ import std.collection.concurrent.ConcurrentHashMap
 import magic.log.LogUtils
 import magic.app.models.uctoo.CrontabLogPO
 import magic.app.dao.uctoo.CrontabLogDAO
+import magic.app.core.database.DbSerialLock
 
 public class AsyncLogWriter {
     private var running = false
@@ -42,6 +43,25 @@ public class AsyncLogWriter {
         }
     }
 
+    /**
+     * 批量落库（持全局 DB 锁）。
+     *
+     * 本写入器跑在独立线程上，与 SchedulerEngine、事件处理器共用同一条
+     * ORM 连接；不加全局锁就会出现
+     * `Socket is already reading/writing` 与 `parameter index N out of range`
+     * 这类「两条路径同时操作一个 socket」的错误。
+     */
+    private func insertBatch(batch: ArrayList<CrontabLogPO>): Unit {
+        DbSerialLock.lock()
+        try {
+            for (log in batch) {
+                dao.insertCrontabLog(log)
+            }
+        } finally {
+            DbSerialLock.unlock()
+        }
+    }
+
     private func consume(): Unit {
         while (running) {
             try {
@@ -56,15 +76,13 @@ public class AsyncLogWriter {
 
                 if (batch.size > 0) {
                     try {
-                        for (log in batch) {
-                            dao.insertCrontabLog(log)
-                        }
+                        insertBatch(batch)
                     } catch (e: Exception) {
                         LogUtils.error("AsyncLogWriter", "批量写入失败, 重试一次: ${e.message}")
+                        // 失败多半是连接被别的线程占用后状态错乱，等一下再重试
+                        sleep(Duration.millisecond * 50)
                         try {
-                            for (log in batch) {
-                                dao.insertCrontabLog(log)
-                            }
+                            insertBatch(batch)
                         } catch (e2: Exception) {
                             LogUtils.error("AsyncLogWriter", "重试写入仍失败: ${e2.message}")
                         }
@@ -86,9 +104,7 @@ public class AsyncLogWriter {
         synchronized (mutex) {
             if (queue.size > 0) {
                 try {
-                    for (log in queue) {
-                        dao.insertCrontabLog(log)
-                    }
+                    insertBatch(queue)
                     LogUtils.info("AsyncLogWriter", "关闭前刷新${queue.size}条剩余日志")
                 } catch (e: Exception) {
                     LogUtils.error("AsyncLogWriter", "刷新剩余日志失败: ${e.message}")

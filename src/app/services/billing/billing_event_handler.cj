@@ -8,6 +8,7 @@ import magic.core.model.ChatUsage
 import magic.app.models.uctoo.LlmUsageLogsPO
 import magic.app.services.uctoo.LlmUsageLogsService
 import magic.log.LogUtils
+import magic.app.core.database.DbSerialLock
 
 func billingReasonStr(reason: ?String): String {
     match (reason) { case Some(s) => s; case None => "unknown" }
@@ -60,7 +61,7 @@ public class BillingEventHandler {
 
             spawn {
                 try {
-                    let result = usageService.create(log, agentName)
+                    let result = DbSerialLock.withLock({ => usageService.create(log, agentName) })
                     if (result.success) {
                         LogUtils.info("BillingEventHandler: saved llm_usage_log for agent ${agentName}, model ${modelName}")
                     } else {
@@ -89,7 +90,7 @@ public class BillingEventHandler {
 
             spawn {
                 try {
-                    let result = usageService.create(log, "system")
+                    let result = DbSerialLock.withLock({ => usageService.create(log, "system") })
                     if (!result.success) {
                         LogUtils.error("BillingEventHandler: save llm_usage_log FAILED for failure event, reason: ${billingReasonStr(result.reason)}")
                     }

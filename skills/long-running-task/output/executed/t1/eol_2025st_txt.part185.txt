@@ -1,0 +1,46 @@
+
+                    var sucai_3 = [];
+
+                    for (var i = 0; i < group6.length; i++) {
+
+                        if (Number(group6[i].publish_id) != 0) {
+
+                            sucai_3.push(group6[i])
+
+                        }
+
+                    }
+
+                    if (sucai_3.length == 0) {
+
+                        $('.a6ad').hide();
+
+                    } else {
+
+                        var a6_ad_data = randomAd('storage_ad', group6, storage_ad_obj, storage_img, 'a6_ad_status', 'a6_ad');
+
+                        var a6_str = '';
+
+                        a6_str += '<a href="' + a6_ad_data.href + '">' + '<img src="' + a6_ad_data.img + '" />' + '</a>';
+
+                        $(".a6ad").html(a6_str);
+
+                    }
+
+
+
+                },
+
+            });
+
+        }
+
+
+
+        new weixinShare({
+
+            'title': '2023年全国高考试题及答案_2023年高考真题答案解析_中国教育在线',
+
+            'link': 'https://gaokao.eol.cn/e_html/gk/gkst/',
+
+            'image': 'https://gaokao.e

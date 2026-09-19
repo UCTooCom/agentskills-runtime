@@ -1,0 +1,59 @@
+{
+  "images": {
+    "qg1": [
+      "https://img.eol.cn/e_images/gk/2025/st/qg1/sx01.png"
+    ],
+    "qg2": []
+  },
+  "text_sources": [
+    {
+      "url": "http://gaokao.eol.cn/shiti/sx/202506/t20250607_2673303.shtml",
+      "encoding": "utf-8",
+      "bytes": 168598,
+      "hits": {
+        "19.": 0,
+        "19．": 0,
+        "第19题": 0,
+        "新定义": 0,
+        "三角函数": 0,
+        "导数": 0,
+        "f(x)": 0,
+        "sin": 11,
+        "cos": 0,
+        "证明": 0,
+        "求": 0
+      },
+      "ctx": []
+    },
+    {
+      "url": "https://gaokao.eol.cn/shiti/sx/202506/t20250607_2673303.shtml",
+      "encoding": "utf-8",
+      "bytes": 168598,
+      "hits": {
+        "19.": 0,
+        "19．": 0,
+        "第19题": 0,
+        "新定义": 0,
+        "三角函数": 0,
+        "导数": 0,
+        "f(x)": 0,
+        "sin": 11,
+        "cos": 0,
+        "证明": 0,
+        "求": 0
+      },
+      "ctx": []
+    },
+    {
+      "url": "http://gaokao.eol.cn/e_html/gk/2025gkshiti/index.shtml",
+      "error": "HTTP Error 404: Not Found"
+    }
+  ],
+  "downloads": [
+    {
+      "url": "https://img.eol.cn/e_images/gk/2025/st/qg1/sx01.png",
+      "file": "qg1_00.png",
+      "bytes": 433262
+    }
+  ]
+}

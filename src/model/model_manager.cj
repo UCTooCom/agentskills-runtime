@@ -95,6 +95,49 @@ private func checkProvider(provider: String): Bool {
     return DEFAULT_PROVIDER_MAP.keys().contains(provider)
 }
 
+/**
+ * 从裸模型名推断 provider：取已知 provider 名里能匹配名字前缀的那个
+ * （"deepseek-v4-1-flash" → "deepseek"）。匹配不到返回空串。
+ */
+private func inferProvider(modelName: String): String {
+    let lowered = modelName.toAsciiLower()
+    for (provider in getAllProviderNames()) {
+        if (lowered.startsWith(provider)) {
+            return provider
+        }
+    }
+    return ""
+}
+
+/**
+ * 把历史 / 别名 / 自造的模型名规范化成厂商**当前的官方 ID**。
+ *
+ * 依据 DeepSeek 官方《模型 & 价格》页（api-docs.deepseek.com/zh-cn/quick_start/pricing，
+ * 2026-09-18 核实）：正式模型 ID 已简化为 `deepseek-flash`（对应 DeepSeek-V4.1-Flash）
+ * 与 `deepseek-v4-pro`；`deepseek-v4-flash`、`deepseek-v4-flash-vision-exp` 虽仍可调用，
+ * 但对应模型已下线，请求改由 DeepSeek-V4.1-Flash 提供服务。
+ *
+ * 而 `deepseek-v4-1-flash` 是**配置里自造的写法，官方从未提供此 ID**（原样发给厂商 API
+ * 有风险）。此前 `Agents` 表的 `model` 列正是被写成这个名字，导致加载 Agent 时抛
+ * "deepseek-v4-1-flash is invalid"。
+ *
+ * 不规范化就会把已废弃甚至不存在的 ID 原样发给厂商 API；规范化后老配置无需改库也能继续用。
+ */
+private func normalizeModelName(name: String): String {
+    let lower = name.toAsciiLower()
+    if (lower.contains("deepseek")) {
+        // 仅对带代次前缀的写法做收敛（v4-1 / v4.1 / v4-flash / v4_flash），
+        // 已经是 canonical 的 `deepseek-flash` / `deepseek-v4-pro` 原样返回。
+        if (lower.contains("v4-1") || lower.contains("v4.1") || lower.contains("v4-flash") || lower.contains("v4_flash")) {
+            if (lower.contains("pro")) {
+                return "deepseek-v4-pro"
+            }
+            return "deepseek-flash"
+        }
+    }
+    return name
+}
+
 private func getDefaultBaseURL(provider: String, kind: String): String {
     let config = DEFAULT_PROVIDER_MAP[provider]
     let envVarName = config.urlEnvVar
@@ -179,8 +222,27 @@ public class ModelConfig {
 private func parseModel(model: String, kind!: String): ModelConfig {
     let items = model.split(":", 2)
     if (items.size == 1) {
-        if (items[0] == "llamacpp") {
+        let bareName = items[0].trimAscii()
+        if (bareName == "llamacpp") {
             return ModelConfig(provider: "llamacpp", kind: kind, name: "unknown")
+        }
+        // 裸模型名（没有 "provider:name" 前缀）。
+        //
+        // 实测来源：`Agents` 表的 `model` 列被直接写成 "deepseek-v4-1-flash"
+        // （而 .env 里规范的写法是 MODEL_CONFIG=deepseek:deepseek-flash），
+        // 于是 AgentExecutionExecutor 加载 Agent 时逐个抛
+        // "deepseek-v4-1-flash is invalid. Only [...] are supported now."。
+        //
+        // 两步兜底：先按官方最新 ID 规范化模型名，再按 provider 名前缀推断 provider；
+        // 推断不出就退到 Config.MODEL_PROVIDER。
+        let canonicalName = normalizeModelName(bareName)
+        let inferred = inferProvider(canonicalName)
+        if (inferred.size > 0) {
+            return ModelConfig(provider: inferred, kind: kind, name: canonicalName)
+        }
+        let fallback = Config.MODEL_PROVIDER
+        if (checkProvider(fallback)) {
+            return ModelConfig(provider: fallback, kind: kind, name: canonicalName)
         }
     } else if (items.size == 2) {
         let provider = items[0].trimAscii()
@@ -188,7 +250,9 @@ private func parseModel(model: String, kind!: String): ModelConfig {
         if (!checkProvider(provider)) {
             throw ModelException("${model} is invalid. Only ${getAllProviderNames()} are supported now.")
         }
-        return ModelConfig(provider: provider, kind: kind, name: modelName)
+        // 同样做官方 ID 规范化：`deepseek:deepseek-v4-1-flash` 这类老配置
+        // 会在这里被收敛成 `deepseek-flash`，无需改库。
+        return ModelConfig(provider: provider, kind: kind, name: normalizeModelName(modelName))
     }
     throw ModelException("${model} is invalid. Only ${getAllProviderNames()} are supported now.")
 }

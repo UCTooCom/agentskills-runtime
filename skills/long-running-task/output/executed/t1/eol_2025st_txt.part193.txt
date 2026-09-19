@@ -1,0 +1,35 @@
+ </script>
+
+    <script>
+
+        var ua = window.navigator.userAgent;
+
+        if (/Mobile|iP(hone|ad)|Android|BlackBerry|IEMobile/.test(ua)) {
+
+            // $('body').append('<div class="ai_bottom"></div>');
+
+            var coop = getQueryVariable("fromcoop") || "default";
+
+            $.ajax({
+
+                type: "GET",
+
+                url: requestOrigin,
+
+                crossDomain: true,
+
+                dataType: 'json',
+
+                success: function (res) {
+
+                    if (res.data[127] && res.data[127][coop] && res.data[127][coop]["status"]) {
+
+                        $('.ai_bottom').append('<a target="_blank" href="' + res.data[127][coop].link + '"><img src="' + res.data[127][coop].img_url + '" class="img_item" /></a>');
+
+                        window.gio('track', 'mnzy_show127')
+
+                    } else {
+
+                        if (res.data[127] && res.data[127]['default'] && res.data[127]['default']["status"]) {
+
+                            $('.ai

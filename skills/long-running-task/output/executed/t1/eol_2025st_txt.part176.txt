@@ -1,0 +1,45 @@
+           var ca = document.cookie.split(';');
+
+            for (var i = 0; i < ca.length; i++) {
+
+                var c = ca[i].trim();
+
+                if (c.indexOf(name) == 0) { return c.substring(name.length, c.length); }
+
+            }
+
+            return "";
+
+        }
+
+        var areaids = getCookie("areaids");
+
+        if (!!areaids) {
+
+            adshow(areaids);
+
+        } else {
+
+            // 定位
+
+            $.ajax({
+
+                // 根据ip定位
+
+                url: 'https://api.map.baidu.com/location/ip?ak=iSy1vtkpfoXIE22dgO2jshUnZy1YXLlP',
+
+                //根据经纬度定位
+
+                // url:'https://api.map.baidu.com/geocoder/v2/?ak=ia6HfFL660Bvh43exmH9LrI6&location=40.80772,111.62299&output=json&pois=0',
+
+                type: 'POST',
+
+                dataType: 'json',
+
+                crossDomain: true,
+
+                success: function (data) {
+
+                    if (data.status == 0) {
+
+                        // var a=JSON.stringify(data.content.address_detail.

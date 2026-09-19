@@ -15,6 +15,7 @@ public class BuiltinToolsRegistry {
         registerHttpTools(toolManager)
         registerFileTools(toolManager)
         registerWebTools(toolManager)
+        registerVisionTools(toolManager)
         registerSkillTools(toolManager)
         registerCodeGenTools(toolManager)
         registerCliTools(toolManager)
@@ -67,6 +68,17 @@ public class BuiltinToolsRegistry {
         
 
         LogUtils.info("[BuiltinToolsRegistry] Web tools registered")
+    }
+
+    /**
+     * 视觉工具：把图片交给原生多模态模型理解（vision 直传）。
+     * 补齐此前「模型支持视觉、传输层也支持 image_url，但 agent 无工具可用」的断点。
+     */
+    public static func registerVisionTools(toolManager: ToolManager): Unit {
+        toolManager.addTool(ImageUnderstandTool())
+        LogUtils.info("[BuiltinToolsRegistry] Registered: ImageUnderstandTool")
+
+        LogUtils.info("[BuiltinToolsRegistry] Vision tools registered")
     }
 
     public static func registerSkillTools(toolManager: ToolManager): Unit {
@@ -127,6 +139,7 @@ public class BuiltinToolsRegistry {
             DirectoryListTool.NAME,
             DirectoryCreateTool.NAME,
             WebFetchTool.NAME,
+            ImageUnderstandTool.NAME,
 
             SkillInitializerTool.NAME,
             SkillPackagerTool.NAME,

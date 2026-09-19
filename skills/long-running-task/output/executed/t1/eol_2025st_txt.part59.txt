@@ -1,0 +1,63 @@
+>答案</font></a>
+
+                <span>|</span>
+
+                <a href="" ><font color="grey">解析</font></a>
+
+        </div>
+
+</li>
+
+<li>
+
+    <div class="word-xueke">生物</span>
+
+        <div class="xueke-a">
+
+           <a href=""><font color="grey">试题</font></a>
+
+                <span>|</span>
+
+                <a href=""><font color="grey">答案</font></a>
+
+                <span>|</span>
+
+                <a href="" ><font color="grey">解析</font></a>
+
+        </div>
+
+</li>
+
+        <li>
+
+    <div class="word-xueke">地理</span>
+
+        <div class="xueke-a">
+
+            <a href=""><font color="grey">试题</font></a>
+
+                <span>|</span>
+
+                <a href=""><font color="grey">答案</font></a>
+
+                <span>|</span>
+
+                <a href="" ><font color="grey">解析</font></a>
+
+        </div>
+
+</li>
+
+</div>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="test" id="st12">
+
+                    <div class="topline clearfix">
+
+              

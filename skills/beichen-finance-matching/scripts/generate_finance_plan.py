@@ -37,7 +37,7 @@ def llm_available() -> bool:
 def call_llm(prompt: str) -> str:
     base = os.environ.get("LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "https://api-ai.gitcode.com/v1"
     key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY") or "sk-dummy-key"
-    model = os.environ.get("LLM_MODEL") or "deepseek-v4-flash"
+    model = os.environ.get("LLM_MODEL") or "deepseek-flash"
     url = f"{base.rstrip('/')}/chat/completions"
     payload = {"model": model, "stream": False,
                "messages": [{"role": "system",

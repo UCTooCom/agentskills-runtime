@@ -1,0 +1,18 @@
+?fromcoop=pddh">查学校</a></li>
+                <li class="nav-li" style="margin: 0px 26px;"><a target="_blank"
+                        href="https://www.gaokao.cn/special?fromcoop=pddh">查专业</a></li>
+                <li class="nav-li" style="margin: 0px 26px;"><a target="_blank"
+                        href="https://www.gaokao.cn/choose/school/code?fromcoop=pddh">智能选大学</a></li>
+                <li class="nav-li" style="margin: 0px 26px;"><a target="_blank"
+                        href="https://www.gaokao.cn/quanzhidao?fromcoop=pddh">高考工具箱</a></li>
+                <li class="nav-li navUrlActive" style="margin: 0px 26px;"><a target="_blank"
+                        href="https://gaokao.eol.cn/">资讯频道</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+<script src="https://www.eol.cn/e_js/gk/2017/jquery-3.2.1.min.js"></script>
+<script>
+    document.getElementById('search_icon').onclick = function () {
+        var val = document.getElementById('headsearch').value
+        window.open('ht

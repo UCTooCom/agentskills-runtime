@@ -1,0 +1,55 @@
+            </div>
+
+</li>
+
+        <li>
+
+    <div class="word-xueke">地理</span>
+
+        <div class="xueke-a">
+
+                <a href=""><font color="grey">真题</font></a>
+
+                <span>|</span>
+
+                <a href=""><font color="grey">答案</font></a>
+
+                <span>|</span>
+
+                <a href=""><font color="grey">解析</font></a>
+
+            </div>
+
+</li>
+
+</div>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="test" id="st29">
+
+                    <div class="topline clearfix">
+
+                        <div class="head-fl clearfix">
+
+                            <span>内蒙古卷</span>
+
+                        </div>
+
+                        <div class="head-mid">
+
+
+
+                        </div>
+
+                        <div class="head-fr clearfix">
+
+                            <a href="">2025</a>
+
+                            <a href="https://gaokao.eol.cn/e_html/gk/gkst/2024st.shtml">2024</a>
+
+                            <a href

@@ -49,5 +49,16 @@ public interface AgentExecution {
      * Internally used.
      */
     func markCancellation(): Unit
+
+    /**
+     * 任务终止原因（Ch0 / spec long-running-task 中断语义）。
+     * 由执行器在步数耗尽等中断场景下写入，供持久化层落可区分状态。
+     */
+    prop terminationReason: AgentTerminationReason
+
+    /**
+     * 写入任务终止原因。
+     */
+    func setTerminationReason(reason: AgentTerminationReason): Unit
 }
 

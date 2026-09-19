@@ -1,5 +1,13 @@
 /*
  * Copyright (c) UCToo Co., Ltd. 2026. All rights reserved.
+ *
+ * ⚠️ 元数据 schema 归属声明（2026-09-12，long-running-task design 2.4.4）：
+ * 本文件描述的是 **DB 存储态 schema**（skill_name + sequential/parallel/conditional + input_mapping），
+ * 仅供 SkillCompositionsService 的 CRUD 持久化（SkillCompositionsPO）使用。
+ *
+ * 它与技能实际在用的「文件态」COMPOSITION.yaml 格式（script / plugin / output + ${step-name.output}）
+ * **不同源、不兼容**。长程任务的编排执行请使用 src/skill/lrt_composition_runner.cj
+ * （LrtCompositionRunner，方案 A），**不要**把本文件的模型接入运行时执行链路。
  */
 package magic.skill
 

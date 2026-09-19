@@ -1,0 +1,6 @@
+# cangjie-coder → cangjie-coder → code-gen-verifier
+# [agent-skill] 由宿主 LLM 调度技能 cangjie-coder 补齐「cangjie-coder」（无 CLI 入口，不出可执行命令）
+python skills/code-gen-verifier/scripts/verify.py --files "${cangjie-coder.generated_files}" --project-path "${project_path}" --verify-level compile
+# pdf_parser → skill-creator → code-gen-verifier
+# [agent-skill] 由宿主 LLM 调度技能 skill-creator 补齐「pdf_parser」（无 CLI 入口，不出可执行命令）
+python skills/code-gen-verifier/scripts/verify.py --files "${pdf_parser.generated_files}" --project-path "${project_path}" --verify-level compile

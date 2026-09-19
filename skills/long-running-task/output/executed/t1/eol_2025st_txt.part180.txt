@@ -1,0 +1,45 @@
+_img, 'a1_ad_status', 'a1_ad');
+
+
+
+                        if (a1_ad_data.length == 0) {
+
+                            a1_ad_data = {
+
+                                group: []
+
+                            };
+
+                        }
+
+
+
+                        var a1_str = '';
+
+                        for (var i = 0; i < a1_ad_data.group.length; i++) {
+
+                            a1_str += '<a target="_blank" href="' + a1_ad_data.group[i].href + '">' + '<img src="' + a1_ad_data.group[i].img + '" />' + '</a>';
+
+                        }
+
+                        $(".a1ad").html(a1_str);
+
+                    }
+
+
+
+                    // A2广告--大旗帜6190--切帧
+
+                    var a2_imarr = [{ group2: [] }, { group2: [] }];
+
+                    if (data.data[6190]) {
+
+                        data.data[6190].forEach(function (item, index) {
+
+                            if (index < 2) {
+
+                                a2_imarr[0].group2.push(item);
+
+                            } else {
+
+  

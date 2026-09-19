@@ -1,0 +1,71 @@
+# 数据契约（DATA_CONTRACT.yaml）
+# 声明本技能用到的表、字段、幂等键、写入规则与示例行。
+#
+# 用途：① 单回合注入 token 约束（只注入步骤声明用到的表，spec §5.16 规则 4）；
+#       ② 插件发现与 tableWhitelist 校验；③ crudgen / loaddbinfo 生成依据。
+# 详见 tasks.md 第 14 章（数据契约）。
+#
+# 本技能涉及 2 张表：
+#   - company：公司主体表（upsert by company_name + deleted_at IS NULL）
+#   - tasks：研报内容表（insert with dedup by company_id + title + deleted_at IS NULL）
+
+tables:
+  - name: company
+    access: read_write
+    role: 公司主体表，投研简报按公司写入（upsert：已存在则更新 org_description，不存在则插入）
+    idempotent_key: ["company_name"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", comment: 主键}
+      - {name: company_name, type: varchar(200), required: true, example: "贵州茅台", comment: 公司名称，幂等键}
+      - {name: region, type: varchar(100), required: false, example: "中国", comment: 地区}
+      - {name: org_description, type: text, required: false, example: "投资简报日期 2026-09-12：收盘 1685.0，涨跌幅 0.5%，PE 30.2，PB 8.1，市值 21168亿", comment: 组织描述，每日简报更新}
+      - {name: org_type, type: varchar(50), required: false, example: "investment-research", comment: 组织类型}
+      - {name: is_verified, type: bool, required: false, example: false, comment: 是否已验证}
+      - {name: created_at, type: timestamptz, required: false, example: "2026-09-12T04:27:57+08:00", comment: 创建时间}
+      - {name: updated_at, type: timestamptz, required: false, example: "2026-09-12T04:27:57+08:00", comment: 更新时间}
+      - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删；查询一律带 deleted_at IS NULL}
+    write_rule:
+      - 幂等策略：先按 company_name + deleted_at IS NULL 查，命中则 UPDATE org_description，未命中则 INSERT
+      - company 表无 company_name 唯一约束，不能用 ON CONFLICT (company_name)，须分两步 SQL
+      - 已有公司（如之前导入的）不重复创建，每日新研报通过 tasks 关联到已有 company.id
+    sample_rows:
+      - {id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", company_name: "贵州茅台", region: "中国",
+         org_description: "投资简报日期 2026-09-12：收盘 1685.0，涨跌幅 0.5%，PE 30.2，PB 8.1，市值 21168亿",
+         org_type: "investment-research", is_verified: false}
+      - {id: "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e", company_name: "宁德时代", region: "中国",
+         org_description: "投资简报日期 2026-09-12：收盘 185.3，涨跌幅 -1.2%，PE 25.6，PB 4.3，市值 8165亿",
+         org_type: "investment-research", is_verified: false}
+
+  - name: tasks
+    access: read_write
+    role: 研报内容表，每日投资简报按公司写入（task_type='research'，关联 company.id）
+    idempotent_key: ["company_id", "title"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f", comment: 主键}
+      - {name: title, type: varchar(500), required: true, example: "每日投资简报 - 贵州茅台", comment: 简报标题，幂等键之一}
+      - {name: description, type: text, required: false, example: "# 每日投资简报 - 贵州茅台\n## 市场数据\n收盘价: 1685.0...", comment: 简报 Markdown 全文}
+      - {name: task_type, type: varchar(50), required: false, enum: [research, task, review], example: "research", comment: 任务类型}
+      - {name: task_status, type: varchar(20), required: false, enum: [pending, in_progress, completed, failed], example: "completed", comment: 任务状态}
+      - {name: priority, type: varchar(20), required: false, example: "normal", comment: 优先级}
+      - {name: company_id, type: uuid, required: false, fk: company.id, example: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", comment: 关联公司，幂等键之一}
+      - {name: tags, type: jsonb, required: false, example: '["investment-research", "daily-brief"]', comment: 标签数组}
+      - {name: extra_data, type: jsonb, required: false, example: '{"report_date":"2026-09-12","code":"600519"}', comment: 扩展数据}
+      - {name: created_at, type: timestamptz, required: false, example: "2026-09-12T04:27:57+08:00", comment: 创建时间}
+      - {name: updated_at, type: timestamptz, required: false, example: "2026-09-12T04:27:57+08:00", comment: 更新时间}
+      - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删；查询一律带 deleted_at IS NULL}
+    write_rule:
+      - 幂等策略：同一公司 + 同一简报标题已存在且未删除时不重复插入
+      - company_id 通过子查询关联：FROM company c WHERE c.company_name = ? AND c.deleted_at IS NULL
+      - tags 写 jsonb 数组，extra_data 写 jsonb 对象，均需 '::jsonb' 类型标注
+      - 每日简报标题格式固定为"每日投资简报 - {公司名}"，靠此去重
+    sample_rows:
+      - {id: "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f", title: "每日投资简报 - 贵州茅台",
+         task_type: "research", task_status: "completed", priority: "normal",
+         company_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+         tags: '["investment-research", "daily-brief"]',
+         extra_data: '{"report_date":"2026-09-12","code":"600519"}'}
+      - {id: "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a", title: "每日投资简报 - 宁德时代",
+         task_type: "research", task_status: "completed", priority: "normal",
+         company_id: "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+         tags: '["investment-research", "daily-brief"]',
+         extra_data: '{"report_date":"2026-09-12","code":"300750"}'}

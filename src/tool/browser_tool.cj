@@ -59,6 +59,23 @@ public class BrowserTool <: NativeFuncTool {
             throw ToolException("Parameter 'url' is required")
         }
 
+        // 同源应用地址护栏：browser_open 通过操作系统默认浏览器打开一个「独立」浏览器实例，
+        // 该实例不共享用户在 Web 管理后台已登录的标签页会话，会被服务端重定向到登录页，
+        // 导致 agent 无法在用户当前 tab 内继续操作。运营 uctoo 管理后台（localhost:3031 /
+        // javatoarktsapi.uctoo.com）必须使用页面级 WebMCP 工具 navigate_url（在用户当前
+        // 标签页内 router.push），而不是 browser_open。命中同源地址时直接拒绝并提示。
+        if (isSameOriginAppUrl(url)) {
+            LogUtils.warn("[BrowserTool] Refused same-origin app URL (would lose login session): ${url}")
+            let response = JsonObject()
+            response.put("success", JsonBool(false))
+            response.put("url", JsonString(url))
+            response.put("error", JsonString(
+                "拒绝在独立浏览器中打开同源管理后台地址（会丢失用户登录态、被重定向到登录页）。" +
+                "请改用页面级 WebMCP 工具 navigate_url 在用户当前已登录的标签页内导航，" +
+                "例如：{ \"name\": \"navigate_url\", \"arguments\": { \"url\": \"${url}\" } }。"))
+            return response.toJsonString()
+        }
+
         let browser = extractString(args, "browser")
 
         LogUtils.info("[BrowserTool] Opening URL: ${url}")
@@ -178,6 +195,18 @@ public class BrowserTool <: NativeFuncTool {
             }
         }
         return ""
+    }
+
+    // 判断是否为「同源管理后台」地址。命中即用 browser_open 打开独立浏览器会丢失登录态，
+    // 必须在用户当前已登录标签页内用 navigate_url 操作。覆盖开发(localhost:3031)与生产(javatoarktsapi.uctoo.com)。
+    protected static func isSameOriginAppUrl(url: String): Bool {
+        let markers = ["localhost:3031", "127.0.0.1:3031", "javatoarktsapi.uctoo.com"]
+        for (marker in markers) {
+            if (url.contains(marker)) {
+                return true
+            }
+        }
+        return false
     }
 }
 

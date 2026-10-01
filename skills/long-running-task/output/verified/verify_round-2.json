@@ -1,0 +1,30 @@
+{
+  "artifact_path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime/skills/long-running-task/output/rounds/a298ea47-8af2-4432-8180-21f62c2b8b72/round-2.md",
+  "artifact_type": "doc",
+  "passed": true,
+  "checks": [
+    {
+      "name": "existence",
+      "passed": true,
+      "detail": "文件存在且非空"
+    },
+    {
+      "name": "non_empty",
+      "passed": true,
+      "detail": "文本内容 489 字符"
+    },
+    {
+      "name": "no_secret_leak",
+      "passed": true,
+      "detail": "未发现高危密钥字面量"
+    },
+    {
+      "name": "size",
+      "passed": true,
+      "detail": "体积 1090 字节（<20MB）"
+    }
+  ],
+  "summary": "通过",
+  "checked_at": "2026-09-23T08:05:09+08:00",
+  "task_id": "a298ea47-8af2-4432-8180-21f62c2b8b72"
+}

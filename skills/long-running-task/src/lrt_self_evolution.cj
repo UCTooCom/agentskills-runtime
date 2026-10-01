@@ -152,7 +152,7 @@ public class LrtSelfEvolution {
         let m = HashMap<String, JsonValue>()
         m["agent_id"] = JsonValue.String(agentId)
         m["round"] = JsonValue.Number(Float64(round))
-        m["max_round_duration_ms"] = JsonValue.Number(Float64(LrtConfig.maxRoundDurationMs()))
+        m["max_round_duration_ms"] = JsonValue.Number(Float64(LrtConfig.maxRoundDurationMsFor(agentId)))
 
         var total: Int64 = 0
         var passed: Int64 = 0

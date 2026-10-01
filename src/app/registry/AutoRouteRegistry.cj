@@ -15,6 +15,7 @@ import magic.app.routes.uctoo.mcp.McpRoute
 import magic.app.controllers.uctoo.mcp.McpController
 import magic.core.skill.SkillManager
 import magic.core.model.ChatModel
+import magic.config.Config
 
 /**
  * AutoRouteRegistry - 自动路由注册器
@@ -107,7 +108,7 @@ public class AutoRouteRegistry {
         let uctooUserService = UctooUserService()
         let uctooSessionService = UctooSessionService()
         let smsLogService = SmsLogService()
-        let jwtUtil = JWTUtil("uctoo-v4-secret-key", 1728000, 6048000)
+        let jwtUtil = JWTUtil(Config.jwtSecret, 1728000, 6048000)
         let bcryptUtil = BcryptUtil(saltRounds: 10)
         let cookieUtil = CookieUtil(true, None<String>)
         

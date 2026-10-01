@@ -956,9 +956,20 @@ AgentSkills Runtime 提供了自动化打包脚本，可以从源码构建发布
 # 1. 构建项目
 cjpm build
 
-# 2. 运行打包脚本（自动从 cjpm.toml 读取版本号）
+# 2. 构建内置进程技能（L3 进程隔离轨）
+#    每个含 plugin.yaml 且 mode: process 的技能都是独立 cjpm 包，不会随主工程一起构建。
+#    漏了这一步，打包时只会打印一行
+#    "[INFO] No L3 process plugin executables found" 然后跳过 —— 发布包里没有 exe，
+#    安装后表现为插件拉不起来，且没有任何报错。
+cd skills/long-running-task && cjpm build && cd ../..
+
+# 3. 运行打包脚本（自动从 cjpm.toml 读取版本号）
 cjpm run --skip-build --name magic.scripts.package_release
 ```
+
+> **提示**：进程技能的构建产物（`skills/{name}/target/release/bin/skill_{name}.exe`）
+> 与 `scripts/`、`COMPOSITION.yaml` 等技能资源会被打包到 `bin/skills/{name}/`，
+> 详细布局见下方「内置技能的发布形态」。
 
 #### 打包脚本功能
 
@@ -966,6 +977,8 @@ cjpm run --skip-build --name magic.scripts.package_release
 - **自动平台检测**：自动检测当前操作系统和架构
 - **精简打包**：自动排除 examples、tests 等非必要模块
 - **完整依赖**：包含所有运行时所需的 DLL 文件
+- **内置技能打包**：把含 `plugin.yaml` 的技能连同其可执行文件与自带资源打进 `bin/skills/{name}/`
+- **版本标识别**：生成 `release/VERSION`（版本号 / 平台 / 构建时间）
 
 #### 输出文件
 
@@ -985,13 +998,36 @@ release/
 release/
 ├── bin/                    # 可执行文件和所有 DLL
 │   ├── agentskills-runtime.exe  # 主入口程序
-│   └── *.dll               # 所有依赖库
+│   ├── *.dll               # 所有依赖库
+│   ├── plugins/            # 插件清单（见下）
+│   └── skills/             # 内置进程技能的完整运行形态（见下）
 ├── magic/                  # 运行时模块
 ├── commonmark4cj/          # Markdown 解析器
 ├── yaml4cj/                # YAML 解析器
-├── VERSION                 # 版本信息
+├── VERSION                 # 版本信息（含版本号、平台、构建时间）
 └── .env.example            # 配置模板
 ```
+
+#### 内置技能的发布形态
+
+`skills/` 下的技能随 runtime 一同发布，按形态分两类打包：
+
+| 技能形态 | 判定依据 | 发布包落点 | 内容 |
+|---|---|---|---|
+| **进程隔离轨插件**（L3） | 含 `plugin.yaml` 且 `mode: process` | `bin/plugins/{name}/` + `bin/skills/{name}/` | `plugin.yaml` + `SKILL.md`；编译产物 `target/release/bin/skill_{name}.exe`；**技能自带资源**（`scripts/` 降级脚本、`COMPOSITION.yaml`、`DATA_CONTRACT.yaml`、`OPS.md` 等） |
+| 纯 SKILL.md 技能 | 只有 `SKILL.md` | 不在发布包内 | 需安装后单独部署到 `plugins/{name}/SKILL.md` |
+
+关键点：**进程插件的 Python 脚本和编排文件与 exe 同根**（都在 `bin/skills/{name}/`）。
+例如 `long-running-task` 的 D 层降级后端（`cli_execute` / `llm` / `template`）依赖
+`scripts/` 下的 Python 脚本，`LrtScriptRunner` 按 `<技能根>/scripts` 解析，
+脚本再用相对路径读写 `output/xxx` —— 少了这一层，插件进程能起来但跑不出结果。
+
+插件可执行文件的定位规则：`plugin.yaml` 的 `command` 是**相对宿主工作目录**的路径
+（宿主按 `${cwd}/${command}` 解析，见 `CordisHostManager.resolvePluginCommand`），
+所以应写成 `./skills/{name}/target/release/bin/skill_{name}.exe`。
+写成相对插件目录的短路径（`./target/release/bin/...`）时，宿主会兜底再探一次
+`skills/{name}/` 前缀并打 `plugin_command_relative_fallback` 警告；
+发布脚本静态校验（用例 `17.7-plugin-command-01`）会对短路径直接失败。
 
 #### 使用发布包
 
@@ -999,14 +1035,20 @@ release/
 # 1. 解压发布包
 tar -xzf agentskills-runtime-win-x64.tar.gz
 
-# 2. 进入目录并配置环境变量
-cd release
+# 2. 配置环境变量
 cp .env.example bin/.env
 # 编辑 .env 文件配置 API 密钥
 
 # 3. 运行服务
-./bin/agentskills-runtime.exe 8080
+cd bin
+./agentskills-runtime.exe 8080
 ```
+
+> **注意**：必须在 `bin/` 目录下启动（而不是解压后的 `release/` 根目录）。
+> 插件根目录 `pluginsRoot` 默认为 `./plugins`（相对当前工作目录），
+> 在 `release/` 下执行会找不到 `release/plugins/`，导致所有插件不被加载。
+> 进程插件的 `command` 同样按 `${cwd}/${command}` 解析，只有在 `bin/` 下
+> 才能正确命中 `bin/skills/{name}/target/release/bin/skill_{name}.exe`。
 
 ### 版本发布流程
 
@@ -1581,6 +1623,14 @@ git push origin feature/your-feature
 ### 参考资料
 - [只需免费AI就能用仓颉开发强大Agent](https://mp.weixin.qq.com/s/jcUVuj7bLs9DaHLhol4-Hg)
 - [深度解析agent skill标准](https://mp.weixin.qq.com/s/qFae5uqJsOAEkn1LN12tuA)
+
+### 捐赠人
+
+<p>
+  <img src="public/logo/CCF2023logo.png" alt="CCF 2023 Logo" width="220" />
+  &nbsp;&nbsp;
+  <img src="public/logo/guanghualogo.png" alt="Guanghua Logo" width="220" />
+</p>
 
 ---
 **AgentSkills Runtime - 让 AI 开发更简单、更安全、更快捷！**

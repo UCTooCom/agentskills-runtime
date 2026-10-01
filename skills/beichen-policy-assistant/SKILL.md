@@ -3,7 +3,7 @@ name: beichen-policy-assistant
 description: 产业政策智能体（北辰产业政策智能体）—— 实现北辰命题"政策赋能精准化"课题的政策库—匹配库—申报库全流程 SOP。输入企业名称自动生成全景企业画像（工商/经营/舆情），基于三层知识库（政策原文库/官方解读库/实操洞察库）与全网实时资源双源检索，语义级匹配市、区两级政策，生成可溯源的适配研判报告，创建申报任务，结果写入 company 表与 tasks 表并通过 aibuilder 呈现。触发词："政策匹配"、"政策申报"、"企业画像"、"政策智能体"、"能申报什么政策"、"产业政策"、"专项政策"、"政策查询"、"申报条件"。
 license: MIT
 version: "1.0.0"
-compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/web_fetch/web_search），脚本执行需 Python 3.8+ + requests 库（落库模式需 psycopg2-binary）
+compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/web_fetch/web_search）。脚本优先使用 TypeScript 版本（需 Node.js v23.10.0+，原生支持 TypeScript：`node --experimental-strip-types scripts/<script>.ts`）；TS 版本运行有错误时降级使用 Python 版本（需 Python 3.8+ + requests 库，落库模式需 psycopg2-binary / pg）
 metadata:
   author: UCToo Team (beichen-hackathon)
   version: "1.0.0"
@@ -51,9 +51,9 @@ allowed-tools: network, filesystem, cli
 
 以命题附件 74 条政策目录为种子，生成三层知识库结构。
 
-**脚本**：`scripts/init_policy_kb.py`
+**脚本**：`scripts/init_policy_kb.ts`（降级：`scripts/init_policy_kb.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/init_policy_kb.py", "--seed", "knowledge/policy-seed.json"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/init_policy_kb.ts", "--seed", "knowledge/policy-seed.json"]})
 # 输出：knowledge/policy-original/{序号}-{政策名称}.md（74 条）+ knowledge/policy-index.json
 ```
 
@@ -61,9 +61,9 @@ cli_execute({"command": "python", "args": ["scripts/init_policy_kb.py", "--seed"
 
 输入企业名称，聚合工商、经营、舆情多渠道公开信息，经信息甄别、冗余过滤、要点萃取，输出结构化企业画像。
 
-**脚本**：`scripts/build_enterprise_profile.py`
+**脚本**：`scripts/build_enterprise_profile.ts`（降级：`scripts/build_enterprise_profile.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/build_enterprise_profile.py", "--company", "北京北辰实业有限公司"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/build_enterprise_profile.ts", "--company", "北京北辰实业有限公司"]})
 # 输出：output/profiles/{企业slug}.json + .md
 ```
 - 未配置 LLM 时用规则降级完成要点萃取，保证可运行
@@ -72,9 +72,9 @@ cli_execute({"command": "python", "args": ["scripts/build_enterprise_profile.py"
 
 基于企业画像语义匹配三层知识库与全网实时资源，输出匹配矩阵。
 
-**脚本**：`scripts/match_policy.py`
+**脚本**：`scripts/match_policy.ts`（降级：`scripts/match_policy.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/match_policy.py", "--profile", "output/profiles/{企业slug}.json", "--topn", "10"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/match_policy.ts", "--profile", "output/profiles/{企业slug}.json", "--topn", "10"]})
 # 输出：output/matches/{企业slug}-{date}.json（匹配矩阵：政策编号/评分/依据/缺口项）
 ```
 - 硬性条件初筛（注册区域/资质/行业）→ 双源检索 → 语义评分 → policy_no 绑定
@@ -83,9 +83,9 @@ cli_execute({"command": "python", "args": ["scripts/match_policy.py", "--profile
 
 调用昇腾 API 生成结构化适配研判报告，无 LLM 时模板降级。
 
-**脚本**：`scripts/generate_policy_report.py`
+**脚本**：`scripts/generate_policy_report.ts`（降级：`scripts/generate_policy_report.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/generate_policy_report.py", "--profile", "output/profiles/{企业slug}.json", "--matches", "output/matches/{企业slug}-{date}.json"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/generate_policy_report.ts", "--profile", "output/profiles/{企业slug}.json", "--matches", "output/matches/{企业slug}-{date}.json"]})
 # 输出：output/reports/{企业slug}-{date}.md（含条件对标表、缺口分析、合规声明）
 ```
 
@@ -97,9 +97,9 @@ cli_execute({"command": "python", "args": ["scripts/generate_policy_report.py", 
 
 企业画像 upsert 到 `company` 表，匹配报告与申报任务写入 `tasks` 表。
 
-**脚本**：`scripts/save_to_db.py`
+**脚本**：`scripts/save_to_db.ts`（降级：`scripts/save_to_db.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/save_to_db.py", "--profile", "output/profiles/{企业slug}.json", "--report", "output/reports/{企业slug}-{date}.md", "--matches", "output/matches/{企业slug}-{date}.json", "--sql-only"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/save_to_db.ts", "--profile", "output/profiles/{企业slug}.json", "--report", "output/reports/{企业slug}-{date}.md", "--matches", "output/matches/{企业slug}-{date}.json", "--sql-only"]})
 # 输出：output/sql/policy_*.sql（company upsert + tasks 写入 policy-match / policy-apply）
 ```
 
@@ -107,36 +107,41 @@ cli_execute({"command": "python", "args": ["scripts/save_to_db.py", "--profile",
 
 每日定时从政府网站抓取最新政策进入储备库，人工研判确认后转入正式库。
 
-**脚本**：`scripts/update_policy_kb.py`
+**脚本**：`scripts/update_policy_kb.ts`（降级：`scripts/update_policy_kb.py`）
 ```bash
 # 抓取模式（每日 cron 触发）
-cli_execute({"command": "python", "args": ["scripts/update_policy_kb.py", "--sources", "default"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/update_policy_kb.ts", "--sources", "default"]})
 # 输出：output/pending/{date}.json（状态 pending，待人工研判）
 
 # commit 模式（人工研判确认后）
-cli_execute({"command": "python", "args": ["scripts/update_policy_kb.py", "--commit", "--date", "2026-08-29", "--reviewer", "张工"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/update_policy_kb.ts", "--commit", "--date", "2026-08-29", "--reviewer", "张工"]})
 # 效果：储备库中被确认条目转入政策原文库，索引状态更新
 ```
 
 ## 脚本执行显式命令示例（即使不读完整 SOP 也可直接执行）
 
-> 工作目录：`apps/agentskills-runtime/skills/beichen-policy-assistant`；Windows 用 `python`，Linux/Mac 用 `python3`。
+> 工作目录：`apps/agentskills-runtime/skills/beichen-policy-assistant`；优先使用 TypeScript 版本（Node.js v23.10.0+），TS 版本运行有错误时降级使用 Python 版本。
 
 ```bash
 # 0. 初始化知识库
-python scripts/init_policy_kb.py --seed knowledge/policy-seed.json
+node --experimental-strip-types scripts/init_policy_kb.ts --seed knowledge/policy-seed.json
+# 降级: python scripts/init_policy_kb.py --seed knowledge/policy-seed.json
 
 # 1. 企业画像
-python scripts/build_enterprise_profile.py --company "北京北辰实业有限公司"
+node --experimental-strip-types scripts/build_enterprise_profile.ts --company "北京北辰实业有限公司"
+# 降级: python scripts/build_enterprise_profile.py --company "北京北辰实业有限公司"
 
 # 2. 政策匹配
-python scripts/match_policy.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --topn 10
+node --experimental-strip-types scripts/match_policy.ts --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --topn 10
+# 降级: python scripts/match_policy.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --topn 10
 
 # 3. 适配报告
-python scripts/generate_policy_report.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json
+node --experimental-strip-types scripts/generate_policy_report.ts --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json
+# 降级: python scripts/generate_policy_report.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json
 
 # 4. 结果落库（仅生成 SQL 文件，无需数据库驱动）
-python scripts/save_to_db.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --report output/reports/beijing_beichen_shiyeyouxiangongsi-2026-08-29.md --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json --sql-only
+node --experimental-strip-types scripts/save_to_db.ts --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --report output/reports/beijing_beichen_shiyeyouxiangongsi-2026-08-29.md --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json --sql-only
+# 降级: python scripts/save_to_db.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --report output/reports/beijing_beichen_shiyeyouxiangongsi-2026-08-29.md --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json --sql-only
 ```
 
 ## 输入参数

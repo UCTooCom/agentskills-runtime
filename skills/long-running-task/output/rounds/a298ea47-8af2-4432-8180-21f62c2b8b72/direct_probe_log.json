@@ -1,0 +1,56 @@
+[
+ {
+  "url": "https://www.bing.com/search?q=2025%E5%B9%B4%E5%8C%97%E4%BA%AC%E5%8D%B7%E9%AB%98%E8%80%83%E7%89%A9%E7%90%86%E7%AC%AC20%E9%A2%98%20%E7%9C%9F%E9%A2%98%20%E9%A2%98%E5%B9%B2",
+  "status": 200,
+  "len": 99765,
+  "head": "<!DOCTYPE html><html dir=\"ltr\" lang=\"zh\" xml:lang=\"zh\" xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:Web=\"http://schemas.live.com/Web/\"><script type=\"text/javascript\" nonce=\"t+CGPQa3y8LT5n1QgXkmo05rMLZ2c"
+ },
+ {
+  "url": "https://search.marcia.com/?q=2025%E5%B9%B4%E5%8C%97%E4%BA%AC%E5%8D%B7%E9%AB%98%E8%80%83%E7%89%A9%E7%90%86%E7%AC%AC20%E9%A2%98%20%E7%9C%9F%E9%A2%98%20%E9%A2%98%E5%B9%B2",
+  "status": 200,
+  "len": 143074,
+  "head": "<!DOCTYPE html> <html lang=\"en-US\"> <head> <script language=\"javascript\" type=\"text/javascript\" src=\"/js/browser-support.config.js?1790077618\"></script> <script language=\"javascript\" type=\"text/javasc"
+ },
+ {
+  "url": "https://duckduckgo.com/html/?q=2025%E5%B9%B4%E5%8C%97%E4%BA%AC%E5%8D%B7%E9%AB%98%E8%80%83%E7%89%A9%E7%90%86%E7%AC%AC20%E9%A2%98%20%E7%9C%9F%E9%A2%98%20%E9%A2%98%E5%B9%B2",
+  "status": null,
+  "len": 40,
+  "head": "ERR: URLError(TimeoutError('timed out'))"
+ },
+ {
+  "url": "https://lite.duckduckgo.com/lite/?q=2025%E5%B9%B4%E5%8C%97%E4%BA%AC%E5%8D%B7%E9%AB%98%E8%80%83%E7%89%A9%E7%90%86%E7%AC%AC20%E9%A2%98%20%E7%9C%9F%E9%A2%98%20%E9%A2%98%E5%B9%B2",
+  "status": null,
+  "len": 40,
+  "head": "ERR: URLError(TimeoutError('timed out'))"
+ },
+ {
+  "url": "https://www.ecosia.org/search?q=2025%E5%B9%B4%E5%8C%97%E4%BA%AC%E5%8D%B7%E9%AB%98%E8%80%83%E7%89%A9%E7%90%86%E7%AC%AC20%E9%A2%98%20%E7%9C%9F%E9%A2%98%20%E9%A2%98%E5%B9%B2",
+  "status": 200,
+  "len": 214773,
+  "head": "<!doctype html><html lang=\"zh\" dir=\"ltr\"><head><meta name=\"theme-color\" content=\"#4F4F4F\" /><meta name=\"description\" content=\"使用 Microsoft 必应进行搜索，并利用 AI 的强大功能查找信息、浏览网页、图像、视频、地图等。为永远充满好奇心的人提供的智能搜索引擎。\" "
+ },
+ {
+  "url": "https://search.brave.com/search?q=2025%E5%B9%B4%E5%8C%97%E4%BA%AC%E5%8D%B7%E9%AB%98%E8%80%83%E7%89%A9%E7%90%86%E7%AC%AC20%E9%A2%98%20%E7%9C%9F%E9%A2%98%20%E9%A2%98%E5%B9%B2",
+  "status": null,
+  "len": 40,
+  "head": "ERR: URLError(TimeoutError('timed out'))"
+ },
+ {
+  "url": "https://www.mojeek.com/search?q=2025%E5%B9%B4%E5%8C%97%E4%BA%AC%E5%8D%B7%E9%AB%98%E8%80%83%E7%89%A9%E7%90%86%E7%AC%AC20%E9%A2%98%20%E7%9C%9F%E9%A2%98%20%E9%A2%98%E5%B9%B2",
+  "status": null,
+  "len": 40,
+  "head": "ERR: URLError(TimeoutError('timed out'))"
+ },
+ {
+  "url": "https://www.startpage.com/sp/search?query=2025%E5%B9%B4%E5%8C%97%E4%BA%AC%E5%8D%B7%E9%AB%98%E8%80%83%E7%89%A9%E7%90%86%E7%AC%AC20%E9%A2%98%20%E7%9C%9F%E9%A2%98%20%E9%A2%98%E5%B9%B2",
+  "status": null,
+  "len": 40,
+  "head": "ERR: URLError(TimeoutError('timed out'))"
+ },
+ {
+  "url": "https://zh.wikipedia.org/wiki/高等学校招生全国统一考试",
+  "status": null,
+  "len": 104,
+  "head": "ERR: UnicodeEncodeError('ascii', 'GET /wiki/高等学校招生全国统一考试 HTTP/1.1', 10, 22, 'ordinal not in range(128)')"
+ }
+]

@@ -22,6 +22,7 @@ package skill_long_running_task
 
 import jsonvalue.*
 import std.collection.{HashMap, ArrayList}
+import std.fs.exists
 import std.time.DateTime
 
 public class LrtExecutor {
@@ -41,8 +42,9 @@ public class LrtExecutor {
         // Ch4.1：轮次与时长的上限统一读 plugin.yaml 的 config 段（可由 LRT_* 环境变量覆盖）。
         // 入参 maxRounds 显式给定时优先（调用方明确要少跑几轮的场景），
         // 未给 / 给 0 才回落配置——避免「配置改了但代码里还有一处硬编码 30」。
-        let effectiveMaxRounds = if (maxRounds > 0) { maxRounds } else { LrtConfig.maxRounds() }
-        let roundBudgetMs = LrtConfig.maxRoundDurationMs()
+        // §11.2：改读带 agentId 的覆盖版本。未配置覆盖的 Agent 行为不变（回落 config 段）。
+        let effectiveMaxRounds = if (maxRounds > 0) { maxRounds } else { LrtConfig.maxRoundsFor(agentId) }
+        let roundBudgetMs = LrtConfig.maxRoundDurationMsFor(agentId)
         // 0. 解出会话/追踪上下文（供事件上报）
         //    从 payload 里取而不是表字段：agent_tasks 没有 session_id/trace_id 列，
         //    而这两个值是"某次提交的上下文"，天然属于 payload。
@@ -54,7 +56,7 @@ public class LrtExecutor {
         let sessionId = LrtExecutor.extractPayloadString(taskRow, "session_id")
         let traceId = LrtExecutor.extractPayloadString(taskRow, "trace_id")
         // §4.2 / §11.3：解析 crontab_id 供轨迹落库（best-effort，解析不到回落 taskId）
-        let crontabId = LrtTraceLog.resolveCrontabId(agentId, userId, permArr)
+        let crontabId = LrtTraceLog.resolveCrontabId(agentId, userId, permArr, taskId: taskId)
         // §4 数据驱动桥：确保宿主侧存在触发 LrtPluginExecutor 的 crontab 记录
         // （scheme = lrt://，2026-09-15 起由 agent_execution:// 变更而来），
         // 使宿主 SchedulerEngine 持续按 cron 反向驱动本任务的多步循环。
@@ -72,9 +74,9 @@ public class LrtExecutor {
         // 不再从 crontab 列读 —— 给用户一个可配置开关。
         // 局限：跨进程不保证互斥（插件为单进程，多副本部署下需外部锁）。
         if (isRoot) {
-            let concurrentable = LrtExecutor.isConcurrentable()
+            let concurrentable = LrtExecutor.isConcurrentable(agentId)
             let executing = LrtExecutor.extractPayloadBool(taskRow, "executing")
-            let lockStale = LrtExecutor.isExecutingLockStale(taskRow)
+            let lockStale = LrtExecutor.isExecutingLockStale(taskRow, agentId)
             if (!concurrentable && executing && !lockStale) {
                 eprintln("[lrt-executor] 并发被禁止且前序执行未完成，跳过本次触发（task=${taskId}）")
                 let skip = HashMap<String, JsonValue>()
@@ -280,6 +282,15 @@ public class LrtExecutor {
                         }
                     case _ => ()
                 }
+                // §11.3 degradation 类 JSONL（tasks.md 1000）：记录本轮失败/通过产物数、
+                // 实际生效的降级环节 applied 与 errno，供事后复盘与自进化根因分析。
+                // 注意：降级成功 ≠ 任务完成，下游须读 payload.last_degradation 判断。
+                let dgFields = HashMap<String, JsonValue>()
+                dgFields["failed_artifacts"] = JsonValue.Number(Float64(failed))
+                dgFields["passed_artifacts"] = JsonValue.Number(Float64(passed))
+                dgFields["applied"] = degradation.get("applied", JsonValue.Null)
+                dgFields["errno"] = degradation.get("errno", JsonValue.Null)
+                LrtTraceLog.emitJsonl(LrtTraceLog.JSONL_TYPE_DEGRADATION, taskId, agentId, traceId, round, dgFields)
 
                 // 第 7 个参数 taskId 是命名参数（仓颉语法要求带默认值的参数必须是命名参数），
                 // 因此必须按名传值，不能写成第 7 个普通位置实参。
@@ -306,14 +317,64 @@ public class LrtExecutor {
                 case _ => allPresent = true
             }
             if (!allPresent) {
-                outcome = "missing_artifacts"
-                let missingCount = LrtExecutor.numOf(check, "missing_count")
-                LrtEventEmitter.stepFailed(
-                    taskId, sessionId, agentId, "final-check", round,
-                    "终检：${missingCount} 个关键产出物缺失或不可用", round, false, traceId
+                // §6.1（tasks.md 743）：校验失败 → 补执行 → **复验** → 仍失败才降级/交人工。
+                //
+                // 「补执行对应步骤」在本架构下的落地形态是**走降级链**：产物由 Agent 在
+                // 回合内产出，插件拿不到「单独重跑某一步」的句柄，能做的是按
+                // degradation_chain 换方案重试（cli_execute → builtin_tool → llm → template）。
+                // 这与 execute-rounds 步骤遇挫时的处理口径保持一致。
+                //
+                // 关键点：**补执行后必须复验**。不复验就不知道补齐没有，会把「降级跑过了」
+                // 误当成「产物有了」——那正是最容易蒙混过关的一类失败。
+                let acceptance = ArrayList<String>()
+                acceptance.add("缺失的关键产出物需重新产出并通过文件态校验（存在 + 非空 + 日期匹配）")
+                acceptance.add("补跑不得覆盖或回滚已通过验核的产物")
+                // 用 ArrayList<JsonValue> 而非 ArrayList<String>：JsonValue.from 只有
+                // ArrayList<JsonValue> 重载（jsonvalue.cj:229），传 ArrayList<String> 会落到
+                // 泛型 from<T> where T <: JsonSerializable 上，ArrayList 不满足该约束 → 编译错。
+                let missingPaths = ArrayList<JsonValue>()
+                var missingDesc = ""
+                match (check.get("missing", JsonValue.Null)) {
+                    case JsonValue.Array(arr) =>
+                        for (it in arr) {
+                            match (it.get("artifact_path", JsonValue.Null)) {
+                                case JsonValue.String(sp) =>
+                                    missingPaths.add(JsonValue.String(sp))
+                                    if (missingDesc.isEmpty()) {
+                                        missingDesc = sp
+                                    } else {
+                                        missingDesc = "${missingDesc}, ${sp}"
+                                    }
+                                case _ => ()
+                            }
+                        }
+                    case _ => ()
+                }
+                let remediation = LrtDegradation.run(
+                    taskId, round,
+                    "终检：${missingPaths.size} 个关键产出物缺失或不可用（${missingDesc}）",
+                    acceptance, userId, permArr, traceId
                 )
+                let recheck = LrtArtifactVerifier.finalCheck(requiredArtifacts, goal)
+                var stillMissing = true
+                match (recheck.get("all_present", JsonValue.Boolean(false))) {
+                    case JsonValue.Boolean(b2) => stillMissing = !b2
+                    case _ => stillMissing = true
+                }
+                if (stillMissing) {
+                    outcome = "missing_artifacts"
+                    let missingCount = LrtExecutor.numOf(recheck, "missing_count")
+                    LrtEventEmitter.stepFailed(
+                        taskId, sessionId, agentId, "final-check", round,
+                        "终检（补执行后仍缺失）：${missingCount} 个关键产出物缺失或不可用", round, false, traceId
+                    )
+                } else {
+                    eprintln("[lrt-executor] 终检补执行成功：缺失产物已补齐，任务继续完成流程")
+                }
                 let finalPatch = HashMap<String, JsonValue>()
-                finalPatch["final_check"] = check
+                finalPatch["final_check"] = recheck
+                finalPatch["final_check_missing_paths"] = JsonValue.from(missingPaths)
+                finalPatch["final_check_remediation"] = remediation
                 LrtPersistService.patchTaskPayload(taskId, finalPatch, userId, permArr)
             }
         }
@@ -386,9 +447,16 @@ public class LrtExecutor {
             )
         }
 
+        // 【根因 G】outcome → errno：**只有 completed 才是 errno 0**。
+        // 原实现无论收敛结果如何一律 errno:0，于是 COMPOSITION 的
+        // degradation_chain（cli_execute → builtin_tool → llm → template）**永远不会被触发**——
+        // "本回合没有产物"被当成"本回合很成功"，这正是"编排显示 completed、
+        // 任务其实一步没动"的根源（2026-09-22 实测：execute-rounds 记 completed，
+        // 而 verify-and-deliver 同时报 40002）。
+        let (errno, errmsg) = LrtExecutor.outcomeCode(outcome)
         let response = HashMap<String, JsonValue>()
-        response["errno"] = JsonValue.Number(0.0)
-        response["errmsg"] = JsonValue.String("ok")
+        response["errno"] = JsonValue.Number(Float64(errno))
+        response["errmsg"] = JsonValue.String(errmsg)
         response["outcome"] = JsonValue.String(outcome)
         response["round"] = JsonValue.Number(Float64(round))
         response["task_id"] = JsonValue.String(taskId)
@@ -397,9 +465,54 @@ public class LrtExecutor {
 
     // ── 内部查询辅助 ──────────────────────────────────────────────
 
+    /// outcome → (errno, errmsg)（根因 G）
+    ///
+    /// 码位刻意从 40010 起：40001/40002 已被 handler 的参数校验占用
+    /// （"提交数据格式错误" / "xxx 不能为空"），收敛结果另开一段，
+    /// 看日志时一眼能分清是"调用姿势不对"还是"这一回合没跑出东西"。
+    private static func outcomeCode(outcome: String): (Int64, String) {
+        match (outcome) {
+            case "completed" => (0, "ok")
+            case "no_artifacts_yet" =>
+                (40010, "本回合没有任何待验核产物（no_artifacts_yet）：执行者未产出，需按降级链换方案或补执行")
+            case "round_timeout" =>
+                (40011, "本回合超时中止（round_timeout），已落检查点，等待下一回合续跑")
+            case "need_human" =>
+                (40012, "已达最大轮次仍未收敛（need_human），需人工介入")
+            case "missing_artifacts" =>
+                (40013, "终检：关键产出物缺失且补执行未补齐（missing_artifacts）")
+            case "concurrency_skipped" =>
+                (0, "ok")
+            case _ =>
+                (40019, "未识别的收敛结果 outcome=${outcome}")
+        }
+    }
+
     private static func pendingArtifacts(taskId: String, userId: String, permArr: ArrayList<JsonValue>, limit: Int64): Array<JsonValue> {
         let whereClause = "task_id = '${taskId}' AND (verification_status IS NULL OR verification_status = 'pending') AND deleted_at IS NULL"
         return LrtPersistService.queryMany(LrtPersistService.TABLE_ARTIFACT, whereClause, userId, permArr, limit)
+    }
+
+    /// 取本任务的一条产物路径（供 verify-and-deliver 归一"整段 JSON 当产物路径"的历史口径）。
+    ///
+    /// `queryMany` 无 orderBy 参数（宿主 host.db 的 query 未暴露排序），故取返回数组的
+    /// **最后一条**——默认扫描序下与插入序一致，最新产物在末尾。这只是启发式：
+    /// 真正的语义是"找一条本任务的产物来验核"，不是"精确取最新"。
+    private static func latestArtifactPath(taskId: String, userId: String, permArr: ArrayList<JsonValue>): String {
+        if (taskId.isEmpty()) {
+            return ""
+        }
+        let whereClause = "task_id = '${taskId}' AND deleted_at IS NULL"
+        let rows = LrtPersistService.queryMany(LrtPersistService.TABLE_ARTIFACT, whereClause, userId, permArr, 50)
+        var i = rows.size - 1
+        while (i >= 0) {
+            let p = LrtExecutor.extractString(rows[i], "artifact_path")
+            if (!p.isEmpty()) {
+                return p
+            }
+            i = i - 1
+        }
+        ""
     }
 
     private static func countArtifacts(taskId: String, userId: String, permArr: ArrayList<JsonValue>, statusWhere: String): Int64 {
@@ -574,9 +687,30 @@ public class LrtExecutor {
         let toolCaller = { name: String, input: HashMap<String, String> =>
             LrtExecutor.builtinToolFallback(name, input, taskId, userId, permArr)
         }
+        let inputMap = HashMap<String, String>()
+        inputMap["goal"] = goal
+        inputMap["task_id"] = taskId
+        inputMap["user_id"] = userId
+        inputMap["agent_id"] = agentId
+        // plan_file 对应 COMPOSITION 条件 ${file:output/planned/plan.json} 约定的规划产物路径；
+        // 缺失会被解析器判为「编排输入缺失」直接中断编排，故显式给出相对技能根的路径。
+        inputMap["plan_file"] = "output/planned/plan.json"
+        // 事件回流上下文：session_id / trace_id 只存在于 payload（agent_tasks 无此列），
+        // 注入编排输入供 LrtCompositionRunner.relayScriptEvents 在转发 D 层脚本事件时取用。
+        // 没有它，notify-progress 的事件只能走 WS 广播、SSE 定向推送会整条失效。
+        let ctxRow = LrtPersistService.queryOne(
+            LrtPersistService.TABLE_AGENT_TASKS, "id = '${taskId}'", userId, permArr
+        )
+        inputMap["session_id"] = LrtExecutor.extractPayloadString(ctxRow, "session_id")
+        // 形参 traceId 为空（如 handleLrtExecute 当前传 ""）时回落 payload，避免 trace 断链
+        inputMap["trace_id"] = if (!traceId.isEmpty()) {
+            traceId
+        } else {
+            LrtExecutor.extractPayloadString(ctxRow, "trace_id")
+        }
         let runner = LrtCompositionRunner(
             skillDir,
-            input: HashMap<String, String>(),
+            input: inputMap,
             pluginCaller: Some(caller),
             toolCaller: Some(toolCaller),
             llmCaller: None,
@@ -602,11 +736,38 @@ public class LrtExecutor {
                 return LrtPlanner.plan(g, taskId, userId, permArr).stringify()
             case "/api/v1/uctoo/long_running_task/lrt-execute" =>
                 // 回合收敛循环（验核未校验产物 → 通过则完成 / 失败则自进化）
-                return LrtExecutor.runTask(taskId, agentId, goal, userId, permArr, LrtConfig.maxRounds()).stringify()
+                return LrtExecutor.runTask(taskId, agentId, goal, userId, permArr, LrtConfig.maxRoundsFor(agentId)).stringify()
             case "/api/v1/uctoo/long_running_task/lrt-verify" =>
-                let apath = match (input.get("artifact_path")) { case Some(v) => v; case None => "" }
-                let atype = match (input.get("artifact_type")) { case Some(v) => v; case None => "" }
+                // COMPOSITION 的 verify-and-deliver 传的是 `artifacts: "${execute-rounds.output}"`
+                // —— 那是 execute-rounds 的**整段 JSON**，不是文件路径，而且键名是 `artifacts`
+                // 不是 `artifact_path`。直接拿去验核必然报 40002「artifact_path 不能为空」，
+                // 这一步因此**从来没有真正验过任何产物**；而"永远失败"又被旧的
+                // errno=0 判定掩盖（根因 G）。
+                // 这里做一次归一：路径缺失或不是真实文件时，取本任务的一条产物来验核；
+                // 一条都没有才如实报错——不臆造产物，也不把"没得验"说成成功。
+                var apath = match (input.get("artifact_path")) { case Some(v) => v; case None => "" }
+                var atype = match (input.get("artifact_type")) { case Some(v) => v; case None => "" }
+                if (apath.isEmpty() || !exists(apath)) {
+                    let latest = LrtExecutor.latestArtifactPath(taskId, userId, permArr)
+                    if (latest.isEmpty()) {
+                        return LrtPersistService.errResult(40002, "verify-and-deliver：本任务没有任何产物可验核").stringify()
+                    }
+                    apath = latest
+                    if (atype.isEmpty()) {
+                        atype = "artifact"
+                    }
+                }
                 let r = LrtVerifier.verify(apath, atype, taskId, agentId, userId, permArr, goal)
+                // `LrtVerifier.verify` 为兼容历史调用方，验核失败也返回 errno=0（结论在 status 里）。
+                // 但 verify-and-deliver 的验收条件是"产物齐全且验核通过才可交付"，
+                // 把 failed 说成 success 正是根因 G 要治的病，故在这里翻成非 0。
+                match (r.get("status", JsonValue.Null)) {
+                    case JsonValue.String(s) =>
+                        if (s == "failed") {
+                            return LrtPersistService.errResult(40014, "verify-and-deliver：产物验核未通过 ${apath}").stringify()
+                        }
+                    case _ => ()
+                }
                 return r.stringify()
             case _ =>
                 eprintln("[lrt-executor] dispatchRoute 未知路由 '${route}'，按空产出处理")
@@ -624,7 +785,14 @@ public class LrtExecutor {
                 args["userId"] = JsonValue.String(userId)
                 args["permissions"] = JsonValue.from(permArr)
                 let res = ctx.invoke("host.cache", "get", JsonValue.from(args))
-                return res.stringify()
+                let s = res.stringify()
+                // 降级纪律：**拿不到东西就如实失败**。host.cache 未命中返回的是 null / 空对象，
+                // 直接交上去会被 dispatchDegraded 判成"降级成功"（它只判空串），
+                // 于是一次真失败被粉饰成成功——正是 COMPOSITION「不得静默置 success」要防的。
+                if (s.isEmpty() || s == "null" || s == "{}" || s == "\"\"") {
+                    return ""
+                }
+                s
         }
     }
 
@@ -681,7 +849,7 @@ public class LrtExecutor {
                         ArrayList<JsonValue>(), traceId
                     )
                     // 递归保护：子任务以 isRoot=false 驱动，内部不再派发
-                    let r = LrtExecutor.runTask(childId, agentId, subGoal, userId, permArr, LrtConfig.maxRounds(), isRoot: false)
+                    let r = LrtExecutor.runTask(childId, agentId, subGoal, userId, permArr, LrtConfig.maxRoundsFor(agentId), isRoot: false)
                     let outcome = LrtExecutor.extractString(r, "outcome")
                     let patch = HashMap<String, JsonValue>()
                     patch["execution_outcome"] = JsonValue.String(outcome)
@@ -753,8 +921,8 @@ public class LrtExecutor {
     /// concurrentable 读取：现由 plugin.yaml 的 `config.concurrentable`（默认 **false**）决定，
     /// 不再读 crontab 列 —— 后者在参数/环境异常时无从配置，且默认 true 会重叠触发。
     /// 对应 review 偏差 #2「concurrentable 改为可配」。
-    private static func isConcurrentable(): Bool {
-        LrtConfig.concurrentable()
+    private static func isConcurrentable(agentId: String): Bool {
+        LrtConfig.concurrentableFor(agentId)
     }
 
     /// 进程内并发咨询锁：写入 payload.executing + payload.executing_since（epoch 毫秒）。
@@ -769,13 +937,13 @@ public class LrtExecutor {
     /// 陈旧并发锁判定：payload.executing=true 且 executing_since 距今超过 maxTaskDurationMs，
     /// 视为上一轮异常退出遗留（进程/宿主崩溃时锁不会被清）→ 允许本次接管。
     /// 缺 executing_since（历史数据）一律视为**不陈旧**，保持原有"禁止重叠"语义。
-    private static func isExecutingLockStale(row: JsonValue): Bool {
+    private static func isExecutingLockStale(row: JsonValue, agentId: String): Bool {
         let sinceMs = LrtExecutor.extractPayloadInt(row, "executing_since")
         if (sinceMs <= 0) {
             return false
         }
         let nowMs = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
-        (nowMs - sinceMs) > LrtConfig.maxTaskDurationMs()
+        (nowMs - sinceMs) > LrtConfig.maxTaskDurationMsFor(agentId)
     }
 
     /// 从 payload 里读整数（缺失 / 非数字返回 0）

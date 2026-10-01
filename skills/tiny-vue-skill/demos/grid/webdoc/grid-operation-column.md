@@ -1,0 +1,13 @@
+# grid Demos
+
+| demoId | 名称 | 描述 | 代码文件 |
+|--------|------|------|----------|
+| operation-column-clear-and-set-radio-row | 单选项操作 | <p>表格列属性设置 <code>type=&quot;radio&quot;</code> 显示单选列。<code>setRadioRow(row)</code> 用于单选行，设置某一行为选中状态。<code>clearRadioRow(row)</code> 用于取消单选行的选中。</p><br> | grid/operation-column/clear-and-set-radio-row.vue |
+| operation-column-radio-config | 单选配置项 | <p> <code>radio-config</code> 配置项，可以配置单选框的默认选中项和禁用配置等特性。单选模式，通过 <code>radio-config</code> 配置项的属性 <code>checkMethod</code> ，传入自定义方法判断哪些数据项被禁用，方法会判断每个数据项，需返回值为 <code>true</code> 或者 <code>false</code>，代表此数据项启用或者禁用。</p><br> | grid/operation-column/radio-config.vue |
+| operation-column-selection-operation | 多选项操作 | <p><br>          表格列属性设置 <code>type=&quot;selection&quot;</code> 显示多选列。<br>          <code>setAllSelection(checked)</code> 用于多选行，可设置所有行的选中状态。<br><br>          <code>clearSelection(checked)</code> 用于多选行，可以手动取消多选行选中。<br><br>          <code>setAllSelection(checked)</code> 用于多选行，可设置所有行的选中状态。<br><br>          <code>toggleAllSelection()</code> 方法可直接切换所有行的选中状态。<br><br>          <code>toggleRowSelection(row)</code> 方法可直接切换某一行的选中状态。<br>          <div class="tip custom-block"><p class="custom-block-title">TIP</p><br><p> <code>setSelection</code> 方法不会触发 <code>select-change</code> 事件，只有点击才会触发。</p></div><br>        </p><br> | grid/operation-column/selection-operation.vue |
+| operation-column-selection-config | 多选配置项 | <p>多选模式，通过 <code>select-config</code> 配置项的属性 <code>checkMethod</code> ，传入自定义方法判断哪些数据项被禁用，方法会判断每个数据项，需返回值为 <code>true</code> 或者 <code>false</code>，代表此数据项启用或者禁用。通过 <code>select-config</code> 配置项的属性<code>checkField</code>指定行数据的某个字段去决定这行数据的选中状态（并且选中状态和这个字段是双向绑定的）。</p><br> | grid/operation-column/selection-config.vue |
+| operation-column-grid-pager-reserve | 翻页后保留选中状态 | <p>通过设置 <code>select-config</code> 中的 <code>reserve</code> 为 <code>true</code> 并设置 <code>row-id</code>，开启翻页后保留选中状态功能。通过 <code>getAllSelection</code> 获取所有翻页选中数据。</p><br> | grid/operation-column/grid-pager-reserve.vue |
+| operation-column-custom-operation-column | 自定义操作列内容 | <p>通过默认插槽设置自定义操作列。</p><br> | grid/operation-column/custom-operation-column.vue |
+| operation-column-dropdown | 表头下拉菜单 | <p>使用多选列 dropdown 插槽，可以在多选列表头配置自定义下拉菜单，示例中使用 TinyDropdown 组件。</p><br> | grid/operation-column/dropdown.vue |
+| operation-column-header-select-disabled | 表头自动禁用 | <p>多选模式，在空数据时复选列表头自动禁用；如果设置 <code>selectConfig.headerAutoDisabled</code> 为 <code>false</code> ，则不自动禁用，保持和旧版本兼容。</p><br> | grid/operation-column/header-select-disabled.vue |
+| operation-column | 操作列的按钮配置 | 通过type="operation"设置列为操作列，通过operationConfig配置操作列的按钮 | grid/operation-column/operation-column.vue |

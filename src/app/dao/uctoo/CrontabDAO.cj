@@ -62,7 +62,8 @@ public interface CrontabDAO <: RootDAO {
                 misfire_threshold,
                 last_executed_at,
                 next_executed_at,
-                exec_count
+                exec_count,
+                owner_user_id
             ) values(
                 ${arg(entity.name)},
                 ${arg(entity.groupName)},
@@ -85,7 +86,8 @@ public interface CrontabDAO <: RootDAO {
                 ${arg(entity.misfireThreshold)},
                 ${arg(entity.lastExecutedAt)},
                 ${arg(entity.nextExecutedAt)},
-                ${arg(entity.execCount)}
+                ${arg(entity.execCount)},
+                ${arg(entity.ownerUserId)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -100,7 +102,7 @@ public interface CrontabDAO <: RootDAO {
      */
     func findCrontabById(id: String): Option<CrontabPO> {
         executor.setSql('''
-            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where id = ${arg(id)}
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count, owner_user_id from crontab where id = ${arg(id)}
         ''').first<CrontabPO>()
     }
 
@@ -134,6 +136,7 @@ public interface CrontabDAO <: RootDAO {
                 last_executed_at = ${arg(entity.lastExecutedAt)},
                 next_executed_at = ${arg(entity.nextExecutedAt)},
                 exec_count = ${arg(entity.execCount)},
+                owner_user_id = ${arg(entity.ownerUserId)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -184,7 +187,7 @@ public interface CrontabDAO <: RootDAO {
      */
     func findAllCrontabPage(page: Int64, size: Int64): Pagination<CrontabPO> {
         executor.page<CrontabPO>('''
-            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab order by created_at desc
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count, owner_user_id from crontab order by created_at desc
         ''', size, page: page)
     }
 
@@ -197,7 +200,7 @@ public interface CrontabDAO <: RootDAO {
      */
     func findCrontabByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<CrontabPO> {
         executor.page<CrontabPO>('''
-            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where creator = ${arg(creator)} order by created_at desc
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count, owner_user_id from crontab where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -207,7 +210,7 @@ public interface CrontabDAO <: RootDAO {
      */
     func listAllCrontab(): ArrayList<CrontabPO> {
         executor.setSql('''
-            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab order by created_at desc
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count, owner_user_id from crontab order by created_at desc
         ''').list<CrontabPO>()
     }
 
@@ -221,7 +224,7 @@ public interface CrontabDAO <: RootDAO {
             return ArrayList<CrontabPO>()
         }
         executor.setSql('''
-            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where id ${IN(ids)}
+            select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count, owner_user_id from crontab where id ${IN(ids)}
         ''').list<CrontabPO>()
     }
 
@@ -260,7 +263,7 @@ public interface CrontabDAO <: RootDAO {
      */
     func findCrontabByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<CrontabPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab where 1=1")
+        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count, owner_user_id from crontab where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -333,7 +336,7 @@ public interface CrontabDAO <: RootDAO {
      */
     func findCrontabByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<CrontabPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab")
+        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count, owner_user_id from crontab")
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")
         }
@@ -358,7 +361,7 @@ public interface CrontabDAO <: RootDAO {
      */
     func findCrontabByCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<CrontabPO> {
         let sql = StringBuilder()
-        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count from crontab")
+        sql.append("select id, name, group_name, task, cron, tactics, remark, creator, created_at, updated_at, deleted_at, status, timeout, max_retries, retry_count, concurrentable, once, priority, parameters, misfire_threshold, last_executed_at, next_executed_at, exec_count, owner_user_id from crontab")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

@@ -16,9 +16,18 @@ D 层是独立 Python 子进程，**既拿不到 ctx，也不该直连数据库*
 明确要求：D 层经 HTTP API 调用宿主 MCP 开放服务）。所以本脚本的定位是：
   1. 把回合产物**换算**成宿主事件协议要求的字段（completedSteps/totalSteps/
      currentStep/estimatedRemaining/intermediateResult）——这是它的本职工作；
-  2. 落 `progress_events.jsonl`，由宿主的事件中继读取并推送；
-  3. 仅在显式配置了 `--endpoint` / `LRT_NOTIFY_ENDPOINT` 时才自己 POST，
-     且**推送失败一律 warn 不中断**（遇挫不停，spec §5.4）。
+  2. 把事件放进 stdout JSON 的 `events` 字段——**这是回流的主通道**：
+     插件侧 `LrtCompositionRunner.relayScriptEvents` 读取 stdout 后经
+     `LrtEventEmitter` 转投 host.event（2026-09-22 补齐，此前该中继缺失）；
+  3. 落 `progress_events.jsonl` 供人工排查（目前无程序消费方，纯留痕）。
+
+── 关于 LRT_NOTIFY_ENDPOINT（2026-09-22 核实：不要再配它）──────────────
+宿主**没有**对应的 POST 接收端点：`/api/v1/uctoo/webmcp/events` 是 **GET SSE
+出口**（WebMCPController，CORS 只放 GET/OPTIONS），不是 POST 入口。给它配值
+要么 405、要么推给一个不存在的路由，`pushed` 依旧是 0。
+正确做法不是让宿主补一个 HTTP 接收端点——那会在既有 host.event 通道之外
+另开事件出口，还要额外做鉴权 + RBAC 权限注册 + 前端改造，纯属重复建设。
+现在事件经上面第 2 条走 IPC，更快且无需鉴权，本开关仅为兼容保留。
 
 ── estimatedRemaining 的取值纪律（spec §9.1）──────────────────────────────
 没有历史基线时写 **null**，不写 0。0 会被前端解读成"马上完成"，是误导。
@@ -219,6 +228,8 @@ def main() -> int:
     parser.add_argument("--trace_id", default="", help="trace 贯穿（spec §5.18 规则 5）")
     parser.add_argument("--endpoint", default=os.environ.get(DEFAULT_ENDPOINT_ENV, ""),
                         help="宿主通知端点；不配则只落盘，由宿主事件中继读取")
+    parser.add_argument("--data_contract", default="",
+                        help="编排器按步注入的表结构契约（数据契约）；本步仅透传接收，不消费")
     args = parser.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)

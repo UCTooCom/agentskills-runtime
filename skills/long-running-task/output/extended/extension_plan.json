@@ -1,0 +1,11 @@
+{
+  "task_id": "",
+  "generated_at": "2026-09-23T11:35:16+08:00",
+  "covered": [],
+  "quality_gate": {
+    "generator_to_verifier": "cangjie-coder / skill-creator → code-gen-verifier",
+    "on_verify_failed": "回 cangjie-coder 修复后重试，最多 2 轮；仍失败则上报人工",
+    "max_retry": 2
+  },
+  "steps": []
+}

@@ -1,0 +1,149 @@
+{
+  "pil": "12.3.0",
+  "outputs": [
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_stem_tiny.png",
+      "kind": "tiny",
+      "size": [
+        320,
+        452
+      ]
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_stem_s1.png",
+      "kind": "slice",
+      "part": 1,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 174588
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_stem_s2.png",
+      "kind": "slice",
+      "part": 2,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 414418
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_stem_s3.png",
+      "kind": "slice",
+      "part": 3,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 306459
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_stem_s4.png",
+      "kind": "slice",
+      "part": 4,
+      "size": [
+        1400,
+        495
+      ],
+      "bytes": 124053
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_ans_tiny.png",
+      "kind": "tiny",
+      "size": [
+        320,
+        452
+      ]
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_ans_s1.png",
+      "kind": "slice",
+      "part": 1,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 102765
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_ans_s2.png",
+      "kind": "slice",
+      "part": 2,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 358596
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_ans_s3.png",
+      "kind": "slice",
+      "part": 3,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 291969
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\yn_ans_s4.png",
+      "kind": "slice",
+      "part": 4,
+      "size": [
+        1400,
+        495
+      ],
+      "bytes": 193594
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\hjlm_stem_tiny.png",
+      "kind": "tiny",
+      "size": [
+        320,
+        452
+      ]
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\hjlm_stem_s1.png",
+      "kind": "slice",
+      "part": 1,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 157302
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\hjlm_stem_s2.png",
+      "kind": "slice",
+      "part": 2,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 392046
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\hjlm_stem_s3.png",
+      "kind": "slice",
+      "part": 3,
+      "size": [
+        1400,
+        494
+      ],
+      "bytes": 162950
+    },
+    {
+      "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\proc\\hjlm_stem_s4.png",
+      "kind": "slice",
+      "part": 4,
+      "size": [
+        1400,
+        495
+      ],
+      "bytes": 204051
+    }
+  ]
+}

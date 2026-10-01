@@ -47,7 +47,8 @@ public class SyncManager {
             } else {
                 LogUtils.info("SyncManager: skillBasePath exists: ${skillBasePath}")
             }
-            handlers.add("agent", AgentSyncHandler(agentBasePath))
+            // agent 同步也要扫技能目录：技能内 bundled 子 agent（skills/<skill>/agents/）同属"声明即注册"
+            handlers.add("agent", AgentSyncHandler(agentBasePath, skillBasePath: skillBasePath))
             handlers.add("agent_skill", AgentSkillSyncHandler(skillBasePath))
             initialized = true
             LogUtils.info("SyncManager: handlers initialized - agent[${agentBasePath}], agent_skill[${skillBasePath}]")
@@ -115,7 +116,11 @@ public class SyncManager {
             for (change in changes) {
                 result.totalCount++
                 if (let ChangeType.Deleted <- change.changeType) {
-                    LogUtils.info("SyncManager", "skipping deleted entity ${change.sourcePath}")
+                    // 删除即下线（2026-09-28）：此前一律跳过，导致"删声明文件即下线"只说了一半
+                    // ——文件删了、库里行还在，子 agent 仍可被派单。
+                    // 仅 agent 实体做**软删**（置 deleted_at），其他实体类型维持跳过：
+                    // 软删也只对有明确 source_path 的记录生效，不做物理删除。
+                    SyncManager.offlineDeletedAgent(handler, change.sourcePath)
                     continue
                 }
                 let syncResult = syncFromFileSystem(et, change.sourcePath, change.sourcePath, trigger)
@@ -145,5 +150,30 @@ public class SyncManager {
             deps.add(key, handler.dependencies)
         }
         return deps
+    }
+
+    /**
+     * 文件被删时的下线处理：只对 agent 生效（软删），其余实体类型维持"跳过"。
+     *
+     * 用 `as` 安全向下转型取 `AgentSyncHandler`（先例 `PermissionUtils.cj`），
+     * 而不是给 SyncHandler 接口加方法——接口改动会波及所有 handler，
+     * 而"删除下线"目前只有 agent 有明确语义。
+     */
+    private static func offlineDeletedAgent(handler: SyncHandler, sourcePath: String): Unit {
+        let opt = handler as AgentSyncHandler
+        match (opt) {
+            case Some(h) =>
+                try {
+                    if (h.offlineBySourcePath(sourcePath)) {
+                        LogUtils.info("SyncManager", "deleted entity 已下线(软删) ${sourcePath}")
+                    } else {
+                        LogUtils.info("SyncManager", "deleted entity 无需下线（库里无对应行） ${sourcePath}")
+                    }
+                } catch (e: Exception) {
+                    LogUtils.warn("SyncManager", "deleted entity 下线失败（忽略）: ${sourcePath}, ${e.message}")
+                }
+            case None =>
+                LogUtils.info("SyncManager", "skipping deleted entity ${sourcePath}（该类型未实现下线）")
+        }
     }
 }

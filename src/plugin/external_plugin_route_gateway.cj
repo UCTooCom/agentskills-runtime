@@ -18,6 +18,33 @@ import ystyle::cordis_core.InstanceStatus
 import ystyle::jsonrpc.{JsonRpcClient, Request, RequestId, Response, JsonRpcError, ErrorCodes}
 
 /**
+ * 模块级网关引用 + 顶层请求入口（启动 hang 关键修复）
+ *
+ * 诊断结论（2026-09-30，见 logs/agentskills-runtime-20260930-154327.log +
+ * cmd-runtime.md）：原实现在【持有 Mutex 字段】的 ExternalPluginRouteGateway
+ * 实例方法内，以「lambda 闭包」或「绑定方法引用」构造 handler 并传给
+ * router.post/get/...，运行时在该调用点卡死——连「零捕获」的控制组闭包也卡。
+ * 触发条件是：在持有 Mutex 字段的类内部方法里构造【任何函数值】（闭包 / 绑定
+ * 方法）。
+ *
+ * 修复：注册期只传入【顶层函数引用】externalPluginRequestHandler（零捕获、
+ * 不在任何持有 Mutex 的类内构造），请求期再经模块级 sharedGateway 反查网关
+ * 实例并委派给 handleExternalRequestGeneric。
+ */
+private var sharedGateway: ?ExternalPluginRouteGateway = None
+
+/// 顶层请求入口（零捕获函数引用）。Router 命中路径后调用，经模块级
+/// sharedGateway 反查网关实例并委派给 handleExternalRequestGeneric。
+func externalPluginRequestHandler(req: HttpRequest, res: HttpResponse): Unit {
+    match (sharedGateway) {
+        case Some(g) => g.handleExternalRequestGeneric(req, res)
+        case None =>
+            LogUtils.warn("[ExternalPluginRouteGateway] gateway not initialized")
+            res.status(503).json("{\"errno\":503,\"errmsg\":\"plugin gateway not initialized\"}")
+    }
+}
+
+/**
  * ExternalPluginRouteGateway - L3 进程插件路由网关（PS-T027）
  *
  * 为 process 插件代理 UCTOO V4 API 路由（design §5.2.4）：
@@ -57,15 +84,23 @@ public class ExternalPluginRouteGateway {
 
     /// 已注册的进程插件路由映射：pluginId -> RouteRegistration 列表
     private let registeredRoutes: HashMap<String, ArrayList<RouteRegistration>> = HashMap<String, ArrayList<RouteRegistration>>()
+    private let routeBindings: HashMap<String, RouteBinding> = HashMap<String, RouteBinding>()
     private let lock: Mutex = Mutex()
 
     public init(router: Router, cordisHost: PluginHost) {
         this.router = router
         this.cordisHost = cordisHost
+        // 发布到模块级注册表（启动期单次写入，请求期只读，无需额外同步）
+        sharedGateway = Some(this)
     }
 
     /**
      * 为进程插件注册 V4 API 路由
+     *
+     * 注册阶段只传入【顶层函数引用】externalPluginRequestHandler（零捕获、不在本类
+     * 实例方法内构造函数值），注册期即完成所有路由挂载；请求期由该函数经
+     * sharedGateway 反查网关实例，再按 METHOD+PATH 从 routeBindings 反查后委派
+     * handleExternalRequest。
      *
      * @param pluginId 插件名（cordis PluginManifestEntry.id）
      * @param routes 插件声明的路由列表（从 plugin.yaml routes 字段解析）
@@ -78,49 +113,83 @@ public class ExternalPluginRouteGateway {
         }
 
         for (route in routes) {
-            try {
-                this.registerSingleRoute(pluginId, route)
-                success += 1
-                LogUtils.info("[ExternalPluginRouteGateway] route registered: ${pluginId} ${route.method} ${route.path}")
-            } catch (e: Exception) {
-                LogUtils.error("[ExternalPluginRouteGateway] route register failed: ${pluginId} ${route.path} (${e.message})")
+            this.routeBindings["${route.method.toString()} ${route.path}"] = RouteBinding(pluginId, route)
+            match (route.method) {
+                case HttpMethod.GET => this.router.get(route.path, externalPluginRequestHandler)
+                case HttpMethod.POST => this.router.post(route.path, externalPluginRequestHandler)
+                case HttpMethod.PUT => this.router.put(route.path, externalPluginRequestHandler)
+                case HttpMethod.DELETE => this.router.delete(route.path, externalPluginRequestHandler)
+                case _ => this.router.post(route.path, externalPluginRequestHandler)
             }
+            synchronized(this.lock) {
+                match (this.registeredRoutes.get(pluginId)) {
+                    case Some(list) => list.add(RouteRegistration(pluginId, route.method, route.path))
+                    case None => ()
+                }
+            }
+            success += 1
+            LogUtils.info("[ExternalPluginRouteGateway] route registered: ${pluginId} ${route.method} ${route.path}")
         }
         LogUtils.info("[ExternalPluginRouteGateway] plugin '${pluginId}' routes: success=${success}, total=${routes.size}")
         return success
     }
 
     /**
-     * 注册单条进程插件路由
-     *
-     * 将插件声明的路由注册到宿主 Router，handler 执行：
-     * 1. 中间件链宿主侧执行（认证/权限/行级/操作日志——由宿主中间件保证）
-     * 2. 序列化 HttpRequest 为 ExternalRequest（含 userId/permissions 上下文）
-     * 3. 经 JSON-RPC invoke 插件进程
-     * 4. 插件返回结果按 V4 规范回写 HttpResponse
-     * 5. 超时/Unreachable 兜底
+     * 通用入口 handler：由顶层函数 externalPluginRequestHandler 委派调用
+     * （注册期不构造任何函数值，规避 Mutex 类内闭包卡死）。
+     * 按 METHOD + PATH 反查路由绑定（支持 :param 模式），委派给 handleExternalRequest。
      */
-    private func registerSingleRoute(pluginId: String, route: ExternalRoute): Unit {
-        let handler = { req: HttpRequest, res: HttpResponse =>
-            this.handleExternalRequest(pluginId, route, req, res)
+    public func handleExternalRequestGeneric(req: HttpRequest, res: HttpResponse): Unit {
+        match (this.lookupBinding(req)) {
+            case Some(binding) => this.handleExternalRequest(binding.pluginId, binding.route, req, res)
+            case None => this.write404(res, req.method.toString(), req.uri.path)
         }
+    }
 
-        match (route.method) {
-            case HttpMethod.GET => this.router.get(route.path, handler)
-            case HttpMethod.POST => this.router.post(route.path, handler)
-            case HttpMethod.PUT => this.router.put(route.path, handler)
-            case HttpMethod.DELETE => this.router.delete(route.path, handler)
-            case _ => this.router.post(route.path, handler)  // 缺省 POST
-        }
-
-        // 记录注册信息（卸载时清理用）
-        let registration = RouteRegistration(pluginId, route.method, route.path)
+    /// 按请求反查路由绑定（PATH 支持 :param 模式匹配，逻辑对齐 Router.matchPath）
+    private func lookupBinding(req: HttpRequest): ?RouteBinding {
+        let reqMethod = req.method
+        let reqPath = req.uri.path
         synchronized(this.lock) {
-            match (this.registeredRoutes.get(pluginId)) {
-                case Some(list) => list.add(registration)
-                case None => ()
+            for ((key, binding) in this.routeBindings) {
+                let parts = key.split(" ")
+                if (parts.size != 2) {
+                    continue
+                }
+                if (parts[0] != reqMethod.toString()) {
+                    continue
+                }
+                if (this.matchPattern(parts[1], reqPath)) {
+                    return binding
+                }
             }
         }
+        return None<RouteBinding>
+    }
+
+    /// 路径模式匹配（对齐 Router.matchPath：:param 段通配）
+    private func matchPattern(pattern: String, path: String): Bool {
+        let patternParts = pattern.split("/")
+        let pathParts = path.split("/")
+        if (patternParts.size != pathParts.size) {
+            return false
+        }
+        for (i in 0..patternParts.size) {
+            let p = patternParts[i]
+            if (p.startsWith(":")) {
+                continue
+            }
+            if (p != pathParts[i]) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// 未匹配到路由绑定的兜底（理论上 Router 已先按路径命中，此处仅作安全网）
+    private func write404(res: HttpResponse, method: String, path: String): Unit {
+        LogUtils.warn("[ExternalPluginRouteGateway] no route binding for ${method} ${path}")
+        res.status(404).json("{\"errno\":404,\"errmsg\":\"route not found\"}")
     }
 
     /**
@@ -515,5 +584,22 @@ public class RouteRegistration {
         this.pluginId = pluginId
         this.method = method
         this.path = path
+    }
+}
+
+/**
+ * RouteBinding - 路由注册期写入、请求期反查的绑定记录。
+ *
+ * 采用「方法引用注册」后，handler 不再携带 per-route 闭包，而是统一走
+ * handleExternalRequestGeneric；请求期按 "METHOD PATH"（PATH 可含 :param）
+ * 反查本记录，取回 pluginId 与 route 后委派给 handleExternalRequest。
+ */
+public class RouteBinding {
+    public let pluginId: String
+    public let route: ExternalRoute
+
+    public init(pluginId: String, route: ExternalRoute) {
+        this.pluginId = pluginId
+        this.route = route
     }
 }

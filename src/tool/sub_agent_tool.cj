@@ -23,6 +23,72 @@ public struct SubAgentTiming {
     }
 }
 
+/// 子 agent 派单请求。
+/// 真派生（查 agents 表 → 造 Agent → AgentAsTool → chat）由宿主侧服务实现并经 DI 注入，
+/// 以避免 magic.tool 反向依赖 magic.app.services 触发包循环依赖（项目铁律）。
+public struct SubAgentDispatchRequest {
+    public let agentId: String
+    public let skillName: String
+    public let agentName: String
+    public let question: String
+    public let userId: String
+    public let parentTaskId: String
+    public let taskId: String
+    public let inputFiles: String
+    public let outputDir: String
+    public let languageContext: String
+    public let modelOverride: String
+    public let background: String
+
+    public init(
+        agentId: String,
+        skillName: String,
+        agentName: String,
+        question: String,
+        userId: String,
+        parentTaskId: String,
+        taskId: String,
+        inputFiles: String,
+        outputDir: String,
+        languageContext: String,
+        modelOverride: String,
+        background: String
+    ) {
+        this.agentId = agentId
+        this.skillName = skillName
+        this.agentName = agentName
+        this.question = question
+        this.userId = userId
+        this.parentTaskId = parentTaskId
+        this.taskId = taskId
+        this.inputFiles = inputFiles
+        this.outputDir = outputDir
+        this.languageContext = languageContext
+        this.modelOverride = modelOverride
+        this.background = background
+    }
+}
+
+/// 子 agent 派单结果。
+public struct SubAgentDispatchResult {
+    public let success: Bool
+    public let output: String
+    public let error: String
+    public let durationMs: Int64
+
+    public init(success: Bool, output: String, error: String, durationMs: Int64) {
+        this.success = success
+        this.output = output
+        this.error = error
+        this.durationMs = durationMs
+    }
+}
+
+/// 子 agent 派发接口：真派生由宿主侧 SubAgentDispatchServiceImpl 实现并经 DI 注入。
+public interface SubAgentDispatcher {
+    func dispatch(req: SubAgentDispatchRequest): SubAgentDispatchResult
+}
+
 public class SubAgentTool <: NativeFuncTool {
     public static let NAME = "sub_agent_execute"
 
@@ -30,6 +96,14 @@ public class SubAgentTool <: NativeFuncTool {
     Execute a sub-agent task with timing and transcript collection.
     Supports skill path, input files, and output directory parameters.
     """
+
+    // 派发实现槽：由宿主侧组合根（AgentRuntimeBridge.init）注入；magic.tool 不自依赖宿主服务。
+    private static var dispatcher: Option<SubAgentDispatcher> = None<SubAgentDispatcher>
+
+    public static func setDispatcher(d: SubAgentDispatcher): Unit {
+        dispatcher = Some(d)
+        LogUtils.info("[SubAgentTool] dispatcher injected")
+    }
 
     public init() {
         super(
@@ -41,16 +115,19 @@ public class SubAgentTool <: NativeFuncTool {
                 ("input_files", "Array of input file paths (optional)", TypeSchema.Str),
                 ("output_dir", "Output directory path (optional)", TypeSchema.Str),
                 ("language_context", "Language-specific context to inject into system prompt (optional)", TypeSchema.Str),
-                ("subagent_type", "Type of sub-agent to select (optional)", TypeSchema.Str),
+                ("subagent_type", "Type/name of sub-agent to select (optional)", TypeSchema.Str),
                 ("model_override", "Model name to override default model (optional)", TypeSchema.Str),
                 ("background", "Execute asynchronously and return task_id (optional, true/false)", TypeSchema.Str),
-                ("task_id", "Task ID for progress tracking (optional)", TypeSchema.Str)
+                ("task_id", "Task ID for progress tracking (optional)", TypeSchema.Str),
+                ("agent_id", "Target agent DB id; if set, dispatch by id instead of by name (optional)", TypeSchema.Str),
+                ("user_id", "Calling user id, used as creator and session user (optional)", TypeSchema.Str),
+                ("parent_task_id", "Parent engineering task id for grouping invocations (optional)", TypeSchema.Str)
             ],
             retType: TypeSchema.Str,
             examples: [
                 """
                 {
-                  "skill_path": "./skills/my-skill",
+                  "skill_path": "./skills/sdd",
                   "question": "Process the input data",
                   "input_files": "[\"./data/input.txt\"]",
                   "output_dir": "./output",
@@ -58,7 +135,10 @@ public class SubAgentTool <: NativeFuncTool {
                   "subagent_type": "code-editor",
                   "model_override": "deepseek-coder",
                   "background": "false",
-                  "task_id": ""
+                  "task_id": "",
+                  "agent_id": "",
+                  "user_id": "",
+                  "parent_task_id": ""
                 }
                 """
             ],
@@ -83,6 +163,10 @@ public class SubAgentTool <: NativeFuncTool {
         let modelOverride = extractString(args, "model_override")
         let background = extractString(args, "background")
         let taskId = extractString(args, "task_id")
+        let agentId = extractString(args, "agent_id")
+        let userId = extractString(args, "user_id")
+        let parentTaskId = extractString(args, "parent_task_id")
+        let skillName = skillNameFromPath(skillPath)
 
         if (question.isEmpty()) {
             return buildErrorResponse("question is required")
@@ -109,6 +193,15 @@ public class SubAgentTool <: NativeFuncTool {
         if (!modelOverride.isEmpty()) {
             transcript = transcript + "Model Override: ${modelOverride}\n"
         }
+        if (!agentId.isEmpty()) {
+            transcript = transcript + "Agent ID: ${agentId}\n"
+        }
+        if (!userId.isEmpty()) {
+            transcript = transcript + "User ID: ${userId}\n"
+        }
+        if (!parentTaskId.isEmpty()) {
+            transcript = transcript + "Parent Task ID: ${parentTaskId}\n"
+        }
         if (background == "true") {
             transcript = transcript + "Background: async execution\n"
         }
@@ -118,75 +211,52 @@ public class SubAgentTool <: NativeFuncTool {
 
         LogUtils.info("[SubAgentTool] Executing question: ${question}")
 
-        try {
-            let result = executeSubAgent(skillPath, question, inputFiles, outputDir, languageContext, subagentType, modelOverride, background, taskId, transcript)
-            
-            let endTime = DateTime.now()
-            let durationMs = (endTime - startTime).toMilliseconds()
-            let timing = SubAgentTiming(0, durationMs, durationMs)
-            
-            return buildSuccessResponse(result, timing, transcript, languageContext: languageContext, subagentType: subagentType, modelOverride: modelOverride, background: background, taskId: taskId)
-        } catch (ex: Exception) {
-            let endTime = DateTime.now()
-            let durationMs = (endTime - startTime).toMilliseconds()
-            let timing = SubAgentTiming(0, durationMs, durationMs)
-            
-            LogUtils.error("[SubAgentTool] Execution failed: ${ex.message}")
-            transcript = transcript + "\nError: ${ex.message}\n"
-            
-            return buildErrorResponse(ex.message, timing: timing, transcript: transcript)
+        let req = SubAgentDispatchRequest(
+            agentId,
+            skillName,
+            subagentType,
+            question,
+            userId,
+            parentTaskId,
+            taskId,
+            inputFiles,
+            outputDir,
+            languageContext,
+            modelOverride,
+            background
+        )
+
+        var result = SubAgentDispatchResult(false, "", "SubAgentTool dispatcher not configured", 0)
+        if (let Some(d) <- dispatcher) {
+            result = d.dispatch(req)
+        }
+
+        let endTime = DateTime.now()
+        let startMs = (startTime - DateTime.UnixEpoch).toMilliseconds()
+        let endMs = (endTime - DateTime.UnixEpoch).toMilliseconds()
+        let timing = SubAgentTiming(startMs, endMs, result.durationMs)
+
+        if (result.success) {
+            return buildSuccessResponse(result.output, timing, transcript, languageContext: languageContext, subagentType: subagentType, modelOverride: modelOverride, background: background, taskId: taskId)
+        } else {
+            transcript = transcript + "\nError: ${result.error}\n"
+            return buildErrorResponse(result.error, timing: timing, transcript: transcript)
         }
     }
 
-    private static func executeSubAgent(
-        skillPath: String,
-        question: String,
-        inputFiles: String,
-        outputDir: String,
-        languageContext: String,
-        subagentType: String,
-        modelOverride: String,
-        background: String,
-        taskId: String,
-        transcript: String
-    ): String {
-        var log = transcript
-        log = log + "Executing sub-agent task\n"
-        log = log + "Question: ${question}\n"
-
-        if (!skillPath.isEmpty()) {
-            log = log + "Loading skill from path: ${skillPath}\n"
+    private static func skillNameFromPath(skillPath: String): String {
+        if (skillPath.isEmpty()) {
+            return ""
         }
-
-        if (!inputFiles.isEmpty()) {
-            log = log + "Processing input files: ${inputFiles}\n"
+        let normalized = if (skillPath.endsWith("/")) { skillPath[0..(skillPath.size - 1)] } else { skillPath }
+        let parts = normalized.split("/")
+        var name = ""
+        for (p in parts) {
+            if (!p.isEmpty() && p != "." && p != "..") {
+                name = p
+            }
         }
-
-        if (!outputDir.isEmpty()) {
-            log = log + "Output directory: ${outputDir}\n"
-        }
-
-        if (!languageContext.isEmpty()) {
-            log = log + "Language context injected into system prompt (${languageContext.size.toString()} chars)\n"
-        }
-
-        if (!subagentType.isEmpty()) {
-            log = log + "Sub-agent type: ${subagentType}\n"
-        }
-
-        if (!modelOverride.isEmpty()) {
-            log = log + "Model override: ${modelOverride}\n"
-        }
-
-        if (background == "true") {
-            log = log + "Background execution mode - returning task ID\n"
-            let effectiveTaskId = if (taskId.isEmpty()) { "subagent_${(DateTime.now() - DateTime.UnixEpoch).toMilliseconds()}" } else { taskId }
-            LogUtils.info("[SubAgentTool] Background task: ${effectiveTaskId}")
-            return effectiveTaskId
-        }
-
-        LogUtils.info("[SubAgentTool] Sub-agent task completed for: ${question}")
-        return "Sub-agent task completed: ${question}"
+        return name
     }
 
     private static func buildSuccessResponse(output: String, timing: SubAgentTiming, transcript: String, languageContext!: String = "", subagentType!: String = "", modelOverride!: String = "", background!: String = "", taskId!: String = ""): String {

@@ -1,0 +1,21 @@
+# grid Demos
+
+| demoId | 名称 | 描述 | 代码文件 |
+|--------|------|------|----------|
+| event-click-event | 点击事件 | <br>        <p>在 <code>grid</code> 标签上配置：</p><br>        <p> <code>header-cell-click</code> 可以监听到表头的点击事件。</p><br>        <p> <code>header-cell-dblclick</code> 可以监听到表头的双击事件。</p><br>        <p> <code>cell-click</code> 可以监听到单元格的点击事件。</p><br>        <p> <code>cell-dblclick</code> 可以监听到单元格的双击事件。</p><br>        <p> <code>footer-cell-click</code> 可以监听到表尾单元格的点击事件。</p><br>        <p> <code>footer-cell-dbclick</code> 可以监听到表尾单元格的双击事件。</p><br>         | grid/event/click-event.vue |
+| event-context-menu-event | 右键相关事件 | <br>          <p>在 <code>grid</code> 标签上配置：</p><br>          <p> <code>header-cell-context-menu</code> 可以监听右键点击表头事件。</p><br>          <p> <code>footer-cell-context-menu</code> 可以监听右键点击表尾单元格事件。</p><br>           | grid/event/context-menu-event.vue |
+| event-cell-mouse-event | 鼠标进入离开单元格事件 | <br>        <p>在 <code>grid</code> 标签上配置：</p><br>        <p> <code>cell-mouseenter</code> 可以监听到鼠标进入单元格事件。</p><br>        <p> <code>cell-mouseleave</code> 可以监听到鼠标离开单元格事件。</p><br>         | grid/event/cell-mouse-event.vue |
+| event-edit-event | 单元格编辑相关事件 | <br>          <p>在 <code>grid</code> 标签上配置：</p><br>          <p> <code>edit-actived</code> 单元格被激活编辑时触发的事件。</p><br>          <p> <code>edit-closed</code> 单元格编辑完成触发该事件。</p><br>          <p> <code>edit-disabled-event</code> 当单元格激活时如果是禁用状态时会触发该事件，同时需要在 <code>edit-config</code> 配置中的 <code>activeMethod</code> 方法控制单元格是否可以编辑（返回 <code>true</code> 可以编辑，反之亦然）。</p><br>           | grid/event/edit-event.vue |
+| event-grid-scroll-event | 表格滚动事件 | <p>在 <code>grid</code> 标签上配置 <code>scroll</code> 事件，可以监听表格的滚动。</p><br> | grid/event/grid-scroll-event.vue |
+| event-current-change-event | 行选中事件 | <p>只对 在 <code>grid</code> 标签上配置 <code>highlightCurrentRow</code> 有效，当手动选中行时触发的事件。</p><br> | grid/event/current-change-event.vue |
+| event-radio-change-event | 单选行选中事件 | <p>在 <code>grid</code> 标签上配置 <code>radio-change</code> 可以监听勾选行事件<br>只对 type=radio 有效，当手动勾选并且值发生改变时触发的事件。</p><br> | grid/event/radio-change-event.vue |
+| event-select-event | 多选行选中事件 | <br>          <p>在 <code>grid</code> 标签上配置：</p><br>          <p> <code>select-change</code> 可以监听到勾选行事件<br>只对 type=selection 有效，当手动勾选并且值发生改变时触发的事件。</p><br>          <p> <code>select-all</code> 有效<br>只对 type=selection 有效，当手动勾选全选时触发的事件。</p><br>           | grid/event/select-event.vue |
+| event-page-change-event | 分页发生改变事件 | <p>只对 在 <code>grid</code> 标签上配置 <code>page-change</code> 可以监听分页发生改变事件。</p><br> | grid/event/page-change-event.vue |
+| event-page-before-change-event | 分页发生改变前的事件 | <p>通过在 <code>grid</code> 标签上配置 <code>is-before-page-change</code> 选择是否打开页面改变时的前置处理特性。在值为 <code>true</code> 时，翻页操作或者改变页大小操作不会立即生效，留给用户处理业务逻辑，之后通过调用预留的 <code>callback</code> 或者 <code>rollback</code> 使之生效或者失效；通过事件 <code>before-page-change</code> 在进行翻页操作或者改变页大小操作时触发，然后控制是否跳转分页。</p><br> | grid/event/page-before-change-event.vue |
+| event-resizable-change-event | 列宽改变事件 | <p>在 <code>grid</code> 标签上配置 <code>resizable-change</code> 可以监听列宽改变事件。</p><br> | grid/event/resizable-change-event.vue |
+| event-toggle-expand-change-event | 行展开收起事件 | <p>在 <code>grid</code> 标签上配置 <code>toggle-expand-change</code> 可以监听到行展开收起事件。</p><br> | grid/event/toggle-expand-change-event.vue |
+| event-toggle-tree-change-event | 树节点展开收起事件 | <p>在 <code>grid</code> 标签上配置 <code>toggle-tree-change</code> 可以监听树节点展开收起事件。</p><br> | grid/event/toggle-tree-change-event.vue |
+| event-toolbar-button-click-event | 工具栏点击事件 | <p>在 <code>grid</code> 标签上配置 <code>toolbar-button-click</code> 可以监听工具栏点击事件。</p><br> | grid/event/toolbar-button-click-event.vue |
+| event-valid-error-event | 校验不通过事件 | <p>在 <code>grid</code> 标签上配置 <code>valid-error</code> 监听校验不通过事件。</p><br> | grid/event/valid-error-event.vue |
+| event-grid-events | 事件对象 | <p>表格属性 <code>envents</code> 设置表格的事件对象。<br></p><br> | grid/event/grid-events.vue |
+| event-get-row-method | 获取表格行方法 | <div class="tip custom-block"><p class="custom-block-title">获取行的方法</p><br><p> <code>getCurrentRow</code> 获取当前行<br><code>getRowIndex</code> 获取当前行号<br><code>getRadioRow</code> Radio 单选选中行<br><code>getRowById</code> 通过 rowId 获取当前行<br><code>getRowNode</code> 通过 tr 元素获取行信息。</p><br></div><br> | grid/event/get-row-method.vue |

@@ -38,7 +38,8 @@ tables:
       - {name: result, type: text, required: false, example: "交付 3 份文档 + 1 个技能包", comment: 完成后回填}
       - {name: error_message, type: text, required: false, example: "round 3 验核失败：缺 2 份 deliverable", comment: 失败原因}
       - {name: agent_id, type: uuid, required: false, example: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", comment: 归属 Agent}
-      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人}
+      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人（执行者：委派场景下为执行 agent 绑定的 uctoo_user.id）}
+      - {name: owner_user_id, type: uuid, required: false, example: "505cf909-5e0e-4dde-b215-74274d2cc548", comment: 归属者（委派任务的真人用户 id）；与 creator 区分，双账号身份 design D1}
       - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删；查询一律带 deleted_at IS NULL}
     write_rule:
       - 创建根任务：parent_task_id 为 null, status=0
@@ -79,6 +80,8 @@ tables:
       - {name: id, type: uuid, required: true, example: "5c4b3a29-1827-4d6e-8f50-a1b2c3d4e5f6", comment: 主键}
       - {name: status, type: int4, required: true, enum: [1, 2], example: 1, comment: "1正常/2禁用"}
       - {name: concurrentable, type: bool, required: false, example: false, comment: "false 时同一任务新触发必须等待前一次完成"}
+      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人（执行者：委派场景下为执行 agent 绑定的 uctoo_user.id）}
+      - {name: owner_user_id, type: uuid, required: false, example: "505cf909-5e0e-4dde-b215-74274d2cc548", comment: 归属者（委派任务的真人用户 id）；与 creator 区分，双账号身份 design D1}
     write_rule:
       - 暂停/恢复只改 status，不改任务本身
       - concurrentable=false 时必须串行；并发触发属于实现缺陷，不是配置项
@@ -125,7 +128,8 @@ tables:
       - {name: artifact_type, type: varchar(50), required: true, enum: [code, config, doc, test, report, data, artifact], example: "doc", comment: 小写枚举值}
       - {name: verification_status, type: varchar(20), required: true, enum: [pending, verifying, passed, failed], example: "passed", comment: 默认 pending}
       - {name: verification_result, type: jsonb, required: false, example: '{"checks":[{"name":"exists","passed":true},{"name":"not_empty","passed":true}],"summary":"ok","passed":true}', comment: 文本列存 JSON 串}
-      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人}
+      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人（执行者：委派场景下为执行 agent 绑定的 uctoo_user.id）}
+      - {name: owner_user_id, type: uuid, required: false, example: "505cf909-5e0e-4dde-b215-74274d2cc548", comment: 归属者（委派任务的真人用户 id）；与 creator 区分，双账号身份 design D1}
       - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删}
     write_rule:
       - 每步产出后追加一条记录，**不做 UPDATE 覆盖**（append-only 审计，spec §5.13）
@@ -152,7 +156,8 @@ tables:
       - {name: optimization_plan, type: text, required: false, example: "产出前强制检查非空，并对空文件触发补执行", comment: "只出方案，不自动改代码/配置（tasks.md 7.3 环节 3）"}
       - {name: anti_regression, type: text, required: false, example: "[P1] 空文件未拦截 → 补 '产出后必校验非空' 到 SKILL.md 约束区\n（约束注入失败：SKILL.md 缺少 BEGIN: AUTO-CONSTRAINTS 标记块）", comment: 脚本产出 + 分级结论 + 注入结果}
       - {name: skill_md_updates, type: jsonb, required: false, example: '[{"skill":"long-running-task","section":"约束","before":"","after":"产出后立即校验非空"}]', comment: 文本列存 JSON 串}
-      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人}
+      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 创建人（执行者：委派场景下为执行 agent 绑定的 uctoo_user.id）}
+      - {name: owner_user_id, type: uuid, required: false, example: "505cf909-5e0e-4dde-b215-74274d2cc548", comment: 归属者（委派任务的真人用户 id）；与 creator 区分，双账号身份 design D1}
       - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删}
     write_rule:
       - 每个自进化轮次追加一条，round 同一 agent 下递增

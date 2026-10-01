@@ -60,6 +60,9 @@ public class DbInfoRoute {
 
         router.post("/api/v1/uctoo/db_info/generate-all-web", controller.generateAllWeb)
 
+        // 插件轨生成（plugingen）：插件名与表名解耦，参数较多个，走 JSON body
+        router.post("/api/v1/uctoo/db_info/generate-plugin", controller.generatePlugin)
+
         return router
     }
 }

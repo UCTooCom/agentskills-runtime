@@ -1,0 +1,32 @@
+{
+  "queries": [
+    {
+      "q": "2025年高考化学真题 压轴题 解析",
+      "ok": true,
+      "charset": "utf-8",
+      "html_len": 97872,
+      "n_results": 0,
+      "results": [],
+      "file": "r4_bing_0.html"
+    },
+    {
+      "q": "2025高考化学 全国卷 最后一题 有机合成",
+      "ok": true,
+      "charset": "utf-8",
+      "html_len": 102074,
+      "n_results": 0,
+      "results": [],
+      "file": "r4_bing_1.html"
+    },
+    {
+      "q": "2025年高考化学试题及答案 完整版",
+      "ok": true,
+      "charset": "utf-8",
+      "html_len": 100603,
+      "n_results": 0,
+      "results": [],
+      "file": "r4_bing_2.html"
+    }
+  ],
+  "candidates": []
+}

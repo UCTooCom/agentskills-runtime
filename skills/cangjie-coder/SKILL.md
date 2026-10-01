@@ -1,22 +1,35 @@
 ---
 name: cangjie-coder
-description: 仓颉代码编写技能（编排器模式）。当用户需要编写、修改、重构或优化任何 .cj 仓颉代码文件时,必须使用此技能。通过4个专用subagent协作完成：doc-consultant(文档查阅)→code-searcher(代码检索)→code-editor(代码编辑)→code-verifier(代码验证)，验证失败时自动修复闭环（最多3次）。此技能确保所有仓颉代码完全符合语言规范,并提供最佳实践指导。
-version: 3.0.0
+description: 仓颉代码编写技能（纯技能形态，不派生子 agent）。当用户需要编写、修改、重构或优化任何 .cj 仓颉代码文件时,必须使用此技能。主 agent 加载后按四步工作流自行执行：查阅文档 → 检索代码片段 → 编辑适配 → 写入文件，再按验证结果修复闭环（最多 3 次）。此技能确保所有仓颉代码完全符合语言规范,并提供最佳实践指导。
+version: 4.0.0
 author: OpenCangjie Team
-dependencies:
-  - cangjie-language-guide
-  - cangjie-full-docs
-agents:
-  - doc-consultant
-  - code-searcher
-  - code-editor
-  - code-verifier
+# 知识库依赖：与本项目同目录的 ../CangjieSkills（渐进披露知识库，经 scripts/search_docs.py 查询），
+# 不再依赖旧版 cangjie-language-guide / cangjie-full-docs 静态文档布局。
+dependencies: []
+# 说明：原 `agents:` 声明键与 skills/cangjie-coder/agents/ 目录已按 SDD tasks.md v3/T-18
+# **下线**——"换脑子的才派生，换说明书的用技能"：编码不需要换脑子，需要的是确定的
+# API 依据与工程内既有范式。四角色职责已并入下方「四步工作流」，由主 agent 直接执行。
 scripts:
-  - cangjie_syntax_check.py
-  - cangjie_compile.py
-  - cangjie_test_runner.py
-  - cangjie_fix_suggest.py
+  - cangjie_syntax_check.ts  # TypeScript 版本（推荐）
+  - cangjie_compile.ts       # TypeScript 版本（推荐）
+  - cangjie_test_runner.ts   # TypeScript 版本（推荐）
+  - cangjie_fix_suggest.ts   # TypeScript 版本（推荐）
+  - cangjie_syntax_check.py  # Python 降级备选
+  - cangjie_compile.py       # Python 降级备选
+  - cangjie_test_runner.py   # Python 降级备选
+  - cangjie_fix_suggest.py   # Python 降级备选
 ---
+
+## 脚本运行说明
+
+本技能的脚本提供 TypeScript 和 Python 两个版本，**优先使用 TypeScript 版本**以减少对 Python 运行环境的依赖。
+
+- **TypeScript 版本（推荐）**：`scripts/*.ts`
+  - 运行方式：`node --experimental-strip-types scripts/<script>.ts [参数]`
+  - 依赖：Node.js ≥22.6（推荐 v23.10+），无需额外 npm 包
+- **Python 版本（降级备选）**：`scripts/*.py`
+  - 运行方式：`python scripts/<script>.py [参数]`
+  - 仅在 TypeScript 版本运行出错时降级使用
 
 # Cangjie Coder 技能（编排器模式）
 
@@ -35,29 +48,37 @@ scripts:
 
 **核心工作流程**: 查阅文档 → 检索代码 → 编辑适配 → 验证代码（失败时自动修复闭环）
 
-## 编排器模式
+## 四步工作流（纯技能形态）
 
-本技能以编排器模式运行，通过4个专用subagent协作完成代码编写：
+> **T-18 变更（2026-09-28）**：早期的「编排器模式 + 四个专用 subagent」已下线——
+> `skills/cangjie-coder/agents/` 目录已删除，四个角色（doc-consultant / code-searcher /
+> code-editor / code-verifier）的职责**并入下面这四步**，由**主 agent 自己按序执行**。
+> 依据：SDD tasks.md v3 决策「换脑子的才派生，换说明书的用技能」——编码不需要换脑子，
+> 需要的是确定的 API 依据与工程内既有范式。派生带来的上下文重建成本不再划算。
+
+本技能由主 agent 加载后按四步执行（不再派生任何子 agent）：
 
 ```
-cangjie-coder(编排器)
-    ├── Step 1: doc-consultant    → 查阅CangjieSkills文档
-    ├── Step 2: code-searcher     → 检索代码片段
-    ├── Step 3: code-editor       → 编辑适配 + 写入文件
-    └── Step 4: code-verifier     → 验证代码
+主 agent（已加载 cangjie-coder）
+    ├── Step 1: 查文档   → 查阅 CangjieSkills 文档（原 doc-consultant 职责）
+    ├── Step 2: 检索代码 → 检索工程内既有代码片段（原 code-searcher 职责）
+    ├── Step 3: 编辑适配 → 复制 + 最小适配 + 写入文件（原 code-editor 职责）
+    └── Step 4: 验证     → 依据编译日志/复核清单自查（原 code-verifier 职责）
            │
-           └── (验证失败) → code-editor(修复) → code-verifier(重新验证)
-                              最多重试3次
+           └── (验证失败) → 回到 Step 3 修复 → Step 4 重新验证，最多 3 次
 ```
 
-### Subagent说明
+### 四步职责对照（原 Subagent → 现由主 agent 直接执行）
 
-| Subagent | 职责 | 工具 | 输入 | 输出 |
-|----------|------|------|------|------|
-| doc-consultant | 文档查阅 | file_read, file_search | topic, detail_level | 文档摘要 |
-| code-searcher | 代码检索 | file_read, file_search | query, doc_summary | 代码片段列表 |
-| code-editor | 代码编辑 | file_read, file_write, file_edit | task_description, doc_summary, code_snippets | 代码文件 |
-| code-verifier | 代码验证 | file_read, cli_execute, file_edit | file_path, verify_level | 验证结果 |
+| 步骤 | 原 Subagent | 职责 | 工具 | 输入 | 输出 |
+|------|-------------|------|------|------|------|
+| Step 1 | doc-consultant | 文档查阅 | search_docs.py, file_read | topic, detail_level | 文档摘要 |
+| Step 2 | code-searcher | 代码检索 | file_read, file_search | query, doc_summary | 代码片段列表 |
+| Step 3 | code-editor | 代码编辑 | file_read, file_write, file_edit | task_description, doc_summary, code_snippets | 代码文件 |
+| Step 4 | code-verifier | 代码验证 | file_read, file_edit | file_path, verify_level | 验证结果 |
+
+> 注：Step 4 **不执行 `cjpm build`**——编译与日志回传由人工在独立终端完成（项目职责边界），
+> AI 只依据人工回传的日志做代码分析与修复建议。
 
 ### 自动修复闭环
 
@@ -69,7 +90,7 @@ cangjie-coder(编排器)
 
 ## 关键约束
 
-- ⚠️ **必须先查阅文档**: 在编写任何仓颉代码前,必须先通过doc-consultant查阅 CangjieSkills 技能获取语言规范和最佳实践
+- ⚠️ **必须先查阅文档**: 在编写任何仓颉代码前,必须先通过 `search_docs.py` 查阅 CangjieSkills 技能获取语言规范和最佳实践
 - ⚠️ **禁止直接生成代码**: 不得直接使用大模型生成仓颉代码,必须先通过code-searcher检索现有代码片段或参考文档示例
 - ⚠️ **必须符合规范**: 所有 .cj 文件必须符合仓颉词法和语法规范
 - ⚠️ **工作流程**: 查阅(Consult) → 检索(Retrieval) → 编辑(Editing) → 验证(Verification)
@@ -83,7 +104,7 @@ cangjie-coder(编排器)
 ### CangjieSkills 技能路径
 
 ```
-CANGJIE_SKILLS_PATH: D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\CangjieSkills\.opencode\skills
+CANGJIE_SKILLS_PATH: ../CangjieSkills
 ```
 
 ### 仓颉编程资料目录
@@ -93,7 +114,7 @@ CANGJIE_CODE_REPOSITORY: D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\ap
 ```
 
 **重要**: 
-- CangjieSkills 技能路径用于查阅官方文档和语言规范
+- CangjieSkills 技能路径指向最新版官方技能根目录，采用脚本化渐进披露检索（`<skill-root>/scripts/search_docs.py`），不要绕过脚本直接读取知识库文件
 - 仓颉编程资料目录用于检索现有代码片段
 - 两个路径可在使用本技能时由用户配置
 
@@ -112,63 +133,76 @@ CANGJIE_CODE_REPOSITORY: D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\ap
 
 #### 1.1 确定需求主题
 
-根据用户请求,确定需要查阅的主题:
+根据用户请求,确定需要查阅的主题与不确定的符号:
 
-| 需求类型 | 查阅主题 | 参考文档路径 |
+| 需求类型 | 查询域 (--domain) | 典型查询示例 |
 |---------|---------|-------------|
-| 基础语法 | 语言基础 | `cangjie-language-guide/SKILL.md#1-语言基础` |
-| 类型定义 | 类型系统 | `cangjie-language-guide/SKILL.md#2-类型系统` |
-| 函数编写 | 函数与闭包 | `cangjie-language-guide/SKILL.md#3-函数与闭包` |
-| 标准库使用 | 标准库 | `cangjie-language-guide/SKILL.md#4-标准库` |
-| 工具使用 | 工具链 | `cangjie-language-guide/SKILL.md#5-工具链` |
-| 高级特性 | 高级特性 | `cangjie-language-guide/SKILL.md#6-高级特性` |
-| 错误处理 | 错误处理与调试 | `cangjie-language-guide/SKILL.md#7-错误处理与调试` |
-| 代码质量 | 最佳实践 | `cangjie-language-guide/SKILL.md#8-最佳实践` |
+| 基础语法 | language | `--query "for 循环"` / `--query "pattern match"` |
+| 类型定义 | language | `--query "class 定义"` / `--query "enum 泛型"` |
+| 标准库 API | std | `--query "ArrayList reverse"` / `--query "HashMap iteration"` |
+| 扩展标准库 | stdx | `--query "stdx.net.http HttpClient"` |
+| 工具链 | tools | `--query "cjpm build"` / `--query "cjpm init"` |
+| 应用示例 | examples | `--query "http server 示例"` / `--query "websocket 示例"` |
 
-#### 1.2 查阅主文档
+> 新版 CangjieSkills 采用"主题索引 → 细分索引/API 成员表 → 叶子契约与示例"的渐进披露结构，统一通过 `<skill-root>/scripts/search_docs.py` 脚本查询，不要绕过脚本直接 file_read 知识库文件。把 `CANGJIE_SKILLS_PATH`（`../CangjieSkills`）记为 `<skill-root>`。
 
-使用 `file_read` 工具查阅 `cangjie-language-guide/SKILL.md`:
+#### 1.2 批量摘要查询（首选）
 
-```json
-{
-  "toolcall": {
-    "thought": "查阅仓颉语言指南中的HTTP服务器相关内容",
-    "name": "file_read",
-    "params": {
-      "path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\CangjieSkills\\.opencode\\skills\\cangjie-language-guide\\SKILL.md"
-    }
-  }
-}
+第一次知识访问使用一个脚本进程中的批量查询，每个独立符号或意图各写一个 `--query`；只有必须共同出现的"类型 + 操作"才放在同一查询中。摘要足够时停止，不为简单成员再展开正文。
+
+```bash
+python <skill-root>/scripts/search_docs.py \
+  --query "ArrayList reverse" \
+  --query "Int64 writeBigEndian" \
+  --query "cjpm run arguments" \
+  --max-results 2
 ```
 
-#### 1.3 查阅参考文档
+- 默认每项返回 3 个候选；精确符号可用 `--max-results 1`，歧义时再扩大
+- 可用 `--domain language|std|stdx|tools|examples` 限域
+- 不要把互不相关的符号塞进一个长查询
+- 结果标记 `ordinary_use_ready` 时，已包含普通调用所需的活动签名与契约；仅在任务还涉及异常、边界或完整示例时展开叶子
 
-如需深入了解特定主题,查阅 `references/` 目录:
+#### 1.3 浏览索引树 / 批量读取叶子
 
-```json
-{
-  "toolcall": {
-    "thought": "查阅HTTP服务器的详细文档",
-    "name": "file_read",
-    "params": {
-      "path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\CangjieSkills\\.opencode\\skills\\cangjie-language-guide\\references\\http_server\\SKILL.md"
-    }
-  }
-}
+不熟悉的领域先读最窄索引；需要参数、异常、限制或完整示例时再把选定 ID 合并为一次叶子查询：
+
+```bash
+# 浏览索引树
+python <skill-root>/scripts/search_docs.py --node language.collections --view indexes
+python <skill-root>/scripts/search_docs.py "集合类型" --view indexes
+
+# 批量读取叶子正文
+python <skill-root>/scripts/search_docs.py \
+  --query "ArrayList reverse" \
+  --query "HashMap tuple iteration" \
+  --view leaves
 ```
 
-**参考文档索引**:
-- **语言基础**: `basic_data_type/`, `function/`, `const/`, `for/`, `pattern_match/`, `error_handle/`, `concurrency/`, `ffi/`
-- **类型系统**: `class/`, `struct/`, `enum/`, `interface/`, `generic/`, `extend/`, `type_system/`
-- **标准库**: `array/`, `arraylist/`, `hashmap/`, `hashset/`, `string/`, `option/`, `fs/`, `iostream/`, `json/`, `socket/`
-- **工具链**: `project_management/`, `compile/`, `cjc/`, `cjfmt/`, `cjlint/`, `unittest/`
-- **高级特性**: `macro/`, `reflect_and_annotation/`, `http_client/`, `http_server/`, `websocket/`, `tls/`
+- `indexes` 返回节点下全部非叶子页面，API 类型页本身就是成员列表
+- `leaves` 可把多个独立 `--query` 与多个精确 `--node` 一次解析、合并并去重
+- 宽 API/主题会被拒绝，先读索引并用普通查询选出精确 ID，不要把 `--force` 当作常规流程
+- 应用示例固定为"场景分类 → 示例叶子"：先普通查询场景，选中后读取一个或少量示例 ID
 
-#### 1.4 提取关键信息
+#### 1.4 stdx 自动配置（如涉及扩展标准库）
 
-从文档中提取:
+项目导入 `stdx.*` 时，先运行脚本按 `cjc -v` 选择兼容 stdx 并全局复用 `~/.cangjie/stdx/`：
+
+```bash
+python <skill-root>/scripts/setup_stdx.py --project <project-root>
+# 离线：--archive <release.zip> --offline
+# 配置已有构建的项目后先 cjpm clean
+```
+
+#### 1.5 查询缺口处理
+
+无结果时依次缩短查询、改用仓颉精确符号、添加 `--domain`，或从最窄相关索引选择叶子；不要枚举知识库文件。若活动知识页仍缺少契约，使用当前工具链构造最小可复现实验并在交付中指出知识缺口，不凭其他语言经验猜写 API。
+
+#### 1.6 提取关键信息
+
+从查询结果中提取:
 - ✅ 语法规范和关键字
-- ✅ API 使用方法
+- ✅ API 签名与使用方法（包、命名参数、返回值、异常）
 - ✅ 最佳实践建议
 - ✅ 常见错误和注意事项
 - ✅ 代码示例
@@ -446,16 +480,12 @@ project/
 
 #### 步骤 1: 查阅文档
 
-```json
-{
-  "toolcall": {
-    "thought": "查阅仓颉语言指南中的HTTP服务器相关内容",
-    "name": "file_read",
-    "params": {
-      "path": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\CangjieSkills\\.opencode\\skills\\cangjie-language-guide\\references\\http_server\\SKILL.md"
-    }
-  }
-}
+```bash
+python ../CangjieSkills/scripts/search_docs.py \
+  --query "http server" \
+  --query "HttpServer listen" \
+  --domain examples \
+  --max-results 2
 ```
 
 **提取关键信息**:
@@ -513,7 +543,7 @@ project/
 
 #### 步骤 1: 查阅文档
 
-查阅 `cangjie-language-guide/references/class/SKILL.md` 了解:
+查阅 `class` 相关知识（通过 `<skill-root>/scripts/search_docs.py` 批量查询 `--query "class 定义" --query "class 成员" --domain language`）了解:
 - class 定义语法
 - 成员变量声明
 - 构造函数定义
@@ -647,15 +677,16 @@ public class User {
 
 ### 推荐工具
 
-1. **file_read**: 读取 CangjieSkills 文档和代码片段
-2. **file_search**: 在代码片段库中搜索相关代码
-3. **file_write**: 将修改后的代码写入目标文件
-4. **directory_create**: 创建必要的目录结构
+1. **bash**: 运行 `search_docs.py` / `setup_stdx.py` 查询 CangjieSkills 知识库
+2. **file_read**: 读取代码片段与查询结果
+3. **file_search**: 在代码片段库中搜索相关代码
+4. **file_write**: 将修改后的代码写入目标文件
+5. **directory_create**: 创建必要的目录结构
 
 ### 工具调用顺序
 
 ```
-1. file_read (查阅 CangjieSkills 文档)
+1. bash (运行 search_docs.py 查阅 CangjieSkills 知识库)
    ↓
 2. file_search (检索代码片段)
    ↓
@@ -809,11 +840,13 @@ public class User {
 
 ## 参考文档
 
-### CangjieSkills 文档
+### CangjieSkills 文档（新版渐进披露知识库）
 
-- **主文档**: `cangjie-language-guide/SKILL.md`
-- **参考文档**: `cangjie-language-guide/references/`
-- **原始文档**: `cangjie-full-docs/SKILL.md`
+- **技能根目录**: `../CangjieSkills`（`CANGJIE_SKILLS_PATH`，记为 `<skill-root>`）
+- **查询入口**: `<skill-root>/scripts/search_docs.py`（批量摘要查询 / 索引浏览 / 叶子读取）
+- **stdx 配置**: `<skill-root>/scripts/setup_stdx.py`
+- **知识库索引**: `<skill-root>/references/index.md`（language/、std/、stdx/、tools/、examples/ 多域）
+- **架构/测试/维护手册**: `<skill-root>/docs/`（architecture.md、testing.md、maintenance.md）
 
 ### 官方文档
 

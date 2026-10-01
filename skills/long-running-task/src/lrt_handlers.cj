@@ -60,6 +60,10 @@ public class LrtHandlers {
                 let path = LrtHandlers.extractString(fields, "path")
                 let reqMethod = LrtHandlers.extractString(fields, "method")
 
+                // 双账号身份（design D1）：登记宿主透传的 creator(执行者) / owner_user_id(归属者)，
+                // 供本请求内插件自身写库（子任务/产物/自进化）在无显式值时作为默认身份。
+                LrtPersistService.setIdentityFromRequest(fields)
+
                 // 自定义路由优先匹配
                 if (reqMethod == "POST" && path.contains("/long_running_task/lrt-plan")) {
                     return LrtHandlers.handleLrtPlan(fields, args)
@@ -144,7 +148,9 @@ public class LrtHandlers {
                             }
                         }
                         let userId = LrtHandlers.extractString(fields, "userId")
-                        if (!userId.isEmpty()) {
+                        // 双身份：body 显式给了 creator（执行者）就沿用，不再被 userId 覆盖；
+                        // 最终兜底与空串清理统一在 LrtPersistService.insert 内完成。
+                        if (!userId.isEmpty() && dataMap.get("creator").isNone()) {
                             dataMap["creator"] = JsonValue.String(userId)
                         }
                         let permArr = LrtHandlers.extractPermissions(fields)
@@ -420,12 +426,29 @@ public class LrtHandlers {
                         }
                         let userId = LrtHandlers.extractString(fields, "userId")
                         let permArr = LrtHandlers.extractPermissions(fields)
-                        // 1) 先创建根任务（parent_task_id=NULL, status=0），拿到 task_id
-                        let payloadMap = HashMap<String, JsonValue>()
-                        payloadMap["goal"] = JsonValue.String(goal)
-                        payloadMap["created_via"] = JsonValue.String("lrt-plan")
-                        let created = LrtPersistService.createRootTask(goal, payloadMap, userId, permArr)
-                        let rootTaskId = LrtHandlers.extractCreatedId(created)
+                        // 根任务来源（design D1 / 双入口收敛）：
+                        // 宿主 submitTask 已先建根任务（含 agent_id / creator / owner_user_id 三元组），
+                        // 并把该 task_id 透传给 lrt-plan。插件应**规划进该已存在任务**，
+                        // 而非再 createRootTask 产生一条孤儿根任务——
+                        // 旧实现每次 plan 都新建根任务，既与宿主任务争用同一 crontab.parameters.taskId
+                        // （execute 实际跑的是无规划的宿主主任务，故"只执行一步"），又因 createRootTask
+                        // 漏写 agent_id 触发 NOT NULL 报错使整条链路卡死。
+                        let providedTaskId = LrtHandlers.extractStringFromMap(bodyMap, "task_id")
+                        var rootTaskId = providedTaskId
+                        var created: JsonValue = JsonValue.Null
+                        if (rootTaskId.isEmpty()) {
+                            // 兜底：无宿主任务时（如直接 HTTP 调用 lrt-plan）由插件自创根任务
+                            let payloadMap = HashMap<String, JsonValue>()
+                            payloadMap["goal"] = JsonValue.String(goal)
+                            payloadMap["created_via"] = JsonValue.String("lrt-plan")
+                            created = LrtPersistService.createRootTask(goal, payloadMap, userId, permArr)
+                            rootTaskId = LrtHandlers.extractCreatedId(created)
+                        } else {
+                            // 已存在宿主根任务：回查其内容用于响应（含 agent_id），直接拿去规划
+                            created = LrtPersistService.queryOne(
+                                LrtPersistService.TABLE_AGENT_TASKS, "id = '${rootTaskId}' AND deleted_at IS NULL", userId, permArr
+                            )
+                        }
                         // 2) AI 自主解析目标 + 任务树分解 + 技能发现，并将 plan 持久化到 agent_tasks.payload
                         //    （taskId 非空时 plan() 内部会经 createChildTask 写入子任务树）
                         let planResult = LrtPlanner.plan(goal, rootTaskId, userId, permArr)
@@ -475,7 +498,8 @@ public class LrtHandlers {
                         // Ch4.1：这里曾经是硬编码 30——改 plugin.yaml 完全不起作用。
                         // 现在统一从 plugin.yaml 的 config.maxRounds 读（LRT_MAX_ROUNDS 可覆盖），
                         // 使"宿主侧 AgentExecutionExecutor.maxRounds"与"插件侧收敛上限"同源。
-                        let maxRounds: Int64 = LrtConfig.maxRounds()
+                        // §11.2：改读带 agentId 的覆盖版本（未配覆盖时回落 config 段，行为不变）
+                        let maxRounds: Int64 = LrtConfig.maxRoundsFor(agentId)
                         let execPerm = ArrayList<JsonValue>()
                         for (p in permArr) { execPerm.add(p) }
                         let execTaskId = taskId
@@ -746,10 +770,10 @@ public class LrtHandlers {
     /// 获取表的可写字段白名单
     private static func getWritableColumns(table: String): Array<String> {
         if (table == "long_running_task_artifact") {
-            return ["task_id", "artifact_path", "artifact_type", "verification_status", "verification_result", "creator", "deleted_at"]
+            return ["task_id", "artifact_path", "artifact_type", "verification_status", "verification_result", "creator", "owner_user_id", "deleted_at"]
         }
         if (table == "long_running_task_evolution") {
-            return ["agent_id", "round", "root_cause", "optimization_plan", "anti_regression", "skill_md_updates", "creator", "deleted_at"]
+            return ["agent_id", "round", "root_cause", "optimization_plan", "anti_regression", "skill_md_updates", "creator", "owner_user_id", "deleted_at"]
         }
         return Array<String>(0, { _ => "" })
     }

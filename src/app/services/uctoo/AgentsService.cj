@@ -89,6 +89,9 @@ public class AgentsService {
             if (entity.description.isSome()) {
                 existingEntity.description = entity.description
             }
+            if (entity.skillName.isSome()) {
+                existingEntity.skillName = entity.skillName
+            }
             if (entity.status.isSome()) {
                 existingEntity.status = entity.status
             }

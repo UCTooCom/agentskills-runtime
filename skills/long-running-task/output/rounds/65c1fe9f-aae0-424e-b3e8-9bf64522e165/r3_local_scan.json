@@ -1,0 +1,574 @@
+{
+ "21cnjy.html": {
+  "size": 1350379,
+  "plain_len": 22128,
+  "chem_kinds": 3,
+  "top": []
+ },
+ "chsi.html": {
+  "size": 48749,
+  "plain_len": 2732,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "gaokao_cn.html": {
+  "size": 9297,
+  "plain_len": 18,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "gaosan_1125274.html": {
+  "size": 15503,
+  "plain_len": 2465,
+  "chem_kinds": 5,
+  "top": [
+   {
+    "score": 3,
+    "text": "必修模块总分约60分，覆盖基础理论与应用。必修一(20分)侧重基础理论(6分)和元素化合物性质(14分);必修二(约40分)包含物质结构、能量转化、有机化学基础(17-23分)等内容。选择性必修模块(约62分)分为化学反应原理(24分)、物质结构与性质(19分)、有机化学基础(19分)三部分，体现知识深度拓展。"
+   },
+   {
+    "score": 3,
+    "text": "选择题以单项选择为主，分值36-56分，覆盖基础知识快速判断;非选择题包括填空题(10-20分)、简答题(20-30分)和实验题(20-25分)。简答题侧重逻辑表述，如反应机理分析或工业流程评价;填空题则注重精准表达，如化学方程式书写或计算结果。"
+   }
+  ]
+ },
+ "gaosan_1125350.html": {
+  "size": 15863,
+  "plain_len": 2580,
+  "chem_kinds": 8,
+  "top": [
+   {
+    "score": 4,
+    "text": "对有多种离子参加的氧化还原反应，要注意反应的顺序问题，按“强先弱后”的原则来书写或判断，即氧化性(或还原性)强的优先发生反应，氧化性(或还原性)弱的后发生反应。一般说，氧化性强的物质能够制取氧化性弱的物质，还原性强的物质能够制取还原性弱的物质。"
+   },
+   {
+    "score": 4,
+    "text": "认真审题，首先看离子反应哪些离子与氧化还原反应的关系，给参与反应的离子按氧化性或还原性排队。"
+   },
+   {
+    "score": 3,
+    "text": "化学是一种综合性的科学基础课程，其考试的重点是化学基本理论、实验技能和实际运用。据了解，高考化学必考知识点主要包括元素周期律、化学键与反应类型、溶液与酸碱、化学实验操作、物质性质与俗名五大核心模块。这些内容贯穿选择题、填空题及实验题，需系统掌握基础概念、反应规律和实验操作细节。"
+   }
+  ]
+ },
+ "gaosan_home.html": {
+  "size": 79891,
+  "plain_len": 8456,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "r3c_049f2f44.html": {
+  "size": 17969,
+  "plain_len": 19,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3c_5a1c26c1.html": {
+  "size": 17969,
+  "plain_len": 19,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3c_5fbb5689.html": {
+  "size": 17969,
+  "plain_len": 19,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3c_95ca4017.html": {
+  "size": 44104,
+  "plain_len": 1475,
+  "chem_kinds": 5,
+  "top": [
+   {
+    "score": 4,
+    "text": "2025 年上海市等级考化学试卷（回忆版）一、碳酸丙烯酯 PC 的合成已知反应 1反应 2 的 H 2 xxkJ / mol反应 3 的 H3 xxkJ / mol反应 4 的"
+   },
+   {
+    "score": 4,
+    "text": "2．PCL3有毒，在潮湿的空气中可发生水解反应产生大量的白雾。它在实验室和工业上都有重要的应用。在实验室中可用下图所示装置（酒精灯、铁架台等未画出）制取PCL3，在圆底烧瓶e中放入足量白磷，将CL2迅"
+   }
+  ]
+ },
+ "r3c_a0646c02.html": {
+  "size": 32565,
+  "plain_len": 85,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3c_a97c3665.html": {
+  "size": 17969,
+  "plain_len": 19,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3_bing_cn.html": {
+  "size": 101983,
+  "plain_len": 1756,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "r3_bing_www.html": {
+  "size": 103806,
+  "plain_len": 1756,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "r3_eol_gk2025.html": {
+  "size": 21425,
+  "plain_len": 2526,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3_gaokao_chem.html": {
+  "size": 18200,
+  "plain_len": 1499,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3_gaosan_chem.html": {
+  "size": 5067,
+  "plain_len": 346,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3_q_hx1.html": {
+  "size": 105030,
+  "plain_len": 1767,
+  "chem_kinds": 2,
+  "top": []
+ },
+ "r3_q_hx2.html": {
+  "size": 102336,
+  "plain_len": 1762,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "r3_q_hx3.html": {
+  "size": 104083,
+  "plain_len": 1762,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "r3_q_hx4.html": {
+  "size": 102640,
+  "plain_len": 1763,
+  "chem_kinds": 2,
+  "top": []
+ },
+ "r3_so360.html": {
+  "size": 7109,
+  "plain_len": 453,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "r3_sogou.html": {
+  "size": 5777,
+  "plain_len": 311,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "so.html": {
+  "size": 7105,
+  "plain_len": 449,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "so360_q2.html": {
+  "size": 7109,
+  "plain_len": 453,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "sogou.html": {
+  "size": 696439,
+  "plain_len": 8661,
+  "chem_kinds": 4,
+  "top": [
+   {
+    "score": 3,
+    "text": "在后面 ) 一、单项选择题ه本大题有 16 小题ى每小题 3 分ى共 48 分و 1 、下列物质中ى不属于同分异构体的是هو A 、正丁烷和异丁烷 B 、苯和甲苯 C 、乙醇和二甲醚 D 、乙炔和苯 2 、下列关于化学反应速率的说法中ى正确的是ي A. 增大压强可以增加所有化学反应的速率。 B. 温度升高时ى吸热反应和放热反应的速率都会增加。 C. 使用..."
+   }
+  ]
+ },
+ "toutiao.html": {
+  "size": 2341012,
+  "plain_len": 1619,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "toutiao_q2.html": {
+  "size": 2194456,
+  "plain_len": 1445,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "zxxk.html": {
+  "size": 8248,
+  "plain_len": 0,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "zxxk_3508877.html": {
+  "size": 8248,
+  "plain_len": 0,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_00.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_01.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_02.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_03.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_04.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_05.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_06.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_07.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_08.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_09.html": {
+  "size": 6066,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_10.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_11.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_12.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_13.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_14.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_15.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_16.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_17.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_18.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_19.html": {
+  "size": 6102,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_20.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_21.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_22.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_23.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_24.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_25.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_26.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_27.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_28.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "articles\\wx_29.html": {
+  "size": 6093,
+  "plain_len": 308,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "bing\\q0.html": {
+  "size": 104486,
+  "plain_len": 1767,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "bing\\q1.html": {
+  "size": 105323,
+  "plain_len": 1763,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "bing\\q2.html": {
+  "size": 102194,
+  "plain_len": 1778,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "pages\\cnjy_m.html": {
+  "size": 7379,
+  "plain_len": 0,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "pages\\eol_sh.html": {
+  "size": 21425,
+  "plain_len": 2526,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "pages\\eol_zx.html": {
+  "size": 21425,
+  "plain_len": 2526,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "pages\\weixin_0.html": {
+  "size": 37226,
+  "plain_len": 1683,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "pages\\weixin_1.html": {
+  "size": 40171,
+  "plain_len": 1934,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "pages\\weixin_2.html": {
+  "size": 38223,
+  "plain_len": 1618,
+  "chem_kinds": 6,
+  "top": [
+   {
+    "score": 4,
+    "text": "/新高考通用) 1. 基本概念与离子反应 10~15分2. 化学平衡与水溶液 18~22分3. 电化学 10~14..."
+   }
+  ]
+ },
+ "pages\\zxxk_pack.html": {
+  "size": 8248,
+  "plain_len": 0,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "probe\\51test.html": {
+  "size": 38856,
+  "plain_len": 3144,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "probe\\bing_cn.html": {
+  "size": 101762,
+  "plain_len": 1755,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "probe\\eol_gk2025.html": {
+  "size": 21425,
+  "plain_len": 2526,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "probe\\eol_hx.html": {
+  "size": 21425,
+  "plain_len": 2526,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "probe\\eol_zt.html": {
+  "size": 21425,
+  "plain_len": 2526,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "probe\\gaokao_com.html": {
+  "size": 465864,
+  "plain_len": 29204,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "probe\\gaosan_ct.html": {
+  "size": 20492,
+  "plain_len": 4035,
+  "chem_kinds": 8,
+  "top": [
+   {
+    "score": 4,
+    "text": "试题通过学生熟悉的典型情境与核心知识点的结合，推动教学回归课标。例如，第29题“艾拉莫德合成路线”中有机合成路线与反应条件的分析，涉及反应类型、官能团名称、物质性质及反应条件控制等内容，要求学生综合运用高中有机化学基础知识解决实际问题，促进知识体系的构建。如反应②中吡啶作用的考查，体现对典型酸碱反应的迁移应用。"
+   },
+   {
+    "score": 3,
+    "text": "试题以化学合成与反应机理为载体，通过真实科研情境设计多层次问题，引导学生运用证据推理和模型认知能力解决问题。例如，第12题通过水微滴表面发生反应的机理图，考查学生对催化机理、轨道杂化变化及总反应式的推理整合能力。"
+   },
+   {
+    "score": 3,
+    "text": "第28题由乙醇和乙酸制备乙酸乙酯的试题情境源于教材中非常典型的反应，贴近教学实际。该题以经典的酯化反应过程为载体，全面考查燃烧热、分子间作用力、化学平衡常数及反应速率等核心内容。此类题目设计有利于推动教学回归知识本质，避免机械刷题，引导学生深入理解化学原理的逻辑关系。"
+   }
+  ]
+ },
+ "probe\\gaosan_home.html": {
+  "size": 79891,
+  "plain_len": 8456,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "probe\\wangxiao.html": {
+  "size": 309742,
+  "plain_len": 24315,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "probe\\xdf_gk.html": {
+  "size": 419088,
+  "plain_len": 4408,
+  "chem_kinds": 1,
+  "top": []
+ },
+ "probe\\yandex.html": {
+  "size": 41511,
+  "plain_len": 434,
+  "chem_kinds": 0,
+  "top": []
+ },
+ "tt\\tt0.html": {
+  "size": 1705271,
+  "plain_len": 1203,
+  "chem_kinds": 4,
+  "top": []
+ },
+ "tt\\tt1.html": {
+  "size": 1716025,
+  "plain_len": 1307,
+  "chem_kinds": 3,
+  "top": [
+   {
+    "score": 3,
+    "text": "2025高考化学全国卷 有机合成 29题-头条搜索"
+   },
+   {
+    "score": 3,
+    "text": "2025年化学高考有机合成大题解析"
+   }
+  ]
+ },
+ "tt\\tt2.html": {
+  "size": 1727640,
+  "plain_len": 1256,
+  "chem_kinds": 4,
+  "top": [
+   {
+    "score": 3,
+    "text": "2025年高考化学真题 有机合成 解析-头条搜索"
+   }
+  ]
+ }
+}

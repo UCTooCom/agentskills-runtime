@@ -6,6 +6,8 @@ import jsonvalue.*
 import std.collection.{HashMap, ArrayList, HashSet}
 import std.sync.Mutex
 import std.time.MonoTime
+import std.fs.{File, Path, OpenMode}
+import std.env.getWorkingDirectory
 
 /**
  * 宿主协调器（docs/design-impl.md §5、§6.2）
@@ -111,6 +113,8 @@ public class PluginHost {
                         }
                         // 检查依赖是否全部就绪
                         let missing = this.checkMissing(params.inject)
+                        let statusStr = if (missing.size == 0) { "Active" } else { "Pending" }
+                        println("[HS-INIT] ${providerId} injects=${params.inject.size} missing=${missing.size} -> ${statusStr}")
                         if (missing.size == 0) {
                             this.transitionStatus(instance, InstanceStatus.Active)
                             let providers = this.snapshotProviders(params.inject)
@@ -141,9 +145,15 @@ public class PluginHost {
                         let params = JsonValue.toObject<ProvideParams>(p)
                         let undoId = this.allocateUndoId()
                         this.state.registerService(params.key, providerId, undoId)
+                        println("[HS-PROVIDE] ${providerId} key=${params.key} -> ${undoId}")
                         this.logger(providerId, "provide ${params.key} -> ${undoId}")
                         synchronized(this.lock) {
                             instance.provides[params.key] = undoId
+                        }
+                        // 唤醒可能在 awaitActive 中等待 provide 服务就绪的线程（PS-T025-BUG 配套）：
+                        // 服务齐全后及时通知，避免其睡满整个超时。spurious wakeup 无害（awaitActive 会重查）。
+                        synchronized(instance.settleLock) {
+                            instance.settleCond.notifyAll()
                         }
                         // 依赖变更通知：服务就绪 → 唤醒 Pending 依赖者重试握手
                         this.notifyDependents(params.key, NotifyKind.PROVIDER_CHANGED, providerId)
@@ -296,6 +306,9 @@ public class PluginHost {
                         let removed = this.eventRegistry.unsubscribe(params.subscriptionId)
                         Some(JsonValue.Boolean(removed))
                     } catch (e: Exception) {
+                        // 退订解析/执行异常：插件只拿到 false（与「订阅不存在」无法区分），
+                        // 交给日志通道才可诊断（同 subscribe/emit 等 handler 的写法）
+                        this.logger(providerId, "unsubscribe error: ${e.message}")
                         Some(JsonValue.Boolean(false))
                     }
                 case None => Some(JsonValue.Boolean(false))
@@ -361,6 +374,67 @@ public class PluginHost {
     }
 
     /**
+     * 启动关键路径诊断输出：只写 stderr。
+     *
+     * 刻意不写框架 .log —— awaitActive 在主线程上跑，而主线程一旦在日志调用内
+     * 部挂起，整个 runtime 就起不来（已多次复现）。stderr 无缓冲，即使后面卡住
+     * 也能保证这一行可见。
+     */
+    /**
+     * 启动期一次性诊断输出（stderr，无缓冲）。
+     *
+     * 【红线】只允许在 awaitActive 的**入口 / 出口**这类「每插件最多一两次」的
+     * 一次性节点调用，绝不允许进入轮询循环体（见 traceAwaitP）。
+     *
+     * 【为什么】cjpm run 把子进程 stdout/stderr 接成管道，stdio 的写是同步阻塞的：
+     * 一旦管道/控制台来不及排空，或 Windows CRT 的 stdout 锁字节被异常线程带死，
+     * 这一句 eprintln 就会把**主线程**永久钉死 —— awaitActive 再也走不到 deadline
+     * 判定，loadAll 永不返回，整个 runtime 起不来。实测症状（PID 836）：进程存活、
+     * 5 秒 0ms CPU（是阻塞不是自旋）、其它线程全在 NtReadFile、日志恰好停在某
+     * 一句 diag 之后，且 awaitActive 一次都没返回 Ok。
+     *
+     * 轮询循环内改走 traceAwaitP（直写文件），主线程因此在启动路径上不会卡在 stdio。
+     * 另见 src/log/log_utils_impl.cj 的 WRITE_LOCK 注释：多线程并发写同一日志句柄
+     * 曾让主线程在日志调用内部挂起。
+     */
+    private func diag(id: String, msg: String): Unit {
+        eprintln("[cordis][${id}] ${msg}")
+    }
+
+    /// 启动诊断：awaitActive 内部关键节点写入 logs/await_trace.txt（unbuffered）。
+    /// 仅用于定位「主线程卡在 awaitActive」的根因，定位后删除。
+    private func traceAwaitP(label: String): Unit {
+        // 路径必须绝对路径：cjpm run 可能把子进程工作目录设在 target/release/bin，
+        // 相对路径 `logs/...` 会静默写失败（try 吞掉异常 → 文件永远不出现）。
+        let base = getWorkingDirectory().toString()
+        try (f = File(Path("${base}/logs/await_trace.txt"), OpenMode.Append)) {
+            f.write("${label}\n".toArray())
+        }
+    }
+
+    /**
+     * awaitActive 轮询用的短等待。
+     *
+     * 【重要】刻意不使用 std.core.sleep。awaitActive 跑在**主线程**上，而实测
+     * 主线程调用 sleep 会永久挂起：2026-10-01 04:35:48 那次运行里，sdd 在
+     * `[DIAG]iter=1 I: before sleep` 之后就再无任何输出——连 5 秒一次的
+     * STILL WAITING 和 30 秒的 TIMEOUT 都没打出来，说明主线程没有在循环，
+     * 而是死在 sleep 这一句里。工程内 sleep 的全部 18 处调用都位于 spawn 出来的
+     * 后台线程（AsyncLogWriter / RetryManager / SchedulerEngine / SSE ping 等），
+     * 没有一处跑在主线程上，与上述现象吻合。
+     *
+     * 改为有界忙等：等待期间不释放主线程，但每次等待时长都很短（10~50ms），
+     * 且循环顶部的 deadline 仍然统一兜底，最迟 timeout 后必定返回。
+     */
+    private func spinWait(d: Duration): Unit {
+        let until = MonoTime.now() + d
+        var n: Int64 = 0
+        while (MonoTime.now() < until) {
+            n = n + 1
+        }
+    }
+
+    /**
      * 等待插件进入 Active 状态（对齐 Cordis Fiber.await()）
      *
      * 阻塞直到实例 Active **且其 provide 的服务全部注册**（Active 是握手完成，
@@ -368,57 +442,198 @@ public class PluginHost {
      * 进程死亡/启动失败 → Err(错误原因)；超时 → Err("timeout")。
      * Pending（依赖未满足）继续等待（依赖就绪后自动 Active）。
      *
+     * 【注意】实现约束：本方法**保证在 timeout 内一定返回**，且全程 tryLock 不阻塞在
+     * 任何互斥锁上（见函数体注释）。禁止改回 synchronized / Condition.wait 的
+     * 阻塞式等待 —— sdd 插件曾因此永久挂起，导致整个 runtime 无法启动。
+     *
      * @param id 插件 id
      * @param timeout 最长等待时间
      * @return Ok(实例) 已 Active 且服务就绪；Err 失败原因/超时/实例不存在
      */
-    public func awaitActive(id: String, timeout!: Duration = 10 * Duration.second): Result<PluginInstance> {
+    public func awaitActive(id: String, timeout!: Duration = 30 * Duration.second): Result<PluginInstance> {
+        // 【注意】启动关键路径：awaitActive 绝不允许永久挂起（sdd 曾在此永久卡死导致
+        // 整个 runtime 起不来）。两道保险：
+        //   ① 全程 tryLock（state.lock / instance.settleLock），拿不到锁就下一轮重试，
+        //      绝不阻塞在锁上 —— 规避死锁、锁被长持、条件变量丢唤醒等一切卡死成因；
+        //   ② deadline 在每轮循环顶部统一判定，最迟 timeout 后必定返回 Err。
+        // 这样即便某个插件真有问题，启动也只会「降级跳过该插件」，不会整体挂起。
+        this.diag(id, "awaitActive: enter, waiting for Active (timeout=${timeout})")
+        this.traceAwaitP("AWAIT enter ${id}")
         let deadline = MonoTime.now() + timeout
+        let warnInterval = 5 * Duration.second
+        var nextWarn = MonoTime.now() + warnInterval
+        var iter = 0
+        var lastStatus: ?InstanceStatus = None
+        var lastDiagPoint = "start"
+        var stateLockBusyCount = 0
+        var settleLockBusyCount = 0
+        var servicesPendingCount = 0
         while (true) {
-            let instance = this.state.getInstance(id)
+            iter = iter + 1
+            if (iter % 250 == 0) {
+                // 带上 lastDiagPoint：主线程若停在某一句（尤其 isExited，见下方 G/H 段），
+                // trace 会直接指名是哪一行，而不只是「在转圈」。
+                this.traceAwaitP("AWAIT spinning ${id} iter=${iter} point=${lastDiagPoint}")
+            }
+            if (MonoTime.now() >= deadline) {
+                this.diag(id, "awaitActive: TIMEOUT after ${iter} polls, giving up")
+                this.traceAwaitP("AWAIT TIMEOUT ${id} iter=${iter}")
+                return Err("timeout waiting for plugin '${id}' active")
+            }
+            // 周期性诊断：每 5 秒输出一次等待详情，便于定位卡点
+            if (MonoTime.now() >= nextWarn) {
+                let elapsed = MonoTime.now() - (deadline - timeout)
+                // Option<T> 不做隐式 toString 兜底：显式解包成字符串再插值
+                let statusText = match (lastStatus) {
+                    case Some(s) => s.toString()
+                    case None => "(unknown)"
+                }
+                var pendingList = "n/a"
+                match (this.diagPendingServices(id)) {
+                    case Some(list) =>
+                        if (list.size == 0) {
+                            pendingList = "(none, provide=0)"
+                        } else {
+                            pendingList = String.join(list.toArray(), delimiter: ", ")
+                        }
+                    case None =>
+                        pendingList = "(state.lock busy)"
+                }
+                this.traceAwaitP("awaitActive: STILL WAITING after ${elapsed} (iter=${iter}, status=${statusText}, lastPoint=${lastDiagPoint}, stateLockBusy=${stateLockBusyCount.toString()}, settleLockBusy=${settleLockBusyCount.toString()}, svcPendingCycles=${servicesPendingCount.toString()}, pendingServices=[${pendingList}])")
+                nextWarn = MonoTime.now() + warnInterval
+                stateLockBusyCount = 0
+                settleLockBusyCount = 0
+                servicesPendingCount = 0
+            }
+            this.traceAwaitP("[DIAG]iter=${iter} A: before tryGetInstance")
+            lastDiagPoint = "A"
+            let instance = this.state.tryGetInstance(id)
             match (instance) {
                 case None =>
-                    return Err("plugin '${id}' not found")
+                    // 实例尚未登记，或 state.lock 忙 → 下一轮重试（不阻塞）
+                    this.traceAwaitP("[DIAG]iter=${iter} A2: instance None or state.lock busy")
+                    lastDiagPoint = "A2"
+                    stateLockBusyCount = stateLockBusyCount + 1
+                    this.spinWait(20 * Duration.millisecond)
+                    continue
                 case Some(inst) =>
-                    let status = synchronized(inst.settleLock) {
-                        inst.status
+                    this.traceAwaitP("[DIAG]iter=${iter} C: before settleLock.tryLock")
+                    lastDiagPoint = "C"
+                    var statusOpt: ?InstanceStatus = None
+                    if (inst.settleLock.tryLock()) {
+                        statusOpt = Some(inst.status)
+                        inst.settleLock.unlock()
                     }
-                    if (status == InstanceStatus.Active) {
-                        // Active 是握手完成；等服务注册（provide 在握手之后）
-                        if (this.allServicesRegistered(inst)) {
-                            return Ok(inst)
-                        }
-                        // 服务未齐 → 短暂等待后重查（不计入 notify，轮询兜底）
-                        sleep(10 * Duration.millisecond)
-                    } else if (status == InstanceStatus.Failed || status == InstanceStatus.Unreachable) {
-                        let reason = synchronized(inst.settleLock) {
-                            inst.error
-                        }
-                        return Err(match (reason) { case Some(r) => r; case None => "plugin '${id}' ${status}" })
-                    } else if (status == InstanceStatus.Unloading) {
-                        // 卸载中 → 等待其完成（重启流程内会替换实例）
-                        return Err("plugin '${id}' is unloading")
-                    } else {
-                        // Starting / Pending：进程已死 → 标记 Failed（对齐 Cordis await 重抛错误）
-                        if (this.manager.isExited(inst)) {
-                            this.transitionStatus(inst, InstanceStatus.Failed,
-                                error: Some("process exited during startup"))
+                    match (statusOpt) {
+                        case None =>
+                            this.traceAwaitP("[DIAG]iter=${iter} C2: settleLock busy")
+                            lastDiagPoint = "C2"
+                            settleLockBusyCount = settleLockBusyCount + 1
+                            this.spinWait(20 * Duration.millisecond)
                             continue
-                        }
-                        // 等待状态变化
-                        let remaining = deadline - MonoTime.now()
-                        if (remaining <= Duration.Zero) {
-                            return Err("timeout waiting for plugin '${id}' active (status ${status})")
-                        }
-                        synchronized(inst.settleLock) {
-                            // 条件变量带超时等待；被 notifyAll 唤醒后重新检查状态
-                            inst.settleCond.wait(timeout: remaining)
-                        }
+                        case Some(status) =>
+                            lastStatus = Some(status)
+                            this.traceAwaitP("[DIAG]iter=${iter} D: status=${status}")
+                            lastDiagPoint = "D"
+                            if (status == InstanceStatus.Active) {
+                                // Active 是握手完成；等服务注册（provide 在握手之后）
+                                this.traceAwaitP("[DIAG]iter=${iter} E: before tryAllServicesRegistered")
+                                lastDiagPoint = "E"
+                                match (this.tryAllServicesRegistered(inst)) {
+                                    case Some(v) =>
+                                        if (v) {
+                                        this.diag(id, "awaitActive: Active observed, returning Ok")
+                                        this.traceAwaitP("AWAIT OK ${id}")
+                                        return Ok(inst)
+                                        }
+                                        this.traceAwaitP("[DIAG]iter=${iter} F: services not all registered")
+                                        lastDiagPoint = "F"
+                                        servicesPendingCount = servicesPendingCount + 1
+                                        this.spinWait(10 * Duration.millisecond)
+                                    case None =>
+                                        this.traceAwaitP("[DIAG]iter=${iter} F2: state.lock busy")
+                                        lastDiagPoint = "F2"
+                                        stateLockBusyCount = stateLockBusyCount + 1
+                                        this.spinWait(10 * Duration.millisecond)
+                                }
+                            } else if (status == InstanceStatus.Failed || status == InstanceStatus.Unreachable) {
+                                this.diag(id, "awaitActive: plugin terminated during startup: ${status}")
+                                this.traceAwaitP("AWAIT ERR terminated ${id} ${status}")
+                                return Err("plugin '${id}' ${status}")
+                            } else if (status == InstanceStatus.Unloading) {
+                                this.diag(id, "awaitActive: plugin unloading")
+                                this.traceAwaitP("AWAIT ERR unloading ${id}")
+                                return Err("plugin '${id}' is unloading")
+                            } else {
+                                // Starting / Pending：进程已死 → 直接判失败（不调用
+                                // transitionStatus，避免再进入 synchronized 持锁路径）
+                                this.traceAwaitP("[DIAG]iter=${iter} G: before isExited")
+                                lastDiagPoint = "G"
+                                this.traceAwaitP("AWAIT ${id} iter=${iter} G before isExited")
+                                let exited = this.manager.isExited(inst)
+                                this.traceAwaitP("AWAIT ${id} iter=${iter} H isExited=${exited}")
+                                this.traceAwaitP("[DIAG]iter=${iter} H: isExited=${exited}")
+                                lastDiagPoint = "H"
+                                if (exited) {
+                                    this.diag(id, "awaitActive: process exited during startup (status=${status})")
+                                    this.traceAwaitP("AWAIT ERR exited ${id} ${status}")
+                                    return Err("plugin '${id}' process exited during startup")
+                                }
+                                this.traceAwaitP("[DIAG]iter=${iter} I: before wait")
+                                lastDiagPoint = "I"
+                                this.spinWait(50 * Duration.millisecond)
+                            }
                     }
             }
         }
         // while(true) 内所有路径均 return；此处仅为类型完整
         Err("unreachable")
+    }
+
+    /**
+     * tryLock 版 allServicesRegistered：拿不到 state.lock 返回 None（调用方重试）
+     * @return Some(true) 已就绪 / Some(false) 未就绪 / None 锁忙
+     */
+    private func tryAllServicesRegistered(inst: PluginInstance): ?Bool {
+        if (inst.entry.provide.size == 0) {
+            return Some(true)
+        }
+        if (!this.state.lock.tryLock()) {
+            return None
+        }
+        var ok = true
+        for (key in inst.entry.provide) {
+            if (this.state.serviceIndex.get(key) != Some(inst.entry.id)) {
+                ok = false
+            }
+        }
+        this.state.lock.unlock()
+        Some(ok)
+    }
+
+    /**
+     * 诊断用：获取指定插件尚未注册的 provide 服务列表（tryLock，不阻塞）
+     * @return Some(ArrayList) 未注册服务名列表；None 表示 state.lock 忙或实例不存在
+     */
+    private func diagPendingServices(id: String): ?ArrayList<String> {
+        let inst = match (this.state.tryGetInstance(id)) {
+            case Some(i) => i
+            case None => return None
+        }
+        if (inst.entry.provide.size == 0) {
+            return Some(ArrayList<String>())
+        }
+        if (!this.state.lock.tryLock()) {
+            return None
+        }
+        let pending = ArrayList<String>()
+        for (key in inst.entry.provide) {
+            if (this.state.serviceIndex.get(key) != Some(inst.entry.id)) {
+                pending.add(key)
+            }
+        }
+        this.state.lock.unlock()
+        Some(pending)
     }
 
     /**
@@ -703,12 +918,38 @@ public class PluginHost {
      * 崩溃自愈：desired 存在但实际进程已退出 → 标记 Failed 后重新拉起
      */
     private func healCrashed(): Unit {
+        // 【死锁红线】本方法跑在启动关键路径上（reconcileDesired 的最后一环，
+        // 主线程），必须保证「既不持锁等待、也不持锁调外部对象」：
+        //
+        // ① 绝不持 state.lock 去调外部对象。isExited → client.isClosed() 会再取
+        //    client 自己的锁；插件 IPC 线程可能正持有它、反过来要 state.lock
+        //    （provide / initialize 回调链），形成 AB-BA 交叉死锁。
+        // ② state.lock 用 tryLock，拿不到就整轮跳过。崩溃自愈只是尽力而为的
+        //    补偿动作，不值得让启动关键路径为它无限等待 —— 下一轮 reconcile /
+        //    awaitActive 的超时兜底会再次走到这里。
+        //    依据：2026-10-01 05:29:05 那次运行，4 个插件全部 launched 之后主线程
+        //    就永久静默 —— cmd-runtime.md 最后一行是 [HS-INIT] sdd（IPC 线程打的），
+        //    而主线程本该紧接着打印的 [CordisHostManager][DIAG] awaitActive #1/4
+        //    始终没出现。reconcileDesired 里 4 个插件已全部拉起、toRemove/toUpdate
+        //    为空，唯一剩下的阻塞点就是这里的取锁 + isExited。
+        if (!this.state.lock.tryLock()) {
+            // 刻意走 diag（stderr，无缓冲）而非 this.logger：本分支的存在意义就是
+            // 「不能在启动关键路径上为自愈动作冒险」，日志子系统同样不许碰。
+            this.diag("reconcile", "healCrashed skipped: state.lock busy")
+            return
+        }
+        let snapshot = ArrayList<(String, PluginInstance)>()
+        for ((id, instance) in this.state.actual) {
+            if (this.state.desired.contains(id)) {
+                snapshot.add((id, instance))
+            }
+        }
+        this.state.lock.unlock()
+
         let crashed = ArrayList<String>()
-        synchronized(this.state.lock) {
-            for ((id, instance) in this.state.actual) {
-                if (this.state.desired.contains(id) && this.manager.isExited(instance)) {
-                    crashed.add(id)
-                }
+        for ((id, instance) in snapshot) {
+            if (this.manager.isExited(instance)) {
+                crashed.add(id)
             }
         }
         for (id in crashed) {

@@ -50,6 +50,13 @@ public class LrtConfig {
     public static let DEFAULT_MONITOR_CHECKPOINT_LATENCY_MS: Int64 = 30000
     public static let DEFAULT_MONITOR_PROGRESS_LATENCY_MS: Int64 = 1000
 
+    // ── §11.3 四类关键决策的 JSONL 行日志（tasks.md 1000）──────────────────
+    // 说明：DB 侧（payload / 表字段）已有完整记录，但那只支持「事后查库」，
+    // 不支持「日志采集器按行抓取」。本开关控制是否额外向 stderr 输出单行 JSON。
+    // 走 stderr 而非 stdout 是硬约束：L3 进程轨的 stdout 是 stdio RPC 通道，
+    // 往 stdout 打印任何内容都会污染 JSON-RPC 报文解析。
+    public static let DEFAULT_DECISION_JSONL_ENABLED: Bool = true
+
     /// 收敛循环的最大轮次
     public static func maxRounds(): Int64 {
         match (LrtConfig.envInt("LRT_MAX_ROUNDS")) {
@@ -100,6 +107,155 @@ public class LrtConfig {
             case Some(v) => return v
             case None => return LrtConfig.yamlBool("monitorEnabled", LrtConfig.DEFAULT_MONITOR_ENABLED)
         }
+    }
+
+    /// 是否向 stderr 输出四类关键决策的单行 JSON 日志（plan/replan/degradation/decision）
+    public static func decisionJsonlEnabled(): Bool {
+        match (LrtConfig.envBool("LRT_DECISION_JSONL")) {
+            case Some(v) => return v
+            case None => return LrtConfig.yamlBool("decisionJsonlEnabled", LrtConfig.DEFAULT_DECISION_JSONL_ENABLED)
+        }
+    }
+
+    // ── §11.2 按 Agent 的配置覆盖（tasks.md 992）──────────────────────────
+    //
+    // 背景：plugin.yaml 的 `config` 段是**插件级默认值**，所有 Agent 共用。
+    // 存量 Agent 想单独调参（如某个 Agent 的任务特别长、需要更大的 maxRounds）
+    // 此前无处可配——建独立 config 表是 tasks 原文明确否掉的路（「不再有独立的
+    // config 表」），所以覆盖值就写在 plugin.yaml 的 `agentConfigOverrides` 段里。
+    //
+    // 优先级：环境变量 LRT_* > agentConfigOverrides.<agentId> > config > 内置默认值。
+    // 「存量 Agent 平滑使用」靠的是**回落**：没配覆盖的 Agent 走插件级默认，
+    // 行为与加本机制之前完全一致，不需要为存量 Agent 补任何配置。
+
+    /// 在 `agentConfigOverrides` 段里查某个 Agent 的某个键，返回**未解析**的原始字符串。
+    /// 未命中返回 None，由调用方回落插件级默认值。
+    ///
+    /// 缩进约定（写进 plugin.yaml 注释强制执行）：agent 键 2 空格、其下配置键 4 空格。
+    /// 用固定前缀匹配而非动态计算缩进，是为了不在这个只有 6 个键的场景里
+    /// 实现一整套 YAML 缩进状态机——约定比解析更不容易出错。
+    private static func agentOverrideRaw(key: String, agentId: String): ?String {
+        if (agentId.isEmpty()) {
+            return None<String>
+        }
+        let root = LrtScriptRunner.skillRoot()
+        if (root.isEmpty()) {
+            return None<String>
+        }
+        let path = "${root}/plugin.yaml"
+        if (!exists(path)) {
+            return None<String>
+        }
+        let text = LrtConfig.readText(path)
+        if (text.isEmpty()) {
+            return None<String>
+        }
+        var inSection = false
+        var inAgent = false
+        for (line in text.split("\n")) {
+            let trimmed = line.trimAscii()
+            if (!inSection) {
+                if (trimmed == "agentConfigOverrides:") {
+                    inSection = true
+                }
+                continue
+            }
+            if (!inAgent) {
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue
+                }
+                if (trimmed == "${agentId}:") {
+                    inAgent = true
+                    continue
+                }
+                // 遇到下一个**顶格**键 → agentConfigOverrides 段结束，未命中
+                if (!line.startsWith(" ")) {
+                    return None<String>
+                }
+                continue
+            }
+            // 已定位到该 agent 块：只认 4 空格缩进的配置键
+            if (line.startsWith("    ${key}:")) {
+                if (trimmed.size <= key.size + 1) {
+                    return None<String>
+                }
+                return Some<String>(trimmed[key.size + 1..trimmed.size].trimAscii())
+            }
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue
+            }
+            // 缩进回退（非 4 空格）→ 本 agent 块结束
+            if (!line.startsWith("    ")) {
+                return None<String>
+            }
+        }
+        return None<String>
+    }
+
+    /// 收敛轮次上限（按 Agent 覆盖）
+    public static func maxRoundsFor(agentId: String): Int64 {
+        match (LrtConfig.envInt("LRT_MAX_ROUNDS")) {
+            case Some(v) => return v
+            case None => ()
+        }
+        match (LrtConfig.agentOverrideRaw("maxRounds", agentId)) {
+            case Some(raw) =>
+                match (Int64.tryParse(raw)) {
+                    case Some(v) => return v
+                    case None => ()
+                }
+            case None => ()
+        }
+        return LrtConfig.yamlInt("maxRounds", LrtConfig.DEFAULT_MAX_ROUNDS)
+    }
+
+    /// 单回合时长上限 ms（按 Agent 覆盖）
+    public static func maxRoundDurationMsFor(agentId: String): Int64 {
+        match (LrtConfig.envInt("LRT_MAX_ROUND_DURATION_MS")) {
+            case Some(v) => return v
+            case None => ()
+        }
+        match (LrtConfig.agentOverrideRaw("maxRoundDurationMs", agentId)) {
+            case Some(raw) =>
+                match (Int64.tryParse(raw)) {
+                    case Some(v) => return v
+                    case None => ()
+                }
+            case None => ()
+        }
+        return LrtConfig.yamlInt("maxRoundDurationMs", LrtConfig.DEFAULT_MAX_ROUND_DURATION_MS)
+    }
+
+    /// 单任务总时长上限 ms（按 Agent 覆盖）
+    public static func maxTaskDurationMsFor(agentId: String): Int64 {
+        match (LrtConfig.envInt("LRT_MAX_TASK_DURATION_MS")) {
+            case Some(v) => return v
+            case None => ()
+        }
+        match (LrtConfig.agentOverrideRaw("maxTaskDurationMs", agentId)) {
+            case Some(raw) =>
+                match (Int64.tryParse(raw)) {
+                    case Some(v) => return v
+                    case None => ()
+                }
+            case None => ()
+        }
+        return LrtConfig.yamlInt("maxTaskDurationMs", LrtConfig.DEFAULT_MAX_TASK_DURATION_MS)
+    }
+
+    /// 是否允许同一任务重叠触发（按 Agent 覆盖）
+    public static func concurrentableFor(agentId: String): Bool {
+        match (LrtConfig.envBool("LRT_CONCURRENTABLE")) {
+            case Some(v) => return v
+            case None => ()
+        }
+        match (LrtConfig.agentOverrideRaw("concurrentable", agentId)) {
+            case Some(raw) =>
+                let lower = raw.toAsciiLower()
+                return lower == "true" || lower == "1" || lower == "yes"
+            case None => ()
+        }
+        return LrtConfig.yamlBool("concurrentable", LrtConfig.DEFAULT_CONCURRENTABLE)
     }
 
     /// 滑动窗口样本数（参与比率计算的近 N 次任务完成）

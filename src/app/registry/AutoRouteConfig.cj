@@ -165,6 +165,16 @@ import magic.app.routes.uctoo.long_running_task.LongRunningTaskRoute
 import magic.app.controllers.uctoo.long_running_task.LongRunningTaskController
 import magic.app.routes.uctoo.long_running_task_evolution.LongRunningTaskEvolutionRoute
 import magic.app.controllers.uctoo.long_running_task_evolution.LongRunningTaskEvolutionController
+import magic.app.routes.uctoo.lrt_verify_job.LrtVerifyJobRoute
+import magic.app.controllers.uctoo.lrt_verify_job.LrtVerifyJobController
+// SDD 两张表路由注册（恢复 crudgen 自动生成状态，2026-09-30）：sdd_projects / sub_agent_invocations
+import magic.app.routes.uctoo.sdd_projects.SddProjectsRoute
+import magic.app.controllers.uctoo.sdd_projects.SddProjectsController
+import magic.app.routes.uctoo.sub_agent_invocations.SubAgentInvocationsRoute
+import magic.app.controllers.uctoo.sub_agent_invocations.SubAgentInvocationsController
+// SDD 编排薄路由（T-09）：语义入口，非通用 CRUD，单独注册
+import magic.app.routes.uctoo.sdd.SddOrchestrationRoute
+import magic.app.controllers.uctoo.sdd.SddOrchestrationController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -239,7 +249,10 @@ import magic.app.services.uctoo.{
     SkillUsageStatsService,
     AgentKanbanTasksService,
     LongRunningTaskArtifactService,
-    LongRunningTaskEvolutionService,}
+    LongRunningTaskEvolutionService,
+    LrtVerifyJobService,
+    SddProjectsService,
+    SubAgentInvocationsService,}
 import magic.app.services.crontab.SchedulerService
 
 
@@ -600,6 +613,66 @@ public class AutoRouteConfig {
         ))
         
         // ==================== CRUD 路由配置 ====================
+        // SubAgentInvocations 路由（恢复 crudgen 自动生成状态，2026-09-30）
+        registry.add(RouteEntry(
+            "sub_agent_invocations",
+            "/api/v1/uctoo/sub_agent_invocations",
+            10,
+            true,
+            { router: Router =>
+                let service = SubAgentInvocationsService()
+                let controller = SubAgentInvocationsController(service)
+                let route = SubAgentInvocationsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // SddProjects 路由（恢复 crudgen 自动生成状态，2026-09-30）
+        registry.add(RouteEntry(
+            "sdd_projects",
+            "/api/v1/uctoo/sdd_projects",
+            10,
+            true,
+            { router: Router =>
+                let service = SddProjectsService()
+                let controller = SddProjectsController(service)
+                let route = SddProjectsRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // SDD 编排薄路由（T-09）：真派生落在宿主侧，这里只暴露 start / run-stage / status
+        // 三个语义入口（sdd_projects / sub_agent_invocations 的通用 CRUD 已于 2026-09-30 恢复注册）。
+        registry.add(RouteEntry(
+            "sdd_orchestration",
+            "/api/v1/uctoo/sdd",
+            10,
+            true,
+            { router: Router =>
+                let controller = SddOrchestrationController()
+                let route = SddOrchestrationRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // LrtVerifyJob 路由
+        registry.add(RouteEntry(
+            "lrt_verify_job",
+            "/api/v1/uctoo/lrt_verify_job",
+            10,
+            true,
+            { router: Router =>
+                let service = LrtVerifyJobService()
+                let controller = LrtVerifyJobController(service)
+                let route = LrtVerifyJobRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
         // LongRunningTaskEvolution 路由
         registry.add(RouteEntry(
             "long_running_task_evolution",

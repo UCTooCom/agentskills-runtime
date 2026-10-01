@@ -153,6 +153,17 @@ public class LrtEventRelay {
                         traceId
                     )
                     true
+                case "artifact_ready" =>
+                    // HTML 产物就绪：把报告正文推给前端，渲染成 artifact 卡片进对话
+                    // （宿主侧在回合产物登记后也会自行推送；这里供插件侧主动 emit 同一语义）
+                    bridge.pushArtifactReady(
+                        taskId, sessionId, agentId,
+                        str(extra, "title"),
+                        str(extra, "html"),
+                        str(extra, "artifactPath"),
+                        traceId
+                    )
+                    true
                 case _ =>
                     false
             }

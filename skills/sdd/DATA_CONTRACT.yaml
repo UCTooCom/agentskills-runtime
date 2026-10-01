@@ -1,0 +1,138 @@
+# 数据契约（DATA_CONTRACT.yaml）
+# 声明 SDD 技能用到的表、字段、幂等键、写入规则与示例行。
+#
+# 用途：① 单回合注入 token 约束（只注入步骤声明用到的表）；
+#       ② 插件发现与 tableWhitelist 校验；③ 让大模型准确 CRUD（示例行不可省）。
+#
+# ── 库表限量（spec.md §6.7 强制）────────────────────────────────────────────
+#   既有表 5 张（其中 agents 只读）+ 本工程新增表 2 张（sdd_projects / sub_agent_invocations）
+#   既有表新增列仅 2 个：agents.skill_name / agent_contexts.task_id
+#   契约三列（default_input_types / default_output_types / capabilities）为**既有列**，只填充不改结构
+#
+# ── 落盘红线 ────────────────────────────────────────────────────────────────
+#   阶段文档正文一律落 long_running_task_artifact；file_path 相对 runtime 自有
+#   specs/{feature_name}/，**禁止** .codeartsdoer/specs/（归属 CodeArts Agent）。
+
+tables:
+  # ── 既有表 ──────────────────────────────────────────────────────────────
+  - name: agent_tasks
+    access: read_write
+    role: SDD 工程实例权威态（状态机）；sdd_projects 只是其可查询投影
+    idempotent_key: ["id"]
+    columns:
+      - {name: id, type: uuid, required: true, example: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b", comment: 主键}
+      - {name: parent_task_id, type: uuid, required: false, example: null, comment: 工程根任务为 null}
+      - {name: status, type: int4, required: true, enum: [0, 1, 2, 3, 4, 5], example: 1, comment: "0待处理/1进行中/2完成/3失败/4取消/5步数耗尽"}
+      - {name: payload, type: jsonb, required: false, example: '{"feature_name":"sdd","enable_research":true,"stage":"spec"}', comment: 含 feature_name / enable_research / 当前 stage}
+      - {name: creator, type: uuid, required: false, example: "1f2e3d4c-5b6a-4978-8c9d-0e1f2a3b4c5d", comment: 执行者}
+      - {name: owner_user_id, type: uuid, required: false, example: "505cf909-5e0e-4dde-b215-74274d2cc548", comment: 归属者；空串必须转 None}
+      - {name: deleted_at, type: timestamptz, required: false, example: null, comment: 软删；查询一律带 deleted_at IS NULL}
+    write_rule:
+      - 状态不倒退：终态（2/3/4）不得回退到中间态；revise 走 round 递增不改状态语义
+      - creator 与查询方 userId 不一致时必须写 owner_user_id
+
+  - name: long_running_task_artifact
+    access: read_write
+    role: 六步阶段文档正文存储（SDD 唯一文档落点）
+    idempotent_key: ["task_id", "stage", "file_path", "version"]
+    columns:
+      - {name: stage, type: varchar, required: true, enum: [research, spec, design, task, code, test], example: "spec", comment: 所属 SDD 阶段}
+      - {name: file_path, type: varchar, required: true, example: "specs/sdd/spec.md", comment: "相对 runtime 自有 specs/{feature_name}/；禁止 .codeartsdoer/specs/"}
+      - {name: usage, type: varchar, required: true, enum: [deliverable, intermediate], example: "deliverable", comment: SDD 阶段文档固定 deliverable}
+      - {name: version, type: int4, required: true, example: 1, comment: revise 回退重做后递增}
+      - {name: state, type: varchar, required: true, enum: [draft, approved, revising], example: "approved", comment: 文档审核状态}
+      - {name: content, type: text, required: true, example: "# **1. 组件定位**", comment: 文档正文}
+    write_rule:
+      - 同一 (task_id, stage) 的新版本用 version 递增，禁止覆盖旧版本
+      - usage 必须为 deliverable；中间产物另标 intermediate
+
+  - name: agent_approvals
+    access: read_write
+    role: 五个 gate-* 闸口的决策留痕
+    idempotent_key: ["task_id", "decision_point_id", "created_at"]
+    columns:
+      - {name: decision_point_id, type: varchar, required: true, example: "gate-spec", comment: "gate-research/gate-spec/gate-design/gate-task/gate-code"}
+      - {name: skill_name, type: varchar, required: true, example: "sdd", comment: SDD 固定 sdd}
+      - {name: choice, type: varchar, required: true, enum: [confirm, revise, abandon], example: "confirm", comment: 闸口三选项}
+      - {name: feedback, type: text, required: false, example: "第 5 章缺异常场景", comment: 用户文字反馈，revise 时必填}
+    write_rule:
+      - 每一次闸口决策立即落库，后续步骤失败也不得丢失
+      - choice=abandon 时同步置 agent_tasks.status=4
+
+  - name: agent_contexts
+    access: read_write
+    role: 阶段检查点 + 子 agent 上下文（按 task_id 隔离）
+    idempotent_key: ["agent_id", "task_id"]
+    columns:
+      - {name: task_id, type: uuid, required: true, example: "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f", comment: "【新增列】所属调用次；子 agent 按次隔离，禁止多次调用共用一份上下文"}
+      - {name: agent_id, type: uuid, required: true, example: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", comment: 归属 Agent}
+      - {name: metadata, type: jsonb, required: false, example: '{"taskId":"7c1d2e3f","stage":"spec","savedAt":"2026-09-27T05:30:00+08"}', comment: 检查点元信息，恢复时**必须按 taskId 过滤**，只按 agent_id 取会串任务}
+    write_rule:
+      - 恢复时按 taskId 过滤，禁止只按 agent_id 取
+      - revise 重做时生成新的 task_id，子 agent 不得读到上一轮 messages
+
+  - name: agents
+    access: read_only
+    role: 子 agent 定义查询（六个 SDD 子 agent 经同步机制自动入库，禁手工灌 SQL）
+    idempotent_key: ["source_path"]
+    columns:
+      - {name: name, type: varchar, required: true, example: "sdd-spec-writer", comment: 子 agent 名，全局唯一}
+      - {name: agent_type, type: varchar, required: true, enum: [main, sub], example: "sub", comment: "frontmatter 键是 agent_type 不是 type"}
+      - {name: skill_name, type: varchar, required: false, example: "sdd", comment: "【新增列】所属技能；SDD 子 agent 固定 sdd"}
+      - {name: parent_id, type: uuid, required: false, example: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", comment: 主 Agent uuid；frontmatter 写名字由同步解析}
+      - {name: source_path, type: varchar, required: true, example: "skills/sdd/agents/sdd-spec-writer.md", comment: 同步唯一键；删除文件即下线}
+      - {name: default_input_types, type: jsonb, required: false, example: '[{"name":"task_description","type":"text","required":true}]', comment: "GB/Z 185.4 ACS 输入契约"}
+      - {name: default_output_types, type: jsonb, required: false, example: '[{"name":"spec_md_path","type":"file_path","required":true}]', comment: "输出契约；为空时契约校验降级为非空校验并标 contract_absent"}
+      - {name: capabilities, type: jsonb, required: false, example: '{"items":[{"id":"write-sdd-spec"}],"output_contract":{"kind":"markdown","required_sections":["1. 组件定位"]}}', comment: "ACS 能力项 + REQ-SDD-012-A 校验规则（output_contract 段）"}
+      - {name: discoverable, type: bool, required: false, example: true, comment: SDD 子 agent 必须 true}
+    write_rule:
+      - 只读：SDD 插件不写 agents 表，定义由同步服务（ChangeDetector）维护
+      - 禁止为 SDD 手工 INSERT；声明只靠 skills/sdd/agents/*.md
+
+  # ── 本工程新增表 ────────────────────────────────────────────────────────
+  - name: sdd_projects
+    access: read_write
+    role: SDD 工程实例可查询投影（feature_name 维度）；权威态仍在 agent_tasks
+    idempotent_key: ["feature_name"]
+    columns:
+      - {name: feature_name, type: varchar, required: true, example: "sdd", comment: "≤10 字符，小写字母+数字+下划线，全局唯一"}
+      - {name: task_id, type: uuid, required: false, example: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b", comment: 回指 agent_tasks.id}
+      - {name: current_stage, type: varchar, required: true, enum: [init, research, spec, design, task, code, test, done, abandoned], example: "spec", comment: 当前阶段}
+      - {name: status, type: varchar, required: true, enum: [running, completed, failed, cancelled], example: "running", comment: 工程终态，与 agent_tasks.status 对齐}
+      - {name: enable_research, type: bool, required: true, example: true, comment: 入口是否启用研究步}
+      - {name: round, type: int4, required: true, example: 1, comment: 当前轮次，revise 回退重做时递增}
+      - {name: owner_user_id, type: uuid, required: false, example: "505cf909-5e0e-4dde-b215-74274d2cc548", comment: 启用 owner 隔离时表名须加入 PermissionUtils.hasOwnerUserColumn 白名单}
+    write_rule:
+      - 状态不倒退；revise 只递增 round，不改 current_stage 语义
+      - 不得在本表重复存储文档正文（正文一律落 long_running_task_artifact）
+
+  - name: sub_agent_invocations
+    access: read_write
+    role: 子 agent 派单留痕（入参/出参/耗时/契约校验/token 成本），可回放可审计可算 ROI
+    idempotent_key: ["task_id", "attempt"]
+    columns:
+      - {name: parent_task_id, type: uuid, required: true, example: "3f2a1c08-6b1e-4c2f-9a11-0c1d2e3f4a5b", comment: 所属 SDD 工程根任务}
+      - {name: task_id, type: uuid, required: false, example: "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f", comment: 本次派单所建的 agent_tasks 子任务}
+      - {name: agent_id, type: uuid, required: true, example: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", comment: 被派生的子 agent}
+      - {name: skill_name, type: varchar, required: false, example: "sdd", comment: 所属技能}
+      - {name: stage, type: varchar, required: false, enum: [research, spec, design, task, code, test], example: "spec", comment: SDD 阶段，成本按此聚合}
+      - {name: mode, type: varchar, required: true, enum: [isolated, path_ref], example: "isolated", comment: "上下文交接模式；超限降级为 path_ref"}
+      - {name: input_json, type: jsonb, required: true, example: '{"task_description":"...","outdir":"specs/sdd"}', comment: 派单入参}
+      - {name: output_json, type: jsonb, required: false, example: '{"spec_md_path":"specs/sdd/spec.md"}', comment: 回传结果，契约校验通过后才写入}
+      - {name: status, type: varchar, required: true, enum: [running, success, failed], example: "success", comment: 执行状态}
+      - {name: duration_ms, type: int8, required: false, example: 12800, comment: 耗时}
+      - {name: error_message, type: text, required: false, example: "token_missing", comment: "错误；token 取不到时追加 token_missing 标记"}
+      # ── REQ-SDD-012-A 契约校验 ──
+      - {name: contract_type, type: varchar, required: false, example: "markdown", comment: "取自 agents.default_output_types；为空标 contract_absent"}
+      - {name: verify_passed, type: bool, required: false, example: true, comment: 契约校验结果}
+      - {name: verify_errors, type: text, required: false, example: "[缺章节] 6. 数据约束", comment: 结构化错误，用于回灌重派上下文}
+      - {name: attempt, type: int4, required: true, example: 1, comment: "第几次尝试；自动重派上限 1 次（attempt 最大 2）"}
+      # ── REQ-SDD-012-B 成本账本 ──
+      - {name: prompt_tokens, type: int8, required: true, example: 3200, comment: 取不到记 0}
+      - {name: completion_tokens, type: int8, required: true, example: 4800, comment: 取不到记 0}
+      - {name: total_tokens, type: int8, required: true, example: 8000, comment: 取不到记 0}
+    write_rule:
+      - 派单开始即写一行（status=running），结束时回写结果，禁止只在日志里记
+      - output_json 必须在契约校验**通过之后**才写入；未通过不得被主 agent 采信
+      - token 取不到记 0 并标 token_missing，**禁止**用字符数折算冒充实测
+      - 成本按 stage 聚合口径固定走视图 v_sub_agent_stage_cost，避免各处分母不一致

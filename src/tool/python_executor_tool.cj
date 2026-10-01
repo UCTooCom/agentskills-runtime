@@ -244,20 +244,31 @@ public class PythonExecutorTool <: NativeFuncTool {
     protected static func readStreamToEnd(stream: InputStream): String {
         let buffer = Array<Byte>(4096, { _ => 0 })
         let result = StringBuilder()
-        
+
         try {
             while (true) {
                 let bytesRead = stream.read(buffer)
                 if (bytesRead <= 0) {
                     break
                 }
-                let chunk = String.fromUtf8(buffer[0..bytesRead])
-                result.append(chunk)
+                let chunk = buffer[0..bytesRead]
+                // 修复（2026-09-20）：Windows 子进程默认用 GBK 编码 stdout/stderr，
+                // String.fromUtf8 遇非 UTF-8 字节会抛异常，旧实现让整个 catch 终止
+                // 循环 → 子进程输出全丢（日志两次 "Error reading stream: Invalid utf8
+                // byte sequence"，agent 只能看到空 stdout 反复试错）。
+                // 现改为：UTF-8 严格解码失败时退化为 unchecked 解码（产生 mojibake
+                // 但不丢内容），让 agent 至少能看到脚本输出/错误信息以继续推理。
+                // 根因修复见 parseEnvObject：给子进程默认注入 PYTHONIOENCODING=utf-8。
+                try {
+                    result.append(String.fromUtf8(chunk))
+                } catch (_: Exception) {
+                    result.append(unsafe { String.fromUtf8Unchecked(chunk) })
+                }
             }
         } catch (ex: Exception) {
             LogUtils.info("[PythonExecutorTool] Error reading stream: ${ex.message}")
         }
-        
+
         return result.toString()
     }
 
@@ -291,8 +302,16 @@ public class PythonExecutorTool <: NativeFuncTool {
     }
 
     protected static func parseEnvObject(envStr: String): Array<(String, String)> {
+        // 修复（2026-09-20）：强制子进程用 UTF-8 输出。
+        // Windows 上 Python 默认 stdout/stderr 编码是 GBK（cp936），脚本里 print
+        // 中文或 traceback 会产出 GBK 字节，readStreamToEnd 用 String.fromUtf8 解码
+        // 必抛 "Invalid utf8 byte sequence"，导致 agent 拿不到任何脚本输出
+        // （日志两次该错误，agent 反复试错耗尽步数）。
+        // newProcess 内部先复制父进程 env 再用本数组覆盖（见 os.cj:62-63），
+        // 所以追加这两个键不会丢 PATH 等继承变量。调用方若显式指定同名键则尊重其值。
+        let defaults = [("PYTHONIOENCODING", "utf-8"), ("PYTHONUTF8", "1")]
         if (envStr.isEmpty()) {
-            return []
+            return defaults
         }
 
         try {
@@ -300,11 +319,27 @@ public class PythonExecutorTool <: NativeFuncTool {
             match (json) {
                 case obj: JsonObject =>
                     let result = ArrayList<(String, String)>()
+                    var hasEncoding = false
+                    var hasUtf8 = false
                     for ((key, value) in obj.getFields()) {
                         match (value) {
-                            case s: JsonString => result.add((key, s.getValue()))
-                            case _ => result.add((key, value.toString()))
+                            case s: JsonString =>
+                                result.add((key, s.getValue()))
+                            case _ =>
+                                result.add((key, value.toString()))
                         }
+                        if (key == "PYTHONIOENCODING") {
+                            hasEncoding = true
+                        }
+                        if (key == "PYTHONUTF8") {
+                            hasUtf8 = true
+                        }
+                    }
+                    if (!hasEncoding) {
+                        result.add(("PYTHONIOENCODING", "utf-8"))
+                    }
+                    if (!hasUtf8) {
+                        result.add(("PYTHONUTF8", "1"))
                     }
                     return result.toArray()
                 case _ =>
@@ -314,7 +349,7 @@ public class PythonExecutorTool <: NativeFuncTool {
             LogUtils.info("[PythonExecutorTool] Failed to parse env as JSON object: ${envStr}")
         }
 
-        return []
+        return defaults
     }
 
     protected static func buildResult(

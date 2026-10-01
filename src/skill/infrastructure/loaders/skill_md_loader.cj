@@ -61,6 +61,14 @@ public class SkillMdLoader {
             let referencesDirExists = exists("${skillDir}/references/")
             let assetsDirExists = exists("${skillDir}/assets/")
 
+            // ── T-19（REQ-SDD-011）：bundledAgents 自动探测 ──────────────────
+            // <skill-root>/agents/ 下的每个 .md 声明文件即一个子 agent，文件名（去后缀）为子 agent 名。
+            // 约定即注册：无需在 SKILL.md 里另写清单，删文件即下线（与 ChangeDetector 同步口径一致）。
+            let bundledAgents = BundledAgentScanner.scan(skillDir)
+            if (bundledAgents.size > 0) {
+                LogUtils.info("Skill '${yamlFrontmatter.name}' 探测到 ${bundledAgents.size} 个 bundled 子 agent: ${bundledAgents}")
+            }
+
             // ── Ch13.1 决策点校验（spec 5.15.1 规则 4 / 5.15.3 异常场景 3）──────
             // 这里持有 SKILL.md 原文，是唯一能校验 decision-points 的位置。
             // 校验失败不阻断加载：只告警，并把失效决策点 id 挂进 manifest，
@@ -92,7 +100,8 @@ public class SkillMdLoader {
                     assetsDirExists: assetsDirExists,
                     parameters: [],  // Parameters would be extracted from the markdown content or YAML
                     decisionPoints: decisionPointResult.validPoints,
-                    invalidDecisionPointIds: decisionPointResult.invalidPointIds
+                    invalidDecisionPointIds: decisionPointResult.invalidPointIds,
+                    bundledAgents: bundledAgents
                 )
             )
         } catch (ex: Exception) {

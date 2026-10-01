@@ -745,6 +745,9 @@ public class LrtCompositionRunner {
             let sub = newProcess(
                 LrtCompositionRunner.resolveInterpreter(),
                 argv.toArray(),
+                // 修复（2026-09-22）：同 runScriptStep —— 降级路径也必须强制 UTF-8 输出，
+                // 否则 cli_execute 兜底同样会因 GBK 字节读取失败而返回空产出。
+                env: [("PYTHONIOENCODING", "utf-8"), ("PYTHONUTF8", "1")],
                 workingDirectory: Some(Path(_skillDir)),
                 redirectErr: true
             )
@@ -810,6 +813,12 @@ public class LrtCompositionRunner {
             let sub = newProcess(
                 LrtCompositionRunner.resolveInterpreter(),
                 args.toArray(),
+                // 修复（2026-09-22）：强制子进程以 UTF-8 输出。Windows 上 Python
+                // stdout/stderr 默认 GBK(cp936)，脚本 print(..., ensure_ascii=False)
+                // 的中文会写成 GBK 字节，读端 String.fromUtf8 抛
+                // "Invalid utf8 byte sequence" → 步骤产出为空 → 长程任务一步即停。
+                // newProcess 内部先取父进程环境再合并本数组（utils/os.cj），不丢 PATH。
+                env: [("PYTHONIOENCODING", "utf-8"), ("PYTHONUTF8", "1")],
                 workingDirectory: Some(Path(cwd)),
                 redirectErr: true
             )
@@ -835,6 +844,11 @@ public class LrtCompositionRunner {
                 try {
                     let out = caller(step.pluginRoute, resolvedInput)
                     LogUtils.info("[LrtCompositionRunner] plugin step '${step.name}' route='${step.pluginRoute}' trace=${traceId}")
+                    // ⚠️ 已知偏差（2026-09-22，根因 G）：本处**没有**校验 out 里的 errno，
+                    // 插件返回 errno≠0 也会被判成功。长程任务的编排实际跑的是插件侧副本
+                    // （skills/long-running-task/src/lrt_composition_runner.cj），那里已修；
+                    // 本副本当前无任何调用方（全库 grep 无实例化点），未同步以免无谓风险。
+                    // 若将来有人接入本副本，请把插件侧的 errnoOf / errMsgOf 一并搬过来。
                     return (true, out, "")
                 } catch (e: Exception) {
                     return (false, "", "插件路由调用异常：${e.message}")
@@ -1028,7 +1042,18 @@ public class LrtCompositionRunner {
                 if (n <= 0) {
                     break
                 }
-                sb.append(String.fromUtf8(buf[0..n]))
+                // 修复（2026-09-22）：旧实现逐块 String.fromUtf8(buf[0..n])，遇非 UTF-8
+                // 字节（Windows 子进程 GBK 输出 / 多字节字符被分块边界截断）即抛异常并
+                // 中断整个读取循环 → 步骤产出变空串 → parse-goal 无 JSON →
+                // plan-tasks 报 50001，长程任务"只跑一步就停"。
+                // 现先严格解码，失败退化为 unchecked 解码（与 python_executor_tool.cj
+                // / cli_tool.cj 同口径），保证内容不丢。
+                let chunk = buf[0..n]
+                try {
+                    sb.append(String.fromUtf8(chunk))
+                } catch (_: Exception) {
+                    sb.append(unsafe { String.fromUtf8Unchecked(chunk) })
+                }
             }
         } catch (e: Exception) {
             LogUtils.warn("[LrtCompositionRunner] readStream error: ${e.message}")

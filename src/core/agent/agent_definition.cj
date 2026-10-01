@@ -115,6 +115,9 @@ public class AgentDefinition {
     /** Agent 名称 */
     public let name: String
     
+    /** 所属技能名（子 agent 必填，主 agent 为空）；对应 agents.skill_name 列 */
+    public let skillName: Option<String>
+    
     /** Agent 类型 */
     public let agentType: AgentType
     
@@ -212,7 +215,8 @@ public class AgentDefinition {
         languageContext: Option<String>,
         systemPrompt: String,
         sourcePath: Path,
-        baseDir: Path
+        baseDir: Path,
+        skillName: Option<String>
     ) {
         this.name = name
         this.agentType = agentType
@@ -239,6 +243,7 @@ public class AgentDefinition {
         this.systemPrompt = systemPrompt
         this.sourcePath = sourcePath
         this.baseDir = baseDir
+        this.skillName = skillName
     }
     
     /**
@@ -255,6 +260,9 @@ public class AgentDefinition {
         let items = ArrayList<(String, JsonValue)>()
         
         items.add(("name", JsonString(name)))
+        if (let Some(sn) <- skillName) {
+            items.add(("skill_name", JsonString(sn)))
+        }
         items.add(("agent_type", JsonString(agentType.toString())))
         items.add(("description", JsonString(description)))
         items.add(("version", JsonString(version)))
@@ -344,6 +352,7 @@ public class AgentDefinitionBuilder {
     private var discoverable: Bool = true
     private var language: Option<String> = None<String>
     private var languageContext: Option<String> = None<String>
+    private var skillName: Option<String> = None<String>
     private var systemPrompt: Option<String> = None
     private var sourcePath: Option<Path> = None
     private var baseDir: Option<Path> = None
@@ -467,6 +476,11 @@ public class AgentDefinitionBuilder {
         this.languageContext = Some(languageContext)
         return this
     }
+
+    public func setSkillName(skillName: String): AgentDefinitionBuilder {
+        this.skillName = Some(skillName)
+        return this
+    }
     
     public func setSystemPrompt(systemPrompt: String): AgentDefinitionBuilder {
         this.systemPrompt = Some(systemPrompt)
@@ -513,7 +527,8 @@ public class AgentDefinitionBuilder {
             languageContext,
             systemPrompt.getOrThrow(),
             sourcePath.getOrThrow(),
-            baseDir.getOrThrow()
+            baseDir.getOrThrow(),
+            skillName
         ))
     }
     

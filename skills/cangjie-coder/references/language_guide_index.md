@@ -5,7 +5,7 @@
 ## CangjieSkills路径
 
 ```
-D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\CangjieSkills\.opencode\skills\cangjie-language-guide\
+../CangjieSkills
 ```
 
 ## 主文档

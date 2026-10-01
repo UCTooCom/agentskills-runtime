@@ -11,6 +11,7 @@ import std.core.Duration
 import magic.log.LogUtils
 import magic.app.services.mcp.{McpOpenService, McpCallResult}
 import magic.app.services.uctoo.OperateLogService
+import magic.app.utils.PermissionUtils
 import jsonvalue.JsonValue
 import stdx.serialization.serialization.{DataModel, DataModelNull, DataModelInt, DataModelString, DataModelBool, DataModelSeq}
 import ystyle::cordis_host.PluginInstance
@@ -485,10 +486,20 @@ public class CordisHostServices {
         let subOp = this.extractStringValue(fields, "subOp")
         LogUtils.info("[CordisHostServices][host.db] executeExecute: subOp='${subOp}', dataKeys=${dataMap.size}, where='${finalWhere}'")
 
-        // 构建 SQL 并执行
-        let sql = this.buildExecuteSql(table, subOp, finalWhere, dataMap)
-        LogUtils.info("[CordisHostServices][host.db] executeExecute SQL: ${sql}")
-        let affected = executor.setSql(sql).update
+        // 构建 SQL 并执行。
+        // 字符串 / 数组 / 对象走**参数化绑定**（? 占位符 + executor.add）：值经 pgsql
+        // 驱动的扩展协议文本参数下发，UTF-8 安全，规避「大段中文 JSON 字面量内联进
+        // SQL 文本触发 Invalid utf8 byte sequence」的老问题（长程任务 payload 写回必现），
+        // 同时杜绝数据值 SQL 注入。
+        // Number / Boolean / NULL / $raw: 片段仍内联（见 sqlValueOrPlaceholder 的说明：
+        // 内联可让 postgres 按目标列做赋值转换，避免整型列收到 Float64 文本而报错）。
+        let (sql, params) = this.buildExecuteSql(table, subOp, finalWhere, dataMap)
+        LogUtils.info("[CordisHostServices][host.db] executeExecute SQL: ${sql} (params=${params.size})")
+        executor.setSql(sql)
+        for (p in params) {
+            this.bindExecuteParam(executor, p)
+        }
+        let affected = executor.update
 
         // 审计留痕（spec 5.12.1 规则 5）：本方法是 L3 插件 insert/update/delete 出来的
         // 唯一通道，在此统一打点——插件不必各自实现，也不存在「某个插件漏写」的可能。
@@ -567,9 +578,22 @@ public class CordisHostServices {
         if (permissions.contains("admin") || permissions.contains("*")) {
             return ""
         }
-        // 非 admin 用户：附加 creator 条件
+        // 非 admin 用户：附加归属条件
         if (!userId.isEmpty()) {
-            // 可见"自己创建的 + 公共数据"
+            // 双账号身份（specs/agent-user-dual-identity · design D1）：
+            // agent_tasks / crontab 的 creator 记**执行者**（委派场景下是 agent 绑定的
+            // uctoo_user，甚至可空），真人归属改由 owner_user_id 表达。若只看 creator，
+            // 委派的真人会因 creator≠自己而既看不到也管不了自己的长程任务（插件经 host.db
+            // 查询会拿到 rows.size=0，任务无法置 running / 卡死）。
+            // 故对这两张表用「creator 命中本人 或 owner_user_id 命中本人」的归属谓词，
+            // 并保持「creator IS NULL 视为公共数据可见」的原有语义（与 PermissionUtils 同口径）。
+            // 白名单不再硬编码在本方法里：与 `PermissionUtils.buildOwnershipPredicate`
+            // 共用一份清单，避免"这边加了表、那边没加"的口径分裂（双账号身份的两处判定
+            // 必须永远一致，漏一处就是"委派的真人看不见自己任务"的静默故障）。
+            if (PermissionUtils.hasOwnerUserColumn(table)) {
+                return "(creator IS NULL OR creator = '${userId}' OR owner_user_id = '${userId}')"
+            }
+            // 其余表仍只看 creator（保持原行为）
             return "(creator IS NULL OR creator = '${userId}')"
         }
         // 无 userId 时不限制（已通过认证中间件）
@@ -622,12 +646,16 @@ public class CordisHostServices {
     /// - "insert": `INSERT INTO ${table} (cols) VALUES (vals) RETURNING *`
     /// - "update": `UPDATE ${table} SET col1=val1, col2=val2 WHERE ${where}`
     /// - "delete": `DELETE FROM ${table} WHERE ${where}`
+    ///
+    /// 返回 (sql, params)：sql 中数据值一律用 `?` 占位符，params 按占位符出现顺序收集
+    /// （NULL / $raw: 片段内联，不产生参数）。调用方须按 params 顺序 bindExecuteParam。
     private func buildExecuteSql(
         table: String,
         subOp: String,
         `where`: String,
         data: HashMap<String, JsonValue>
-    ): String {
+    ): (String, ArrayList<JsonValue>) {
+        var params = ArrayList<JsonValue>()
         match (subOp) {
             case "insert" =>
                 // 构造列名和占位值
@@ -640,10 +668,14 @@ public class CordisHostServices {
                         vals.append(", ")
                     }
                     cols.append(col)
-                    vals.append(this.jsonValueToSqlLiteral(data.get(col) ?? JsonValue.Null))
+                    let (lit, param) = this.sqlValueOrPlaceholder(data.get(col) ?? JsonValue.Null)
+                    if (let Some(p) <- param) {
+                        params.add(p)
+                    }
+                    vals.append(lit)
                     first = false
                 }
-                return "INSERT INTO ${table} (${cols.toString()}) VALUES (${vals.toString()})"
+                return ("INSERT INTO ${table} (${cols.toString()}) VALUES (${vals.toString()})", params)
             case "update" =>
                 var setClause = StringBuilder()
                 var first = true
@@ -652,20 +684,24 @@ public class CordisHostServices {
                         setClause.append(", ")
                     }
                     setClause.append("${col}=")
-                    setClause.append(this.jsonValueToSqlLiteral(data.get(col) ?? JsonValue.Null))
+                    let (lit, param) = this.sqlValueOrPlaceholder(data.get(col) ?? JsonValue.Null)
+                    if (let Some(p) <- param) {
+                        params.add(p)
+                    }
+                    setClause.append(lit)
                     first = false
                 }
                 var sql = "UPDATE ${table} SET ${setClause.toString()}"
                 if (!`where`.isEmpty()) {
                     sql = sql + " WHERE " + `where`
                 }
-                return sql
+                return (sql, params)
             case "delete" =>
                 var sql = "DELETE FROM ${table}"
                 if (!`where`.isEmpty()) {
                     sql = sql + " WHERE " + `where`
                 }
-                return sql
+                return (sql, params)
             case _ =>
                 // 缺省：若有 where 做 update，否则做 insert
                 if (!`where`.isEmpty()) {
@@ -676,10 +712,14 @@ public class CordisHostServices {
                             setClause.append(", ")
                         }
                         setClause.append("${col}=")
-                        setClause.append(this.jsonValueToSqlLiteral(data.get(col) ?? JsonValue.Null))
+                        let (lit, param) = this.sqlValueOrPlaceholder(data.get(col) ?? JsonValue.Null)
+                        if (let Some(p) <- param) {
+                            params.add(p)
+                        }
+                        setClause.append(lit)
                         first = false
                     }
-                    return "UPDATE ${table} SET ${setClause.toString()} WHERE ${`where`}"
+                    return ("UPDATE ${table} SET ${setClause.toString()} WHERE ${`where`}", params)
                 }
                 var cols = StringBuilder()
                 var vals = StringBuilder()
@@ -690,10 +730,47 @@ public class CordisHostServices {
                         vals.append(", ")
                     }
                     cols.append(col)
-                    vals.append(this.jsonValueToSqlLiteral(data.get(col) ?? JsonValue.Null))
+                    let (lit, param) = this.sqlValueOrPlaceholder(data.get(col) ?? JsonValue.Null)
+                    if (let Some(p) <- param) {
+                        params.add(p)
+                    }
+                    vals.append(lit)
                     firstIns = false
                 }
-                return "INSERT INTO ${table} (${cols.toString()}) VALUES (${vals.toString()})"
+                return ("INSERT INTO ${table} (${cols.toString()}) VALUES (${vals.toString()})", params)
+        }
+    }
+
+    /// 把单个列值转换为 (SQL 片段, 待绑定参数)。
+    /// - `$raw:` 前缀 → 去前缀后原文内联（SQL 函数 / 表达式），不参数化；
+    /// - 字符串 → `?` 占位符（本次修复的核心目标：大段中文 payload 不再内联进 SQL 文本）；
+    /// - null → 内联 `NULL`（ORM 的 add() 无 NULL 重载，内联最稳）；
+    /// - Number / Boolean → **维持内联**，理由见下；
+    /// - 其余（数组 / 对象）→ `?` 占位符，值序列化为 JSON 文本下发。
+    private func sqlValueOrPlaceholder(v: JsonValue): (String, ?JsonValue) {
+        match (v) {
+            case JsonValue.String(s) =>
+                if (s.startsWith("$raw:")) {
+                    return (s[5..], None)
+                }
+                return ("?", Some(v))
+            case JsonValue.Null => return ("NULL", None)
+            // Number / Boolean 刻意保持内联：内联时 postgres 视其为「无类型字面量」，
+            // 按目标列做赋值转换（status=1.000000 落到 integer 列可接受）；一旦改为
+            // 绑定参数，参数类型会按列推断，Float64 文本 "1.000000" 交给 int4 会报
+            // invalid input syntax for type integer。旧实现即内联，此处严格保持行为不变。
+            case JsonValue.Number(n) => return (this.jsonValueToSqlLiteral(v), None)
+            case JsonValue.Boolean(b) => return (this.jsonValueToSqlLiteral(v), None)
+            case _ => return ("?", Some(v))
+        }
+    }
+
+    /// 将占位符对应的值绑定为参数（扩展协议 + 文本格式，UTF-8 安全）。
+    /// 数组 / 对象序列化为 JSON 文本后以 String 参数下发（json / jsonb 列接受文本表示）。
+    private func bindExecuteParam(executor: SqlExecutor, v: JsonValue): Unit {
+        match (v) {
+            case JsonValue.String(s) => executor.add(s)
+            case _ => executor.add(v.stringify())
         }
     }
 

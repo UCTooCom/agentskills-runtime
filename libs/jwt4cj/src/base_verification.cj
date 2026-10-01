@@ -333,7 +333,6 @@ public class BaseVerification <: Verification {
             }
         } else {
             isValid = assertInstantIsPast(claimVal, leeway, now)
-            print(isValid)
             if (!isValid) {
                 throw IncorrectClaimException("The Token can't be used before ${claimVal}.", claimName, claim)
             }

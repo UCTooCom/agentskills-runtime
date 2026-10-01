@@ -8,12 +8,18 @@ import magic.app.services.tool.CrudGenService
 import magic.app.services.tool.CrudGenResult
 import magic.app.services.tool.CrudGenAllResult
 import magic.app.services.tool.WebCrudGenService
+import magic.app.services.tool.PluginGenService
+import magic.app.services.tool.PluginGenResult
 //#region AutoCreateCode
 
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.core.response.{APIError, APIResult}
+import std.time.DateTime
 import magic.app.models.uctoo.DbInfoPO
+import magic.app.models.uctoo.UctooUserPO
 import magic.app.services.uctoo.DbInfoService
+import magic.app.services.uctoo.OperateLogService
+import magic.app.services.uctoo.UctooUserService
 import magic.log.LogUtils
 import std.collection.{HashMap, Map, ArrayList}
 import std.convert
@@ -25,11 +31,16 @@ public class DbInfoController {
     private var service: DbInfoService
     private var crudGenService: CrudGenService
     private var webCrudGenService: WebCrudGenService
+    private var pluginGenService: PluginGenService
+    // 代码生成类接口需要解析「调用主体是真人还是 Agent」，供 operate_log 审计留痕
+    private var uctooUserService: UctooUserService
 
     public init(service: DbInfoService) {
         this.service = service
         this.crudGenService = CrudGenService()
         this.webCrudGenService = WebCrudGenService()
+        this.pluginGenService = PluginGenService()
+        this.uctooUserService = UctooUserService()
     }
 
     public func add(req: HttpRequest, res: HttpResponse): Unit {
@@ -839,37 +850,62 @@ public class DbInfoController {
      * @param res 响应对象
      */
     public func generateCrud(req: HttpRequest, res: HttpResponse): Unit {
+        // ① 登录态硬校验（真人 / Agent 均可）
+        let operatorId = requireLogin(req, res)
+        if (operatorId.isNone()) {
+            return
+        }
+        let userId = operatorId.getOrThrow()
+        let identityType = resolveIdentityType(userId)
+        let startTime = DateTime.now()
+        var success = false
+        var errorMessage = ""
+
         try {
             let dbName = req.queryParam("dbName")
             let tableName = req.queryParam("tableName")
 
             if (dbName.isNone()) {
-                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少数据库名称参数 (dbName)\"}")
+                errorMessage = "缺少数据库名称参数 (dbName)"
+                auditGeneration(userId, req, "crudgen", "generateCrud", "/api/v1/uctoo/db_info/generateCrud",
+                    buildCrudAuditParams("crudgen", identityType, "", "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"${errorMessage}\"}")
                 return
             }
 
             if (tableName.isNone()) {
-                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少表名称参数 (tableName)\"}")
+                errorMessage = "缺少表名称参数 (tableName)"
+                auditGeneration(userId, req, "crudgen", "generateCrud", "/api/v1/uctoo/db_info/generateCrud",
+                    buildCrudAuditParams("crudgen", identityType, dbName.getOrThrow(), "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"${errorMessage}\"}")
                 return
             }
 
-            LogUtils.info("DbInfoController", "generateCrud called for ${dbName.getOrThrow()}.${tableName.getOrThrow()}")
+            LogUtils.info("DbInfoController", "generateCrud called by ${userId}(${identityType}) for ${dbName.getOrThrow()}.${tableName.getOrThrow()}")
 
             let result = crudGenService.generateCrud(dbName.getOrThrow(), tableName.getOrThrow())
 
             if (result.success) {
                 if (let Some(data) <- result.data) {
+                    success = true
                     let responseJson = buildCrudGenResultJson(data)
                     res.status(200).json(responseJson)
                 } else {
-                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"生成失败\"}")
+                    errorMessage = "生成失败"
+                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errorMessage}\"}")
                 }
             } else {
-                let reason = result.reason ?? "生成失败"
-                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                errorMessage = result.reason ?? "生成失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errorMessage}\"}")
             }
+
+            auditGeneration(userId, req, "crudgen", "generateCrud", "/api/v1/uctoo/db_info/generateCrud",
+                buildCrudAuditParams("crudgen", identityType, dbName.getOrThrow(), tableName.getOrThrow(), success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
         } catch (e: Exception) {
+            errorMessage = e.message
             LogUtils.error("DbInfoController", "generateCrud exception: ${e.message}")
+            auditGeneration(userId, req, "crudgen", "generateCrud", "/api/v1/uctoo/db_info/generateCrud",
+                buildCrudAuditParams("crudgen", identityType, "", "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
@@ -880,31 +916,53 @@ public class DbInfoController {
      * @param res 响应对象
      */
     public func generateAllCrud(req: HttpRequest, res: HttpResponse): Unit {
+        // ① 登录态硬校验（真人 / Agent 均可）
+        let operatorId = requireLogin(req, res)
+        if (operatorId.isNone()) {
+            return
+        }
+        let userId = operatorId.getOrThrow()
+        let identityType = resolveIdentityType(userId)
+        let startTime = DateTime.now()
+        var success = false
+        var errorMessage = ""
+
         try {
             let dbName = req.queryParam("dbName")
 
             if (dbName.isNone()) {
-                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少数据库名称参数 (dbName)\"}")
+                errorMessage = "缺少数据库名称参数 (dbName)"
+                auditGeneration(userId, req, "crudgen", "generateAllCrud", "/api/v1/uctoo/db_info/generate-all-crud",
+                    buildCrudAuditParams("crudgen", identityType, "", "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"${errorMessage}\"}")
                 return
             }
 
-            LogUtils.info("DbInfoController", "generateAllCrud called for ${dbName.getOrThrow()}")
+            LogUtils.info("DbInfoController", "generateAllCrud called by ${userId}(${identityType}) for ${dbName.getOrThrow()}")
 
             let result = crudGenService.generateAllCrud(dbName.getOrThrow())
 
             if (result.success) {
                 if (let Some(data) <- result.data) {
+                    success = true
                     let responseJson = buildCrudGenAllResultJson(data)
                     res.status(200).json(responseJson)
                 } else {
-                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"生成失败\"}")
+                    errorMessage = "生成失败"
+                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errorMessage}\"}")
                 }
             } else {
-                let reason = result.reason ?? "生成失败"
-                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${reason}\"}")
+                errorMessage = result.reason ?? "生成失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errorMessage}\"}")
             }
+
+            auditGeneration(userId, req, "crudgen", "generateAllCrud", "/api/v1/uctoo/db_info/generate-all-crud",
+                buildCrudAuditParams("crudgen", identityType, dbName.getOrThrow(), "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
         } catch (e: Exception) {
+            errorMessage = e.message
             LogUtils.error("DbInfoController", "generateAllCrud exception: ${e.message}")
+            auditGeneration(userId, req, "crudgen", "generateAllCrud", "/api/v1/uctoo/db_info/generate-all-crud",
+                buildCrudAuditParams("crudgen", identityType, "", "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
@@ -915,31 +973,56 @@ public class DbInfoController {
      * @param res 响应对象
      */
     public func generateWeb(req: HttpRequest, res: HttpResponse): Unit {
+        // ① 登录态硬校验（真人 / Agent 均可）
+        let operatorId = requireLogin(req, res)
+        if (operatorId.isNone()) {
+            return
+        }
+        let userId = operatorId.getOrThrow()
+        let identityType = resolveIdentityType(userId)
+        let startTime = DateTime.now()
+        var success = false
+        var errorMessage = ""
+
         try {
             let dbName = req.queryParam("dbName")
             let tableName = req.queryParam("tableName")
 
             if (dbName.isNone()) {
-                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少数据库名称参数 (dbName)\"}")
+                errorMessage = "缺少数据库名称参数 (dbName)"
+                auditGeneration(userId, req, "crudweb", "generateWeb", "/api/v1/uctoo/db_info/generate-web",
+                    buildCrudAuditParams("crudweb", identityType, "", "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"${errorMessage}\"}")
                 return
             }
 
             if (tableName.isNone()) {
-                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少表名称参数 (tableName)\"}")
+                errorMessage = "缺少表名称参数 (tableName)"
+                auditGeneration(userId, req, "crudweb", "generateWeb", "/api/v1/uctoo/db_info/generate-web",
+                    buildCrudAuditParams("crudweb", identityType, dbName.getOrThrow(), "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"${errorMessage}\"}")
                 return
             }
 
-            LogUtils.info("DbInfoController", "generateWeb called for ${dbName.getOrThrow()}.${tableName.getOrThrow()}")
+            LogUtils.info("DbInfoController", "generateWeb called by ${userId}(${identityType}) for ${dbName.getOrThrow()}.${tableName.getOrThrow()}")
 
-            let success = webCrudGenService.generateWeb(dbName.getOrThrow(), tableName.getOrThrow())
+            let successFlag = webCrudGenService.generateWeb(dbName.getOrThrow(), tableName.getOrThrow())
+            success = successFlag
 
-            if (success) {
+            if (successFlag) {
                 res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":{\"dbName\":\"${dbName.getOrThrow()}\",\"tableName\":\"${tableName.getOrThrow()}\"}}")
             } else {
-                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"生成Web页面失败\"}")
+                errorMessage = "生成Web页面失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errorMessage}\"}")
             }
+
+            auditGeneration(userId, req, "crudweb", "generateWeb", "/api/v1/uctoo/db_info/generate-web",
+                buildCrudAuditParams("crudweb", identityType, dbName.getOrThrow(), tableName.getOrThrow(), success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
         } catch (e: Exception) {
+            errorMessage = e.message
             LogUtils.error("DbInfoController", "generateWeb exception: ${e.message}")
+            auditGeneration(userId, req, "crudweb", "generateWeb", "/api/v1/uctoo/db_info/generate-web",
+                buildCrudAuditParams("crudweb", identityType, "", "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
     }
@@ -950,27 +1033,378 @@ public class DbInfoController {
      * @param res 响应对象
      */
     public func generateAllWeb(req: HttpRequest, res: HttpResponse): Unit {
+        // ① 登录态硬校验（真人 / Agent 均可）
+        let operatorId = requireLogin(req, res)
+        if (operatorId.isNone()) {
+            return
+        }
+        let userId = operatorId.getOrThrow()
+        let identityType = resolveIdentityType(userId)
+        let startTime = DateTime.now()
+        var success = false
+        var errorMessage = ""
+
         try {
             let dbName = req.queryParam("dbName")
 
             if (dbName.isNone()) {
-                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少数据库名称参数 (dbName)\"}")
+                errorMessage = "缺少数据库名称参数 (dbName)"
+                auditGeneration(userId, req, "crudweb", "generateAllWeb", "/api/v1/uctoo/db_info/generate-all-web",
+                    buildCrudAuditParams("crudweb", identityType, "", "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"${errorMessage}\"}")
                 return
             }
 
-            LogUtils.info("DbInfoController", "generateAllWeb called for ${dbName.getOrThrow()}")
+            LogUtils.info("DbInfoController", "generateAllWeb called by ${userId}(${identityType}) for ${dbName.getOrThrow()}")
 
-            let success = webCrudGenService.generateAllWeb(dbName.getOrThrow())
+            let successFlag = webCrudGenService.generateAllWeb(dbName.getOrThrow())
+            success = successFlag
 
-            if (success) {
+            if (successFlag) {
                 res.status(200).json("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":{\"dbName\":\"${dbName.getOrThrow()}\"}}")
             } else {
-                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"批量生成Web页面失败\"}")
+                errorMessage = "批量生成Web页面失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errorMessage}\"}")
             }
+
+            auditGeneration(userId, req, "crudweb", "generateAllWeb", "/api/v1/uctoo/db_info/generate-all-web",
+                buildCrudAuditParams("crudweb", identityType, dbName.getOrThrow(), "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
         } catch (e: Exception) {
+            errorMessage = e.message
             LogUtils.error("DbInfoController", "generateAllWeb exception: ${e.message}")
+            auditGeneration(userId, req, "crudweb", "generateAllWeb", "/api/v1/uctoo/db_info/generate-all-web",
+                buildCrudAuditParams("crudweb", identityType, "", "", success, (DateTime.now() - startTime).toMilliseconds(), errorMessage))
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
         }
+    }
+
+    /**
+     * 生成插件轨代码（plugingen）
+     *
+     * 与 generateCrud / generateWeb 的区别：插件名与表名解耦（如长程任务插件
+     * long-running-task 并无同名表），且加载轨与数据契约都是独立开关，
+     * 所以参数较多，前端以弹出表单收集后通过 JSON body 提交。
+     * 同时兼容 query 传参，便于命令行/curl 直接调用。
+     *
+     * body/query 参数：
+     *   pluginName   必填，插件名（连字符自动转下划线、转小写）
+     *   dbName       表驱动模式必填；空白骨架不需要
+     *   tableName    表驱动模式必填
+     *   mode         sync / dylib / process，缺省 process（L3 进程隔离轨）
+     *   blank        true 时只生成空白骨架
+     *   contract     true 时额外产出 DATA_CONTRACT.yaml（process 轨下被忽略）
+     *   contractOnly true 时只产出 DATA_CONTRACT.yaml（不支持 process 轨）
+     *
+     * 安全口径（项目铁律：CLI/API/MCP 一切对外入口都受 RBAC 约束且必须留痕）：
+     * - 登录态：RequirePermissionMiddleware 已在全局拦过一道，这里再显式校验一次。
+     *   双重校验不是冗余——中间件靠路径匹配，本方法靠「调用点语义」，
+     *   将来若有人把路由挪出全局中间件覆盖范围，这里仍能兜住。
+     * - 主体识别：真人用户与 Agent 都经 JWT 落到 locals.userId（Agent 走
+     *   /api/v1/uctoo/aip/identity/agent-login 拿同一形态的 JWT），故一视同仁；
+     *   审计里额外记 userType（human/agent），回答「这次代码生成是谁发起的」。
+     * - 审计：写 operate_log（module='plugin'）。全局 OperateLogMiddleware 那行是
+     *   通用 API 留痕（module='api'，不区分成败），本行补充成败、耗时与主体类型。
+     */
+    public func generatePlugin(req: HttpRequest, res: HttpResponse): Unit {
+        // ① 登录态硬校验（真人 / Agent 均可）
+        let operatorId = requireLogin(req, res)
+        if (operatorId.isNone()) {
+            return
+        }
+        let userId = operatorId.getOrThrow()
+        let identityType = resolveIdentityType(userId)
+        let ip = clientIp(req)
+
+        let startTime = DateTime.now()
+        var success = false
+        var errorMessage = ""
+
+        try {
+            let body = parseBody(req)
+
+            let pluginName = paramString(body, "pluginName", req)
+            let dbName = paramString(body, "dbName", req)
+            let tableName = paramString(body, "tableName", req)
+            var mode = paramString(body, "mode", req)
+            if (mode.isEmpty()) {
+                mode = "process"
+            }
+            let blank = paramBool(body, "blank", req)
+            let contract = paramBool(body, "contract", req)
+            let contractOnly = paramBool(body, "contractOnly", req)
+
+            // 参数缺失也要留痕：审计先于 return，避免「失败的调用不留记录」
+            if (pluginName.isEmpty()) {
+                errorMessage = "缺少插件名参数 (pluginName)"
+                auditPluginGeneration(
+                    userId, req,
+                    buildGenAuditParams(
+                        identityType, pluginName, dbName, tableName, mode,
+                        blank, contract, contractOnly, false, 0, errorMessage
+                    )
+                )
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"${errorMessage}\"}")
+                return
+            }
+
+            LogUtils.info("DbInfoController", "generatePlugin called by ${userId}(${identityType}): name=${pluginName} db=${dbName} table=${tableName} mode=${mode} blank=${blank} contract=${contract} contractOnly=${contractOnly}")
+
+            let result = pluginGenService.generatePlugin(
+                pluginName,
+                dbName,
+                tableName,
+                mode,
+                blank,
+                contract,
+                contractOnly
+            )
+
+            if (result.success) {
+                if (let Some(data) <- result.data) {
+                    success = true
+                    res.status(200).json(buildPluginGenResultJson(data))
+                } else {
+                    errorMessage = "生成插件失败"
+                    res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errorMessage}\"}")
+                }
+            } else {
+                errorMessage = result.reason ?? "生成插件失败"
+                res.status(500).json("{\"errno\":\"50001\",\"errmsg\":\"${errorMessage}\"}")
+            }
+
+            auditPluginGeneration(
+                userId, req,
+                buildGenAuditParams(
+                    identityType, pluginName, dbName, tableName, mode,
+                    blank, contract, contractOnly, success,
+                    (DateTime.now() - startTime).toMilliseconds(), errorMessage
+                )
+            )
+        } catch (e: Exception) {
+            errorMessage = e.message
+            LogUtils.error("DbInfoController", "generatePlugin exception: ${e.message}")
+            auditPluginGeneration(
+                userId, req,
+                buildGenAuditParams(
+                    identityType, "", "", "", "",
+                    false, false, false, false,
+                    (DateTime.now() - startTime).toMilliseconds(), errorMessage
+                )
+            )
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+
+    /**
+     * 登录态硬校验：取不到 locals.userId 时直接写 401
+     *
+     * @return 已认证主体 ID；未登录返回 None（此时响应已写入，调用方须立即 return）
+     */
+    private func requireLogin(req: HttpRequest, res: HttpResponse): ?String {
+        let userId = req.getLocals("userId")
+        if (let Some(u) <- userId) {
+            let sOpt = u as String
+            if (let Some(s) <- sOpt) {
+                if (!s.isEmpty()) {
+                    return Some(s)
+                }
+            }
+        }
+        res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+        return None<String>
+    }
+
+    /**
+     * 解析调用主体类型：human / agent / unknown
+     *
+     * Agent 走 agent-login 拿到的 JWT 与真人同形，落到 locals 的同样是 uctoo_user.id，
+     * 区分依据是 uctoo_user.user_type。查不到时不阻断主流程，记 unknown。
+     */
+    private func resolveIdentityType(userId: String): String {
+        try {
+            let result = uctooUserService.getById(userId)
+            if (result.success) {
+                if (let Some(u) <- result.data) {
+                    return u.userType
+                }
+            }
+        } catch (e: Exception) {
+            LogUtils.warn("DbInfoController", "resolveIdentityType failed: ${e.message}")
+        }
+        return "unknown"
+    }
+
+    /// 客户端 IP（与 OperateLogMiddleware 同口径：X-Forwarded-For → X-Real-IP → unknown）
+    private func clientIp(req: HttpRequest): String {
+        let xff = req.header("X-Forwarded-For")
+        if (let Some(v) <- xff) {
+            let parts = v.split(",")
+            if (parts.size > 0) {
+                return parts[0].trimAscii()
+            }
+            return v
+        }
+        let xReal = req.header("X-Real-IP")
+        if (let Some(v2) <- xReal) {
+            return v2
+        }
+        return "unknown"
+    }
+
+    /// 代码生成类操作的审计参数（脱敏前均为非敏感的生成元信息，不含凭证）
+    private func buildGenAuditParams(
+        identityType: String,
+        pluginName: String,
+        dbName: String,
+        tableName: String,
+        mode: String,
+        blank: Bool,
+        contract: Bool,
+        contractOnly: Bool,
+        success: Bool,
+        durationMs: Int64,
+        errorMessage: String
+    ): String {
+        let sb = StringBuilder()
+        sb.append("{")
+        sb.append("\"tool\":\"plugingen\",")
+        sb.append("\"identityType\":\"${escapeJson(identityType)}\",")
+        sb.append("\"pluginName\":\"${escapeJson(pluginName)}\",")
+        sb.append("\"dbName\":\"${escapeJson(dbName)}\",")
+        sb.append("\"tableName\":\"${escapeJson(tableName)}\",")
+        sb.append("\"mode\":\"${escapeJson(mode)}\",")
+        sb.append("\"blank\":${blank},")
+        sb.append("\"contract\":${contract},")
+        sb.append("\"contractOnly\":${contractOnly},")
+        sb.append("\"success\":${success},")
+        sb.append("\"durationMs\":${durationMs},")
+        sb.append("\"error\":\"${escapeJson(errorMessage)}\"")
+        sb.append("}")
+        return sb.toString()
+    }
+
+    /**
+     * 写 operate_log 审计（module='plugin'）
+     *
+     * 与全局 OperateLogMiddleware 的 module='api' 通用留痕互补：
+     * 那行只记「有人调了这个路由」，这行记「谁、生成了什么、成没成、耗时多久」。
+     * creator 为空串时必须转 None —— operate_log.creator 是 uuid 列，写空串会触发
+     * PostgreSQL 22P02 并让整条日志静默丢失（既有教训，见 OperateLogService.recordLog）。
+     */
+    private func auditPluginGeneration(userId: String, req: HttpRequest, paramsJson: String): Unit {
+        auditGeneration(userId, req, "plugingen", "generatePlugin", "/api/v1/uctoo/db_info/generate-plugin", paramsJson)
+    }
+
+    /**
+     * 写 operate_log 审计（module='plugin'）的通用入口。
+     *
+     * tool / operate / route 由调用方按具体生成动作传入，便于区分 crudgen / crudweb / plugingen。
+     * 与全局 OperateLogMiddleware 的 module='api' 通用留痕互补：那行只记「有人调了这个路由」，
+     * 这行记「谁、生成了什么、成没成、耗时多久」。
+     * creator 为空串必须转 None —— operate_log.creator 是 uuid 列，写空串会触发 PostgreSQL 22P02
+     * 并让整条日志静默丢失（既有教训，见 OperateLogService.recordLog）。
+     */
+    private func auditGeneration(userId: String, req: HttpRequest, tool: String, operate: String, route: String, paramsJson: String): Unit {
+        try {
+            OperateLogService.recordLog(
+                "plugin",
+                operate,
+                route,
+                paramsJson,
+                clientIp(req),
+                "POST",
+                if (userId.isEmpty()) { None<String> } else { Some<String>(userId) }
+            )
+        } catch (e: Exception) {
+            LogUtils.error("DbInfoController", "auditGeneration failed: ${e.message}")
+        }
+    }
+
+    /// 代码生成类（crud / web）的审计参数（非敏感元信息，不含凭证）
+    private func buildCrudAuditParams(tool: String, identityType: String, dbName: String, tableName: String, success: Bool, durationMs: Int64, errorMessage: String): String {
+        let sb = StringBuilder()
+        sb.append("{")
+        sb.append("\"tool\":\"${escapeJson(tool)}\",")
+        sb.append("\"identityType\":\"${escapeJson(identityType)}\",")
+        sb.append("\"dbName\":\"${escapeJson(dbName)}\",")
+        sb.append("\"tableName\":\"${escapeJson(tableName)}\",")
+        sb.append("\"success\":${success},")
+        sb.append("\"durationMs\":${durationMs},")
+        sb.append("\"error\":\"${escapeJson(errorMessage)}\"")
+        sb.append("}")
+        return sb.toString()
+    }
+
+    /**
+     * 取字符串参数：JSON body 优先，回落 query；两者都没有返回空串
+     */
+    private func paramString(body: ?Map<String, Any>, key: String, req: HttpRequest): String {
+        if (let Some(b) <- body) {
+            if (let Some(v) <- b.get(key)) {
+                let sOpt = v as String
+                if (let Some(s) <- sOpt) {
+                    if (!s.isEmpty()) {
+                        return s
+                    }
+                }
+            }
+        }
+        if (let Some(q) <- req.queryParam(key)) {
+            return q
+        }
+        return ""
+    }
+
+    /**
+     * 取布尔参数：JSON body 优先（兼容 true / "true" / "1" / "on"），回落 query
+     */
+    private func paramBool(body: ?Map<String, Any>, key: String, req: HttpRequest): Bool {
+        if (let Some(b) <- body) {
+            if (let Some(v) <- b.get(key)) {
+                let bOpt = v as Bool
+                if (let Some(x) <- bOpt) {
+                    return x
+                }
+                let sOpt = v as String
+                if (let Some(s) <- sOpt) {
+                    return s == "true" || s == "1" || s == "on"
+                }
+            }
+        }
+        if (let Some(q) <- req.queryParam(key)) {
+            return q == "true" || q == "1" || q == "on"
+        }
+        return false
+    }
+
+    private func buildPluginGenResultJson(data: PluginGenResult): String {
+        let contractFile = if (let Some(f) <- data.dataContractFile) { f } else { "" }
+        let sb = StringBuilder()
+        sb.append("{\"errno\":\"0\",\"errmsg\":\"success\",\"data\":{")
+        sb.append("\"pluginName\":\"${data.pluginName}\",")
+        sb.append("\"dbName\":\"${data.dbName}\",")
+        sb.append("\"tableName\":\"${data.tableName}\",")
+        sb.append("\"mode\":\"${data.mode}\",")
+        sb.append("\"blank\":${data.blank},")
+        sb.append("\"contractGenerated\":${data.contractGenerated},")
+        sb.append("\"contractOnly\":${data.contractOnly},")
+        sb.append("\"skillDir\":\"${data.skillDir}\",")
+        sb.append("\"pluginYamlFile\":\"${data.pluginYamlFile}\",")
+        sb.append("\"skillMdFile\":\"${data.skillMdFile}\",")
+        sb.append("\"dataContractFile\":\"${contractFile}\",")
+        sb.append("\"command\":\"${escapeJson(data.command)}\",")
+        sb.append("\"output\":\"${escapeJson(data.output)}\"")
+        sb.append("}}")
+        return sb.toString()
+    }
+
+    /// JSON 字符串转义：子进程输出可能含引号/换行/反斜杠，直接拼接会破坏 JSON
+    private func escapeJson(raw: String): String {
+        raw.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
     }
 
     private func buildCrudGenResultJson(data: CrudGenResult): String {

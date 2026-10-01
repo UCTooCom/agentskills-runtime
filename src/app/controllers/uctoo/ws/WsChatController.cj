@@ -6,6 +6,7 @@ import magic.core.model.ChatModel
 import magic.skill.SkillAwareAgent
 import magic.agent_executor.react.ReactExecutor
 import magic.core.agent.{AgentRequest, AgentResponse}
+import magic.core.AgentSessionContext
 import magic.agent.memory.tiered.TieredMemory
 import magic.interaction.EventHandlerManager
 import magic.app.services.bridge.AgentRuntimeBridge
@@ -96,6 +97,7 @@ public class WsChatController {
             let memory = TieredMemory(agentId: _agentId)
             _agent = SkillAwareAgent(
                 skillManager: skillManager,
+                sessionContext: AgentSessionContext(userId: "", sessionId: "", agentId: _agentId),
                 model: agentModel,
                 executor: executor,
                 name: agentName,
@@ -112,6 +114,7 @@ public class WsChatController {
             let memory = TieredMemory(agentId: _agentId)
             _agent = SkillAwareAgent(
                 skillManager: skillManager,
+                sessionContext: AgentSessionContext(userId: "", sessionId: "", agentId: _agentId),
                 model: chatModel,
                 executor: executor,
                 name: "Skill Assistant",

@@ -92,6 +92,21 @@ public class CliTool <: NativeFuncTool {
 
         let commandArgs = parseArgsArray(argsStr)
         let envVars = parseEnvObject(envStr)
+
+        // 同源应用地址护栏（与 browser_tool.cj 同源）：严禁用 webmcp-cli 新开/接管独立 Chrome 来操作
+        // uctoo 管理后台。webmcp-cli tabs/pages open 会产生一个没有用户登录态的独立浏览器，被服务端
+        // 重定向到登录页。本应用内导航必须在用户当前已登录标签页内用前端 navigate_url 完成。
+        if (CliTool.isWebmcpCliAppUrlOpen(command, commandArgs)) {
+            LogUtils.warn("[CliTool] Refused webmcp-cli tabs/pages open for same-origin app URL (would lose login session)")
+            let resp = JsonObject()
+            resp.put("success", JsonBool(false))
+            resp.put("refused", JsonBool(true))
+            resp.put("error", JsonString(
+                "拒绝用 webmcp-cli 新开/接管独立浏览器操作 uctoo 管理后台（会丢失用户登录态、被重定向到登录页）。" +
+                "请改用页面级 WebMCP 工具 navigate_url 在用户当前已登录标签页内导航，例如：" +
+                "{ \"name\": \"navigate_url\", \"arguments\": { \"url\": \"/vue-pro/database/uctoo/entity\" } }。"))
+            return resp.toJsonString()
+        }
         // Round2 修复：旧代码这里算出 workingDir 之后**从未使用**（死代码），
         // 子进程 CWD 恒为 runtime 根目录，相对路径脚本必然失败。现在真正透传给 newProcess。
         let workingDir: ?Path = CliTool.resolveWorkingDirectory(cwd)
@@ -149,6 +164,29 @@ public class CliTool <: NativeFuncTool {
                 cwdApplied: false
             )
         }
+    }
+
+    // 判断命令是否为 `webmcp-cli tabs/pages open <同源应用地址>`。命中即拒绝，强制改走前端 navigate_url。
+    protected static func isWebmcpCliAppUrlOpen(command: String, commandArgs: Array<String>): Bool {
+        if (!command.contains("webmcp-cli")) {
+            return false
+        }
+        if (commandArgs.size < 3) {
+            return false
+        }
+        let sub = commandArgs[0]
+        let action = commandArgs[1]
+        if (!((sub == "tabs" || sub == "tab" || sub == "pages" || sub == "page") && action == "open")) {
+            return false
+        }
+        let url = commandArgs[2]
+        let markers = ["localhost:3031", "127.0.0.1:3031", "javatoarktsapi.uctoo.com", "/vue-pro/"]
+        for (marker in markers) {
+            if (url.contains(marker)) {
+                return true
+            }
+        }
+        return false
     }
 
     /**

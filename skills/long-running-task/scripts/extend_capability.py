@@ -200,6 +200,8 @@ def main() -> int:
     parser.add_argument("--task_id", default="", help="透传 task_id")
     parser.add_argument("--execute", action="store_true",
                         help="已废弃（保留兼容）：commands.txt 现只要有缺口就产出，不再受此开关控制")
+    parser.add_argument("--data_contract", default="",
+                        help="编排器按步注入的表结构契约（数据契约）；本步仅透传接收，不消费")
     args = parser.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)

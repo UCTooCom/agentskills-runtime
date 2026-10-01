@@ -248,9 +248,32 @@ public class HTTPServer {
                 case ConnState.STATE_HIJACKED => "HIJACKED"
                 case ConnState.STATE_CLOSED => "CLOSED"
             }
-            logger.info("conn state: ${name}")
+            // NEW 是每一条新连接的起始态，几乎每条连接都会触发一次，属纯噪声，故跳过；
+            // 其余状态（ACTIVE/IDLE/CLOSED/HIJACKED）保留 INFO，便于排查连接泄漏/异常堆积。
+            if (name != "NEW") {
+                logger.info("conn state: ${name}")
+            }
         }
-        config.errorLog = { msg => logger.error("http: ${msg}") }
+        config.errorLog = { msg =>
+            // 以下均为客户端侧 / 握手期的良性噪声，不应以 ERROR 刷屏（2026-09-28 降噪）：
+            //  - Socket is already closed / write response over connection：客户端在响应写出前已断开
+            //    （浏览器取消 / 导航离开 / keep-alive 超时），属预期；
+            //  - TLS server handshake failed / TLS handler error：客户端 TLS 握手失败
+            //    （多为前端健康探测、TLS 版本协商不一致、本地证书环境），非服务异常；
+            //  - readHttpRequestFromConnection error / TLS read failed：读超时（日志实测每 ~10 分钟一次，
+            //    为 idle 连接被回收），非真实请求失败。
+            // 其余未匹配的（如真实写失败、非预期协议错误）仍按 ERROR 上报。
+            if (msg.contains("Socket is already closed")
+                || msg.contains("write response over connection")
+                || msg.contains("TLS server handshake failed")
+                || msg.contains("TLS handler error")
+                || msg.contains("readHttpRequestFromConnection error")
+                || msg.contains("TLS read failed")) {
+                logger.debug("http: ${msg} (客户端侧/握手期良性，已降级 DEBUG)")
+            } else {
+                logger.error("http: ${msg}")
+            }
+        }
         let libServer = LibHttpServer(handler: handler, config: config)
         _libServer = Some(libServer)
 

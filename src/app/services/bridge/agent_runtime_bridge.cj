@@ -4,12 +4,17 @@
 package magic.app.services.bridge
 
 import magic.agent.base.BaseAgent
+import magic.skill.{SkillAwareAgent, CompositeSkillToolManager}
+import magic.agent_executor.react.ReactExecutor
+import magic.core.AgentSessionContext
+import magic.agent.memory.tiered.TieredMemory
 import magic.core.agent.{AgentDefinition, AgentType, AgentMemory, AgentPermission}
 import magic.core.agent.AgentExecutor
 import magic.agent_executor.AgentExecutorManager
 import magic.model.ModelManager
 import magic.app.models.uctoo.AgentsPO
 import magic.app.services.uctoo.AgentsService
+import magic.tool.SubAgentTool
 import magic.app.core.response.APIResult
 import magic.log.LogUtils
 import f_util.UUID
@@ -36,7 +41,12 @@ public class AgentRuntimeBridge {
         }
     }
 
-    public init() {}
+    public init() {
+        // 组合根注入：把子 agent 真派生实现挂到 SubAgentTool 的函数槽。
+        // 实现落在 magic.app.services.bridge（本包），magic.tool 不反向依赖宿主服务，避免包循环依赖。
+        // 注：init(bridge:) 未声明为命名参数（无 !），调用只能按位置传参
+        SubAgentTool.setDispatcher(SubAgentDispatchServiceImpl(this))
+    }
 
     public func createRuntimeAgent(definition: AgentDefinition): APIResult<BaseAgent> {
         try {
@@ -46,7 +56,7 @@ public class AgentRuntimeBridge {
                 // 已存在同名记录，复用并更新
                 let existingPO = existingAgents[0]
                 let agentId = existingPO.id
-                let agent = buildAgentFromDefinition(definition)
+                let agent = buildAgentFromDefinition(definition, agentId)
                 runtimeAgents.add(agentId, agent)
                 let po = mapDefinitionToPO(definition, agentId)
                 po.status = Some(0)
@@ -56,7 +66,7 @@ public class AgentRuntimeBridge {
             }
             // 不存在同名记录，创建新记录
             let agentId = UUID.random().toString()
-            let agent = buildAgentFromDefinition(definition)
+            let agent = buildAgentFromDefinition(definition, agentId)
             runtimeAgents.add(agentId, agent)
             let po = mapDefinitionToPO(definition, agentId)
             po.status = Some(0)
@@ -79,7 +89,7 @@ public class AgentRuntimeBridge {
         }
     }
 
-    public func loadFromDatabase(agentId: String): APIResult<BaseAgent> {
+    public func loadFromDatabase(agentId: String, userId!: String = ""): APIResult<BaseAgent> {
         try {
             if (let Some(existing) <- runtimeAgents.get(agentId)) {
                 return APIResult<BaseAgent>(existing)
@@ -91,7 +101,7 @@ public class AgentRuntimeBridge {
             }
             if (let Some(po) <- result.data) {
                 let definition = mapPOToDefinition(po)
-                let agent = buildAgentFromDefinition(definition)
+                let agent = buildAgentFromDefinition(definition, agentId, userId: userId)
                 runtimeAgents.add(agentId, agent)
                 return APIResult<BaseAgent>(agent)
             }
@@ -110,7 +120,7 @@ public class AgentRuntimeBridge {
             }
             try {
                 let definition = mapPOToDefinition(po)
-                let agent = buildAgentFromDefinition(definition)
+                let agent = buildAgentFromDefinition(definition, po.id)
                 runtimeAgents.add(po.id, agent)
                 agents.add(agent)
             } catch (_: Exception) {}
@@ -144,8 +154,8 @@ public class AgentRuntimeBridge {
                 return data
             }
         }
-        let agent = buildAgentFromDefinition(definition)
         let agentId = UUID.random().toString()
+        let agent = buildAgentFromDefinition(definition, agentId)
         runtimeAgents.add(agentId, agent)
         return agent
     }
@@ -162,14 +172,25 @@ public class AgentRuntimeBridge {
         ids
     }
 
-    private func buildAgentFromDefinition(definition: AgentDefinition): BaseAgent {
+    private func buildAgentFromDefinition(definition: AgentDefinition, agentId: String, userId!: String = ""): BaseAgent {
         let modelName = if (let Some(m) <- definition.model) { m } else { "deepseek:deepseek-chat" }
         let chatModel = ModelManager.createChatModel(modelName)
-        BaseAgent(
+        // 根因 D：宿主执行者必须有真正的 executor + 工具，否则 agent.chat 在
+        // executor.getOrThrow() 处抛异常 → 返回空内容 → 永远 no_artifacts_yet
+        // （长程任务只跑第一步、web 只显示第一步）。对齐 web 聊天路径
+        // （WebMCPProtocol）用 SkillAwareAgent + ReactExecutor + 工具 + 记忆。
+        let sessionContext = AgentSessionContext(userId: userId, sessionId: agentId, agentId: agentId)
+        let memory = TieredMemory(agentId: agentId)
+        SkillAwareAgent(
+            skillManager: CompositeSkillToolManager(),
+            sessionContext: sessionContext,
             model: chatModel,
+            executor: ReactExecutor(),
             name: definition.name,
             description: definition.description,
-            systemPrompt: definition.systemPrompt
+            systemPrompt: definition.systemPrompt,
+            memory: Some(memory),
+            eventHandlerManager: None
         )
     }
 
@@ -195,6 +216,7 @@ public class AgentRuntimeBridge {
         po.defaultInputTypes = definition.defaultInputTypes
         po.defaultOutputTypes = definition.defaultOutputTypes
         po.discoverable = definition.discoverable
+        po.skillName = definition.skillName
         po.sourcePath = Some(definition.sourcePath.toString())
         po.syncStatus = Some("synced")
 
@@ -255,7 +277,8 @@ public class AgentRuntimeBridge {
             None<String>,
             if (let Some(s) <- po.systemPrompt) { s } else { "" },
             Path(if (let Some(s) <- po.sourcePath) { s } else { "." }),
-            Path(".")
+            Path("."),
+            po.skillName
         )
     }
 

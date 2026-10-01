@@ -1,0 +1,178 @@
+# ============================================================================
+# SDD 规范驱动开发 —— 六步编排（方案 A 文件态格式：script / plugin / output）
+# 格式要素与 skills/long-running-task/COMPOSITION.yaml 完全一致：
+#   step_type / script / plugin_route / depends_on / condition /
+#   uses_tables / input / degradation_chain / acceptance_criteria
+#
+# 落盘红线：阶段文档一律落 runtime 自有 specs/{feature_name}/，
+#           禁止落 .codeartsdoer/specs/（该目录归属 CodeArts Agent）。
+# 研究步红线：condition 只挂入口信号 ${input.enable_research}，
+#             绝不挂"文件是否存在"（否则首轮恒跳过，见 design.md §2.2.2 注）。
+#
+# 两张新表的写入责任方（ADR-001 v2 固化，填平"白名单列了但没人写"的悬空债）：
+#   sdd_projects        —— 每步推进 current_stage / round / status，由宿主侧
+#                          SddProjectsService 写入（“phase 推进”，禁止通用 edit）
+#   sub_agent_invocations —— 仅文档步（research/spec/design/task/test）派生时写，
+#                          由宿主侧 SubAgentInvocationsService 写入；
+#                          code 步按 v3 决策不派生子 agent，故不触碰本表
+# ============================================================================
+
+name: sdd
+description: 规范驱动开发六步编排（研究可选 + 需求→设计→任务→编码→测试 + 输出聚合）
+version: 1.0.0
+
+steps:
+  - name: research
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/sdd/gen-research"
+    depends_on: []
+    condition: "${input.enable_research}"
+    uses_tables:
+      - agent_tasks
+      - long_running_task_artifact
+      - sdd_projects
+      - sub_agent_invocations
+    input:
+      task_description: "${input.task_description}"
+      feature_name: "${input.feature_name}"
+      template_path: "templates/research-template.md"
+      outdir: "specs/${input.feature_name}"
+    acceptance_criteria:
+      - 产出 specs/${input.feature_name}/research.md 且八节齐全
+      - research.md 落 long_running_task_artifact，usage=deliverable，stage=research
+      - 子 agent sdd-researcher 真实派生（sub_agent_invocations 有记录），不得主 agent 自扮演
+      - 回传结果经契约校验（output_contract.required_sections 八节）通过
+      - sdd_projects.current_stage 推进到 research，task_id 回指 agent_tasks.id
+
+  - name: spec
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/sdd/gen-spec"
+    depends_on:
+      - research
+    uses_tables:
+      - agent_tasks
+      - long_running_task_artifact
+      - sdd_projects
+      - sub_agent_invocations
+    input:
+      feature_name: "${input.feature_name}"
+      task_description: "${input.task_description}"
+      upstream_doc: "${research.output}"
+      template_path: "templates/spec_template.md"
+      outdir: "specs/${input.feature_name}"
+    acceptance_criteria:
+      - 产出 spec.md 且含六节（组件定位/领域术语/角色与边界/DFX/核心能力/数据约束）
+      - 核心能力章节用 EARS 语法写验收条件
+      - spec.md 落 long_running_task_artifact，usage=deliverable，stage=spec
+      - 子 agent sdd-spec-writer 真实派生且回传经契约校验通过
+      - sdd_projects.current_stage 推进到 spec（revise 时 round 递增、stage 不倒退）
+
+  - name: design
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/sdd/gen-design"
+    depends_on:
+      - spec
+    uses_tables:
+      - agent_tasks
+      - long_running_task_artifact
+      - sdd_projects
+      - sub_agent_invocations
+    input:
+      feature_name: "${input.feature_name}"
+      spec_path: "${spec.output}"
+      template_path: "templates/design_template.md"
+      outdir: "specs/${input.feature_name}"
+    acceptance_criteria:
+      - 产出 design.md，首章为"需求与存量功能关系分析（已实现/需扩展/需新增对比表）"
+      - 主体覆盖实现模型/接口设计/数据模型/进度可观测/人在回路/防回退约束
+      - design.md 落 long_running_task_artifact，usage=deliverable，stage=design
+      - 子 agent sdd-design-writer 真实派生且回传经契约校验通过
+      - sdd_projects.current_stage 推进到 design
+
+  - name: task
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/sdd/gen-task"
+    depends_on:
+      - design
+    uses_tables:
+      - agent_tasks
+      - long_running_task_artifact
+      - sdd_projects
+      - sub_agent_invocations
+    input:
+      feature_name: "${input.feature_name}"
+      spec_path: "${spec.output}"
+      design_path: "${design.output}"
+      template_path: "templates/tasks-template.md"
+      outdir: "specs/${input.feature_name}"
+    acceptance_criteria:
+      - 产出 tasks.md，含"需求覆盖追踪矩阵"且每条 spec 需求至少被一个任务覆盖
+      - 每条编码任务带语言标签 cangjie/web/app
+      - tasks.md 落 long_running_task_artifact，usage=deliverable，stage=task
+      - 子 agent sdd-task-planner 真实派生且回传经契约校验通过
+      - sdd_projects.current_stage 推进到 task
+
+  - name: code
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/sdd/gen-code"
+    depends_on:
+      - task
+    uses_tables:
+      - agent_tasks
+      - agent_contexts
+      - long_running_task_artifact
+      - sdd_projects
+    input:
+      feature_name: "${input.feature_name}"
+      tasks_path: "${task.output}"
+      design_path: "${design.output}"
+      agent_id: "${input.agent_id}"
+      language: "${input.language}"
+    degradation_chain:
+      - cangjie_coder
+      - fullstack_codegen
+      - template
+    acceptance_criteria:
+      - 按语言标签加载编程技能 cangjie-coder / web-coder(或路由 fullstack-codegen) / app-coder(或路由 frontend-dev)，主 agent 按 SOP 执行，**不派生编码子 agent**
+      - 主 agent 直执行需 `agent_id`（主 agent 定义 id，必填）；缺失或编程技能未挂载时本步**显式失败**，不得静默猜写
+      - 编码前先取得确定依据（工程既有先例 + 技术栈官方文档技能），查不到须标注缺口请人工确认
+      - 代码产物经 code-gen-verifier 通过才算完成，未通过禁止标记完成
+      - 至少一份 usage=deliverable 代码产物入库
+      - sdd_projects.current_stage 推进到 code（本步不写 sub_agent_invocations）
+
+  - name: test
+    step_type: plugin
+    plugin_route: "/api/v1/uctoo/sdd/gen-test"
+    depends_on:
+      - code
+    uses_tables:
+      - agent_tasks
+      - long_running_task_artifact
+      - sdd_projects
+      - sub_agent_invocations
+    input:
+      feature_name: "${input.feature_name}"
+      spec_path: "${spec.output}"
+      design_path: "${design.output}"
+      tasks_path: "${task.output}"
+      code_artifacts: "${code.output}"
+      template_path: "templates/test-report-template.md"
+      outdir: "specs/${input.feature_name}"
+    acceptance_criteria:
+      - 产出 test-report.md，含与 spec/design 的一致性核查 + 缺陷分级 P0-P2
+      - 未覆盖需求在缺陷或完善意见中归因
+      - test-report.md 落 long_running_task_artifact，usage=deliverable，stage=test
+      - 子 agent sdd-tester 真实派生且回传经契约校验通过
+      - sdd_projects.current_stage 推进到 test
+
+  - name: output-result
+    step_type: output
+    depends_on:
+      - test
+    uses_tables:
+      - sdd_projects
+    input:
+      report_dir: "${test.output}"
+    acceptance_criteria:
+      - 聚合六步产物路径与审核决策摘要，可反查每一步结构化日志
+      - sdd_projects.current_stage 置 done，status 置 completed

@@ -3,7 +3,18 @@ name: long-running-task
 description: AI 自主驱动长程任务系统 —— 接收高层目标，AI 自主规划并驱动分钟级到天级长程任务，实现"人设目标、AI 自主规划与执行、人评审交付"闭环。触发词："长程任务"、"自主任务"、"跑一个长期任务"、"AI 自主执行"、"定时自主任务"、"Long Running Task"、"Autonomous Task"。
 license: MIT
 version: "1.1.0"
-compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/skill），脚本执行需 Python 3.8+，宿主 PostgreSQL + crontab 调度引擎。L3 进程隔离轨插件（mode=process）。
+compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/skill），脚本执行需 Node.js ≥22.6（推荐 v23.10+）（推荐 TypeScript 版本）或 Python 3.8+（降级备选），宿主 PostgreSQL + crontab 调度引擎。L3 进程隔离轨插件（mode=process）。
+
+## 脚本运行说明
+
+本技能的脚本提供 TypeScript 和 Python 两个版本，**优先使用 TypeScript 版本**以减少对 Python 运行环境的依赖。
+
+- **TypeScript 版本（推荐）**：`scripts/*.ts`（parse_goal, llm_fallback, verify_artifact, notify_progress, extend_capability, evolve）
+  - 运行方式：`node --experimental-strip-types scripts/<script>.ts [参数]`
+  - 依赖：Node.js ≥22.6（推荐 v23.10+），无需额外 npm 包
+- **Python 版本（降级备选）**：`scripts/*.py`
+  - 运行方式：`python scripts/<script>.py [参数]`
+  - 仅在 TypeScript 版本运行出错时降级使用
 metadata:
   author: UCToo Team
   version: "1.1.0"
@@ -126,6 +137,22 @@ decision-points:
 - 执行底座：agentskills-runtime（仓颉 L3 进程隔离轨插件 `long-running-task` + 宿主 SchedulerEngine/CheckpointManager/DagScheduler/WebSocket/SkillBridge）
 - 持久化：agent_tasks（任务树）/ agent_contexts（检查点）/ long_running_task_artifact（产物）/ long_running_task_evolution（自进化）
 - 人在回路：暂停/恢复/取消/调整目标/追加约束，关键操作（合并/部署/删除）需用户确认
+
+## 委派触发规则（Delegation Rules）
+
+本技能由 **MainAgent 显式委派**触发，不是自动运行。MainAgent 的 AGENTS.md 已约定：当用户需求具备「多步骤 / 规划-执行-验核-交付闭环 / 跨回合持久化 / AI 自主编排子技能 / 明确触发词」任一特征时，必须以**显式前缀**把任务交给本技能的 LRT 子系统。
+
+- **触发方式（两条路径均已实现，择一即可，行为完全一致）**：
+  - **路径 A — 前缀路由（推荐、最直观）**：用户消息以 `长程任务：<目标>`（中英文冒号均可）或 `/lrt <目标>` 开头，
+    由 `WebMCPProtocol.extractLrtGoal` 识别 → `handleLongRunningTaskRoute` → `LongTaskApiService.submitTask`
+    提交到本技能。例如 `长程任务：查找去年高考物理真题并逐题求解`。
+  - **路径 B — 自然语言调用工具**：当用户以自然语言表述"用长程任务 / long-running-task 来做 X"时，
+    也可直接**调用 `long-running-task` 工具**，参数为 `query = <目标>`。该工具由 `LongRunningTaskTool`
+    （`src/app/tools/long_running_task_tool.cj`）实现，内部同样调用 `LongTaskApiService.submitTask`，
+    已绕过 `BaseSkill.execute` 的占位空实现，可正常触发本技能。
+- 触发词（与 frontmatter `description` 一致）：长程任务、自主任务、跑一个长期任务、AI 自主执行、定时自主任务、Long Running Task、Autonomous Task，以及"查找 X 并解题 / 整理 X 并产出报告"这类"研究 + 执行"复合型需求。
+- 程序化触发（前端 / 意图路由 / 定时器）：经 `LrtPluginClient.plan()` / `execute()` 调用插件路由 `/api/v1/uctoo/long_running_task/lrt-plan`、`/lrt-execute`（见 `src/app/services/lrt/lrt_plugin_client.cj`）。
+- 本技能是 L3 进程隔离插件（`mode: process`，见 `plugin.yaml`）；其 COMPOSITION.yaml 中的 `plugin` 步骤经宿主 `LrtPluginClient` 路由到本插件进程执行，**不要**在宿主侧另起一套编排。
 
 ## 全流程 SOP
 

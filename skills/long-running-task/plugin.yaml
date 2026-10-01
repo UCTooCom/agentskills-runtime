@@ -40,6 +40,28 @@ config:
   monitorRoundTimeoutRate: 0.2
   monitorCheckpointLatencyMs: 30000
   monitorProgressLatencyMs: 1000
+  # ── §11.3 四类关键决策的 JSONL 行日志（tasks.md 1000）──
+  # 控制 plan/replan/degradation/decision 是否额外向 stderr 输出单行 JSON。
+  # 走 stderr 是硬约束：L3 进程轨的 stdout 被 stdio RPC 通道独占，不可污染。
+  # 环境变量 LRT_DECISION_JSONL 优先级更高（容器化部署改配置成本高于注入变量）。
+  decisionJsonlEnabled: true
+# ── §11.2 按 Agent 的配置覆盖（tasks.md 992）────────────────────────────
+# 存量 Agent 想单独调参时写这里；**不建独立的 config 表**（tasks 原文已否掉该路）。
+# 优先级：环境变量 LRT_* > agentConfigOverrides.<agentId> > config 段 > 内置默认值。
+# 「存量 Agent 平滑使用」靠的是**回落**：此处未列出的 Agent 走 config 段默认值，
+# 行为与加本机制之前完全一致，**不需要为存量 Agent 补任何配置**。
+#
+# ⚠️ 缩进是硬约定，解析器按固定前缀匹配（见 LrtConfig.agentOverrideRaw）：
+#      agent 键必须 **2 空格**缩进，其下的配置键必须 **4 空格**缩进。
+#    写错缩进不会报错，只会**静默回落**到 config 段——排查时先查缩进。
+#
+# 示例（去掉注释并替换 <agentId> 后生效；当前无任何覆盖，全部 Agent 走默认值）：
+agentConfigOverrides: {}
+# agentConfigOverrides:
+#   <agentId>:
+#     maxRounds: 60
+#     maxRoundDurationMs: 3600000
+#     concurrentable: false
 # D 层脚本运行环境（Ch8）。LrtScriptRunner 按以下优先级解析脚本目录，
 # 全部缺省时回退到「进程 cwd 下的 scripts/」。插件为 mode:process（宿主经 stdio 拉起），
 # 进程 cwd 不保证是技能根，**生产部署建议显式设置 LRT_SKILL_ROOT**，

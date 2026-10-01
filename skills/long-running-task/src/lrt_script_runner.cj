@@ -22,7 +22,7 @@
 package skill_long_running_task
 
 import std.process.*
-import std.env.getVariable
+import std.env.{getVariable, getWorkingDirectory}
 import jsonvalue.*
 import std.io.InputStream
 import std.core.Duration
@@ -40,6 +40,12 @@ public class LrtScriptRunner {
             return (-1, "", "脚本不存在: ${scriptAbs}")
         }
         let allArgs = ArrayList<String>()
+        // 修复（2026-09-22）：强制 Python 以 UTF-8 模式运行（等价 PYTHONUTF8=1）。
+        // Windows 上 Python 子进程 stdout 默认按 GBK(cp936) 编码，脚本里
+        // print(json.dumps(..., ensure_ascii=False)) 的中文会写成 GBK 字节流，
+        // 读端 String.fromUtf8 必抛 "Invalid utf8 byte sequence"。
+        // 必须置于脚本路径之前，否则会被当成脚本名。
+        allArgs.add("-Xutf8")
         allArgs.add(scriptAbs)
         for (a in args) {
             allArgs.add(a)
@@ -126,6 +132,17 @@ public class LrtScriptRunner {
             eprintln("[lrt-runner] LRT_SKILL_ROOT=${skillRoot} 下未找到 scripts/，继续回退")
         }
 
+        // 兜底：env 未设置时按已知部署布局从进程 cwd 探测 <root>/scripts。
+        // 宿主未转发 plugin.yaml 的 env 到进程，LRT_SCRIPTS_DIR / LRT_SKILL_ROOT 恒为空，
+        // 必须靠此探测定位 skills/<name>/scripts（否则 parse_goal.py 报「脚本不存在」）。
+        let probed = LrtScriptRunner.probeSkillRootFromCwd()
+        if (!probed.isEmpty()) {
+            let sc = LrtScriptRunner.joinPath(probed, "scripts")
+            if (exists(sc)) {
+                return LrtScriptRunner.toAbsoluteIfPossible(sc)
+            }
+        }
+
         if (exists("scripts")) {
             return LrtScriptRunner.toAbsoluteIfPossible("scripts")
         }
@@ -174,6 +191,13 @@ public class LrtScriptRunner {
         if (!envRoot.isEmpty()) {
             return LrtScriptRunner.toAbsoluteIfPossible(envRoot)
         }
+        // 兜底：env 未设置时按已知部署布局从进程 cwd 探测技能根
+        // （含 COMPOSITION.yaml 或 scripts/ 的目录）。mode:process 下 cwd 不保证是技能根，
+        // 不能依赖 cwd 直接拼 scripts/，否则 parse_goal.py 等永远找不到。
+        let probed = LrtScriptRunner.probeSkillRootFromCwd()
+        if (!probed.isEmpty()) {
+            return probed
+        }
         let dir = LrtScriptRunner.resolveScriptsDir()
         match (LrtScriptRunner.resolveSkillRoot(dir)) {
             case Some(p) => return p.toString()
@@ -196,6 +220,51 @@ public class LrtScriptRunner {
         eprintln("[lrt-runner] 无法解析技能根目录（scriptsDir=${scriptsDir}），子进程将继承 runtime 当前目录；" +
                   "D 层脚本的相对路径产物可能落到非预期位置")
         return None<Path>
+    }
+
+    /// 按已知部署布局从进程 cwd 探测技能根目录。
+    ///
+    /// mode:process 插件由宿主经 stdio 拉起，进程 cwd = 宿主工作目录
+    /// （开发态 <repo>/apps/agentskills-runtime；发布态 <bin>），而技能资源
+    /// （COMPOSITION.yaml / scripts/ / output/）实际位于 <cwd>/skills/<name>/。
+    /// 当 LRT_SKILL_ROOT / LRT_SCRIPTS_DIR 均未设置时，逐级探测以下候选目录，
+    /// 返回第一个含 COMPOSITION.yaml 或 scripts/ 的绝对路径；都未命中返回空串。
+    /// 注：plugin.yaml 的 env 段本应提供 LRT_SKILL_ROOT，但宿主侧
+    /// cordis_host_manager.toCordisEntry 未把 entry.env 转发到进程，故 env 恒为空，
+    /// 必须靠此探测兜底（否则 COMPOSITION.yaml / scripts 永远找不到，长程任务一步即卡死）。
+    private static func probeSkillRootFromCwd(): String {
+        let cwd = LrtScriptRunner.getWorkingDirString()
+        let candidates = [
+            "${cwd}/skills/long-running-task",
+            "${cwd}/bin/skills/long-running-task",
+            "${cwd}/plugins/long-running-task"
+        ]
+        for (c in candidates) {
+            if (LrtScriptRunner.dirContains(c, "COMPOSITION.yaml") || LrtScriptRunner.dirContains(c, "scripts")) {
+                return LrtScriptRunner.toAbsoluteIfPossible(c)
+            }
+        }
+        return ""
+    }
+
+    private static func getWorkingDirString(): String {
+        try {
+            return getWorkingDirectory().toString().replace("\\", "/")
+        } catch (e: Exception) {
+            return "."
+        }
+    }
+
+    private static func dirContains(dir: String, child: String): Bool {
+        try {
+            let p = Path(dir)
+            if (!exists(p) || !FileInfo(p).isDirectory()) {
+                return false
+            }
+            return exists(Path("${dir}/${child}"))
+        } catch (e: Exception) {
+            return false
+        }
     }
 
     private static func canRun(cmd: String): Bool {
@@ -222,7 +291,21 @@ public class LrtScriptRunner {
                 if (n <= 0) {
                     break
                 }
-                result.append(String.fromUtf8(buffer[0..n]))
+                // 修复（2026-09-22）：旧实现直接 String.fromUtf8(buffer[0..n])，一旦
+                // 出现非 UTF-8 字节（Windows 子进程 GBK 输出，或多字节字符恰好被
+                // 分块边界截断）就抛异常并跳出整个读取循环 → 脚本产出全丢。这正是
+                // 长程任务"只跑一步就停"的直接原因：parse-goal 读出空串 →
+                // plan-tasks 报 50001 → notify-progress 拿不到 --task_id →
+                // 组合整体 failed。
+                // 现按 python_executor_tool.cj / cli_tool.cj 的同口径处理：先严格
+                // 解码，失败则退化为 unchecked 解码，保证内容不丢；根因（GBK 输出）
+                // 已由上面的 -Xutf8 消除。
+                let chunk = buffer[0..n]
+                try {
+                    result.append(String.fromUtf8(chunk))
+                } catch (_: Exception) {
+                    result.append(unsafe { String.fromUtf8Unchecked(chunk) })
+                }
             }
         } catch (e: Exception) {
             eprintln("[lrt-runner] readStream error: ${e.message}")

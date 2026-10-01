@@ -149,6 +149,9 @@ public class CrontabService {
             if (entity.execCount.isSome()) {
                 existingEntity.execCount = entity.execCount
             }
+            if (entity.ownerUserId.isSome()) {
+                existingEntity.ownerUserId = entity.ownerUserId
+            }
 
             
             // 设置更新时间和ID

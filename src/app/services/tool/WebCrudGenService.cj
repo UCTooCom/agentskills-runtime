@@ -167,7 +167,17 @@ public class WebCrudGenService {
                 if (bytesRead <= 0) {
                     break
                 }
-                result.append(String.fromUtf8(buffer[0..bytesRead]))
+                // 加固（2026-09-22）：生成器子进程输出可能是非 UTF-8 字节（Windows 默认
+                // GBK/cp936），或中文多字节字符正好被 4096 块边界切断；旧实现直接
+                // String.fromUtf8 会抛异常并中止整个读取循环，导致生成器输出被截断。
+                // UTF-8 严格解码失败时退化为 unchecked 解码，保证内容不丢。
+                // 同款策略见 src/tool/python_executor_tool.cj（2026-09-20 修复）。
+                let chunk = try {
+                    String.fromUtf8(buffer[0..bytesRead])
+                } catch (_: Exception) {
+                    unsafe { String.fromUtf8Unchecked(buffer[0..bytesRead]) }
+                }
+                result.append(chunk)
             }
         } catch (e: Exception) {
             LogUtils.error("WebCrudGenService", "Error reading stream: ${e.message}")

@@ -39,8 +39,10 @@ public class LrtTriggerBridge {
     public static let TABLE_CRONTAB: String = "crontab"
     /// 宿主 SchedulerEngine 仅在 status==1 时把任务注册进 ticktock（见 long_task_api_service.cj:131 注释）
     public static let STATUS_ENABLED: Int64 = 1
-    /// 默认 5 分钟轮询，与宿主 submitTask 默认 cron 一致
-    public static let DEFAULT_CRON: String = "0 */5 * * * ?"
+    /// 默认 5 分钟轮询，与宿主 submitTask 默认 cron 一致。
+    /// 注意：宿主 SchedulerEngine 用 f_ticktock 的 CronCompiler（6 字段：秒 分 时 日 月 周），
+    /// **不支持 Quartz 风格的 `?` 通配符**——带 `?` 会被整行跳过导致续跑失效（2026-09-22 实测）。
+    public static let DEFAULT_CRON: String = "0 */5 * * * *"
 
     /// 确保存在一条触发宿主 LrtPluginExecutor 的 crontab 记录；幂等。
     /// 返回 crontab id（新插入或既有的）；失败/空 agentId 返回 ""。
@@ -53,7 +55,7 @@ public class LrtTriggerBridge {
         }
         let taskUri = "lrt://${agentId}"
         // 1) 幂等：既有记录直接复用，避免每次 runTask 重复插入一条 crontab
-        let existing = LrtTraceLog.resolveCrontabId(agentId, userId, permArr)
+        let existing = LrtTraceLog.resolveCrontabId(agentId, userId, permArr, taskId: taskId)
         if (!existing.isEmpty()) {
             return existing
         }

@@ -1,0 +1,29 @@
+{
+  "date": "2026-09-25",
+  "fetched_at": "2026-09-25T12:26:11.088Z",
+  "count": 2,
+  "items": [
+    {
+      "policy_no": null,
+      "title": "朝阳区关于支持数据要素产业高质量发展的若干措施（征求意见稿）",
+      "url": "https://example.gov.cn/notice/demo-1",
+      "department": "朝阳区数据局",
+      "level": "区级",
+      "domain": "数据要素",
+      "published_date": "2026-09-25",
+      "status": "pending"
+    },
+    {
+      "policy_no": null,
+      "title": "北京市关于进一步支持人工智能创新应用的通知",
+      "url": "https://example.gov.cn/notice/demo-2",
+      "department": "北京市经信局",
+      "level": "市级",
+      "domain": "人工智能",
+      "published_date": "2026-09-25",
+      "status": "confirmed",
+      "reviewer": "待填",
+      "reviewed_at": "2026-09-25"
+    }
+  ]
+}

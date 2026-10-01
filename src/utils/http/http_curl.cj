@@ -175,7 +175,11 @@ protected struct HttpUtilsImpl {
 
         let (status, respHeader) = parseCurlVerboseOutput(subProcess)
 
-        if (respHeader.get("content-type") |> contains("text/event-stream")) {
+        let contentType = match (respHeader.get("content-type")) {
+            case Some(v) => v
+            case None => ""
+        }
+        if (contentType.contains("text/event-stream")) {
             let httpStream = HttpStream()
             spawn {
                 processStream(subProcess, httpStream, tempPath)

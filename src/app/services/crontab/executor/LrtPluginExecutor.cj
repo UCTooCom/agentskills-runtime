@@ -53,7 +53,10 @@ import std.time.DateTime
 import stdx.encoding.json.{JsonValue, JsonObject, JsonKind}
 import magic.log.LogUtils
 import magic.app.services.crontab.model.{CrontabExecutionContext, ExecutionResult}
-import magic.app.services.lrt.LrtPluginClient
+// 注：LrtPluginClient / LrtHostExecutor 随「取消自动续跑」（2026-09-23）不再在此调用——
+// 回合由 submitTask（首回合）与 lrt-intervene resume（单回合）触发，调度行只负责停表。
+import magic.app.services.lrt.LrtScheduleBridge
+import magic.app.services.uctoo.{AgentsService, CrontabService}
 import f_base.Result
 
 public class LrtPluginExecutor <: CrontabExecutor {
@@ -79,40 +82,92 @@ public class LrtPluginExecutor <: CrontabExecutor {
             return ExecutionResult.failureResult(msg, LrtPluginExecutor.calcDuration(startTime), -1)
         }
 
+        // ── 【取消自动续跑 · 2026-09-23 · 用户定夺】lrt:// 调度行不再驱动任何回合 ──
+        // 实测问题：submitTask 曾给每个长程任务建一条 lrt-<taskId> 常驻调度行（每 5 分钟
+        // 一次、once=false），而任务中断/完成/取消后**全工程没有任何代码负责停表**，
+        // 本执行器也是拿到 taskId 就 spawn 一个宿主 Agent 回合。后果：
+        //   lrt-65c1fe9f 累计执行 386 次（最后一次 2026-09-23 18:50），规划早已失败
+        //   （parse-goal 退出码 2），仍每 5 分钟烧一轮 token、把 status 反复拉回 1，
+        //   用户侧表现为"聊天被遗留任务接管"。
+        // 新语义：长程任务**只在用户显式要求时续跑** —— lrt-intervene(action=resume)
+        //   由宿主触发**单个**回合（见 LongTaskApiService.intervene 的 resume 分支）。
+        // 故本执行器现在的职责改为：把历史调度行**自愈式停掉**（引擎摘除 + 库里置
+        // 2=禁用），让它在升级后第一次 tick 就永久退出，不再消耗任何 Agent 回合。
+        // 新任务不建调度行（A1），不受影响。
+        LrtPluginExecutor.stopSchedule(context.crontabId, taskId)
+        let stopSummary = "已停表：LRT 不再由定时任务自动续跑（taskId=${taskId}, agentId=${agentId}, "
+            + "userId=${userId}, crontabId=${context.crontabId}）。"
+            + "如需继续，请由用户显式触发 lrt-intervene resume。"
+        LogUtils.info("LrtPluginExecutor", stopSummary)
+        return ExecutionResult.successResult(
+            stopSummary, LrtPluginExecutor.calcDuration(startTime), stopSummary
+        )
+    }
+
+    /// 停表：从调度引擎摘除 + 库里置 status=2（禁用）。
+    ///
+    /// 两步缺一不可：只摘引擎，进程重启后引擎会按 status=1 重新注册，自动续跑复活；
+    /// 只改库，当前进程内这一轮之后仍会继续触发到下次重启。
+    /// 任一步失败都只记日志 —— 停表是收敛动作，不该让调度器把本行判为执行失败
+    /// （失败会触发重试/告警噪音）。
+    private static func stopSchedule(crontabId: String, taskId: String): Unit {
+        if (crontabId.isEmpty()) {
+            return
+        }
+        // 1) 引擎摘除：经 LrtScheduleBridge 的函数槽，避免 crontab.executor -> crontab 反向 import
+        let engineStopped = LrtScheduleBridge.stopCrontab(crontabId)
+        // 2) 库里禁用：status=2。读-改-写，避免 update 把其它列冲掉。
+        var dbStopped = false
+        try {
+            let svc = CrontabService()
+            match (svc.getById(crontabId).data) {
+                case Some(po) =>
+                    if (po.status != 2) {
+                        po.status = 2
+                        let r = svc.update(crontabId, po)
+                        dbStopped = r.success
+                        if (!dbStopped) {
+                            LogUtils.warn(
+                                "LrtPluginExecutor",
+                                "停表：更新 crontab.status=2 失败: crontabId=${crontabId}"
+                            )
+                        }
+                    } else {
+                        dbStopped = true
+                    }
+                case None =>
+                    LogUtils.warn(
+                        "LrtPluginExecutor",
+                        "停表：未找到 crontab 行: crontabId=${crontabId}, taskId=${taskId}"
+                    )
+            }
+        } catch (e: Exception) {
+            LogUtils.warn(
+                "LrtPluginExecutor",
+                "停表异常（忽略）: crontabId=${crontabId}, error=${e.message}"
+            )
+        }
         LogUtils.info(
             "LrtPluginExecutor",
-            "触发长程任务插件执行: taskId=${taskId}, agentId=${agentId}, crontabId=${context.crontabId}"
+            "停表完成: taskId=${taskId}, crontabId=${crontabId}, engineStopped=${engineStopped}, dbDisabled=${dbStopped}"
         )
+    }
 
-        // 异步派发：runTask 是一整轮收敛循环，不能让它把调度线程占住（详见类注释）。
-        let dispatchedTaskId = taskId
-        let dispatchedUserId = userId
-        spawn { =>
-            try {
-                match (LrtPluginClient.execute(dispatchedTaskId, dispatchedUserId, ArrayList<String>())) {
-                    case Ok(v) =>
-                        LogUtils.info(
-                            "LrtPluginExecutor",
-                            "插件执行返回: taskId=${dispatchedTaskId}, result=${LrtPluginExecutor.head(v.stringify())}"
-                        )
-                    case Err(e) =>
-                        LogUtils.warn(
-                            "LrtPluginExecutor",
-                            "插件执行失败: taskId=${dispatchedTaskId}, reason=${e}"
-                        )
-                    case _ =>
-                        LogUtils.warn("LrtPluginExecutor", "插件执行无结果: taskId=${dispatchedTaskId}")
-                }
-            } catch (e: Exception) {
-                LogUtils.error(
-                    "LrtPluginExecutor",
-                    "插件执行异常: taskId=${dispatchedTaskId}, error=${e.message}"
-                )
-            }
+    /// 解析 agent 绑定的 uctoo_user.id（执行者身份，用于写 creator）。
+    /// 未绑定时返回空串：插件侧会回落为"不显式指定 creator"，避免空串写进 uuid 列。
+    private static func resolveAgentUctooUserId(agentId: String): String {
+        if (agentId.isEmpty()) {
+            return ""
         }
-
-        let summary = "已触发插件执行 taskId=${taskId}"
-        ExecutionResult.successResult(summary, LrtPluginExecutor.calcDuration(startTime), summary)
+        try {
+            match (AgentsService().getById(agentId).data) {
+                case Some(agent) => return agent.userId.getOrDefault({ => "" })
+                case None => return ""
+            }
+        } catch (e: Exception) {
+            LogUtils.error("LrtPluginExecutor", "解析 agent 绑定用户失败: agentId=${agentId}, ${e.message}")
+            return ""
+        }
     }
 
     public func validate(taskUri: String): Bool {

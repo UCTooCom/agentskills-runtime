@@ -98,6 +98,9 @@ public class DataMapper {
                 builder.setDefaultOutputTypes(outputTypes)
             }
             builder.setDiscoverable(po.discoverable)
+            if (let Some(sn) <- po.skillName) {
+                builder.setSkillName(sn)
+            }
             if (let Some(sp) <- po.sourcePath) {
                 builder.setSourcePath(Path(sp))
             }

@@ -160,10 +160,13 @@ public class LrtPluginClient {
      * @param taskId 宿主侧已创建的 agent_tasks.id(插件据此回写规划结果)
      * @param goal 用户目标原文
      */
-    public static func plan(taskId: String, goal: String, userId: String, permissions: ArrayList<String>): Result<JsonValue, String> {
+    public static func plan(taskId: String, goal: String, userId: String, permissions: ArrayList<String>, creator!: String = "", ownerUserId!: String = "", agentId!: String = ""): Result<JsonValue, String> {
         let body = HashMap<String, JsonValue>()
         body["task_id"] = JsonValue.String(taskId)
         body["goal"] = JsonValue.String(goal)
+        body["agent_id"] = JsonValue.String(agentId)
+        body["creator"] = JsonValue.String(creator)
+        body["owner_user_id"] = JsonValue.String(ownerUserId)
         return invoke(
             "POST",
             "${LRT_ROUTE_PREFIX}/lrt-plan",
@@ -180,9 +183,12 @@ public class LrtPluginClient {
      *
      * @param taskId 根任务 ID
      */
-    public static func execute(taskId: String, userId: String, permissions: ArrayList<String>): Result<JsonValue, String> {
+    public static func execute(taskId: String, userId: String, permissions: ArrayList<String>, creator!: String = "", ownerUserId!: String = "", agentId!: String = ""): Result<JsonValue, String> {
         let body = HashMap<String, JsonValue>()
         body["task_id"] = JsonValue.String(taskId)
+        body["agent_id"] = JsonValue.String(agentId)
+        body["creator"] = JsonValue.String(creator)
+        body["owner_user_id"] = JsonValue.String(ownerUserId)
         return invoke(
             "POST",
             "${LRT_ROUTE_PREFIX}/lrt-execute",
@@ -206,12 +212,18 @@ public class LrtPluginClient {
         action: String,
         content: String,
         userId: String,
-        permissions: ArrayList<String>
+        permissions: ArrayList<String>,
+        creator!: String = "",
+        ownerUserId!: String = "",
+        agentId!: String = ""
     ): Result<JsonValue, String> {
         let body = HashMap<String, JsonValue>()
         body["task_id"] = JsonValue.String(taskId)
+        body["agent_id"] = JsonValue.String(agentId)
         body["action"] = JsonValue.String(action)
         body["content"] = JsonValue.String(content)
+        body["creator"] = JsonValue.String(creator)
+        body["owner_user_id"] = JsonValue.String(ownerUserId)
         return invoke(
             "POST",
             "${LRT_ROUTE_PREFIX}/lrt-intervene",
@@ -226,9 +238,12 @@ public class LrtPluginClient {
     /**
      * 便捷方法：验核(`lrt-verify`)
      */
-    public static func verify(taskId: String, userId: String, permissions: ArrayList<String>): Result<JsonValue, String> {
+    public static func verify(taskId: String, userId: String, permissions: ArrayList<String>, creator!: String = "", ownerUserId!: String = "", agentId!: String = ""): Result<JsonValue, String> {
         let body = HashMap<String, JsonValue>()
         body["task_id"] = JsonValue.String(taskId)
+        body["agent_id"] = JsonValue.String(agentId)
+        body["creator"] = JsonValue.String(creator)
+        body["owner_user_id"] = JsonValue.String(ownerUserId)
         return invoke(
             "POST",
             "${LRT_ROUTE_PREFIX}/lrt-verify",
@@ -245,9 +260,11 @@ public class LrtPluginClient {
      *
      * @param agentId 目标 Agent ID(自演化产物写回该 Agent 的技能/配置)
      */
-    public static func evolve(agentId: String, userId: String, permissions: ArrayList<String>): Result<JsonValue, String> {
+    public static func evolve(agentId: String, userId: String, permissions: ArrayList<String>, creator!: String = "", ownerUserId!: String = ""): Result<JsonValue, String> {
         let body = HashMap<String, JsonValue>()
         body["agent_id"] = JsonValue.String(agentId)
+        body["creator"] = JsonValue.String(creator)
+        body["owner_user_id"] = JsonValue.String(ownerUserId)
         return invoke(
             "POST",
             "${LRT_ROUTE_PREFIX}/lrt-evolve",
@@ -273,11 +290,17 @@ public class LrtPluginClient {
         taskId: String,
         action: String,
         userId: String,
-        permissions: ArrayList<String>
+        permissions: ArrayList<String>,
+        creator!: String = "",
+        ownerUserId!: String = "",
+        agentId!: String = ""
     ): Result<JsonValue, String> {
         let body = HashMap<String, JsonValue>()
         body["task_id"] = JsonValue.String(taskId)
+        body["agent_id"] = JsonValue.String(agentId)
         body["action"] = JsonValue.String(action)
+        body["creator"] = JsonValue.String(creator)
+        body["owner_user_id"] = JsonValue.String(ownerUserId)
         return invoke(
             "POST",
             "${LRT_ROUTE_PREFIX}/lrt-deliver",
@@ -306,14 +329,20 @@ public class LrtPluginClient {
         feedback: String,
         goal: String,
         userId: String,
-        permissions: ArrayList<String>
+        permissions: ArrayList<String>,
+        creator!: String = "",
+        ownerUserId!: String = "",
+        agentId!: String = ""
     ): Result<JsonValue, String> {
         let body = HashMap<String, JsonValue>()
         body["task_id"] = JsonValue.String(taskId)
+        body["agent_id"] = JsonValue.String(agentId)
         body["action"] = JsonValue.String(action)
         // 两个可空语义字段：空串时仍显式下发，让插件侧无需区分「键缺失」与「值为空」
         body["feedback"] = JsonValue.String(feedback)
         body["goal"] = JsonValue.String(goal)
+        body["creator"] = JsonValue.String(creator)
+        body["owner_user_id"] = JsonValue.String(ownerUserId)
         return invoke(
             "POST",
             "${LRT_ROUTE_PREFIX}/lrt-review",

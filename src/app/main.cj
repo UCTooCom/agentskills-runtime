@@ -38,9 +38,16 @@ import magic.skill.application.{ProgressiveSkillLoader, SkillManagementService}
 import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
 import magic.log.LogUtils
 import magic.model.ModelManager
+// 启动卡死定位：stdout 走 4KB 缓冲管道，被 kill 时尾部整段丢失；
+// traceStartup 直接落盘 logs/startup-trace.txt，给「最后一条执行到的语句」。
+import magic.utils.traceStartup
 import magic.core.model.ChatModel
 import magic.app.services.crontab.SchedulerEngine
 import magic.app.services.crontab.model.SchedulerStatus
+// 依赖倒置：LRT 需要"新建 crontab 后注册进引擎"，但 lrt 不能反向 import crontab
+// （crontab.executor -> lrt 已存在，反向即成包环）。故由组合根在这里注入实现。
+import magic.app.services.lrt.LrtScheduleBridge
+import magic.app.services.bridge.SddScheduleBridge
 import magic.app.dao.uctoo.{CrontabDAO, CrontabLogDAO, CrontabTaskRegistryDAO}
 import magic.plugins.hello.HelloPlugin
 import magic.plugins.doc_helper.{DocHelperPlugin, DocHelperRoute}
@@ -260,25 +267,33 @@ public class Application {
         // 初始化同步管理器
         let agentBasePath = getVariable("SYNC_AGENT_BASE_PATH").getOrDefault({ => "./" })
         let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./skills" })
+        println("[STARTUP-DIAG] >>> entering SyncManager.initialize")
         SyncManager.initialize(agentBasePath, skillBasePath)
+        println("[STARTUP-DIAG] <<< SyncManager.initialize returned")
         LogUtils.info("SyncManager initialized with agentBasePath: ${agentBasePath}, skillBasePath: ${skillBasePath}")
         
-        // 启动时同步 .env 配置到 config 表（同步执行，确保在服务就绪前完成）
-        try {
-            let configSyncHandler = ConfigSyncHandler()
-            let configSyncResult = configSyncHandler.startupSync()
-            LogUtils.info("Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount}")
-            for (detail in configSyncResult.details) {
-                if (!detail.success) {
-                    LogUtils.error("Config sync failed for ${detail.envKey}: ${detail.errorMessage ?? "unknown"}")
+        // 启动时同步 .env 配置到 config 表（异步执行，避免 80 次串行 DB 读写阻塞启动关键路径；
+        // 配置同步失败不再等价于 runtime 起不来，与下方 syncAll 的 spawn 写法一致）
+        spawn {
+            try {
+                let configSyncHandler = ConfigSyncHandler()
+                println("[STARTUP-DIAG] >>> entering ConfigSyncHandler.startupSync (async)")
+                let configSyncResult = configSyncHandler.startupSync()
+                println("[STARTUP-DIAG] <<< ConfigSyncHandler.startupSync returned")
+                LogUtils.info("Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount}")
+                for (detail in configSyncResult.details) {
+                    if (!detail.success) {
+                        LogUtils.error("Config sync failed for ${detail.envKey}: ${detail.errorMessage ?? "unknown"}")
+                    }
                 }
+            } catch (e: Exception) {
+                LogUtils.error("Config startup sync failed: ${e.message}")
             }
-        } catch (e: Exception) {
-            LogUtils.error("Config startup sync failed: ${e.message}")
         }
         
         // 异步执行启动全量同步（不阻塞启动）
         spawn {
+            println("[STARTUP-DIAG] >>> spawn syncAll entered")
             try {
                 let result = SyncManager.instance?.syncAll(TriggerSource.Startup)
                 match (result) {
@@ -293,6 +308,7 @@ public class Application {
         }
         
         LogUtils.info("Application init complete")
+        println("[STARTUP-DIAG] <<< Application constructor complete, control returns to caller (next: app.start())")
     }
     
     /// HTTPS构造函数
@@ -430,25 +446,33 @@ public class Application {
         // 初始化同步管理器
         let agentBasePath = getVariable("SYNC_AGENT_BASE_PATH").getOrDefault({ => "./" })
         let skillBasePath = getVariable("SYNC_SKILL_BASE_PATH").getOrDefault({ => "./skills" })
+        println("[STARTUP-DIAG] >>> entering SyncManager.initialize")
         SyncManager.initialize(agentBasePath, skillBasePath)
+        println("[STARTUP-DIAG] <<< SyncManager.initialize returned")
         LogUtils.info("SyncManager initialized with agentBasePath: ${agentBasePath}, skillBasePath: ${skillBasePath}")
         
-        // 启动时同步 .env 配置到 config 表（同步执行，确保在服务就绪前完成）
-        try {
-            let configSyncHandler = ConfigSyncHandler()
-            let configSyncResult = configSyncHandler.startupSync()
-            LogUtils.info("Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount}")
-            for (detail in configSyncResult.details) {
-                if (!detail.success) {
-                    LogUtils.error("Config sync failed for ${detail.envKey}: ${detail.errorMessage ?? "unknown"}")
+        // 启动时同步 .env 配置到 config 表（异步执行，避免 80 次串行 DB 读写阻塞启动关键路径；
+        // 配置同步失败不再等价于 runtime 起不来，与下方 syncAll 的 spawn 写法一致）
+        spawn {
+            try {
+                let configSyncHandler = ConfigSyncHandler()
+                println("[STARTUP-DIAG] >>> entering ConfigSyncHandler.startupSync (async)")
+                let configSyncResult = configSyncHandler.startupSync()
+                println("[STARTUP-DIAG] <<< ConfigSyncHandler.startupSync returned")
+                LogUtils.info("Config startup sync completed - total:${configSyncResult.totalCount}, success:${configSyncResult.successCount}, failed:${configSyncResult.failedCount}")
+                for (detail in configSyncResult.details) {
+                    if (!detail.success) {
+                        LogUtils.error("Config sync failed for ${detail.envKey}: ${detail.errorMessage ?? "unknown"}")
+                    }
                 }
+            } catch (e: Exception) {
+                LogUtils.error("Config startup sync failed: ${e.message}")
             }
-        } catch (e: Exception) {
-            LogUtils.error("Config startup sync failed: ${e.message}")
         }
         
         // 异步执行启动全量同步（不阻塞启动）
         spawn {
+            println("[STARTUP-DIAG] >>> spawn syncAll entered")
             try {
                 let result = SyncManager.instance?.syncAll(TriggerSource.Startup)
                 match (result) {
@@ -463,6 +487,7 @@ public class Application {
         }
         
         LogUtils.info("Application init complete")
+        println("[STARTUP-DIAG] <<< Application constructor complete, control returns to caller (next: app.start())")
     }
 
     private func setupMiddlewares(): Unit {
@@ -470,11 +495,7 @@ public class Application {
         let corsMiddleware = CORSMiddleware()
         server.use(corsMiddleware)
         
-        let jwtSecret = if (let Some(secret) <- getVariable("JWT_SECRET")) {
-            secret
-        } else {
-            "uctoo-v4-secret-key"
-        }
+        let jwtSecret = AppConfig.jwtSecret
 
         // 创建JWT工具和Cookie工具
         let jwtUtil = JWTUtil(jwtSecret, 1728000, 6048000)  // access_token: 20天, refresh_token: 70天
@@ -625,6 +646,7 @@ public class Application {
             res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"${runtimeVersion}\",\"language\":\"cangjie\"}")
         })
         
+        println("[STARTUP-DIAG] >>> entering SchedulerEngine.initialize (DB: crontab)")
         // 初始化调度引擎
         try {
             let sqlExecutor = ORM.executor()
@@ -635,13 +657,63 @@ public class Application {
                 SchedulerEngine.initialize(crontabDAO.getOrThrow(), crontabLogDAO.getOrThrow(), crontabTaskRegistryDAO.getOrThrow())
                 schedulerEngineInitialized = true
                 LogUtils.info("SchedulerEngine initialized successfully")
+
+                // 组合根注入：长程任务新建 crontab 行后要立刻注册进引擎，否则只能等进程重启
+                // 才被加载（表现：只跑提交时手动触发的首回合）。lambda 体内现取 SchedulerEngine.instance，
+                // 因此注册时机早于/晚于实例创建都不影响正确性。
+                LrtScheduleBridge.setCrontabReloader({ crontabId: String =>
+                    match (SchedulerEngine.instance) {
+                        case Some(engine) =>
+                            engine.reloadTask(crontabId)
+                            LogUtils.info("[main] 调度已注册到引擎: crontabId=${crontabId}")
+                        case None =>
+                            LogUtils.warn("[main] 调度引擎未初始化，跳过注册: crontabId=${crontabId}")
+                    }
+                })
+
+                // 组合根注入（取消自动续跑 · 2026-09-23）：
+                // LrtPluginExecutor 不再驱动长程任务回合，改为把历史 lrt-* 调度行停掉。
+                // 停表要同时做两件事 —— 引擎摘除（本回调）+ 库里置 status=2（执行器内做），
+                // 只做前者的话进程重启后会按 status=1 重新注册，自动续跑复活。
+                LrtScheduleBridge.setCrontabStopper({ crontabId: String =>
+                    match (SchedulerEngine.instance) {
+                        case Some(engine) =>
+                            engine.removeTask(crontabId)
+                            LogUtils.info("[main] 调度已从引擎摘除（停止 LRT 自动续跑）: crontabId=${crontabId}")
+                        case None =>
+                            LogUtils.warn("[main] 调度引擎未初始化，跳过摘除: crontabId=${crontabId}")
+                    }
+                })
+
+                // 组合根注入：SDD 六步编排（scheme=sdd）的调度注册/摘除出口。
+                // 与 LrtScheduleBridge 同一套依赖倒置机制——crontab.executor 不能反向
+                // import crontab（会成环），故由这里把实现注入 bridge 包的函数槽。
+                SddScheduleBridge.setCrontabReloader({ crontabId: String =>
+                    match (SchedulerEngine.instance) {
+                        case Some(engine) =>
+                            engine.reloadTask(crontabId)
+                            LogUtils.info("[main] SDD 编排调度已注册到引擎: crontabId=${crontabId}")
+                        case None =>
+                            LogUtils.warn("[main] 调度引擎未初始化，跳过注册: crontabId=${crontabId}")
+                    }
+                })
+                SddScheduleBridge.setCrontabStopper({ crontabId: String =>
+                    match (SchedulerEngine.instance) {
+                        case Some(engine) =>
+                            engine.removeTask(crontabId)
+                            LogUtils.info("[main] SDD 编排调度已从引擎摘除: crontabId=${crontabId}")
+                        case None =>
+                            LogUtils.warn("[main] 调度引擎未初始化，跳过摘除: crontabId=${crontabId}")
+                    }
+                })
             } else {
                 LogUtils.error("Failed to cast SqlExecutor to DAO interfaces")
             }
         } catch (e: Exception) {
             LogUtils.error("Failed to initialize SchedulerEngine: ${e.message}")
         }
-        
+        println("[STARTUP-DIAG] <<< SchedulerEngine.initialize returned")
+
         // 注册全局事件处理器（数据流闭环关键步骤）
         try {
             let billingHandler = BillingEventHandler()
@@ -675,14 +747,17 @@ public class Application {
         }
         
         // 预加载数据库中的 Agent 到运行时
+        println("[STARTUP-DIAG] >>> entering AgentRuntimeBridge.loadAllFromDatabase (DB: agents)")
         try {
             let agents = AgentRuntimeBridge.instance.loadAllFromDatabase()
             LogUtils.info("Loaded ${agents.size.toString()} agents from database into runtime")
         } catch (e: Exception) {
             LogUtils.error("Failed to load agents from database: ${e.message}")
         }
+        println("[STARTUP-DIAG] <<< AgentRuntimeBridge.loadAllFromDatabase returned")
 
         // 插件系统启动（双轨接入：在全部存量路由之后，只追加不修改）
+        println("[STARTUP-DIAG] >>> entering pluginManager.loadAll (scan skills/ + src/examples)")
         // 去中心化自动发现：扫描 skills/ 目录子目录的 plugin.yaml，单插件失败不阻断启动
         try {
             let pluginRegistry = PluginRegistry()
@@ -706,7 +781,9 @@ public class Application {
                 _skillInstallPath,
                 "${currentDir}/src/examples"
             ]
+            traceStartup("TRACE[main.configureRoutes] >>> call pluginManager.loadAll (scan skills/ + src/examples)")
             let loadResult = pluginManager.loadAll(skillDirs)
+            traceStartup("TRACE[main.configureRoutes] <<< pluginManager.loadAll returned: ${loadResult.summary()}")
             this._pluginManager = Some(pluginManager)
             // 注入插件管理器供 Agent 自引用工具调用（plugin_inspect/activate/deactivate）
             PluginAgentTools.setPluginManager(pluginManager)
@@ -721,21 +798,35 @@ public class Application {
             GeneratedPluginAnchors.touch()
 
             // 插件轨路由注册（存量 AutoRouteRegistry.registerAllRoutes() 之后）
+            traceStartup("TRACE[main.configureRoutes] >>> call routeScanner.scanAndRegister")
             let routeScanner = PluginRouteScanner()
+            eprintln("[DIAG] main: about to scanAndRegister")
             routeScanner.scanAndRegister(router, pluginManager)
+            eprintln("[DIAG] main: scanAndRegister DONE")
+            traceStartup("TRACE[main.configureRoutes] <<< scanAndRegister returned")
 
             LogUtils.info("Plugin system loaded: ${loadResult.summary()}")
+            traceStartup("TRACE[main.configureRoutes] >>> LogUtils.info(Plugin system loaded) done")
+            println("[STARTUP-DIAG] <<< pluginManager.loadAll returned")
+            eprintln("[DIAG] main: pluginManager.loadAll RETURNED; next = PluginRouteScanner + server.start")
         } catch (e: Exception) {
             LogUtils.error("Plugin system startup failed (framework continues): ${e.message}")
         }
 
+        traceStartup("TRACE[main.configureRoutes] >>> call server.setRouter")
         server.setRouter(router)
+        traceStartup("TRACE[main.configureRoutes] <<< server.setRouter returned")
         logger.info("All routes configured successfully")
+        println("[STARTUP-DIAG] <<< configureRoutes finished; Application constructor will return next")
     }
 
     public func start(): Unit {
+        traceStartup("TRACE[main.start] >>> entering Application.start()")
+        println("[STARTUP-DIAG] >>> entering Application.start()")
         logger.info("Starting uctoo-backend-v4 on ${server.getHost()}:${server.getPort()}")
+        eprintln("[DIAG] main: about to server.start() (this BLOCKS in accept loop if actually serving)")
         server.start()
+        eprintln("[DIAG] main: server.start() RETURNED (unexpected - server exited)")
     }
 
     public func stop(): Unit {

@@ -13,7 +13,8 @@ import std.console.Console
 import std.collection.{HashMap, ArrayList}
 import std.io.OutputStream
 import std.core.Duration
-import std.time.DateTime
+import std.sync.Mutex
+import std.time.{DateTime, MonoTime}
 import std.convert.*
 import std.env.getVariable
 
@@ -49,6 +50,54 @@ struct LogUtilsImpl {
     private static var _watermarkAlerter: Option<(String, Int64, Int64) -> Unit> = None
     /// 水位阈值缺省值：1 GiB
     private static let DEFAULT_WATERMARK_BYTES: Int64 = 1073741824
+
+    /// 全局日志写锁。
+    ///
+    /// 背景（2026-09-30 ~ 10-01 启动卡死排查）：`stdx.logger.SimpleLogger` 与
+    /// `std.fs.File` 均未承诺线程安全，而 runtime 启动期有主线程 + 每个 L3 插件
+    /// 各自的 stdio 读线程并发调 LogUtils。实测多次启动永久挂起，挂起点在**不同
+    /// 运行里落在完全不同的业务代码行**（PluginRouteScanner / awaitActive 的
+    /// 不同日志语句），且共同特征是：主线程最后一条 stderr 探针已打印，但对应
+    /// 的那条日志**从未落盘**、之后主线程彻底静止——即卡在日志写入调用内部。
+    /// 这是并发写共享句柄导致内部状态损坏的典型表征，故所有写出口统一串行化，
+    /// 保证同一时刻只有一个线程触碰 LOGGER / NAMED_LOGGERS。
+    private static let WRITE_LOCK: Mutex = Mutex()
+
+    /// 拿写锁的最长等待时间。正常争用是微秒级，这个上限只在「持有者卡死」时才会触发。
+    private static let WRITE_LOCK_WAIT: Duration = 500 * Duration.millisecond
+
+    /// 因写锁不可用而被丢弃的日志条数（仅用于诊断，前 5 次打 stderr）
+    private static var DROPPED_COUNT: Int64 = 0
+
+    /// 有界地拿日志写锁后执行 action。
+    ///
+    /// 为什么不用 synchronized(WRITE_LOCK)：synchronized 是**无限期**等待。
+    /// 2026-10-01 那几轮启动挂死的共同特征就是「主线程最后一条 stderr 探针已打印，
+    /// 但它要写的那条日志从未落盘，之后主线程彻底静止」——即主线程死在日志写入
+    /// 调用内部。日志属于观测面，**绝不允许它把控制面（尤其是主线程启动路径）
+    /// 拖死**。因此这里改为有界 tryLock：
+    ///   - 正常情况（微秒级争用）：照样拿到锁，日志不丢；
+    ///   - 持有者真卡死：最多等 500ms，然后**丢弃这一条日志**并返回，
+    ///     调用方继续往下走。宁可少一行日志，也不让整个 runtime 起不来。
+    private static func withWriteLock(action: () -> Unit): Unit {
+        let deadline = MonoTime.now() + WRITE_LOCK_WAIT
+        while (!WRITE_LOCK.tryLock()) {
+            if (MonoTime.now() >= deadline) {
+                // 丢弃日志本身也是一种信号，必须留下痕迹，否则排查时会误以为
+                // 「这段代码根本没执行到」。只报前 5 次，避免刷屏。
+                if (DROPPED_COUNT < 5) {
+                    DROPPED_COUNT = DROPPED_COUNT + 1
+                    eprintln("[LOG-DROP] log write lock busy over 500ms, message dropped")
+                }
+                return
+            }
+        }
+        try {
+            action()
+        } finally {
+            WRITE_LOCK.unlock()
+        }
+    }
 
     /// §11.3：注入磁盘水位告警出口（组合根调用）
     public static func setWatermarkAlerter(f: (String, Int64, Int64) -> Unit): Unit {
@@ -321,55 +370,50 @@ struct LogUtilsImpl {
     //------------------------------------------------------------
 
     public static func trace(msg: String): Unit {
-        LOGGER.trace(msg)
+        withWriteLock({ => LOGGER.trace(msg) })
     }
 
     public static func agentTrace(name: String, msg: String): Unit {
-        let logger = getNamedLogger(name)
-        logger.trace("[${name}] ${msg}")
+        withWriteLock({ => getNamedLogger(name).trace("[${name}] ${msg}") })
     }
 
     //------------------------------------------------------------
 
     public static func debug(msg: String): Unit {
-        LOGGER.debug(msg)
+        withWriteLock({ => LOGGER.debug(msg) })
     }
 
     public static func agentDebug(name: String, msg: String): Unit {
-        let logger = getNamedLogger(name)
-        logger.debug("[${name}] ${msg}")
+        withWriteLock({ => getNamedLogger(name).debug("[${name}] ${msg}") })
     }
 
     //------------------------------------------------------------
 
     public static func info(msg: String): Unit {
-        LOGGER.info(msg)
+        withWriteLock({ => LOGGER.info(msg) })
     }
 
     public static func agentInfo(name: String, msg: String): Unit {
-        let logger = getNamedLogger(name)
-        logger.info("[${name}] ${msg}")
+        withWriteLock({ => getNamedLogger(name).info("[${name}] ${msg}") })
     }
 
     //------------------------------------------------------------
 
     public static func warn(msg: String): Unit {
-        LOGGER.warn(msg)
+        withWriteLock({ => LOGGER.warn(msg) })
     }
 
     public static func agentWarn(name: String, msg: String): Unit {
-        let logger = getNamedLogger(name)
-        logger.warn("[${name}] ${msg}")
+        withWriteLock({ => getNamedLogger(name).warn("[${name}] ${msg}") })
     }
 
     //------------------------------------------------------------
 
     public static func error(msg: String): Unit {
-        LOGGER.error(msg)
+        withWriteLock({ => LOGGER.error(msg) })
     }
 
     public static func agentError(name: String, msg: String): Unit {
-        let logger = getNamedLogger(name)
-        logger.error("[${name}] ${msg}")
+        withWriteLock({ => getNamedLogger(name).error("[${name}] ${msg}") })
     }
 }

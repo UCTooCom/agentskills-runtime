@@ -1,8 +1,19 @@
 ---
 name: code-gen-verifier
 description: 代码生成验证技能。验证crud-generator生成的代码是否可编译、是否符合仓颉语言规范、是否遵循uctoo-v4模块开发规范。当代码生成后需要自动验证时使用。触发词："验证生成代码"、"code-gen-verifier"、"verify generated code"。
-version: 1.0.0
+version: 1.1.0
 author: OpenCangjie Team
+
+## 脚本运行说明
+
+本技能的脚本提供 TypeScript 和 Python 两个版本，**优先使用 TypeScript 版本**以减少对 Python 运行环境的依赖。
+
+- **TypeScript 版本（推荐）**：`scripts/verify.ts`
+  - 运行方式：`node --experimental-strip-types scripts/verify.ts [参数]`
+  - 依赖：Node.js ≥22.6（推荐 v23.10+），无需额外 npm 包
+- **Python 版本（降级备选）**：`scripts/verify.py`
+  - 运行方式：`python scripts/verify.py [参数]`
+  - 仅在 TypeScript 版本运行出错时降级使用
 inputs:
   - name: files
     type: string[]

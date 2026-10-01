@@ -76,6 +76,9 @@ private let DEFAULT_PROVIDER_MAP = HashMap<String, ProviderConfig>([
     ("atomgit",   ProviderConfig("ATOMGIT_BASE_URL", // openai-compatible
                                 "https://api.atomgit.com/api/v5",
                                 "ATOMGIT_API_KEY")),
+    ("evomap",    ProviderConfig("EVOMAP_BASE_URL", // OpenAI-compatible Chat Completions Gateway
+                                "https://api.evomap.ai/v1",
+                                "EVOMAP_API_KEY")),
     ("tokendance", ProviderConfig("TOKENDANCE_BASE_URL", // openai-compatible
                                  "https://tokendance.space/gateway/v1",
                                  "TOKENDANCE_API_KEY")),
@@ -125,6 +128,14 @@ private func inferProvider(modelName: String): String {
  */
 private func normalizeModelName(name: String): String {
     let lower = name.toAsciiLower()
+    // 带其他厂商前缀的模型名（如 evomap-deepseek-v4-flash）不是 deepseek 官方裸 ID，
+    // 不应被下面的 deepseek 规范化改写——否则会丢掉 evomap- 前缀、错发给 deepseek 官方。
+    // 仅当模型名以「非 deepseek 的已知 provider 名 + 连字符」开头时才整名原样返回。
+    for (provider in getAllProviderNames()) {
+        if (provider != "deepseek" && lower.startsWith(provider + "-")) {
+            return name
+        }
+    }
     if (lower.contains("deepseek")) {
         // 仅对带代次前缀的写法做收敛（v4-1 / v4.1 / v4-flash / v4_flash），
         // 已经是 canonical 的 `deepseek-flash` / `deepseek-v4-pro` 原样返回。
@@ -276,7 +287,7 @@ public struct ModelManager {
     public static func createChatModel(modelConfig: ModelConfig): ChatModel {
         match (modelConfig.provider) {
             case "openai" | "dashscope" | "ark" | "deepseek" |
-                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" | "orbitai" | "atomgit" | "gmicloud" =>
+                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" | "orbitai" | "atomgit" | "gmicloud" | "evomap" =>
                 return OpenAIChatModel(modelConfig.provider, modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "tokendance" =>
                 return TokendanceChatModel(modelConfig.provider, modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)

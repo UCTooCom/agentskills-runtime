@@ -47,7 +47,8 @@ public interface AgentContextsDAO <: RootDAO {
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                task_id
             ) values(
 ${arg(entity.agentId)},
                 ${arg(entity.messages)},
@@ -55,7 +56,8 @@ ${arg(entity.agentId)},
                 ${arg(entity.creator)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.taskId)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -70,7 +72,7 @@ ${arg(entity.agentId)},
      */
     func findAgentContextsById(id: String): Option<AgentContextsPO> {
         executor.setSql('''
-            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at from agent_contexts where id = ${arg(id)}
+            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at, task_id from agent_contexts where id = ${arg(id)}
         ''').first<AgentContextsPO>()
     }
 
@@ -89,6 +91,7 @@ ${arg(entity.agentId)},
                 metadata = ${arg(entity.metadata)},
                 creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
+                task_id = ${arg(entity.taskId)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -139,7 +142,7 @@ ${arg(entity.agentId)},
      */
     func findAllAgentContextsPage(page: Int64, size: Int64): Pagination<AgentContextsPO> {
         executor.page<AgentContextsPO>('''
-            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at from agent_contexts order by created_at desc
+            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at, task_id from agent_contexts order by created_at desc
         ''', size, page: page)
     }
 
@@ -152,7 +155,7 @@ ${arg(entity.agentId)},
      */
     func findAgentContextsByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<AgentContextsPO> {
         executor.page<AgentContextsPO>('''
-            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at from agent_contexts where creator = ${arg(creator)} order by created_at desc
+            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at, task_id from agent_contexts where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -162,7 +165,7 @@ ${arg(entity.agentId)},
      */
     func listAllAgentContexts(): ArrayList<AgentContextsPO> {
         executor.setSql('''
-            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at from agent_contexts order by created_at desc
+            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at, task_id from agent_contexts order by created_at desc
         ''').list<AgentContextsPO>()
     }
 
@@ -176,7 +179,7 @@ ${arg(entity.agentId)},
             return ArrayList<AgentContextsPO>()
         }
         executor.setSql('''
-            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at from agent_contexts where id ${IN(ids)}
+            select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at, task_id from agent_contexts where id ${IN(ids)}
         ''').list<AgentContextsPO>()
     }
 
@@ -215,7 +218,7 @@ ${arg(entity.agentId)},
      */
     func findAgentContextsByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentContextsPO> {
         let sql = StringBuilder()
-        sql.append("select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at from agent_contexts where 1=1")
+        sql.append("select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at, task_id from agent_contexts where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -288,7 +291,7 @@ ${arg(entity.agentId)},
      */
     func findAgentContextsByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentContextsPO> {
         let sql = StringBuilder()
-        sql.append("select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at from agent_contexts")
+        sql.append("select id, agent_id, messages, metadata, creator, created_at, updated_at, deleted_at, task_id from agent_contexts")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

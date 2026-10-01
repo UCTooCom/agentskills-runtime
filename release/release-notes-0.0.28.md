@@ -79,6 +79,30 @@
 | 数据契约 | `DATA_CONTRACT.yaml` 描述表角色 / 幂等键 / 写入纪律 / 示例行，契约漂移经 `contract_drift` 事件告警 |
 | 复用现有基建 | 不重造调度引擎（crontab SchedulerEngine + f_ticktock）、检查点（CheckpointManager）、DAG（DagScheduler）、通知通道（WebSocketEventBridge / SseEventBridge） |
 
+#### 前端评审交互（人在回路的可操作界面）
+
+上面的 6 个决策点是**后端契约**；用户在界面上真正看到并操作的是本版本新增的一张评审卡片，落在二次开发的 OpenTiny 副本里：
+
+| 文件 | 位置 |
+|------|------|
+| `ReviewCard.vue` | `apps/web-admin/web/src/lib/webmcp-sdk/packages/next-remoter/src/components/` |
+| `useLongRunningTaskReview.ts` | 同包的 `composable/` |
+
+链路是：插件产出 `review_required` → 宿主 SSE `lrt_event` → `useTinyRobotChat.onLrtEvent` 调 `initReview(taskId)` → 追加一条 `content.type = 'review_required'` 的 assistant 消息 → `contentRendererMatches` 渲染成卡片。
+
+卡片提供三个动作，与后端 §1 的接口一一对应：
+
+| 界面动作 | 请求 | 后端行为 |
+|------|------|------|
+| ✅ 确认交付 | `POST /long_running_task/deliver/:taskId` `{action: confirm}` | 交付闭环 |
+| 🔧 要求改进 | `POST /long_running_task/review/:taskId` `{action: improve, feedback}` | 带反馈文本，`improve` **触发 replan 重规划** |
+| 🗑 放弃 | `POST /long_running_task/deliver/:taskId` `{action: abandon}` | 终止任务 |
+
+两个实现上值得记录的点：
+
+- **评审状态用 `reactive` Map 按 `taskId` 存放**（`pending` / `submitting` / `done` / `error`），而不是挂在消息对象上——消息对象不保证响应式，reactive Map 才能稳定驱动卡片重渲染。卡片据此切换按钮组、提交中、已提交/失败四态。
+- **接口基址靠推导而非配置**：`long_running_task` 端点与 webmcp 同属 `/api/v1/uctoo/` 前缀、互为兄弟目录，因此从前端 `agentRoot`（形如 `.../api/v1/uctoo/webmcp/`）去掉 `/webmcp/` 段即得正确基址。此处隐含耦合，若日后端点层级调整须同步修改。
+
 #### 交付状态
 
 插件源码 23 个 `.cj` 文件，规格任务完成度 **177/237（74.7%）**；`spec.md`（87KB）、`design.md`（115KB）、`tasks.md`（211KB）三件套齐全，另有 5 轮问题分析、3 份评审报告与失断语义诊断记录。

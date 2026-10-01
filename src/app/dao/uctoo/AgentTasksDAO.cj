@@ -55,7 +55,8 @@ public interface AgentTasksDAO <: RootDAO {
                 deleted_at,
                 aip_session_id,
                 aip_task_id,
-                aip_task_state
+                aip_task_state,
+                owner_user_id
             ) values(
 ${arg(entity.agentId)},
                 ${arg(entity.parentTaskId)},
@@ -71,7 +72,8 @@ ${arg(entity.agentId)},
                 ${arg(entity.deletedAt)},
                 ${arg(entity.aipSessionId)},
                 ${arg(entity.aipTaskId)},
-                ${arg(entity.aipTaskState)}
+                ${arg(entity.aipTaskState)},
+                ${arg(entity.ownerUserId)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -113,6 +115,7 @@ ${arg(entity.agentId)},
                 aip_session_id = ${arg(entity.aipSessionId)},
                 aip_task_id = ${arg(entity.aipTaskId)},
                 aip_task_state = ${arg(entity.aipTaskState)},
+                owner_user_id = ${arg(entity.ownerUserId)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -163,7 +166,7 @@ ${arg(entity.agentId)},
      */
     func findAllAgentTasksPage(page: Int64, size: Int64): Pagination<AgentTasksPO> {
         executor.page<AgentTasksPO>('''
-            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at from agent_tasks order by created_at desc
+            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at, owner_user_id, aip_session_id, aip_task_id, aip_task_state from agent_tasks order by created_at desc
         ''', size, page: page)
     }
 
@@ -176,7 +179,7 @@ ${arg(entity.agentId)},
      */
     func findAgentTasksByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<AgentTasksPO> {
         executor.page<AgentTasksPO>('''
-            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at from agent_tasks where creator = ${arg(creator)} order by created_at desc
+            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at, owner_user_id, aip_session_id, aip_task_id, aip_task_state from agent_tasks where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -186,7 +189,7 @@ ${arg(entity.agentId)},
      */
     func listAllAgentTasks(): ArrayList<AgentTasksPO> {
         executor.setSql('''
-            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at from agent_tasks order by created_at desc
+            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at, owner_user_id, aip_session_id, aip_task_id, aip_task_state from agent_tasks order by created_at desc
         ''').list<AgentTasksPO>()
     }
 
@@ -200,7 +203,7 @@ ${arg(entity.agentId)},
             return ArrayList<AgentTasksPO>()
         }
         executor.setSql('''
-            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at from agent_tasks where id ${IN(ids)}
+            select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at, owner_user_id, aip_session_id, aip_task_id, aip_task_state from agent_tasks where id ${IN(ids)}
         ''').list<AgentTasksPO>()
     }
 
@@ -239,7 +242,7 @@ ${arg(entity.agentId)},
      */
     func findAgentTasksByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentTasksPO> {
         let sql = StringBuilder()
-        sql.append("select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at from agent_tasks where 1=1")
+        sql.append("select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at, owner_user_id, aip_session_id, aip_task_id, aip_task_state from agent_tasks where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -312,7 +315,7 @@ ${arg(entity.agentId)},
      */
     func findAgentTasksByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentTasksPO> {
         let sql = StringBuilder()
-        sql.append("select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at from agent_tasks")
+        sql.append("select id, agent_id, parent_task_id, status, priority, payload, result, error_message, creator, created_at, updated_at, completed_at, deleted_at, owner_user_id, aip_session_id, aip_task_id, aip_task_state from agent_tasks")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

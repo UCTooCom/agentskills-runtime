@@ -3,7 +3,7 @@ name: beichen-finance-matching
 description: 金融匹配智能体（北辰金融匹配智能体）—— 实现北辰命题"金融服务体系化"课题的产业金融服务 SOP 全流程线上化，解决企业"融资难、对接繁、流程慢"痛点。采集企业融资需求并初步审核，基于金融工具数据库（90+ 金融伙伴与产品）智能匹配优势金融机构，生成定制融资方案与对接材料包，按北辰金融 SOP 六阶段时效（1d/1d/2d/3-5d/约定时限/长期）跟踪进度与超期提醒，结果写入 company 表与 tasks 表并通过 aibuilder 呈现。触发词："融资匹配"、"金融服务"、"融资需求"、"贷款对接"、"金融方案"、"机构匹配"、"融资智能体"。
 license: MIT
 version: "1.0.0"
-compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/web_fetch/web_search），脚本执行需 Python 3.8+ + requests 库（落库模式需 psycopg2-binary）
+compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/web_fetch/web_search）。脚本优先使用 TypeScript 版本（Node.js v23.10+，原生支持 --experimental-strip-types）；TS 版本运行有错误时降级使用 Python 版本（Python 3.8+ + requests 库，落库模式需 psycopg2-binary）
 metadata:
   author: UCToo Team (beichen-hackathon)
   version: "1.0.0"
@@ -52,9 +52,9 @@ allowed-tools: network, filesystem, cli
 
 以金融伙伴目录种子（64 银行/12 证券/9 基金/6 投资骨架，演示环境可用真实示例机构）生成金融工具数据库。
 
-**脚本**：`scripts/init_finance_kb.py`
+**脚本**：`scripts/init_finance_kb.ts`（降级：`scripts/init_finance_kb.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/init_finance_kb.py", "--seed", "knowledge/finance-seed.json"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/init_finance_kb.ts", "--seed", "knowledge/finance-seed.json"]})
 # 输出：knowledge/finance-partners/*.json + knowledge/finance-index.json
 ```
 
@@ -62,9 +62,9 @@ cli_execute({"command": "python", "args": ["scripts/init_finance_kb.py", "--seed
 
 结构化采集企业融资需求，完整性校验 + 可行性初判，生成 case_id。
 
-**脚本**：`scripts/collect_financing_need.py`
+**脚本**：`scripts/collect_financing_need.ts`（降级：`scripts/collect_financing_need.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/collect_financing_need.py", "--company", "北京北辰实业有限公司", "--amount", "500万", "--purpose", "研发投入", "--guarantee", "信用"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/collect_financing_need.ts", "--company", "北京北辰实业有限公司", "--amount", "500万", "--purpose", "研发投入", "--guarantee", "信用"]})
 # 输出：output/needs/{case_id}.json（状态 intaked，阶段一截止 = 1 个工作日）
 ```
 
@@ -72,9 +72,9 @@ cli_execute({"command": "python", "args": ["scripts/collect_financing_need.py", 
 
 硬性初筛（额度/期限/担保对标产品要素）+ 优势匹配打分，输出 Top N 匹配矩阵。
 
-**脚本**：`scripts/match_finance.py`
+**脚本**：`scripts/match_finance.ts`（降级：`scripts/match_finance.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/match_finance.py", "--need", "output/needs/{case_id}.json", "--topn", "3"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/match_finance.ts", "--need", "output/needs/{case_id}.json", "--topn", "3"]})
 # 输出：output/matches/{case_id}.json（机构/产品/评分构成/依据）
 ```
 
@@ -82,9 +82,9 @@ cli_execute({"command": "python", "args": ["scripts/match_finance.py", "--need",
 
 调用昇腾 API 生成备选机构方案对比表，无 LLM 时模板降级。
 
-**脚本**：`scripts/generate_finance_plan.py`
+**脚本**：`scripts/generate_finance_plan.ts`（降级：`scripts/generate_finance_plan.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/generate_finance_plan.py", "--need", "output/needs/{case_id}.json", "--matches", "output/matches/{case_id}.json"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/generate_finance_plan.ts", "--need", "output/needs/{case_id}.json", "--matches", "output/matches/{case_id}.json"]})
 # 输出：output/plans/{case_id}.md（对比表 + 适配理由 + 风险提示 + 合规声明）
 ```
 
@@ -92,9 +92,9 @@ cli_execute({"command": "python", "args": ["scripts/generate_finance_plan.py", "
 
 按机构类型生成标准材料清单 + 预填信息 + 缺失项标注。
 
-**脚本**：`scripts/build_dossier.py`
+**脚本**：`scripts/build_dossier.ts`（降级：`scripts/build_dossier.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/build_dossier.py", "--need", "output/needs/{case_id}.json", "--partner", "光大银行"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/build_dossier.ts", "--need", "output/needs/{case_id}.json", "--partner", "光大银行"]})
 # 输出：output/dossiers/{case_id}-光大银行.md
 ```
 
@@ -102,29 +102,55 @@ cli_execute({"command": "python", "args": ["scripts/build_dossier.py", "--need",
 
 阶段推进、超期扫描、回访提醒。
 
-**脚本**：`scripts/track_service.py`
+**脚本**：`scripts/track_service.ts`（降级：`scripts/track_service.py`）
 ```bash
 # 阶段推进
-cli_execute({"command": "python", "args": ["scripts/track_service.py", "--case", "{case_id}", "--advance", "--owner", "张工"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/track_service.ts", "--case", "{case_id}", "--advance", "--owner", "张工"]})
 # 超期扫描
-cli_execute({"command": "python", "args": ["scripts/track_service.py", "--check"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/track_service.ts", "--check"]})
 # 回访任务
-cli_execute({"command": "python", "args": ["scripts/track_service.py", "--case", "{case_id}", "--review"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/track_service.ts", "--case", "{case_id}", "--review"]})
 ```
 
 ### Step 6：结果落库（Persist）
 
 企业 upsert 到 `company` 表，融资方案与服务任务写入 `tasks` 表。
 
-**脚本**：`scripts/save_to_db.py`
+**脚本**：`scripts/save_to_db.ts`（降级：`scripts/save_to_db.py`）
 ```bash
-cli_execute({"command": "python", "args": ["scripts/save_to_db.py", "--need", "output/needs/{case_id}.json", "--plan", "output/plans/{case_id}.md", "--tracking", "output/tracking/{case_id}.json", "--sql-only"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/save_to_db.ts", "--need", "output/needs/{case_id}.json", "--plan", "output/plans/{case_id}.md", "--tracking", "output/tracking/{case_id}.json", "--sql-only"]})
 # 输出：output/sql/finance_*.sql（company upsert + tasks 写入 finance-plan / finance-service）
 ```
 
 ## 脚本执行显式命令示例
 
-> 工作目录：`apps/agentskills-runtime/skills/beichen-finance-matching`；Windows 用 `python`，Linux/Mac 用 `python3`。
+> 工作目录：`apps/agentskills-runtime/skills/beichen-finance-matching`。
+> 优先使用 TypeScript 版本（需 Node.js v23.10+）；TS 版本运行有错误时降级使用 Python 版本（Windows 用 `python`，Linux/Mac 用 `python3`）。
+
+```bash
+# 0. 初始化金融工具数据库
+node --experimental-strip-types scripts/init_finance_kb.ts --seed knowledge/finance-seed.json
+
+# 1. 需求建档（SOP 阶段一）
+node --experimental-strip-types scripts/collect_financing_need.ts --company "北京北辰实业有限公司" --amount "500万" --term "2年" --purpose "研发投入" --guarantee "信用"
+
+# 2. 机构匹配
+node --experimental-strip-types scripts/match_finance.ts --need output/needs/{case_id}.json --topn 3
+
+# 3. 方案生成
+node --experimental-strip-types scripts/generate_finance_plan.ts --need output/needs/{case_id}.json --matches output/matches/{case_id}.json
+
+# 4. 对接材料包
+node --experimental-strip-types scripts/build_dossier.ts --need output/needs/{case_id}.json --partner "光大银行"
+
+# 5. SOP 跟踪
+node --experimental-strip-types scripts/track_service.ts --case {case_id} --advance --owner "张工"
+
+# 6. 落库
+node --experimental-strip-types scripts/save_to_db.ts --need output/needs/{case_id}.json --plan output/plans/{case_id}.md --tracking output/tracking/{case_id}.json --sql-only
+```
+
+### 降级：Python 版本命令
 
 ```bash
 # 0. 初始化金融工具数据库
@@ -168,8 +194,9 @@ python scripts/save_to_db.py --need output/needs/{case_id}.json --plan output/pl
 
 ## 错误处理与降级策略
 
+- **TS 降级 Python**：TypeScript 版本为优先执行版本，若运行报错则降级使用功能完全一致的 Python 版本
 - **LLM 不可用**：匹配用规则打分、方案用模板生成，均不中断流程
-- **数据库连接失败**：save_to_db.py 支持 `--sql-only` 生成 SQL 文件
+- **数据库连接失败**：save_to_db 支持 `--sql-only` 生成 SQL 文件（TS 版直连需 `npm install pg`，Python 版需 `pip install psycopg2-binary`）
 - **伙伴库产品要素不全**：匹配以优势领域 + 服务经验先验降级打分
 - **编码错误**：cli_execute stdout 编码失败时按"遇挫不停"原则继续
 

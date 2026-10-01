@@ -264,6 +264,10 @@ public class AgentLoader {
             builder.setDefaultOutputTypes(defaultOutputTypes)
         }
         
+        if (let Some(skillName) <- yaml.get("skill_name")) {
+            builder.setSkillName(skillName)
+        }
+        
         if (let Some(discoverableStr) <- yaml.get("discoverable")) {
             builder.setDiscoverable(discoverableStr.toAsciiLower() == "true")
         }

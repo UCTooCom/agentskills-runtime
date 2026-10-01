@@ -262,6 +262,10 @@ public class PluginContext {
                     let typed = JsonValue.toObject<T>(args[0])
                     listener(typed)
                 } catch (e: Exception) {
+                    // 监听器/反序列化异常被吞掉 → 订阅方「什么都没收到」且无任何线索，必须可见。
+                    // 诊断走 stderr：stdout 是插件↔宿主的协议帧通道；
+                    // stderr 由宿主 PluginManager.forwardStderr 转发进宿主日志。
+                    eprintln("[cordis-plugin] ctx.on('${event}') listener failed: " + e.toString())
                     ()
                 }
             }
@@ -279,6 +283,8 @@ public class PluginContext {
                     let typed = JsonValue.toObject<T>(args[0])
                     listener(typed)
                 } catch (e: Exception) {
+                    // 一次性订阅的监听器失败同样必须可见（否则该事件永久静默）
+                    eprintln("[cordis-plugin] ctx.once('${event}') listener failed: " + e.toString())
                     ()
                 }
             }
@@ -300,6 +306,8 @@ public class PluginContext {
                     let typed = JsonValue.toObject<T>(args[0])
                     listener(typed)
                 } catch (e: Exception) {
+                    // 返回值版监听器失败会被当作「无 bail 值」（None）→ 派发语义静默改变，必须可见
+                    eprintln("[cordis-plugin] ctx.onVal('${event}') listener failed: " + e.toString())
                     None
                 }
             } else {
@@ -360,6 +368,8 @@ public class PluginContext {
                         case None => listener(typed, { => None })
                     }
                 } catch (e: Exception) {
+                    // 洋葱链上的监听器失败会被当作「不 veto、不传值」（None）→ 链结果静默改变，必须可见
+                    eprintln("[cordis-plugin] ctx.onWaterfall('${event}') listener failed: " + e.toString())
                     None
                 }
             } else {
@@ -706,30 +716,41 @@ public class PluginRuntime {
                         }
                         match (listener) {
                             case Some(l) =>
-                                if (params.nextAllowed) {
-                                    // waterfall：构造 next 闭包（发 events/next 请求）
-                                    let next: () -> ?JsonValue = { =>
-                                        let result = this.server.request<NextParams, JsonValue>(
-                                            Methods.EVENTS_NEXT,
-                                            params: NextParams(params.emitId))
-                                        match (result) {
-                                            case Ok(v) =>
-                                                match (v) {
-                                                    case JsonValue.Null => None
-                                                    case other => Some(other)
-                                                }
-                                            case Err(e) => None
+                                try {
+                                    if (params.nextAllowed) {
+                                        // waterfall：构造 next 闭包（发 events/next 请求）
+                                        let next: () -> ?JsonValue = { =>
+                                            let result = this.server.request<NextParams, JsonValue>(
+                                                Methods.EVENTS_NEXT,
+                                                params: NextParams(params.emitId))
+                                            match (result) {
+                                                case Ok(v) =>
+                                                    match (v) {
+                                                        case JsonValue.Null => None
+                                                        case other => Some(other)
+                                                    }
+                                                case Err(e) =>
+                                                    // next 请求失败会让洋葱链被静默截断（下游订阅者的
+                                                    // bail/veto 值丢失、上游当成「链正常结束」），必须可见
+                                                    eprintln("[cordis-plugin] waterfall next (${params.emitId}) failed: ${e}")
+                                                    None
+                                            }
+                                        }
+                                        match (l(params.args, Some(next))) {
+                                            case Some(v) => complete(v)
+                                            case None => complete(JsonValue.Null)
+                                        }
+                                    } else {
+                                        match (l(params.args, None)) {
+                                            case Some(v) => complete(v)
+                                            case None => complete(JsonValue.Null)
                                         }
                                     }
-                                    match (l(params.args, Some(next))) {
-                                        case Some(v) => complete(v)
-                                        case None => complete(JsonValue.Null)
-                                    }
-                                } else {
-                                    match (l(params.args, None)) {
-                                        case Some(v) => complete(v)
-                                        case None => complete(JsonValue.Null)
-                                    }
+                                } catch (e: Exception) {
+                                    // 监听器异常原样上抛（控制流不变：宿主侧按派发超时处理并清理订阅），
+                                    // 但先在插件侧留痕——否则插件没有任何「哪个事件、哪个监听器失败」的线索
+                                    eprintln("[cordis-plugin] events/dispatch listener failed (event='${params.event}'): " + e.toString())
+                                    throw e
                                 }
                             case None =>
                                 complete(JsonValue.Boolean(false))
@@ -846,12 +867,17 @@ public class PluginRuntime {
         // 3. 注册退订 effect：插件卸载时自动退订
         this.registry.effect({ =>
             try {
-                this.server.request<UnsubscribeParams, JsonValue>(
+                match (this.server.request<UnsubscribeParams, JsonValue>(
                     Methods.EVENTS_UNSUBSCRIBE,
-                    params: UnsubscribeParams(subscriptionId))
-                ()
+                    params: UnsubscribeParams(subscriptionId))) {
+                    case Ok(_) => ()
+                    case Err(e) =>
+                        // 退订失败 → 宿主侧残留本插件的订阅（后续派发打向已卸载插件），必须可见
+                        eprintln("[cordis-plugin] unsubscribe '${event}' (${subscriptionId}) failed: ${e}")
+                }
             } catch (e: Exception) {
-                ()
+                // 退订时异常（连接已关闭/传输层错误）同样必须留痕，否则就是「插件卸载后订阅残留」
+                eprintln("[cordis-plugin] unsubscribe '${event}' (${subscriptionId}) error: " + e.toString())
             }
         })
         subscriptionId

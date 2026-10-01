@@ -19,7 +19,9 @@ def validate_skill(skill_path):
         return False, "SKILL.md not found"
 
     # Read and validate frontmatter
-    content = skill_md.read_text()
+    # 统一接受 CRLF 换行（与 quick_validate.ts 的 \r\n→\n 归一化口径一致，
+    # 修复 Windows CRLF 的 SKILL.md 在 Python 版误判 "Invalid frontmatter format"）
+    content = skill_md.read_text().replace('\r\n', '\n')
     if not content.startswith('---'):
         return False, "No YAML frontmatter found"
 

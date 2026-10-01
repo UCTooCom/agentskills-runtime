@@ -141,9 +141,17 @@ public class WebFetchTool <: AbsTool {
         // 抓取：先用 verify=false；失败（多为 TLS 握手被服务端主动断开，
         // 或 CA 校验不过）再用系统 CA（verify=true）重试一次 ——
         // .env 里的 SSL_CERT_FILE 已指向本地 CA 包，这一步才有意义。
+        // 2026-09-20 优化：若 verify=false 是网络层失败（RST/timeout/TLS 握手被
+        // 对端断开），同 URL 同 client 指纹 verify=true 必然同样失败，盲目重试
+        // 只浪费约 2 分钟（日志实测 bing 每次两次各约 2min、共约 4min 才返回错误）。
+        // 仅当 verify=false 是证书/CA 校验类失败时，verify=true 才有意义。
         var fetched: Option<String> = None<String>
         var lastError = ""
         for (verifyMode in [false, true]) {
+            if (verifyMode && WebFetchTool.isNetworkLayerFailure(lastError)) {
+                LogUtils.info("[WebFetchTool] verify=false 为网络层失败（${lastError}），跳过 verify=true 重试以节省时间")
+                break
+            }
             try {
                 fetched = HttpUtils.get(url, headers, None<JsonObject>, verify: verifyMode)
             } catch (ex: Exception) {
@@ -229,6 +237,24 @@ public class WebFetchTool <: AbsTool {
             failObj.put("suggestion", JsonString(WebFetchTool.failureSuggestion(ex.message)))
             return ToolResponse(failObj.toJsonString(), isError: true)
         }
+    }
+
+    /// 判定 web_fetch 失败是否属于网络层（verify=true 重试也无意义的情形）。
+    /// 证书/CA 校验类失败返回 false（verify=true 换系统 CA 有意义）。
+    /// 依据：2026-09-20 日志，bing 的 verify=false 与 verify=true 失败原因
+    /// 均为 "TLS 握手 failed: Failed to read data 10054: forcibly closed"，
+    /// 属网络层，重试纯浪费时间。
+    protected static func isNetworkLayerFailure(msg: String): Bool {
+        let m = msg.toAsciiLower()
+        if (m.contains("certificate") || m.contains("verification")) {
+            return false
+        }
+        // 网络层：连接被 RST、超时、TLS 握手被对端断开
+        return m.contains("10054") || m.contains("forcibly closed") ||
+            m.contains("10060") || m.contains("did not properly respond") ||
+            m.contains("tls 握手") || m.contains("read data") ||
+            m.contains("connection refused") || m.contains("timed out") ||
+            m.contains("timeout")
     }
 
     /// 判定响应体是否疑似反爬/验证页。返回命中的原因，正常内容返回空串。

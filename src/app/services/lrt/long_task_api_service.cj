@@ -27,9 +27,15 @@ import std.convert.*
 import std.time.DateTime
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull, JsonKind}
 import magic.log.LogUtils
-import magic.app.models.uctoo.{AgentTasksPO, CrontabPO, CrontabLogPO}
-import magic.app.services.uctoo.{AgentTasksService, CrontabService, CrontabLogService}
+// 注：CrontabPO / CrontabLogPO 随「取消自动续跑」（2026-09-23）一并移除——
+// submitTask 不再建常驻调度行，本文件不再直接构造这两类 PO。
+import magic.app.models.uctoo.AgentTasksPO
+import magic.app.services.uctoo.{AgentTasksService, CrontabService, CrontabLogService, AgentsService}
 import magic.app.services.bridge.CheckpointManager
+// 注意：此处**不可** import magic.app.services.crontab。
+// crontab.executor 已依赖本包（LrtPluginExecutor 驱动 LrtHostExecutor/LrtPluginClient），
+// 反向 import 会构成 crontab -> crontab.executor -> lrt -> crontab 包环，cjpm 拒绝构建。
+// 调度注册改走 LrtScheduleBridge（组合根注入的函数槽）。
 import magic.app.core.response.APIResult
 import f_util.UUID
 
@@ -47,6 +53,55 @@ public class LongTaskApiService {
 
     public init() {}
 
+    // ── 双身份解析（spec agent-user-dual-identity · design D1）───────────
+
+    /// 解析 agent 绑定的 uctoo_user.id —— 即"执行者"身份，用于写 `creator`。
+    ///
+    /// 未绑定时返回空串：调用方据此回退为"不显式指定 creator"（落库侧用人类 userId 兜底），
+    /// 严禁把空串写进 uuid 列（SQLSTATE 22P02，2026-09-21 高考数学实测复现）。
+    private func resolveAgentUctooUserId(agentId: String): String {
+        if (agentId.isEmpty()) {
+            return ""
+        }
+        try {
+            match (AgentsService().getById(agentId).data) {
+                case Some(agent) => return agent.userId.getOrDefault({ => "" })
+                case None => return ""
+            }
+        } catch (e: Exception) {
+            LogUtils.error("[LongTaskApiService] 解析 agent 绑定用户失败: agentId=${agentId}, ${e.message}")
+            return ""
+        }
+    }
+
+    /// 从既有任务行解析 (执行者 creator, 归属者 owner_user_id, agent 定义 id)。
+    ///
+    /// owner 优先取任务行已记录的 owner_user_id（保证归属在任务生命周期内不变），
+    /// 缺失时回落为当前操作人 userId。agentId 取自任务行 agent_id（agents.id），
+    /// 供 LrtPluginClient 透传给插件写 agent_tasks.agent_id（NOT NULL）。
+    private func resolveTaskIdentity(taskId: String, userId: String): (String, String, String) {
+        var creator = ""
+        var owner = userId
+        var agentId = ""
+        try {
+            match (tasksService.getById(taskId).data) {
+                case Some(task) =>
+                    creator = resolveAgentUctooUserId(task.agentId)
+                    agentId = task.agentId
+                    if (task.ownerUserId.isSome()) {
+                        owner = task.ownerUserId.getOrThrow()
+                    }
+                case None => ()
+            }
+        } catch (e: Exception) {
+            LogUtils.error("[LongTaskApiService] 解析任务身份失败: taskId=${taskId}, ${e.message}")
+        }
+        if (owner.isEmpty()) {
+            owner = userId
+        }
+        return (creator, owner, agentId)
+    }
+
     // ── 9.1.1 提交长程任务（POST /long_running_task/add）──────────────
 
     /**
@@ -56,15 +111,17 @@ public class LongTaskApiService {
      * 1. 建根任务(`agent_tasks`,`parent_task_id=NULL`,`status=0` pending)
      *    ： 先建任务是因为 crontab 的 `parameters` 里要带 `taskId`。
      *    `status=0` 与插件侧建根任务一致；进入 running(1) 发生在插件首回合。
-     * 2. 建调度记录(`crontab`,`task=lrt://<agentId>`,
+     * 2. 【2026-09-23 起已移除】建调度记录(`crontab`,`task=lrt://<agentId>`,
      *    `parameters={"taskId":<id>,"userId":<uid>}`)。
+     *    改为事件驱动：不再建常驻调度行，后续回合由 `lrt_verify_job` 队列推进；
+     *    未跑完的任务只在用户显式要求时续跑(lrt-intervene resume 触发单个回合)。
      * 3. **回调插件 `lrt-plan`** 做 AI 自主规划(把 goal 解析成任务树草稿)。
      * 4. **立即触发首回合**(spec 4.1 规则 5)：不等下一个 CRON 周期。
      *
      * @param goal 用户目标原文(必填)
      * @param agentId 执行该任务的 Agent(必填;决定 `lrt://` 的路径段)
      * @param priority 优先级(缺省 5;数值越小越优先,与 `AgentTasksPO.priority` 语义一致)
-     * @param cron CRON 表达式(缺省 5 分钟轮询间隔,每 5 分钟唤起一回合)
+     * @param cron 已废弃：事件驱动模型下不再据此建常驻调度(保留入参仅为兼容旧调用方)
      * @param constraints 附加约束(缺省空;写入 payload.constraints,供重规划使用)
      * @param userId 提交人
      */
@@ -85,6 +142,10 @@ public class LongTaskApiService {
             return fail("agentId 不能为空")
         }
 
+        // 解析执行 agent 的 uctoo_user.id：creator 应记为 agent 自身帐号（执行者），
+        // 而非委派任务的真人用户（owner_user_id）。详见 spec agent-user-dual-identity §FR-2。
+        let agentUctooUserId = resolveAgentUctooUserId(agentId)
+
         try {
             // ── 1) 建根任务 ───────────────────────────────────────
             let taskPO = AgentTasksPO()
@@ -101,7 +162,15 @@ public class LongTaskApiService {
             taskPO.status = Some(0)
             taskPO.priority = Some(match (priority) { case Some(p) => p; case None => 5 })
             taskPO.payload = Some(LongTaskApiService.buildInitialPayload(goal, constraints, sessionId, traceId).toString())
-            taskPO.creator = Some(userId)
+            // creator = 执行者（agent 自身帐号）；owner_user_id = 任务归属的真人用户。
+            // 【uuid 空串防线】agent 可能未绑定 uctoo_user（如从 AGENTS.md 同步的 MainAgent，
+            // agents.user_id 为 NULL → agentUctooUserId 解析为 ""）。creator / owner_user_id
+            // 均为 uuid 列，空串入库必报 SQLSTATE 22P02（invalid input syntax for type uuid: ""），
+            // 导致 LRT 委派 100% 失败（2026-09-21 高考数学实测复现，见
+            // specs/long-running-task/review-2026-09-21-gaokao-run.md 问题 3）。
+            // 身份缺失时写 NULL：creator 语义降级为"未记录执行者身份"，owner 归属不受影响。
+            taskPO.creator = if (agentUctooUserId.isEmpty()) { None<String> } else { Some(agentUctooUserId) }
+            taskPO.ownerUserId = if (userId.isEmpty()) { None<String> } else { Some(userId) }
             taskPO.createdAt = DateTime.now()
             taskPO.updatedAt = DateTime.now()
 
@@ -116,59 +185,30 @@ public class LongTaskApiService {
                 case None => taskPO.id
             }
 
-            // ── 2) 建调度记录 ─────────────────────────────────────
-            let crontabPO = CrontabPO()
-            // 预置 ID：insertXxx 若自行生成主键会覆盖此值（见 CrontabService.create
-            // 的 `entity.id = id`），故这里只是"库不生成主键"时的兜底。
-            crontabPO.id = LongTaskApiService.generateId()
-            crontabPO.name = "lrt-${taskId}"
-            crontabPO.groupName = "1"
-            // taskUri 形如 lrt://<agentId>；SchedulerEngine 按 scheme 选 LrtPluginExecutor，
-            // 再由 parsePath 取出 agentId、由 parameters 里的 taskId 驱动 L3 插件执行。
-            // 【为什么不再用 agent_execution://】宿主 AgentExecutionExecutor 在收敛退出时
-            // 会**无条件** updateTaskStatus(..., Some(2))，与 spec 5.6.1 规则 7
-            // 「未经用户确认不得交付」冲突（插件侧两段式被宿主 CRON 链路旁路）。
-            // 长程任务因此改走 lrt://，宿主只触发、不写 status。（2026-09-15 定夺）
-            crontabPO.task = "lrt://${agentId}"
-            crontabPO.cron = match (cron) { case Some(c) => c; case None => "0 */5 * * * ?" }
-            crontabPO.tactics = ""
-            crontabPO.remark = "长程任务调度（taskId=${taskId}）"
-            crontabPO.creator = Some(userId)
-            crontabPO.createdAt = DateTime.now()
-            crontabPO.updatedAt = DateTime.now()
-            // 【关键】必须显式写 status=1。
-            // CrontabPO.status 默认值是 0，而 SchedulerEngine 只在 `task.status == 1`
-            // 时才把任务注册进 ticktock（SchedulerEngine.cj:169）。写 0 的后果是
-            // **任务永不触发、且没有任何报错**——排查成本极高，故在此写死并加注释。
-            crontabPO.status = 1
-            crontabPO.concurrentable = Some(false) // 禁止重叠触发（调度层 runningTasks + 插件层 executing 双保险）
-            crontabPO.once = Some(false)          // 反复唤起，直到任务收敛为终态
-            crontabPO.priority = Some(match (priority) { case Some(p) => p; case None => 5 })
-            // parameters 是宿主传给执行器的字符串；LrtPluginExecutor 从中取
-            // taskId（定位 agent_tasks）与 userId（插件侧行级权限）。
-            // 真正的任务上下文由插件按 taskId 从 agent_tasks.payload 取，故这里保持精简。
-            let paramObj = JsonObject()
-            paramObj.put("taskId", JsonString(taskId))
-            paramObj.put("userId", JsonString(userId))
-            crontabPO.parameters = Some(paramObj.toString())
-
-            let crontabResult = crontabService.create(crontabPO, userId)
-            if (!crontabResult.success) {
-                // 调度建失败要回滚任务，否则留下一个"存在但永不执行"的僵尸任务
-                LogUtils.error("[LongTaskApiService] 创建调度失败，回滚任务: ${reasonOf(crontabResult.reason)}")
-                let _ = tasksService.delete(taskId, true)
-                return fail("创建调度失败: ${reasonOf(crontabResult.reason)}")
-            }
-            // 用 create 回填的真实 ID（库可能自行生成主键，不能沿用本地预置值）
-            let crontabId = match (crontabResult.data) {
-                case Some(c) => c.id
-                case None => crontabPO.id
-            }
+            // ── 2) 【已移除】建调度记录 ─────────────────────────────────
+            // 【取消自动续跑 · 2026-09-23 · 用户定夺方案 A1】
+            // 这里原本为每个任务建一条 `lrt-<taskId>`（`cron = 0 */5 * * * *`、
+            // `once=false`）的常驻 crontab 行，靠周期性 tick 推进回合。
+            // 实测后果：任务中断/完成/取消后**没有任何代码负责停表**（全工程无
+            // lrt- 前缀的删除/禁用逻辑），调度行永久空转——lrt-65c1fe9f 已执行
+            // 386 次、最后一次 2026-09-23 18:50，每 5 分钟先跑一个宿主 Agent 回合
+            // 再派发插件验核，规划早已失败仍在烧 token，且把 status 反复拉回 1。
+            //
+            // 新语义（用户定夺）：长程任务**不自动续跑**。
+            // - 提交时立即触发首回合（下方第 4 步，保持不变）；
+            // - 后续回合由 lrt_verify_job 队列（RC-A）事件驱动推进，受
+            //   LRT_MAX_HOST_ROUNDS 硬约束，达限置 awaiting_review 后停下；
+            // - 未跑完的任务只在用户显式要求时续跑：lrt-intervene(action=resume)
+            //   → 宿主触发**单个**回合（见 intervene 的 resume 分支）。
+            //
+            // 兜底：历史库里仍有 lrt-* 调度行，由 LrtPluginExecutor 的终态守卫
+            // （终态/awaiting_review/任务缺失 → 停表并短路）拦住，不依赖本处改动。
+            let crontabId = ""
 
             // ── 3) 回调插件做 AI 自主规划 ─────────────────────────
             // 规划失败**不阻断**提交：任务与调度已就绪，规划可重试（干预 adjust_goal 会重新触发）。
             // 若此处直接失败，用户会以为"任务没提交成功"，但库里其实已经有记录了，反而更乱。
-            match (LrtPluginClient.plan(taskId, goal, userId, ArrayList<String>())) {
+            match (LrtPluginClient.plan(taskId, goal, userId, ArrayList<String>(), creator: agentUctooUserId, ownerUserId: userId, agentId: agentId)) {
                 case Ok(planJson) =>
                     LogUtils.info("[LongTaskApiService] 插件规划完成: taskId=${taskId}")
                     LongTaskApiService.mergePlanIntoPayload(this.tasksService, taskId, JsonValue.fromStr(planJson.stringify()))
@@ -183,21 +223,39 @@ public class LongTaskApiService {
             // spawn 异步：提交接口必须快速返回 taskId，不能等一整个回合跑完。
             let firstTaskId = taskId
             let firstUserId = userId
+            // spawn 异步闭包不能捕获可变变量（agentUctooUserId 为 var），用不可变快照传入
+            let spawnCreator = agentUctooUserId
+            // 【根因 D】首回合同样必须"先执行、再验核"：
+            // 直接调插件的话，插件查 pendingArtifacts 必为空 → no_artifacts_yet 空转，
+            // 用户在 Web 端只会看到"提交成功 + 一条 step_start"，之后就没有下文了。
+            // 与 crontab 侧 `LrtPluginExecutor` 走同一个入口，保证两条触发路径行为一致。
             spawn { =>
-                match (LrtPluginClient.execute(firstTaskId, firstUserId, ArrayList<String>())) {
-                    case Ok(_) => LogUtils.info("[LongTaskApiService] 首回合已触发: taskId=${firstTaskId}")
-                    case Err(e) => LogUtils.warn("[LongTaskApiService] 首回合触发失败: ${e}")
-                    case _ => LogUtils.warn("[LongTaskApiService] 首回合无结果: taskId=${firstTaskId}")
-                }
+                LrtHostExecutor.runRoundThenDispatch(
+                    firstTaskId, agentId, firstUserId,
+                    creator: spawnCreator,
+                    ownerUserId: userId,
+                    crontabId: crontabId
+                )
+                LogUtils.info("[LongTaskApiService] 首回合已执行并触发验核: taskId=${firstTaskId}")
             }
 
             // ── 5) 组装响应 ───────────────────────────────────────
+            // crontabId 保留字段（旧前端会读），不再有调度行时为空串；
+            // scheduler 明示当前调度模型，便于排查"为什么没有第二回合"。
             let resp = JsonObject()
             resp.put("taskId", JsonString(taskId))
             resp.put("agentId", JsonString(agentId))
             resp.put("crontabId", JsonString(crontabId))
+            resp.put("scheduler", JsonString("event-driven"))
             resp.put("status", JsonInt(1))
             resp.put("firstRoundTriggered", JsonBool(true))
+            // cron 入参在事件驱动模型下不再建调度行，显式记一行日志避免静默忽略
+            if (cron.isSome()) {
+                LogUtils.info(
+                    "[LongTaskApiService] 收到 cron 入参但当前为事件驱动模型，未建常驻调度: "
+                    + "taskId=${taskId}, cron=${cron.getOrThrow()}"
+                )
+            }
             ok(resp)
         } catch (e: Exception) {
             LogUtils.error("[LongTaskApiService] submitTask 异常: ${e.message}")
@@ -223,11 +281,98 @@ public class LongTaskApiService {
         if (action.trimAscii().isEmpty()) {
             return APIResult<JsonValue>(false, "action 不能为空")
         }
-        match (LrtPluginClient.intervene(taskId, action, content, userId, ArrayList<String>())) {
-            case Ok(v) => ok(JsonValue.fromStr(v.stringify()))
+        let (lrtCreator, lrtOwner, lrtAgentId) = resolveTaskIdentity(taskId, userId)
+        match (LrtPluginClient.intervene(taskId, action, content, userId, ArrayList<String>(), creator: lrtCreator, ownerUserId: lrtOwner, agentId: lrtAgentId)) {
+            // 【两套 JsonValue 判定铁律】v 是插件客户端返回的 `jsonvalue.JsonValue`（枚举），
+            // 序列化用 `stringify()`；本文件的裸 `JsonValue` 是 stdx 的类，序列化用 `toJsonString()`。
+            // 故先把 v 落成字符串再往下传，避免跨包类型混用（2026-09-23）。
+            // 【match 臂不能写块】`=> {` 会被解析成 lambda 起始（`expected '=>' in lambda expression`），
+            // 故臂内恒定单表达式，逻辑外提到 afterInterveneOk。
+            case Ok(v) => LongTaskApiService.afterInterveneOk(
+                taskId, action, lrtAgentId, lrtOwner, lrtCreator, v.stringify()
+            )
             case Err(e) => APIResult<JsonValue>(false, "干预失败: ${e}")
             case _ => APIResult<JsonValue>(false, "干预无结果")
         }
+    }
+
+    /// 干预成功（插件返回 Ok）后的宿主侧收尾。
+    ///
+    /// 【显式续跑 · 2026-09-23 用户定夺方案 A3】
+    /// resume 且 errno=0 时由宿主立刻推进**一个**回合，然后停下等下一次用户指令。
+    /// 这里刻意不建/不启用任何 crontab 行 —— 常驻调度正是「遗留任务被自动续跑」的根因
+    /// （实测 lrt-65c1fe9f 空转 386 次）。回合预算恒为 1，防失控。
+    ///
+    /// 【为什么外提成函数】仓颉 match 臂不接受 `{ ... }` 多语句块：`=>` 后的 `{`
+    /// 会被当成 lambda 起始，报 `expected '=>' in lambda expression, found keyword 'let'`。
+    /// 故臂内只放一次函数调用，本函数承接原块内逻辑。
+    ///
+    /// @param raw 插件响应的 JSON 文本（由调用方对枚举侧 `stringify()` 得到，本函数内按 stdx 解析）
+    private static func afterInterveneOk(
+        taskId: String,
+        action: String,
+        agentId: String,
+        owner: String,
+        creator: String,
+        raw: String
+    ): APIResult<JsonValue> {
+        if (action.trimAscii() == "resume" && LongTaskApiService.isInterveneApplied(raw)) {
+            spawn { =>
+                try {
+                    LrtHostExecutor.runRoundThenDispatch(
+                        taskId, agentId, owner,
+                        creator: creator,
+                        ownerUserId: owner,
+                        crontabId: ""
+                    )
+                    LogUtils.info("[LongTaskApiService] 用户显式续跑：已执行 1 个回合: taskId=${taskId}")
+                } catch (e: Exception) {
+                    LogUtils.error("[LongTaskApiService] 续跑回合异常: taskId=${taskId}, ${e.message}")
+                }
+            }
+        }
+        ok(JsonValue.fromStr(raw))
+    }
+
+    /// 判断插件干预结果是否为「已成功应用」（errno 缺失或为 0）。
+    ///
+    /// 插件的拒绝路径（任务已完成/已取消/状态不允许）也走 `Ok`，只是 errno 非 0；
+    /// 若不判 errno 就在 resume 被拒时照样触发回合，等于"用户没同意也续跑"。
+    ///
+    /// 【入参为什么是 String 而不是 JsonValue】插件客户端返回的 `v` 是 `jsonvalue.JsonValue`
+    /// （枚举），与本文件 import 的 stdx `JsonValue`（类）是两套类型，直接传参会
+    /// `mismatched types: expected 'Class-JsonValue', found 'Enum-JsonValue'`。
+    /// 由调用方 `stringify()` 成字符串再进来，函数内统一按 stdx 解析（2026-09-23）。
+    private static func isInterveneApplied(text: String): Bool {
+        try {
+            let parsed = JsonValue.fromStr(text)
+            if (parsed is JsonObject) {
+                let ev = parsed.asObject().get("errno")
+                if (ev.isNone()) {
+                    return true
+                }
+                let jv = ev.getOrThrow()
+                // errno 可能是整数也可能是浮点/字符串形态，逐档尝试；全部失败按"成功"处理
+                // （插件旧响应可能不带 errno，或形态不规整，此时不因解析问题阻断续跑）。
+                var intCode: Option<Int64> = None
+                try {
+                    intCode = Some(jv.asInt().getValue())
+                } catch (_: Exception) {
+                    ()
+                }
+                if (let Some(c) <- intCode) {
+                    return c == 0
+                }
+                try {
+                    return jv.asFloat().getValue() == 0.0
+                } catch (_: Exception) {
+                    return true
+                }
+            }
+        } catch (_: Exception) {
+            return true
+        }
+        true
     }
 
     // ── 9.1.3 任务树（GET /long_running_task/tree/:rootId）───────────
@@ -384,7 +529,8 @@ public class LongTaskApiService {
         if (taskId.trimAscii().isEmpty()) {
             return APIResult<JsonValue>(false, "taskId 不能为空")
         }
-        match (LrtPluginClient.verify(taskId, userId, ArrayList<String>())) {
+        let (lrtCreator, lrtOwner, lrtAgentId) = resolveTaskIdentity(taskId, userId)
+        match (LrtPluginClient.verify(taskId, userId, ArrayList<String>(), creator: lrtCreator, ownerUserId: lrtOwner, agentId: lrtAgentId)) {
             case Ok(v) => ok(JsonValue.fromStr(v.stringify()))
             case Err(e) => APIResult<JsonValue>(false, "验核失败: ${e}")
             case _ => APIResult<JsonValue>(false, "验核无结果")
@@ -398,7 +544,8 @@ public class LongTaskApiService {
         if (agentId.trimAscii().isEmpty()) {
             return APIResult<JsonValue>(false, "agentId 不能为空")
         }
-        match (LrtPluginClient.evolve(agentId, userId, ArrayList<String>())) {
+        let lrtCreator = resolveAgentUctooUserId(agentId)
+        match (LrtPluginClient.evolve(agentId, userId, ArrayList<String>(), creator: lrtCreator, ownerUserId: userId)) {
             case Ok(v) => ok(JsonValue.fromStr(v.stringify()))
             case Err(e) => APIResult<JsonValue>(false, "自进化失败: ${e}")
             case _ => APIResult<JsonValue>(false, "自进化无结果")
@@ -427,7 +574,8 @@ public class LongTaskApiService {
         if (effectiveAction != "confirm" && effectiveAction != "abandon") {
             return APIResult<JsonValue>(false, "action 须为 confirm 或 abandon")
         }
-        match (LrtPluginClient.deliver(taskId, effectiveAction, userId, ArrayList<String>())) {
+        let (lrtCreator, lrtOwner, lrtAgentId) = resolveTaskIdentity(taskId, userId)
+        match (LrtPluginClient.deliver(taskId, effectiveAction, userId, ArrayList<String>(), creator: lrtCreator, ownerUserId: lrtOwner, agentId: lrtAgentId)) {
             case Ok(v) => ok(JsonValue.fromStr(v.stringify()))
             case Err(e) => APIResult<JsonValue>(false, "交付确认失败: ${e}")
             case _ => APIResult<JsonValue>(false, "交付确认无结果")
@@ -467,7 +615,8 @@ public class LongTaskApiService {
             && goal.trimAscii().isEmpty()) {
             return APIResult<JsonValue>(false, "improve 时 feedback 与 goal 不可同时为空")
         }
-        match (LrtPluginClient.review(taskId, effectiveAction, feedback, goal, userId, ArrayList<String>())) {
+        let (lrtCreator, lrtOwner, lrtAgentId) = resolveTaskIdentity(taskId, userId)
+        match (LrtPluginClient.review(taskId, effectiveAction, feedback, goal, userId, ArrayList<String>(), creator: lrtCreator, ownerUserId: lrtOwner, agentId: lrtAgentId)) {
             case Ok(v) => ok(JsonValue.fromStr(v.stringify()))
             case Err(e) => APIResult<JsonValue>(false, "评审改进失败: ${e}")
             case _ => APIResult<JsonValue>(false, "评审改进无结果")
@@ -704,6 +853,13 @@ public class LongTaskApiService {
         }
         payload.put("constraints", consArr)
         payload.put("created_via", JsonString("long_running_task/add"))
+        // 【取消自动续跑 · 2026-09-23】调度模型标记。
+        // 旧行为：submitTask 同时建一条 `0 */5 * * * *` 的 crontab 行，任务中断/完成后
+        // 无人负责停表，调度行永久空转（实测 lrt-65c1fe9f 执行 386 次，每 5 分钟烧一轮
+        // 宿主 Agent 回合）。新行为：不建常驻调度，回合推进由 lrt_verify_job 队列事件驱动，
+        // 未跑完的任务**只在用户显式要求时**续跑（lrt-intervene resume 触发单个回合）。
+        payload.put("scheduler", JsonString("event-driven"))
+        payload.put("auto_resume", JsonBool(false))
         payload
     }
 

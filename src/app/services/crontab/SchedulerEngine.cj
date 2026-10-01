@@ -11,7 +11,7 @@ import f_ticktock.{Ticktock, CronCompiler}
 import magic.app.models.uctoo.{CrontabPO, CrontabLogPO}
 import magic.app.dao.uctoo.{CrontabDAO, CrontabLogDAO, CrontabTaskRegistryDAO}
 import magic.app.services.crontab.model.{TriggerType, triggerTypeToString, CrontabExecutionContext, ExecutionResult, SchedulerStatus, durationMsBetween}
-import magic.app.services.crontab.executor.{ExecutorRegistry, CrontabExecutor, ScriptExecutor, HttpExecutor, BuiltinExecutor, AgentExecutionExecutor, LrtPluginExecutor, QuotaResetExecutor, EvaluationExecutor, SkillCuratorExecutor}
+import magic.app.services.crontab.executor.{ExecutorRegistry, CrontabExecutor, ScriptExecutor, HttpExecutor, BuiltinExecutor, AgentExecutionExecutor, LrtPluginExecutor, QuotaResetExecutor, EvaluationExecutor, SkillCuratorExecutor, SddOrchestrationExecutor}
 import magic.app.services.crontab.executor.builtin.{BuiltinTaskHandler, DatabaseCleanupHandler, CacheRefreshHandler, LogRotationHandler, HealthCheckHandler, MetricsReportHandler, AibuilderTaskRefundHandler}
 import magic.app.services.crontab.misfire.{MisfireManager, MisfireAction}
 import magic.app.services.crontab.retry.RetryManager
@@ -92,6 +92,8 @@ public class SchedulerEngine {
         executorRegistry.register("quota_reset", QuotaResetExecutor())
         executorRegistry.register("evaluation", EvaluationExecutor())
         executorRegistry.register("skill-curator", SkillCuratorExecutor())
+        // SDD 六步编排：每 tick 推进一步，跑完/失败自己停表（异步化，避免 HTTP 长连接）
+        executorRegistry.register("sdd", SddOrchestrationExecutor())
     }
 
     public func loadAllActiveTasks(): Unit {

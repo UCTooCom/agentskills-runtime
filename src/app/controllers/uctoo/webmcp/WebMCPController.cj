@@ -11,7 +11,7 @@ import magic.core.model.ChatModel
 import magic.core.agent.{AgentDefinition, AgentLoadManager}
 import magic.log.LogUtils
 import magic.tool.webmcp.{SSEConnectionManager, PendingToolCallManager, FrontendToolRegistry, WebMCPToolContext}
-import magic.app.services.bridge.LrtEventBridge
+import magic.app.services.bridge.{LrtEventBridge, SddEventBridge}
 import http_lib.server.{WebSocketConn, ConnectionController, WebSocketOpcode}
 import http_lib.message.{HttpRequest as LibHttpRequest, HttpResponse as LibHttpResponse}
 import http_lib.core.HttpStatus
@@ -111,6 +111,10 @@ public class WebMCPController {
         // 推送时按 sessionId 取具体连接，连接不存在则只走 WebSocket 通道。
         // attachSSEManager 内部幂等，重复调用无副作用。
         LrtEventBridge.attachSSEManager(_sseConnectionManager)
+
+        // T-12：SDD 六步进度事件走同一条 SSE 通道（同样是后台长跑，无"当前请求"可依附）。
+        // 缺这一行时 sdd_* 事件只能走 WebSocket 广播，聊天区（SSE）收不到进度。
+        SddEventBridge.attachSSEManager(_sseConnectionManager)
 
         // 将用户菜单数据注入 Agent system prompt
         // 让大模型知道用户有权限访问的页面列表，从而引导用户通过前端工具操作页面
@@ -1081,10 +1085,24 @@ public class WebMCPController {
 
     /**
      * 从 HttpRequest 中提取用户 ID
-     * 优先级：查询参数 userId > 请求头 X-User-Id > 空字符串
+     * 优先级：鉴权中间件解析的登录用户 > 查询参数 userId > 请求头 X-User-Id > 空字符串
+     *
+     * 修复说明（2026-09-21）：此前只认查询参数与自定义头，从不读取
+     * DeserializeUserMiddleware 校验 JWT 后写入 req.locals["userId"] 的登录用户，
+     * 导致 WebMCP 聊天即使携带合法 token，_userId 仍为空串；叠加"未登录拦截"后
+     * 表现为"用户已登录却被提示请先登录"。
+     * 登录用户被放在最高优先级：客户端自报的 userId 不得覆盖已认证身份，避免冒用。
      */
     private func _extractUserId(req: HttpRequest): String {
-        // 1. 查询参数
+        // 1. 鉴权中间件（DeserializeUserMiddleware）解析出的登录用户——唯一可信来源
+        if (let Some(u) <- req.getLocals("userId")) {
+            if (let Some(userId) <- (u as String)) {
+                if (!userId.isEmpty()) {
+                    return userId
+                }
+            }
+        }
+        // 2. 查询参数
         let queryOpt = req.queryParam("userId")
         if (queryOpt.isSome()) {
             let userId = queryOpt.getOrThrow()
@@ -1092,12 +1110,12 @@ public class WebMCPController {
                 return userId
             }
         }
-        // 2. 请求头
+        // 3. 请求头
         let headerOpt = req.header("X-User-Id")
         if (headerOpt.isSome()) {
             return headerOpt.getOrThrow()
         }
-        // 3. 默认空字符串
+        // 4. 默认空字符串
         return ""
     }
 

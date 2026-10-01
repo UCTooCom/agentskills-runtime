@@ -522,6 +522,12 @@ public class AgentsController {
                 entity.description = Some<String>(s)
             }
         }
+        if (let Some(skillName) <- map.get("skill_name")) {
+            let skillNameStr = skillName as String
+            if (let Some(s) <- skillNameStr) {
+                entity.skillName = Some<String>(s)
+            }
+        }
         if (let Some(status) <- map.get("status")) {
             let statusInt = status as Int64
             if (let Some(v) <- statusInt) {

@@ -1,0 +1,35 @@
+[
+  {
+    "ok": true,
+    "name": "yn_stem.jpg",
+    "bytes": 521957,
+    "size": [
+      2116,
+      2993
+    ],
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\img\\yn_stem.jpg",
+    "url": "https://img.eol.cn/e_images/gk/2025/st/yn/wl00.jpg"
+  },
+  {
+    "ok": true,
+    "name": "yn_ans.jpg",
+    "bytes": 482146,
+    "size": [
+      2116,
+      2993
+    ],
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\img\\yn_ans.jpg",
+    "url": "https://img.eol.cn/e_images/gk/2025/st/yn/wld00.jpg"
+  },
+  {
+    "ok": true,
+    "name": "hjlm_stem.jpg",
+    "bytes": 444150,
+    "size": [
+      2116,
+      2993
+    ],
+    "file": "D:\\UCT\\projects\\miniapp\\qintong\\Delivery\\uctoo-admin\\apps\\agentskills-runtime\\skills\\long-running-task\\output\\rounds\\7e3b3121-4fa2-44b6-9938-8bd8afeb0c02\\img\\hjlm_stem.jpg",
+    "url": "https://img.eol.cn/e_images/gk/2025/st/hjlm/wld00.jpg"
+  }
+]

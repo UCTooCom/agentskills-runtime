@@ -47,9 +47,14 @@ public class ConfigSyncHandler {
             }
             let envValues = envFileService.readAllEnvValues(envPath)
             LogUtils.info("ConfigSyncHandler", "Read ${envValues.size} config items from .env file")
+            println("[STARTUP-DIAG][ConfigSync] >>> obtaining ORM.executor()")
             let executor = ORM.executor()
+            println("[STARTUP-DIAG][ConfigSync] <<< ORM.executor() obtained")
 
+            var diagIdx: Int32 = 0
             for ((key, value) in envValues) {
+                diagIdx++
+                println("[STARTUP-DIAG][ConfigSync] [${diagIdx}/${envValues.size}] begin envKey=${key}")
                 let detail = SyncDetail()
                 detail.envKey = key
                 detail.envValue = value
@@ -65,6 +70,7 @@ public class ConfigSyncHandler {
                             entity.value = Some(resolvedValue)
                             entity.lastSyncedAt = Some(DateTime.now())
                             executor.updateConfig(entity)
+                            println("[STARTUP-DIAG][ConfigSync] [${diagIdx}] updateConfig done envKey=${key}")
                             detail.success = true
                             result.successCount++
                         case None =>
@@ -83,6 +89,7 @@ public class ConfigSyncHandler {
                             newEntity.status = 1
                             newEntity.lastSyncedAt = Some(DateTime.now())
                             let insertId = executor.insertConfig(newEntity)
+                            println("[STARTUP-DIAG][ConfigSync] [${diagIdx}] insertConfig done envKey=${key}")
                             detail.success = true
                             result.successCount++
                     }
@@ -92,6 +99,7 @@ public class ConfigSyncHandler {
                     result.failedCount++
                 }
                 result.details.add(detail)
+                println("[STARTUP-DIAG][ConfigSync] [${diagIdx}] end envKey=${key} success=${detail.success}")
             }
             LogUtils.info("ConfigSyncHandler", "Startup sync completed: ${result.successCount}/${result.totalCount} succeeded")
         } catch (e: Exception) {

@@ -46,6 +46,9 @@ public class AgentContextsPO {
         @ORMField['deleted_at']
     public var deletedAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['task_id']
+    public var taskId: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -56,7 +59,8 @@ public class AgentContextsPO {
                 creator: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
-                deletedAt: Option<DateTime>
+                deletedAt: Option<DateTime>,
+                taskId: Option<String>
     ) {
                 this.id = id
                 this.agentId = agentId
@@ -66,6 +70,7 @@ public class AgentContextsPO {
                 this.createdAt = createdAt
                 this.updatedAt = updatedAt
                 this.deletedAt = deletedAt
+                this.taskId = taskId
     }
 
     /// 序列化为 JsonValue
@@ -79,6 +84,7 @@ public class AgentContextsPO {
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("task_id", optionToJsonValue(this.taskId))
         return JsonObject(map)
     }
 

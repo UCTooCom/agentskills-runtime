@@ -113,4 +113,94 @@ public class LrtArtifactVerifier {
         response["missing"] = JsonValue.from(missing)
         return JsonValue.from(response)
     }
+
+    /**
+     * **§6.1 校验失败处理：补执行 → 复验 → 仍失败则触发降级策略链**（tasks.md 743）
+     *
+     * 三段式：`verify` →（失败）`remediate` → `re-verify` →（补跑耗尽）`degrade`
+     *
+     * ── 为什么补跑/降级能力用**回调注入**而不是本类直接调 LrtExecutor ──
+     * 补跑需要执行编排能力，而 Verifier 是纯判定组件；直接反向依赖会形成
+     * Verifier ↔ Executor 的循环依赖。回调形式让「谁能补跑、怎么降级」由调用方
+     * 决定，本类只负责「验几次、什么时候该放弃、放弃后交给谁」这三件事。
+     * （与 DecisionPointRegistry 经回调注入 web_request_approval 同一套路）
+     *
+     * ── 为什么补跑次数可控而不是无限重试 ──
+     * 长程任务的每一步都可能很贵（一次 LLM 调用或一个子任务）。无限补跑会把
+     * 预算烧在同一处失败上，`maxRemediations` 就是把「再试一次」的代价显式化。
+     *
+     * @param maxRemediations 最多补跑次数；**0 = 不补跑**，校验失败即直接降级
+     * @param remediate       补执行回调，入参为上一次的失败原因，返回补跑是否成功
+     * @param degrade         降级回调，入参为最终失败原因，返回降级结果（原样透传进返回值）
+     */
+    public static func verifyWithRemediation(
+        artifactPath: String,
+        expectedDate: String,
+        contentHint: String,
+        maxRemediations: Int64,
+        remediate: (String) -> Bool,
+        degrade: (String) -> JsonValue
+    ): JsonValue {
+        let attempts = ArrayList<JsonValue>()
+        var verifyCount: Int64 = 0
+        var remediations: Int64 = 0
+        var lastReason = ""
+        var passed = false
+        var degraded = false
+        var degradationResult = JsonValue.Null
+
+        while (true) {
+            let (ok, reason) = LrtArtifactVerifier.verifyFileState(artifactPath, expectedDate, contentHint)
+            verifyCount = verifyCount + 1
+            if (ok) {
+                passed = true
+                lastReason = reason
+                break
+            }
+            lastReason = reason
+            if (remediations >= maxRemediations) {
+                // 补跑机会已耗尽 → 交降级链，不在原地继续重试消耗预算
+                degraded = true
+                degradationResult = degrade(reason)
+                break
+            }
+            remediations = remediations + 1
+            let fixed = remediate(reason)
+            let flag = if (fixed) { "成功" } else { "未成功" }
+            attempts.add(JsonValue.String("第 ${remediations} 次补执行${flag}：${reason}"))
+        }
+
+        let response = HashMap<String, JsonValue>()
+        response["errno"] = JsonValue.Number(0.0)
+        response["errmsg"] = JsonValue.String("ok")
+        response["passed"] = JsonValue.Boolean(passed)
+        response["reason"] = JsonValue.String(lastReason)
+        response["verify_count"] = JsonValue.Number(Float64(verifyCount))
+        response["remediations"] = JsonValue.Number(Float64(remediations))
+        response["degraded"] = JsonValue.Boolean(degraded)
+        response["degradation"] = degradationResult
+        response["attempts"] = JsonValue.from(attempts)
+        return JsonValue.from(response)
+    }
+
+    /**
+     * 不带补跑能力的便捷版：等价于「只校验一次，失败即降级」。
+     *
+     * 存在意义：让不具备补执行能力的调用方（或明确不希望补跑的场景）无需自己拼
+     * 一个恒 false 的 remediate 回调。行为与「verifyFileState 失败后直接降级」一致。
+     *
+     * 注：**刻意不写成 verifyWithRemediation 的重载**——两个版本仅靠第 4 个参数
+     * （Int64 vs 函数类型）区分，重载解析容易踩歧义；独立命名零风险。
+     */
+    public static func verifyThenDegrade(
+        artifactPath: String,
+        expectedDate: String,
+        contentHint: String,
+        degrade: (String) -> JsonValue
+    ): JsonValue {
+        LrtArtifactVerifier.verifyWithRemediation(
+            artifactPath, expectedDate, contentHint, 0,
+            { reason: String => false }, degrade
+        )
+    }
 }

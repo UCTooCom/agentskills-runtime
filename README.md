@@ -1549,5 +1549,13 @@ Thanks for the support from the following open source projects and communities:
 - [Developing Powerful Agents with Cangjie Using Only Free AI](https://mp.weixin.qq.com/s/jcUVuj7bLs9DaHLhol4-Hg)
 - [In-depth Analysis of Agent Skill Standards](https://mp.weixin.qq.com/s/qFae5uqJsOAEkn1LN12tuA)
 
+### Donators
+
+<p>
+  <img src="public/logo/CCF2023logo.png" alt="CCF 2023 Logo" width="220" />
+  &nbsp;&nbsp;
+  <img src="public/logo/guanghualogo.png" alt="Guanghua Logo" width="220" />
+</p>
+
 ---
 **AgentSkills Runtime - Making AI Development Simpler, Safer, and Faster!**

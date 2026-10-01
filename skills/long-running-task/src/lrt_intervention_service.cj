@@ -159,8 +159,10 @@ public class LrtInterventionService {
     }
 
     // ── resume：恢复 ──────────────────────────────────────────────
-    // 状态机：paused(5) → running(1)；crontab.status=1 重新启用调度；
-    // 下次调度触发时 LrtExecutor 从最新检查点恢复，不从头执行。
+    // 状态机：paused(5) → running(1)。
+    // 【2026-09-23 变更】不再把 crontab.status 置回 1：调度行一启用就会每 5 分钟
+    // 自动续跑（本次要消除的行为）。resume 只改任务状态，实际推进由宿主在该动作
+    // 成功后触发**单个**回合；若仍有历史调度行，顺手置为禁用(2)。
 
     private static func applyResume(
         taskId: String,
@@ -184,11 +186,15 @@ public class LrtInterventionService {
         // （用户可能就是想重跑），但必须让用户知道真实情况。
         let checkpointCount = LrtInterventionService.countCheckpoints(taskId, userId, permArr)
         let statusResult = LrtPersistService.updateTaskStatus(taskId, STATUS_RUNNING, userId, permArr)
-        let crontabOk = setCrontabStatus(taskId, CRONTAB_ENABLED, userId, permArr)
+        // 【取消自动续跑 · 2026-09-23】这里原本会 setCrontabStatus(taskId, CRONTAB_ENABLED)
+        // 把调度行重新启用，等于「用户点一次继续 → 定时任务从此每 5 分钟自动续跑」，
+        // 正是本次要消除的行为（实测 lrt-65c1fe9f 空转 386 次）。
+        // 新语义：resume 只改任务状态；真正的推进由宿主在该动作成功后触发**单个**回合
+        // （见宿主 LongTaskApiService.intervene 的 resume 分支）。
+        // 反向加固：若该任务仍存在历史调度行，顺手置为禁用（2），避免其被再次启用。
+        let _crontabDisabled = setCrontabStatus(taskId, CRONTAB_DISABLED, userId, permArr)
         LrtInterventionService.logDecision("resume", taskId, currentStatus, STATUS_RUNNING, userId)
-        let message = if (!crontabOk) {
-            "任务已恢复，但调度记录未启用，请手工检查 crontab.status"
-        } else if (checkpointCount == 0) {
+        let message = if (checkpointCount == 0) {
             "任务已恢复，但**未找到可用检查点**，将从首轮重新执行（可能丢失此前已完成回合的进度）"
         } else {
             "任务已恢复，将从最新检查点继续执行（可用检查点 ${checkpointCount} 个）"
@@ -422,7 +428,20 @@ public class LrtInterventionService {
         m["to_status"] = JsonValue.Number(Float64(toStatus))
         m["user_id"] = JsonValue.String(userId)
         m["at"] = JsonValue.String(LrtInterventionService.nowIso())
-        eprintln("[lrt-decision] ${JsonValue.from(m).toString()}")
+        // §11.3 四类关键决策的 JSONL 行日志（tasks.md 1000）。
+        //
+        // 这里改过一次，原因要留档：原实现是 eprintln("[lrt-decision] ${JsonValue.from(m).toString()}")，
+        // 但 jsonvalue 库**从未定义** toString（全库零命中），走的是默认 ToString 派生，
+        // 输出形如 Map(...) 的调试表示而**不是合法 JSON**，日志采集器根本解析不了——
+        // 即「声称结构化、实际不可解析」。现统一改走 LrtTraceLog.emitJsonl（内部 stringify），
+        // 四类决策共用 [lrt-jsonl] 前缀，采集器只需一条规则。
+        let jf = HashMap<String, JsonValue>()
+        jf["decision"] = JsonValue.String(action)
+        jf["from_status"] = JsonValue.Number(Float64(fromStatus))
+        jf["to_status"] = JsonValue.Number(Float64(toStatus))
+        jf["user_id"] = JsonValue.String(userId)
+        jf["at"] = JsonValue.String(LrtInterventionService.nowIso())
+        LrtTraceLog.emitJsonl(LrtTraceLog.JSONL_TYPE_DECISION, taskId, "", "", 0, jf)
     }
 
     private static func nowIso(): String {

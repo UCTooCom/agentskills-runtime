@@ -104,8 +104,19 @@ public class JsonRpcClient {
         }
     }
 
+    /**
+     * 注册「插件 → 宿主」请求处理器。
+     *
+     * 【并发红线】requestHandlers 是普通 HashMap，却被两个线程同时访问：
+     * 宿主主线程（registerHostHandlers / CordisHostServices.registerFor）写，
+     * 本 client 的 IPC 接收线程（handleIncomingRequest）读。此前完全无锁，
+     * HashMap 在并发写 + 扩容时可能进入损坏状态（经典场景是遍历/查找陷入死循环），
+     * 这与「启动期偶发、挂死点每次都不一样」的现象高度吻合。故统一用 this.lock 保护。
+     */
     public func registerRequestHandler(method: String, handler: RequestCallback): Unit {
-        this.requestHandlers.add(method, handler)
+        synchronized(this.lock) {
+            this.requestHandlers.add(method, handler)
+        }
     }
 
     public func sendResponse(id: RequestId, result: JsonValue): Unit {
@@ -174,10 +185,23 @@ public class JsonRpcClient {
         }
     }
     
+    /**
+     * 探测连接是否已关闭（崩溃检测用）。
+     *
+     * 【死锁红线】本方法必须**永不阻塞**，原因（2026-10-01 启动挂死实测）：
+     * 它是存活探测，会被宿主线程在启动关键路径上高频调用
+     * （PluginHost.reconcileDesired 的 healCrashed、awaitActive 的 G 点）。
+     * 宿主主线程一旦在这里等 client.lock 等不到，整个 runtime 就起不来。
+     * 因此改为 tryLock：拿不到锁就返回「还活着」这个保守值（不触发误重启），
+     * 绝不等待。注意仓颉 Mutex 是可重入锁，同一线程重复 tryLock 仍会成功。
+     */
     public func isClosed(): Bool {
-        synchronized(this.lock) {
-            !this.running
+        if (!this.lock.tryLock()) {
+            return false
         }
+        let closed = !this.running
+        this.lock.unlock()
+        closed
     }
     
     private func generateId(): RequestId {
@@ -238,7 +262,14 @@ public class JsonRpcClient {
     }
 
     private func handleIncomingRequest(req: Request): Unit {
-        match (this.requestHandlers.get(req.method)) {
+        // 【并发红线】只在持锁期间**取出** handler，随后立刻解锁再调用。
+        // 绝不能持 this.lock 调用 handler：handler 内部会 registerRequestHandler
+        // （CordisHostServices.registerFor 在 initialize 回调里注册 host.db 等）
+        // 或访问宿主其它锁，持锁调用就是自锁 / AB-BA 死锁。
+        let handlerOpt = synchronized(this.lock) {
+            this.requestHandlers.get(req.method)
+        }
+        match (handlerOpt) {
             case Some(handler) =>
                 match (handler(req)) {
                     case Some(result) =>

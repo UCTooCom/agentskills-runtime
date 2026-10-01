@@ -5,7 +5,6 @@ import ystyle::jsonrpc.{JsonRpcClient, NewlineFraming}
 import std.process.{launch, SubProcess, ProcessRedirect}
 import std.env.{getVariables, getVariable, setVariable, getWorkingDirectory}
 import std.fs.{exists, File, OpenMode, Directory, removeIfExists}
-import std.io.StringReader
 import std.sync.Mutex
 import std.collection.{ArrayList, HashMap}
 
@@ -16,8 +15,8 @@ import std.collection.{ArrayList, HashMap}
  * - launch：拉起插件子进程并建立 JSON-RPC 连接（stdio 模式：三流 Pipe，
  *   PipeTransport + NewlineFraming 换行分帧）
  * - terminate：热卸载（关闭连接 + 强杀 + wait 回收退出码，避免僵尸进程）
- * - forwardStderr：独立线程转发插件 stderr 到宿主日志
  * - isExited：探测插件连接是否已关闭（stdout EOF 判定崩溃）
+ * - （stderr 由子进程 Inherit 宿主 stderr 排空，不再单独起 forwardStderr 阻塞线程）
  *
  * 剥离说明：原 cordis-cj 含 UDS（Unix Domain Socket）模式，依赖
  * ystyle::jsonrpc_unix.UnixServerTransport，Windows 不可用。本集成传输
@@ -153,11 +152,26 @@ public class PluginManager {
         } else {
             this.logger(entry.id, "[launchStdio] WARNING: no extra dirs found for PATH injection")
         }
+        // 下发插件元数据环境变量（对齐官方 cordis-cj v0.2.0 的 pluginEnv）：
+        // 宿主按 entry 下发 id / provide / inject，使 cordis.toml 成为唯一来源；
+        // 追加在继承环境之上，不消费这些变量的插件不受影响。
+        envMap["CORDIS_PLUGIN_ID"] = entry.id
+        envMap["CORDIS_PLUGIN_PROVIDE"] = String.join(entry.provide.toArray(), delimiter: ",")
+        envMap["CORDIS_PLUGIN_INJECT"] = String.join(entry.inject.toArray(), delimiter: ",")
         let proc = launch(entry.source, entry.args.toArray(),
             environment: Some(envMap),
             stdIn: ProcessRedirect.Pipe,
             stdOut: ProcessRedirect.Pipe,
-            stdErr: ProcessRedirect.Pipe)
+            // 【启动挂死修复】stderr 改为 Inherit（直接继承宿主 stderr），而非 Pipe。
+            // 原因：此前每拉起一个插件都用 spawn 起一条 forwardStderr 绿线程阻塞读
+            // stderr 管道（NtReadFile）。4 个插件 = 4 条阻塞绿线程 + 4 条 receiveLoop
+            // 阻塞绿线程 = 8 条，正好占满仓颉原生工作线程池（8），导致运行 awaitActive
+            // 的主绿线程被永久饿死（cjpm build 后启动卡在 All routes registered 之后，
+            // CPU=0%）。改用 Inherit 后，子进程 stderr 由操作系统 / cjpm / 控制台负责
+            // 排空，无需宿主读线程，直接消除 4 条阻塞绿线程。副作用：插件 stderr 不再带
+            // [cordis][id] 前缀、不经过 LogUtils 落库，而是直连宿主 stderr（仍可观测）。
+            // 参考：logs/startup-hang-analysis-20261001-v5.md（绿色线程饥饿，非死锁）。
+            stdErr: ProcessRedirect.Inherit)
         let transport = PipeTransport(proc)
         // 帧协议必须与插件端 LineStdioTransport + NewlineFraming 一致
         // （cordis_plugin/plugin_runtime.cj 的 JsonRpcServer 固定 NewlineFraming）。
@@ -167,24 +181,13 @@ public class PluginManager {
         // 注意：client.start() 延迟到 registerHostHandlers 之后调用，
         // 避免 receiveLoop 在 handler 注册之前启动而丢失 initialize 请求
         let instance = PluginInstance(entry, proc, client)
-        this.forwardStderr(instance)
+        // 【启动挂死修复】不再 spawn forwardStderr 阻塞读线程（见 launchStdio 的
+        // stdErr: ProcessRedirect.Inherit 注释）：改为子进程 stderr 继承宿主 stderr，
+        // 由 OS/cjpm/控制台排空，避免每插件占用一条阻塞绿线程占满原生线程池。
         instance
     }
 
     // ── 公共辅助 ──────────────────────────────────────────────────────
-
-    /**
-     * 独立线程转发插件 stderr 到宿主日志
-     * stderr 仅供插件打日志；进程退出后 readln 返回 None，线程自然结束
-     */
-    private func forwardStderr(instance: PluginInstance): Unit {
-        spawn {
-            let reader = StringReader(instance.process.stdErrPipe)
-            while (let Some(line) <- reader.readln()) {
-                this.logger(instance.entry.id, line)
-            }
-        }
-    }
 
     /**
      * 获取 stdx DLL 所在目录

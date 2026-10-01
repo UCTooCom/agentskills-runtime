@@ -6,8 +6,9 @@ package magic.plugin
 import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 import std.core.Duration
-import std.env.getWorkingDirectory
-import std.fs.{Path, exists}
+import std.time.MonoTime
+import std.env.{getWorkingDirectory, getVariable}
+import std.fs.{File, Path, OpenMode, exists}
 import magic.log.LogUtils
 import f_base.Result
 import plugin_spi.{Plugin, PluginState, PluginError, PluginContext, LoadResult}
@@ -106,6 +107,23 @@ public class CordisHostManager {
         })
     }
 
+    /// 启动诊断：把关键节点写入 logs/await_trace.txt（unbuffered，进程被杀也能落盘）。
+    /// 专门用于定位「主线程卡在 loadProcessPlugins / awaitActive」的根因，绕开 stdout 管道缓冲。
+    /// 临时探针，根因定位后删除。
+    private func traceAwait(label: String): Unit {
+        let base = getWorkingDirectory().toString()
+        try (f = File(Path("${base}/logs/await_trace.txt"), OpenMode.Append)) {
+            f.write("${label}\n".toArray())
+        }
+    }
+
+    private func traceAwaitReset(): Unit {
+        let base = getWorkingDirectory().toString()
+        try (f = File(Path("${base}/logs/await_trace.txt"), OpenMode.Write)) {
+            f.write("=== await_trace reset ===\n".toArray())
+        }
+    }
+
     // ── 启动编排 ──────────────────────────────────────────────────────
 
     /**
@@ -117,6 +135,17 @@ public class CordisHostManager {
     public func loadProcessPlugins(list: PluginList): LoadResult {
         let result = LoadResult()
         let desired = ArrayList<PluginEntry>()
+        // 重置必须放在入口：这样即便主线程卡在后面某个 println 上，
+        // await_trace.txt 也一定存在且能看到「最后一条真的执行到的 trace」。
+        this.traceAwaitReset()
+
+        // 应急开关：CORDIS_SKIP_PROCESS_PLUGINS=sdd（多个用逗号或空格分隔）可让
+        // 指定的 process 插件**完全不启动**（在拉起前就跳过，不占端口、不握手）。
+        // 用于在不改代码、不删 plugin.yaml 的前提下隔离「某个插件把启动卡住」的问题。
+        let skipRaw = match (getVariable("CORDIS_SKIP_PROCESS_PLUGINS")) {
+            case Some(v) => v
+            case None => ""
+        }
 
         for (entry in list.plugins) {
             if (entry.mode != PluginMode.Process) {
@@ -124,6 +153,12 @@ public class CordisHostManager {
             }
             if (!entry.enabled) {
                 result.skipped.add("${entry.name}(disabled)")
+                continue
+            }
+            if (!skipRaw.isEmpty() && skipRaw.contains(entry.name)) {
+                LogUtils.error("[CordisHostManager] process plugin '${entry.name}' SKIPPED by CORDIS_SKIP_PROCESS_PLUGINS")
+                println("[CordisHostManager][DIAG] '${entry.name}' SKIPPED by CORDIS_SKIP_PROCESS_PLUGINS")
+                result.skipped.add("${entry.name}(skipped-by-env)")
                 continue
             }
             // 必填校验：process 模式 command 必须提供
@@ -152,29 +187,63 @@ public class CordisHostManager {
         }
 
         // 设置期望状态并 reconcile（先加后删 + 拓扑排序 + 崩溃自愈）
+        println("[CordisHostManager][DIAG] desired built: ${desired.size.toString()} -> [${this.joinIds(desired)}]")
+        this.traceAwait("TRACE[loadProcessPlugins] desired built")
         synchronized(this.cordisHost.state.lock) {
             for (ce in desired) {
                 this.cordisHost.state.addDesired(ce)
             }
         }
+        println("[CordisHostManager][DIAG] addDesired done; >>> reconcileDesired enter")
         this.cordisHost.reconcileDesired()
+        println("[CordisHostManager][DIAG] <<< reconcileDesired returned")
+        this.traceAwait("TRACE[loadProcessPlugins] reconcileDesired returned; desired.size=${desired.size.toString()}")
 
         // 收集启动结果（awaitActive 确认握手完成）
+        let totalStart = MonoTime.now()
+        this.traceAwait("TRACE[loadProcessPlugins] before loop, totalStart set")
+        var pluginIndex = 0
         for (ce in desired) {
-            match (this.cordisHost.awaitActive(ce.id, timeout: 10 * Duration.second)) {
+            pluginIndex = pluginIndex + 1
+            let pluginStart = MonoTime.now()
+            this.traceAwait("TRACE[loadProcessPlugins] loop iter#${pluginIndex.toString()} '${ce.id}' BEFORE awaitActive println")
+            println("[CordisHostManager][DIAG] awaitActive #${pluginIndex}/${desired.size.toString()} '${ce.id}' start")
+            this.traceAwait("TRACE[loadProcessPlugins] loop iter#${pluginIndex.toString()} '${ce.id}' AFTER awaitActive println, calling awaitActive")
+            match (this.cordisHost.awaitActive(ce.id, timeout: 30 * Duration.second)) {
                 case Ok(_) =>
+                    let elapsed = MonoTime.now() - pluginStart
                     synchronized(this.processLock) {
                         this.startedIds.add(ce.id)
                     }
                     result.loaded.add(ce.id)
                     LogUtils.info("[CordisHostManager] process plugin started: ${ce.id}")
+                    println("[CordisHostManager][DIAG] awaitActive #${pluginIndex}/${desired.size.toString()} '${ce.id}' OK (elapsed=${elapsed})")
+                    this.traceAwait("TRACE[loadProcessPlugins] awaitActive OK '${ce.id}' (elapsed=${elapsed})")
                 case Err(reason) =>
+                    let elapsed = MonoTime.now() - pluginStart
                     result.failed.add("${ce.id}(${reason})")
                     LogUtils.error("[CordisHostManager] process plugin '${ce.id}' failed to activate: ${reason}")
+                    println("[CordisHostManager][DIAG] awaitActive #${pluginIndex}/${desired.size.toString()} '${ce.id}' FAILED (elapsed=${elapsed}, reason=${reason})")
+                    this.traceAwait("TRACE[loadProcessPlugins] awaitActive FAILED '${ce.id}': ${reason}")
             }
         }
+        let totalElapsed = MonoTime.now() - totalStart
+        println("[CordisHostManager][DIAG] all ${desired.size.toString()} process plugins awaitActive done (total=${totalElapsed})")
+        this.traceAwait("TRACE[loadProcessPlugins] all plugins awaitActive done (total=${totalElapsed})")
 
         return result
+    }
+
+    /**
+     * 启动诊断用：把期望启动的插件 id 拼成字符串。
+     * 【注意】仓颉 ArrayList 没有 join 成员方法，必须用 String.join(arr.toArray(), delimiter:)。
+     */
+    private func joinIds(list: ArrayList<PluginEntry>): String {
+        let names = ArrayList<String>()
+        for (ce in list) {
+            names.add(ce.id)
+        }
+        String.join(names.toArray(), delimiter: ", ")
     }
 
     /**

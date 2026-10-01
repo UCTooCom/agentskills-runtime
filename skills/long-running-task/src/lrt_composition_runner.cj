@@ -645,6 +645,7 @@ public class LrtCompositionRunner {
                 result.status = LrtStepStatus.Completed
                 result.output = out
                 result.attempts = attempt
+                this.relayScriptEvents(step, out, traceId)
                 _cache.add(cacheKey, out)
                 result.durationMs = LrtCompositionRunner.nowMs() - start
                 return result
@@ -670,6 +671,7 @@ public class LrtCompositionRunner {
                             result.output = dOut
                             result.attempts = attempt
                             result.durationMs = LrtCompositionRunner.nowMs() - start
+                            this.relayScriptEvents(step, dOut, traceId)
                             _cache.add(cacheKey, dOut)
                             eprintln("[LrtCompositionRunner] step '${step.name}' 主路径失败，"
                                 + "经降级后端 '${raw}' 完成（产出已标记 degraded）trace=${traceId}")
@@ -689,6 +691,132 @@ public class LrtCompositionRunner {
         result.durationMs = LrtCompositionRunner.nowMs() - start
         eprintln("[LrtCompositionRunner] ${result.errorMessage} trace=${traceId}")
         return result
+    }
+
+    // ── D 层脚本事件的宿主回流（替代 LRT_NOTIFY_ENDPOINT）────────────────────
+    //
+    // notify_progress.py 的模块注释写的是「落 progress_events.jsonl，由宿主的事件中继
+    // 读取并推送」，但**这个中继一直没实现**：全库没有任何代码读 progress_events.jsonl。
+    // 于是脚本只剩 LRT_NOTIFY_ENDPOINT 这条 HTTP POST 出口，而宿主**没有**对应的接收端点
+    // （/api/v1/uctoo/webmcp/events 是 GET SSE 出口，CORS 只放 GET/OPTIONS）——pushed 恒为 0。
+    //
+    // 正确修法不是给宿主补一个 POST 端点：那会在既有的 host.event 通道之外另开一条
+    // 事件出口，还要额外做鉴权 + RBAC 权限注册 + 前端改造，纯属重复建设。
+    // D 层是独立 Python 子进程，拿不到 ctx，所以由**握有 ctx 的插件进程**把脚本 stdout
+    // 里的 events 转投既有通道：LrtEventEmitter → host.event → LrtEventRelay → LrtEventBridge。
+
+    /// 把脚本 stdout JSON 里的 `events` 数组逐条转发给宿主（best-effort，失败不影响编排）。
+    private func relayScriptEvents(step: LrtStep, output: String, traceId: String): Unit {
+        if (output.isEmpty()) {
+            return
+        }
+        var root = JsonValue.Null
+        try {
+            root = JsonValue.parse(output)
+        } catch (e: Exception) {
+            // 产出不是 JSON（纯文本脚本）——没有事件可中继，静默返回
+            return
+        }
+        match (root) {
+            case JsonValue.Map(m) =>
+                match (m.get("events")) {
+                    case Some(JsonValue.Array(arr)) =>
+                        if (!arr.isEmpty()) {
+                            eprintln("[LrtCompositionRunner] step '${step.name}' "
+                                + "中继 ${arr.size} 条事件到 host.event trace=${traceId}")
+                        }
+                        for (evt in arr) {
+                            this.relayOneEvent(evt, traceId)
+                        }
+                    case _ => ()
+                }
+            case _ => ()
+        }
+    }
+
+    /// 转发单条事件。事件里的 task_id / session_id 缺失时回落编排输入 _input。
+    private func relayOneEvent(evt: JsonValue, traceId: String): Unit {
+        match (evt) {
+            case JsonValue.Map(f) =>
+                let eventType = LrtCompositionRunner.mapStr(f, "type")
+                if (eventType.isEmpty()) {
+                    return
+                }
+                let taskId = LrtCompositionRunner.mapStr(f, "task_id")
+                let agentId = LrtCompositionRunner.mapStr(f, "agent_id")
+                // 事件里的 session_id 优先；脚本未收到该参数时回落编排输入，
+                // 两者都空则宿主只走 WS 广播（定义好的降级路径）
+                var sessionId = LrtCompositionRunner.mapStr(f, "session_id")
+                if (sessionId.isEmpty()) {
+                    sessionId = this.inputOf("session_id")
+                }
+                var evtTraceId = LrtCompositionRunner.mapStr(f, "trace_id")
+                if (evtTraceId.isEmpty()) {
+                    evtTraceId = this.inputOf("trace_id")
+                }
+                if (evtTraceId.isEmpty()) {
+                    evtTraceId = traceId
+                }
+                match (f.get("data")) {
+                    case Some(JsonValue.Map(d)) =>
+                        match (eventType) {
+                            case "progress_update" =>
+                                LrtEventEmitter.progressUpdate(
+                                    taskId, sessionId, agentId,
+                                    LrtCompositionRunner.mapInt(d, "completedSteps", 0),
+                                    LrtCompositionRunner.mapInt(d, "totalSteps", 0),
+                                    LrtCompositionRunner.mapStr(d, "currentStep"),
+                                    LrtCompositionRunner.mapOptInt(d, "estimatedRemaining"),
+                                    LrtCompositionRunner.mapStr(d, "intermediateResult"),
+                                    evtTraceId
+                                )
+                            case "step_failed" =>
+                                LrtEventEmitter.stepFailed(
+                                    taskId, sessionId, agentId,
+                                    LrtCompositionRunner.mapStr(d, "step"),
+                                    0,
+                                    LrtCompositionRunner.mapStr(d, "errorMessage"),
+                                    1,
+                                    true,
+                                    evtTraceId
+                                )
+                            case _ =>
+                                eprintln("[LrtCompositionRunner] 中继跳过未知事件类型 '${eventType}'")
+                        }
+                    case _ => ()
+                }
+            case _ => ()
+        }
+    }
+
+    /// 取编排输入（缺失 → 空串）
+    private func inputOf(key: String): String {
+        match (_input.get(key)) {
+            case Some(v) => v
+            case None => ""
+        }
+    }
+
+    private static func mapStr(m: HashMap<String, JsonValue>, key: String): String {
+        match (m.get(key)) {
+            case Some(JsonValue.String(s)) => s
+            case _ => ""
+        }
+    }
+
+    private static func mapInt(m: HashMap<String, JsonValue>, key: String, default: Int64): Int64 {
+        match (m.get(key)) {
+            case Some(JsonValue.Number(n)) => Int64(n)
+            case _ => default
+        }
+    }
+
+    /// 可选整数字段：缺失 → None（宿主据此输出显式 null，而非误导性的 0）
+    private static func mapOptInt(m: HashMap<String, JsonValue>, key: String): ?Int64 {
+        match (m.get(key)) {
+            case Some(JsonValue.Number(n)) => Some<Int64>(Int64(n))
+            case _ => None<Int64>
+        }
     }
 
     // ── §14.2 按步注入数据契约（spec 5.16 规则 8：单回合注入 ≤2000 token）────────
@@ -983,6 +1111,11 @@ public class LrtCompositionRunner {
         }
         // 参数：--key value 形式传递 input
         let args = ArrayList<String>()
+        // 修复（2026-09-22）：强制 Python UTF-8 模式，避免 Windows 上子进程 stdout
+        // 以 GBK(cp936) 输出中文，导致读端 String.fromUtf8 抛
+        // "Invalid utf8 byte sequence"、步骤产出为空（notify-progress 因此拿不到输入）。
+        // 必须位于脚本路径之前。
+        args.add("-Xutf8")
         args.add(scriptPath)
         for (k in LrtCompositionRunner.sortedKeys(resolvedInput)) {
             match (resolvedInput.get(k)) {
@@ -1014,6 +1147,55 @@ public class LrtCompositionRunner {
         }
     }
 
+    /// 取插件路由产出里的 errno（非 JSON / 无该键 → 0，"无从判定就不判失败"）。
+    ///
+    /// 刻意区分「没有 errno 键」与「errno=0」：早期 / 第三方插件路由可能不带 errno，
+    /// 这时沿用旧行为（有返回即成功），避免一次改动把不相关的路由全部误判失败。
+    private static func errnoOf(output: String): Int64 {
+        var out: Int64 = 0
+        if (output.isEmpty()) {
+            return out
+        }
+        var root = JsonValue.Null
+        try {
+            root = JsonValue.parse(output)
+        } catch (_: Exception) {
+            return out
+        }
+        match (root) {
+            case JsonValue.Map(m) =>
+                match (m.get("errno")) {
+                    case Some(JsonValue.Number(n)) => out = Int64(n)
+                    case _ => ()
+                }
+            case _ => ()
+        }
+        out
+    }
+
+    /// 取插件路由产出里的 errmsg（缺失 → 空串，供失败原因上屏）
+    private static func errMsgOf(output: String): String {
+        var out = ""
+        if (output.isEmpty()) {
+            return out
+        }
+        var root = JsonValue.Null
+        try {
+            root = JsonValue.parse(output)
+        } catch (_: Exception) {
+            return out
+        }
+        match (root) {
+            case JsonValue.Map(m) =>
+                match (m.get("errmsg")) {
+                    case Some(JsonValue.String(s)) => out = s
+                    case _ => ()
+                }
+            case _ => ()
+        }
+        out
+    }
+
     /// plugin 分发：经注入的 LrtPluginCaller 调用插件路由
     private func runPluginStep(
         step: LrtStep,
@@ -1025,6 +1207,17 @@ public class LrtCompositionRunner {
                 try {
                     let out = caller(step.pluginRoute, resolvedInput)
                     eprintln("[LrtCompositionRunner] plugin step '${step.name}' route='${step.pluginRoute}' trace=${traceId}")
+                    // 【根因 G】插件路由返回值里的 errno **必须被当真**。
+                    // 原实现只看"有没有返回"，不看 errno：于是 verify-and-deliver 返回
+                    // 40002「artifact_path 不能为空」时，整条编排仍被判成 completed——
+                    // 与 COMPOSITION.yaml「全部方案失败时……不得静默置 success」直接冲突。
+                    // 现在 errno ≠ 0 即判失败，把降级链（degradation_chain）真正让出来；
+                    // 降级成功会带 `[degraded by xxx]` 标记，仍算"跑通但不是按原计划"。
+                    let errno = LrtCompositionRunner.errnoOf(out)
+                    if (errno != 0) {
+                        let errmsg = LrtCompositionRunner.errMsgOf(out)
+                        return (false, out, "插件路由 '${step.pluginRoute}' 返回 errno=${errno}：${errmsg}")
+                    }
                     return (true, out, "")
                 } catch (e: Exception) {
                     return (false, "", "插件路由调用异常：${e.message}")
@@ -1207,6 +1400,14 @@ public class LrtCompositionRunner {
             case Some(v) => if (!v.trimAscii().isEmpty()) { return v }
             case None => ()
         }
+        // 兜底：env 未设置时复用脚本运行器的技能根探测（按部署布局从 cwd 定位 COMPOSITION.yaml）。
+        // mode:process 下进程 cwd = 宿主工作目录，而 plugin.yaml 的 env 段又未被宿主转发到进程
+        // （cordis_host_manager.toCordisEntry 只透传 command/args，丢弃 entry.env），
+        // 故不能依赖 cwd 直接拼 COMPOSITION.yaml，必须显式探测技能根。
+        let probed = LrtScriptRunner.skillRoot()
+        if (!probed.isEmpty()) {
+            return probed
+        }
         return "."
     }
 
@@ -1229,7 +1430,17 @@ public class LrtCompositionRunner {
                 if (n <= 0) {
                     break
                 }
-                sb.append(String.fromUtf8(buf[0..n]))
+                // 修复（2026-09-22）：旧实现逐块 String.fromUtf8(buf[0..n])，遇非 UTF-8
+                // 字节（Windows 子进程 GBK 输出 / 多字节字符被分块边界截断）即抛异常并
+                // 中断整个读取循环 → 步骤产出变成空串。notify-progress 失败就是因为
+                // stderr 侧这次解码异常把整段输出吞掉了。
+                // 现先严格解码，失败退化为 unchecked 解码（与 python_executor_tool.cj 同口径）。
+                let chunk = buf[0..n]
+                try {
+                    sb.append(String.fromUtf8(chunk))
+                } catch (_: Exception) {
+                    sb.append(unsafe { String.fromUtf8Unchecked(chunk) })
+                }
             }
         } catch (e: Exception) {
             eprintln("[LrtCompositionRunner] readStream error: ${e.message}")

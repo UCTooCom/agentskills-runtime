@@ -91,6 +91,9 @@ public class CrontabPO {
         @ORMField['exec_count']
     public var execCount: Option<Int32> = None<Int32>
 
+        @ORMField['owner_user_id']
+    public var ownerUserId: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -116,7 +119,8 @@ public class CrontabPO {
                 misfireThreshold: Option<Int32>,
                 lastExecutedAt: Option<DateTime>,
                 nextExecutedAt: Option<DateTime>,
-                execCount: Option<Int32>
+                execCount: Option<Int32>,
+                ownerUserId: Option<String>
     ) {
                 this.id = id
                 this.name = name
@@ -141,6 +145,7 @@ public class CrontabPO {
                 this.lastExecutedAt = lastExecutedAt
                 this.nextExecutedAt = nextExecutedAt
                 this.execCount = execCount
+                this.ownerUserId = ownerUserId
     }
 
     /// 序列化为 JsonValue
@@ -169,6 +174,7 @@ public class CrontabPO {
         map.add("last_executed_at", optionToJsonValue(this.lastExecutedAt))
         map.add("next_executed_at", optionToJsonValue(this.nextExecutedAt))
         map.add("exec_count", optionToJsonValue(this.execCount))
+        map.add("owner_user_id", optionToJsonValue(this.ownerUserId))
         return JsonObject(map)
     }
 

@@ -32,6 +32,10 @@ public class ExecutorRegistry {
         // status=2**（spec 5.6.1 规则 7：未经用户确认不得交付）。详见 LrtPluginExecutor 类注释。
         if (lower.startsWith("lrt://")) { return "lrt" }
         if (lower.startsWith("quota_reset://")) { return "quota_reset" }
+        // sdd://<feature_name> —— SDD 六步编排（宿主侧异步编排）专用 scheme。
+        // 与 lrt 分开：lrt 的调度行已改为"只停表、不驱动回合"，而 sdd 的调度行
+        // 每 tick 推进一步。详见 SddOrchestrationExecutor 类注释。
+        if (lower.startsWith("sdd://")) { return "sdd" }
         return ""
     }
 
@@ -45,6 +49,8 @@ public class ExecutorRegistry {
         // "lrt://" 前缀长 6 个字符
         if (lower.startsWith("lrt://")) { return taskUri[6..] }
         if (lower.startsWith("quota_reset://")) { return taskUri[15..] }
+        // "sdd://" 前缀长 6 个字符（路径段是 feature_name，不是 uuid）
+        if (lower.startsWith("sdd://")) { return taskUri[6..] }
         if (lower.startsWith("http://")) { return taskUri }
         if (lower.startsWith("https://")) { return taskUri }
         return taskUri

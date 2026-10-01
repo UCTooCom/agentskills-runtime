@@ -283,6 +283,14 @@ public class Config {
     public static var MODEL_CONFIG: String = getEnv("MODEL_CONFIG").getOrDefault({ => "stepfun:step-3" })
 
     /**
+     * JWT 签名密钥。用户 token 与（本地模式下）agent token 共用同一把密钥签发与校验。
+     * 作为全工程唯一来源：main.cj 与 AutoRouteRegistry 均引用此处，
+     * 避免各路由处硬编码默认密钥导致设置 JWT_SECRET 环境变量后长程任务系列经 AutoRoute
+     * 注册的路由静默 401（与用户 token 校验密钥不同源）。
+     */
+    public static var jwtSecret: String = getEnv("JWT_SECRET").getOrDefault({ => "uctoo-v4-secret-key" })
+
+    /**
      * Get API key for the configured model provider
      */
     public static func getModelApiKey(): String {

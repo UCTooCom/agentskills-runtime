@@ -36,6 +36,38 @@ public class PermissionUtils {
         }
     }
 
+    /// 具备归属列 `owner_user_id` 的表。
+    ///
+    /// 双账号身份设计（specs/agent-user-dual-identity · design D1）：这类表的 `creator`
+    /// 记的是**执行者**（委派场景下可能是 agent 绑定的 `uctoo_user`，甚至因 agent 未绑定
+    /// 而为空），真人归属改由 `owner_user_id` 表达。若行级可见性与所有权判定仍只看
+    /// creator，委派的真人将看不到也管不了属于自己的长程任务。
+    /// ⚠️ 前置条件：本清单里的表**必须**已有 `owner_user_id` 列，否则生成的 SQL 会报错。
+    /// 前四张表的列由 `sql/incremental/20260921_dual_identity_owner_user_id.sql` 增加
+    /// （crontab / long_running_task_artifact / long_running_task_evolution / agent_tasks）；
+    /// `lrt_verify_job` 的 `owner_user_id` 列在其创建迁移 `sql/incremental/lrt_verify_job_20260922.sql`
+    /// 中一并建好，未执行该 DDL 前请勿把它留在清单内。
+    ///
+    /// 2026-09-22 增补产物表与自进化表（根因 D 修复的前置）：
+    /// 宿主侧执行者以**执行者**（agent 帐号）写 `long_running_task_artifact.creator`、
+    /// 以归属真人写 `owner_user_id`；插件是以**归属真人**身份查产物的，
+    /// 若本表不看 owner 列，插件会看不见执行者刚产出的产物，
+    /// 表现为"明明产出了，验核却说没有产物"（与插件侧
+    /// `LrtPersistService.ownerAwareTables` 保持同一份清单）。
+    public static func hasOwnerUserColumn(entityType: String): Bool {
+        return entityType == "agent_tasks" || entityType == "crontab"
+            || entityType == "long_running_task_artifact" || entityType == "long_running_task_evolution"
+            || entityType == "lrt_verify_job"
+    }
+
+    /// 构造「该用户拥有此行」的行归属谓词（可直接嵌入 WHERE，含 uuid 字面量故无需再绑定参数）。
+    private static func buildOwnershipPredicate(userId: String, entityType: String): String {
+        if (hasOwnerUserColumn(entityType)) {
+            return "(creator = '${userId}'::uuid OR owner_user_id = '${userId}'::uuid)"
+        }
+        return "creator = '${userId}'::uuid"
+    }
+
     public static func checkReadPermission(userId: String, entityId: String, entityType: String): (Bool, String) {
         return checkUserHasPermission(userId, entityType, entityId, PermissionLevel.READ)
     }
@@ -82,9 +114,10 @@ public class PermissionUtils {
             let executor = ORM.executor()
 
             executor.add(entityId)
-            executor.add(userId)
+            // creator 可能已被记为委派出去的执行者（agent 帐号），真人归属在 owner_user_id —— 双列判定
+            let ownership = buildOwnershipPredicate(userId, entityType)
             let creatorCheck = executor.setSql('''
-                SELECT COUNT(*) FROM ${entityType} WHERE id = ? AND creator = ? AND deleted_at IS NULL
+                SELECT COUNT(*) FROM ${entityType} WHERE id = ? AND ${ownership} AND deleted_at IS NULL
             ''').first<Int64>() ?? 0
 
             LogUtils.info(logger, "checkUserHasPermission: userId=${userId}, entityType=${entityType}, entityId=${entityId}, creatorCheck=${creatorCheck}")
@@ -147,9 +180,9 @@ public class PermissionUtils {
                     }
                 }
                 if (ids.isEmpty()) {
-                    return ("creator = '${userId}'::uuid", ArrayList<String>())
+                    return (buildOwnershipPredicate(userId, entityType), ArrayList<String>())
                 }
-                return (buildFilterCondition(ids, userId), ArrayList<String>())
+                return (buildFilterCondition(ids, userId, entityType), ArrayList<String>())
             }
 
             let executor = ORM.executor()
@@ -169,13 +202,13 @@ public class PermissionUtils {
             PermissionCache.putFilterCache(userId, entityType, authorizedIds)
 
             if (authorizedIds.isEmpty()) {
-                return ("creator = '${userId}'::uuid", ArrayList<String>())
+                return (buildOwnershipPredicate(userId, entityType), ArrayList<String>())
             }
 
-            return (buildFilterCondition(authorizedIds, userId), ArrayList<String>())
+            return (buildFilterCondition(authorizedIds, userId, entityType), ArrayList<String>())
         } catch (e: Exception) {
             LogUtils.error(logger, "Failed to generate permission filter: ${e.message}")
-            return ("creator = '${userId}'::uuid", ArrayList<String>())
+            return (buildOwnershipPredicate(userId, entityType), ArrayList<String>())
         }
     }
 
@@ -414,12 +447,13 @@ public class PermissionUtils {
         }
     }
 
-    private static func buildFilterCondition(authorizedIds: ArrayList<String>, userId: String): String {
+    private static func buildFilterCondition(authorizedIds: ArrayList<String>, userId: String, entityType: String): String {
+        let ownership = buildOwnershipPredicate(userId, entityType)
         if (authorizedIds.isEmpty()) {
-            return "creator = '${userId}'::uuid"
+            return ownership
         }
         let sb = StringBuilder()
-        sb.append("(creator = '${userId}'::uuid OR id IN (")
+        sb.append("(${ownership} OR id IN (")
         var first = true
         for (id in authorizedIds) {
             if (id.isEmpty()) {

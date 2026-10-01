@@ -28,6 +28,9 @@ import std.sync.AtomicBool
 
 // Ch9：长程任务意图路由依赖
 import magic.app.services.lrt.LongTaskApiService
+import magic.core.AgentSessionContext
+import std.env.getVariable
+import magic.app.tools.LrtToolFactory
 
 /**
  * 长程任务触发前缀（Ch9 意图路由）
@@ -39,6 +42,16 @@ import magic.app.services.lrt.LongTaskApiService
  * 顺序无关（都是 startsWith 判定），但保持"人类写法在前"便于阅读。
  */
 let LRT_TRIGGER_PREFIXES: Array<String> = ["长程任务:", "长程任务：", "/lrt"]
+
+/**
+ * 前端登录页路径（web 项目上下文）。
+ *
+ * web-admin 的 VITE_CONTEXT=/vue-pro/、登录路由为 /login，故完整路径为 /vue-pro/login。
+ * 与项目既有 FRONTEND_URL 约定拼接（见 CORSMiddleware），不新增配置项：
+ *   dev  → http://localhost:3031/vue-pro/login
+ *   prod → https://<部署域名>/vue-pro/login
+ */
+let FRONTEND_LOGIN_PATH: String = "/vue-pro/login"
 
 /**
  * WebMCP 协议处理器
@@ -60,6 +73,9 @@ public class WebMCPProtocol {
     private var _menuDataProvider: ?MenuDataProvider = None
     // 当前用户 ID（由 setSessionInfo 设置，供 MenuDataProvider 查询用户菜单）
     private var _userId: String = ""
+    // 会话上下文（共享实例）：构造 agent 时注入同一引用，setSessionInfo 更新其字段，
+    // 使长程任务等工具在每次请求都能拿到真实 userId / sessionId / agentId。
+    private var _sessionContext: AgentSessionContext = AgentSessionContext(userId: "", sessionId: "", agentId: "")
 
     /**
      * 构造函数，接受可空类型的 SkillManager 和 ChatModel
@@ -86,8 +102,12 @@ public class WebMCPProtocol {
             
             this._agentId = agentId
             let memory = TieredMemory(agentId: agentId)
+            // 注意：本 2 参构造仅由 McpController（agent 互联、空 userId）使用，
+            // 不注入 lrtToolFactory —— 互联路径不应提交长程任务（避免空 userId 产生孤儿任务）。
+            // 长程任务工具仅由 3 参构造（WebMCPController web 聊天路径）注入。
             this._agent = Some(SkillAwareAgent(
                 skillManager: skillManager.getOrThrow(),
+                sessionContext: this._sessionContext,
                 model: chatModel.getOrThrow(),
                 executor: executor,
                 name: agentName,
@@ -141,6 +161,8 @@ public class WebMCPProtocol {
                 let memory = TieredMemory(agentId: this._agentId)
                 this._agent = Some(SkillAwareAgent(
                     skillManager: skillManager.getOrThrow(),
+                    sessionContext: this._sessionContext,
+                    lrtToolFactory: Some(LrtToolFactory()),
                     model: agentModel,
                     executor: executor,
                     name: agentName,
@@ -169,6 +191,8 @@ public class WebMCPProtocol {
                 let memory = TieredMemory(agentId: this._agentId)
                 this._agent = Some(SkillAwareAgent(
                     skillManager: skillManager.getOrThrow(),
+                    sessionContext: this._sessionContext,
+                    lrtToolFactory: Some(LrtToolFactory()),
                     model: chatModel.getOrThrow(),
                     executor: executor,
                     name: fallbackName,
@@ -187,6 +211,15 @@ public class WebMCPProtocol {
         this._sessionId = sessionId
         this._clientId = clientId
         this._userId = userId
+        // 同步刷新共享会话上下文：构造 agent 时 userId 尚为空，此处才是最新的真实用户信息。
+        // agent 与长程任务工具持有同一引用，更新后双方都能看到正确 userId / sessionId / agentId。
+        this._sessionContext.update(userId: _userId, sessionId: _sessionId, agentId: this._agentId)
+    }
+
+    /// 返回当前会话已解析的 agent id（构造期已从 agents 表解析并写入 _agentId）。
+    /// WebMCPController 据此触发 agent 本地自动登录。
+    public func getAgentId(): String {
+        this._agentId
     }
 
     /**

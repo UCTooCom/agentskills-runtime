@@ -535,6 +535,12 @@ public class AgentContextsController {
         if (let Some(deletedAt) <- map.get("deleted_at")) {
             // DateTime类型, 由数据库处理
         }
+        if (let Some(taskId) <- map.get("task_id")) {
+            let taskIdStr = taskId as String
+            if (let Some(s) <- taskIdStr) {
+                entity.taskId = Some<String>(s)
+            }
+        }
         return entity
     }
 

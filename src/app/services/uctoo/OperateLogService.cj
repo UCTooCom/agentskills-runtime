@@ -1175,6 +1175,19 @@ public class OperateLogService {
 
     private static func resolveAuditActorType(userId: String, pluginId: String): String {
         if (!userId.isEmpty()) {
+            // 区分 agent 帐号与人类用户：agent 的 uctoo_user.userType == "agent"。
+            // （spec agent-user-dual-identity FR-4：审计 actorType 按 userType 判定，
+            //  而非仅凭 userId 非空即记 user，否则 agent 的自主写操作会被误归为普通用户。）
+            try {
+                let userOpt = UctooUserService().getById(userId).data
+                if (let Some(u) <- userOpt) {
+                    if (u.userType == "agent") {
+                        return "agent"
+                    }
+                }
+            } catch (e: Exception) {
+                // 查询失败则保守降级为 user，不阻断审计写入
+            }
             return "user"
         }
         if (!pluginId.isEmpty()) {

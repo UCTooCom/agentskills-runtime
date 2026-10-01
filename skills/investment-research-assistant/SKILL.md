@@ -3,7 +3,18 @@ name: investment-research-assistant
 description: 智能投研助理（Investment Research Assistant）—— 实现金融行业"自动抓取、清洗、提取，输出每日投资简报"全流程最佳实践 SOP。自动抓取行情/公告/新闻等多源数据，清洗去重，提取关键投资要素（估值、财务、事件、情绪），生成结构化每日投资简报并按公司写入 company 表、研报内容写入关联 tasks 表，通过 aibuilder 模块呈现。触发词："投研"、"投资简报"、"研报"、"每日投资简报"、"股票分析"、"Investment Research"、"热点公司"、"行情"、"A股"、"复盘"、"盘后分析"、"市场资讯"、"估值分析"、"公司基本面"、"财报"、"盘前盘后"。
 license: MIT
 version: "1.1.0"
-compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/web_fetch），脚本执行需 Python 3.8+ + requests 库（落库模式需 psycopg2-binary）
+compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/web_fetch），脚本执行需 Node.js ≥22.6（推荐 v23.10+）（推荐 TypeScript 版本）或 Python 3.8+ + requests 库（降级备选，落库模式需 psycopg2-binary）
+
+## 脚本运行说明
+
+本技能的脚本提供 TypeScript 和 Python 两个版本，**优先使用 TypeScript 版本**以减少对 Python 运行环境的依赖。
+
+- **TypeScript 版本（推荐）**：`scripts/*.ts`（fetch_market_data, clean_market_data, extract_factors, generate_report, save_report_to_db）
+  - 运行方式：`node --experimental-strip-types scripts/<script>.ts [参数]`
+  - 依赖：Node.js ≥22.6（推荐 v23.10+），无需额外 npm 包
+- **Python 版本（降级备选）**：`scripts/*.py`
+  - 运行方式：`python scripts/<script>.py [参数]`
+  - 仅在 TypeScript 版本运行出错时降级使用
 metadata:
   author: UCToo Team
   version: "1.1.0"
@@ -93,14 +104,14 @@ decision-points:
 
 | 数据源 | 内容 | 优先工具 |
 |--------|------|---------|
-| 行情接口 | 收盘价、涨跌幅、成交量、市盈率等 | `scripts/fetch_market_data.py`（已含东财接口、名称解析、合规留痕） |
-| 公司公告 | 定期报告、重大事项 | `scripts/fetch_market_data.py`（含公告字段）或降级 `web_fetch` / `http_request` |
-| 财经新闻 | 行业动态、公司新闻 | `scripts/fetch_market_data.py`（含新闻字段）或降级 `web_fetch` / `http_request` |
+| 行情接口 | 收盘价、涨跌幅、成交量、市盈率等 | `scripts/fetch_market_data.ts`（已含东财接口、名称解析、合规留痕） |
+| 公司公告 | 定期报告、重大事项 | `scripts/fetch_market_data.ts`（含公告字段）或降级 `web_fetch` / `http_request` |
+| 财经新闻 | 行业动态、公司新闻 | `scripts/fetch_market_data.ts`（含新闻字段）或降级 `web_fetch` / `http_request` |
 | 宏观数据 | 利率、PMI、CPI 等 | 降级 `web_fetch` / `http_request`（脚不含宏观数据源） |
 
 **工具优先级**（必须遵守）：
-1. **优先用 `cli_execute` 运行 `scripts/fetch_market_data.py`**——人工已验证脚本可正确生成预期产出物（`output/raw/{date}.json`）
-2. 仅在检测到系统环境不具备运行脚本时（如 python 未安装、requests 缺失、cli_execute 不可用）才降级用 `web_fetch` / `http_request` 收集数据
+1. **优先用 `cli_execute` 运行 `scripts/fetch_market_data.ts`**（`node --experimental-strip-types`）——人工已验证脚本可正确生成预期产出物（`output/raw/{date}.json`）
+2. 仅在检测到系统环境不具备运行脚本时（如 Node.js 不可用、cli_execute 不可用）才降级用 `web_fetch` / `http_request` 收集数据
 3. 降级时仍需按脚本的字段结构产出 `output/raw/{date}.json`，保证下游 Step2 可衔接
 
 **最佳实践**：
@@ -118,7 +129,7 @@ decision-points:
 - 剔除停牌、退市、异常行情等无效数据
 - 空值/异常值处理并标记
 
-**脚本**：`scripts/clean_market_data.py`（输入原始 JSON，输出清洗后 JSON）
+**脚本**：`scripts/clean_market_data.ts`（优先；降级 `clean_market_data.py`）——输入原始 JSON，输出清洗后 JSON
 - **优先用 `cli_execute` 运行此脚本**——人工已验证可正确生成预期产出物（`output/clean/{date}.json`）
 - 仅在检测到系统环境不具备运行脚本时才降级用 `file_read` + 大模型手动清洗（产出需保持同字段结构以衔接下游 Step3）
 
@@ -134,7 +145,7 @@ decision-points:
 | 情绪要素 | 新闻情感倾向（正面/中性/负面） |
 | 风险提示 | 高波动、负面事件、合规风险 |
 
-**脚本**：`scripts/extract_factors.py`（输出要素 JSON）
+**脚本**：`scripts/extract_factors.ts`（优先；降级 `extract_factors.py`）——输出要素 JSON
 - **优先用 `cli_execute` 运行此脚本**——人工已验证可正确生成预期产出物（`output/factors/{date}.json`）
 - 仅在检测到系统环境不具备运行脚本时才降级用大模型从清洗 JSON 中提取要素（产出需保持同字段结构以衔接下游 Step4）
 
@@ -151,7 +162,7 @@ decision-points:
 └── 数据来源与免责声明
 ```
 
-**脚本**：`scripts/generate_report.py`（输入要素 JSON，输出投资简报 Markdown）
+**脚本**：`scripts/generate_report.ts`（优先；降级 `generate_report.py`）——输入要素 JSON，输出投资简报 Markdown
 - **优先用 `cli_execute` 运行此脚本**——人工已验证可正确生成预期产出物（`output/brief/{date}.md`）
 - 已配置 `LLM_API_KEY` 时脚本内部调用昇腾 API / AtomGit OpenAI 兼容接口生成
 - 未配置 LLM 时脚本内部降级为基于要素的模板化简报（不中断流程）
@@ -166,10 +177,10 @@ decision-points:
 - 公司信息 upsert 到 `company` 表（company_name、region、website、org_description 等）
 - 研报内容写入关联 `tasks` 表（title、description、task_type='research'、company_id、creator_id、tags、extra_data）
 
-**脚本**：`scripts/save_report_to_db.py`（支持 psycopg2 直连或生成 SQL 文件）
+**脚本**：`scripts/save_report_to_db.ts`（优先；降级 `save_report_to_db.py`）——支持 pg/psycopg2 直连或生成 SQL 文件
 - **优先用 `cli_execute` 运行此脚本**——人工已验证可正确生成预期产出物（`output/sql/report_*.sql` 或直连 DB 写入）
-- `--sql-only` 模式仅生成 SQL 文件（无需 psycopg2），人工导入数据库即可
-- 直连模式需 `DATABASE_URL` 环境变量 + psycopg2（未安装时脚本自动降级为 `--sql-only`）
+- `--sql-only` 模式仅生成 SQL 文件（无需数据库驱动），人工导入数据库即可
+- 直连模式需 `DATABASE_URL` 环境变量 + `pg`（TS 版）/ psycopg2（Python 版）；驱动未安装时打印警告并仅生成 SQL 文件
 - 仅在检测到系统环境不具备运行脚本时才降级用 runtime 数据库 CRUD API 直接写入 company/tasks 表
 
 ### Step 6：每日简报输出（Brief）
@@ -180,32 +191,37 @@ decision-points:
 
 ## 脚本执行显式命令示例（v10 新增，即使不读完整 SOP 也可直接执行）
 
-> **重要**：agent 即使因 file_read 编码问题未读到完整 SOP，也可直接按本段命令执行六步全流程。命令中的日期 `2026-08-12` 需替换为用户要求的日期。
+> **重要**：agent 即使因 file_read 编码问题未读到完整 SOP，也可直接按本段命令执行六步全流程。命令中的日期 `2026-08-12` 需替换为用户要求的日期。**脚本优先使用 TypeScript 版本（Node.js ≥22.6，推荐 v23.10+）；TS 版本运行有错误时降级 Python 版本**（Windows 用 `python`，Linux/Mac 用 `python3`）。
 
 ```bash
 # Step 1：抓取行情（必填 --companies，支持代码或名称；--force 覆盖旧产出避免误判已完成）
-cli_execute({"command": "python", "args": ["scripts/fetch_market_data.py", "--companies", "600519,000858,300750", "--date", "2026-08-12", "--force"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/fetch_market_data.ts", "--companies", "600519,000858,300750", "--date", "2026-08-12", "--force"]})
+# 降级: cli_execute({"command": "python", "args": ["scripts/fetch_market_data.py", "--companies", "600519,000858,300750", "--date", "2026-08-12", "--force"]})
 # 输出: output/raw/2026-08-12.json
 
 # Step 2：清洗数据
-cli_execute({"command": "python", "args": ["scripts/clean_market_data.py", "--input", "output/raw/2026-08-12.json"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/clean_market_data.ts", "--input", "output/raw/2026-08-12.json"]})
+# 降级: cli_execute({"command": "python", "args": ["scripts/clean_market_data.py", "--input", "output/raw/2026-08-12.json"]})
 # 输出: output/clean/2026-08-12.json
 
 # Step 3：提取要素
-cli_execute({"command": "python", "args": ["scripts/extract_factors.py", "--input", "output/clean/2026-08-12.json"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/extract_factors.ts", "--input", "output/clean/2026-08-12.json"]})
+# 降级: cli_execute({"command": "python", "args": ["scripts/extract_factors.py", "--input", "output/clean/2026-08-12.json"]})
 # 输出: output/factors/2026-08-12.json
 
 # Step 4：生成研报
-cli_execute({"command": "python", "args": ["scripts/generate_report.py", "--factors", "output/factors/2026-08-12.json"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/generate_report.ts", "--factors", "output/factors/2026-08-12.json"]})
+# 降级: cli_execute({"command": "python", "args": ["scripts/generate_report.py", "--factors", "output/factors/2026-08-12.json"]})
 # 输出: output/brief/2026-08-12.md
 
 # Step 5：落库（仅生成 SQL 文件，无需数据库驱动）
-cli_execute({"command": "python", "args": ["scripts/save_report_to_db.py", "--report", "output/brief/2026-08-12.md", "--factors", "output/factors/2026-08-12.json", "--sql-only"]})
+cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/save_report_to_db.ts", "--report", "output/brief/2026-08-12.md", "--factors", "output/factors/2026-08-12.json", "--sql-only"]})
+# 降级: cli_execute({"command": "python", "args": ["scripts/save_report_to_db.py", "--report", "output/brief/2026-08-12.md", "--factors", "output/factors/2026-08-12.json", "--sql-only"]})
 # 输出: output/sql/report_20260812_HHMMSS.sql
 ```
 
 **工作目录**：`apps/agentskills-runtime/skills/investment-research-assistant`（脚本相对路径基于此目录）
-**Windows 用 `python`，Linux/Mac 用 `python3`**
+**脚本运行策略**：优先 `node --experimental-strip-types scripts/<script>.ts [参数]`（需 Node.js ≥22.6，推荐 v23.10+）；TS 出错时降级 `python scripts/<script>.py [参数]`（Windows 用 `python`，Linux/Mac 用 `python3`）
 
 ## 输入参数
 
@@ -225,8 +241,8 @@ cli_execute({"command": "python", "args": ["scripts/save_report_to_db.py", "--re
 ## 错误处理与降级策略
 
 - **数据源失败**：单个数据源抓取失败时记录 error 字段，不中断其他公司抓取；agent 按"遇挫不停"原则尝试替代数据源
-- **LLM 不可用**：`generate_report.py` 检测 `LLM_API_KEY` 未配置时自动降级为模板化简报，不中断流程
-- **数据库连接失败**：`save_report_to_db.py` 支持 `--sql-only` 模式仅生成 SQL 文件，无 psycopg2 时打印警告并降级
+- **LLM 不可用**：`generate_report.ts` 检测 `LLM_API_KEY` 未配置时自动降级为模板化简报，不中断流程
+- **数据库连接失败**：`save_report_to_db.ts` 支持 `--sql-only` 模式仅生成 SQL 文件，无 pg 驱动（或 Python 版无 psycopg2）时打印警告并降级
 - **编码错误**：`cli_execute` 的 stdout 编码失败时返回替换后的字符串（非空），agent 按"stdout 解码失败替代方案清单"尝试其他路径
 - **部分公司失败**：研报按公司独立生成，单家公司失败不影响其他公司输出
 
@@ -246,7 +262,13 @@ cli_execute({"command": "python", "args": ["scripts/save_report_to_db.py", "--re
 # 通过 skill 执行（runtime 内置工具调用）
 skill run investment-research-assistant:generate-daily-brief companies="600519,000858"
 
-# 或直接运行脚本（需 python + requests；Windows 用 python，Linux/Mac 用 python3）
+# 或直接运行脚本（优先 TypeScript 版本，需 Node.js ≥22.6，推荐 v23.10+；TS 出错时降级 Python 版本）
+node --experimental-strip-types scripts/fetch_market_data.ts --companies "600519,000858"
+node --experimental-strip-types scripts/clean_market_data.ts --input output/raw/2026-08-07.json
+node --experimental-strip-types scripts/extract_factors.ts --input output/clean/2026-08-07.json
+node --experimental-strip-types scripts/generate_report.ts --factors output/factors/2026-08-07.json
+node --experimental-strip-types scripts/save_report_to_db.ts --report output/brief/2026-08-07.md --factors output/factors/2026-08-07.json --sql-only
+# 降级（Python 3.8+ + requests；Windows 用 python，Linux/Mac 用 python3）
 # Windows: pip install requests psycopg2-binary
 # Linux/Mac: pip3 install requests psycopg2-binary
 python scripts/fetch_market_data.py --companies "600519,000858"
@@ -325,7 +347,7 @@ agent：[返回 answer 报告 3 家公司的具体投研分析]  ← 正确！
 ## 旧产出清理（建议，v9 新增）
 
 - 运行 SOP 前可清理 `output/` 目录下的旧文件，避免误判
-- 或用 `fetch_market_data.py --force` 覆盖旧产出文件（`--force` 参数会覆盖同日期的旧 JSON）
+- 或用 `fetch_market_data.ts --force` 覆盖旧产出文件（`--force` 参数会覆盖同日期的旧 JSON）
 - 清理命令示例：`file_write` 删除 `output/brief/{旧日期}.md`，或 `cli_execute` 运行 `rm output/brief/*.md` 后重新生成
 
 ## 遇挫不停重试指令（v17 新增，P0）

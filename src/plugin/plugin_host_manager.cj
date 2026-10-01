@@ -6,6 +6,7 @@ package magic.plugin
 import std.collection.{ArrayList, HashMap}
 import f_base.Result
 import magic.log.LogUtils
+import magic.utils.traceStartup
 import magic.app.core.router.Router
 import stdx.encoding.json.{JsonObject, JsonString}
 import plugin_spi.{Plugin, PluginState, PluginError, LoadResult, PluginContext, ServiceRegistry, PluginSpiLogger}
@@ -134,7 +135,9 @@ public class PluginHostManager {
         }
         if (hasProcess) {
             let mgr = this.ensureCordisHostManager()
+            traceStartup("TRACE[PluginHostManager.loadAll] >>> call loadProcessPlugins (awaitActive loop inside)")
             let procResult = mgr.loadProcessPlugins(list)
+            traceStartup("TRACE[PluginHostManager.loadAll] <<< loadProcessPlugins returned: loaded=${procResult.loaded.size}, failed=${procResult.failed.size}, skipped=${procResult.skipped.size}")
             for (name in procResult.loaded) {
                 result.loaded.add(name)
             }
@@ -144,7 +147,9 @@ public class PluginHostManager {
             for (name in procResult.skipped) {
                 result.skipped.add(name)
             }
+            traceStartup("TRACE[PluginHostManager.loadAll] >>> call registerProcessPluginRoutes")
             this.registerProcessPluginRoutes(list, mgr)
+            traceStartup("TRACE[PluginHostManager.loadAll] <<< registerProcessPluginRoutes returned")
         }
         LogUtils.info("[PluginHostManager] load finished: ${result.summary()}")
         return result

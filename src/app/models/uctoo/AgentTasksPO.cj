@@ -49,6 +49,9 @@ public class AgentTasksPO {
         @ORMField['creator']
     public var creator: Option<String> = None<String>
 
+        @ORMField['owner_user_id']
+    public var ownerUserId: Option<String> = None<String>
+
         @ORMField['created_at']
     public var createdAt: DateTime = DateTime.now()
 
@@ -82,6 +85,7 @@ public class AgentTasksPO {
                 result: Option<String>,
                 errorMessage: Option<String>,
                 creator: Option<String>,
+                ownerUserId: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
                 completedAt: Option<DateTime>,
@@ -99,6 +103,7 @@ public class AgentTasksPO {
                 this.result = result
                 this.errorMessage = errorMessage
                 this.creator = creator
+                this.ownerUserId = ownerUserId
                 this.createdAt = createdAt
                 this.updatedAt = updatedAt
                 this.completedAt = completedAt
@@ -118,6 +123,7 @@ public class AgentTasksPO {
         map.add("result", optionToJsonValue(this.result))
         map.add("error_message", optionToJsonValue(this.errorMessage))
         map.add("creator", optionToJsonValue(this.creator))
+        map.add("owner_user_id", optionToJsonValue(this.ownerUserId))
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("completed_at", optionToJsonValue(this.completedAt))

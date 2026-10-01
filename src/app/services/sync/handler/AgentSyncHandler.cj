@@ -17,9 +17,12 @@ public class AgentSyncHandler <: SyncHandler {
     private let dataMapper = DataMapper()
     private let statusManager = SyncStatusManager()
     private let basePath_: String
+    // 技能根目录（如 ./skills）：其下各技能的 bundled 子 agent 声明文件也要参与文件→DB 同步
+    private let skillBasePath_: String
 
-    public init(basePath: String) {
+    public init(basePath: String, skillBasePath!: String = "") {
         this.basePath_ = basePath
+        this.skillBasePath_ = skillBasePath
     }
 
     public prop entityType: String {
@@ -65,6 +68,8 @@ public class AgentSyncHandler <: SyncHandler {
             }
             let po = dataMapper.agentDefinitionToPO(definition, existingPO)
             po.sourcePath = Some(normalizedSourcePath)
+            // T-14: 子 agent 落库时绑定所属技能名（skills/<skill_name>/agents/*.md），供 REQ-SDD-011 自动探测
+            po.skillName = deriveSkillName(normalizedSourcePath)
             if (let Some(dao) <- agentsDAO) {
                 if (existingPO.isSome()) {
                     dao.updateAgents(po)
@@ -93,6 +98,42 @@ public class AgentSyncHandler <: SyncHandler {
             LogUtils.error("AgentSyncHandler.syncFromFileSystem failed: ${e.message}")
             return SyncResult(false, entityType, context.entityId, SyncStatus.Error, e.message)
         }
+    }
+
+    /**
+     * **删除即下线**（2026-09-28 补齐）：声明文件被删 → `agents` 表对应行**软删**（置 deleted_at）。
+     *
+     * 此前 `SyncManager.syncAll` 对 `ChangeType.Deleted` 只跳过，导致"删文件即下线"
+     * 这条约定只说了一半——文件删了、库里行还在，子 agent 仍可被派单。
+     *
+     * 两个刻意的保守选择：
+     *   1. **只软删不做物理删除**：同步链路的删除判定可能因目录临时不可见而误判，
+     *      不可逆的物理删除代价太大；软删后仍可恢复。
+     *   2. **按 source_path 精确定位**：不用 name 兜底，避免误伤同名但来源不同的记录。
+     */
+    public func offlineBySourcePath(sourcePath: String): Bool {
+        let normalized = ChangeDetector().normalizePath(sourcePath)
+        try {
+            let agentsDAO = ORM.executor() as AgentsDAO
+            if (let Some(dao) <- agentsDAO) {
+                match (findAgentBySourcePath(dao, normalized)) {
+                    case Some(po) =>
+                        if (po.deletedAt.isSome()) {
+                            return true
+                        }
+                        po.deletedAt = Some<DateTime>(DateTime.now())
+                        dao.updateAgents(po)
+                        LogUtils.info("AgentSyncHandler: 声明文件已删除，软删下线 agent '${po.name}' source=${normalized}")
+                        return true
+                    case None =>
+                        LogUtils.warn("AgentSyncHandler: 声明文件已删除但库里无对应行（无需下线）: ${normalized}")
+                        return false
+                }
+            }
+        } catch (e: Exception) {
+            LogUtils.error("AgentSyncHandler.offlineBySourcePath 失败: ${normalized}, ${e.message}")
+        }
+        false
     }
 
     public func syncToFileSystem(entityId: String, context: SyncContext): SyncResult {
@@ -128,9 +169,18 @@ public class AgentSyncHandler <: SyncHandler {
         }
     }
 
+    /**
+     * 文件侧变更检测：`<basePath>` 下的 AGENTS.md / agents 目录 **加上** 技能目录里
+     * 各技能的 bundled 子 agent 声明文件（`skills/<skill>/agents/<name>.md`）。
+     *
+     * 后者是 T-19 落库的关键：漏掉它，`agents` 表里就只有主 agent（2026-09-28 实测现象）。
+     */
     public func detectChanges(): Array<FileChange> {
         let detector = ChangeDetector()
-        return detector.detectAgentChanges(basePath_)
+        if (skillBasePath_.isEmpty()) {
+            return detector.detectAgentChanges(basePath_)
+        }
+        return detector.detectAgentChanges(basePath_, bundledSkillRoots: [skillBasePath_])
     }
 
     public func buildFilePath(sourcePath: String): String {
@@ -243,6 +293,20 @@ public class AgentSyncHandler <: SyncHandler {
         } catch (_: Exception) {
             return None
         }
+    }
+
+    /// 从 agent 来源路径推导所属技能名。
+    /// 约定（REQ-SDD-011）：子 agent 声明于 skills/<skill_name>/agents/<name>.md，
+    /// 仅当文件路径包含 "/agents/" 段时才归属该技能；主 agent（AGENTS.md 或全局 agent）留空（见迁移注释：主agent为空）。
+    private func deriveSkillName(sourcePath: String): Option<String> {
+        let parts = sourcePath.split("/")
+        let n = parts.size
+        for (i in 0..n) {
+            if (parts[i] == "agents" && i > 0) {
+                return Some(parts[i - 1])
+            }
+        }
+        return None<String>
     }
 
     private func buildAgentMarkdown(definition: AgentDefinition): String {

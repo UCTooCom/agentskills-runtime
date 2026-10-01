@@ -7,7 +7,8 @@ import { useAxiosRepo } from '@pinia-orm/axios';
 //#endregion Human-Code Preservation
 
 // 使用 VITE_BACKEND_URL（install.html 配置的后端服务域名）
-const apiURL = import.meta.env.VITE_BACKEND_URL || 'https://localhost:443';
+import { getRuntimeApiURL } from '@/utils/runtime-config';
+const apiURL = getRuntimeApiURL();
 
 export class {{table_name}} extends Model {
   static override entity = '{{table_name}}'

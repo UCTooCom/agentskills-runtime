@@ -1,1 +1,0 @@
-see [README.md](../mcp_server/README.md)

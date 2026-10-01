@@ -28,9 +28,64 @@ public class LrtPersistService {
     /// 调优配置表（spec 6.5：自进化环节3 增量优化落配置，供宿主调优服务消费）
     public static let TABLE_AGENT_LOOP_TUNING_CONFIGS: String = "agent_loop_tuning_configs"
 
+    /// 具备 owner_user_id 列的表（design D1 三元组第二元「归属者」）。
+    /// 仅这些表注入 owner_user_id：crontab_log / agent_loop_metrics / agent_loop_tuning_configs 等
+    /// 表无此列，无脑注入会触发 SQLSTATE 42703（关系 "xxx" 的 "owner_user_id" 字段不存在）。
+    /// 与 agent_id 同理按表白名单收敛（agent_id 仅 agent_tasks 有 NOT NULL）。
+    private static let ownerAwareTables: ArrayList<String> = LrtPersistService.buildOwnerAwareTables()
+
+    private static func buildOwnerAwareTables(): ArrayList<String> {
+        let t = ArrayList<String>()
+        t.add("agent_tasks")
+        t.add("crontab")
+        t.add("long_running_task_artifact")
+        t.add("long_running_task_evolution")
+        return t
+    }
+
+    /// 当前请求的执行者（creator）与归属者（owner_user_id）。
+    ///
+    /// 双账号身份 design D1：宿主 `LrtPluginClient` 把二者放进请求 body，
+    /// 由 `LrtHandlers.dispatch` 统一登记到这里。插件内部写库（子任务 / 产物 / 自进化）
+    /// 没有显式值时以它们为默认身份，避免出现"根任务记 agent、子任务记人类"的口径撕裂。
+    /// 插件同一时刻只推进一个任务（concurrentable=false + executing 双保险），故用静态槽即可。
+    private static var identityCreator: String = ""
+    private static var identityOwnerUserId: String = ""
+    /// agent 定义 id（agents.id）。与 creator / owner_user_id 同属双账号身份三元组（design D1），
+    /// 用于写 agent_tasks.agent_id（NOT NULL）。宿主 `LrtPluginClient` 把 agent_id 注入请求 body，
+    /// 由 `setIdentityFromRequest` 登记；插件写库时无显式值以它为默认身份。
+    private static var identityAgentId: String = ""
+
     /// 初始化插件上下文（仓颉中 init 是构造器关键字，不能作普通函数名，故命名为 initialize）
     public static func initialize(ctx: PluginContext): Unit {
         LrtPersistService.ctx = ctx
+    }
+
+    /// 从 ExternalRequest 的 fields 中提取并登记当前请求的双账号身份。
+    /// 宿主侧见 `lrt_plugin_client.cj`：creator / owner_user_id 注入在 body 里。
+    public static func setIdentityFromRequest(fields: HashMap<String, JsonValue>): Unit {
+        var creator = ""
+        var ownerUserId = ""
+        var agentId = ""
+        match (fields.get("body")) {
+            case Some(JsonValue.Map(bodyMap)) =>
+                match (bodyMap.get("creator")) {
+                    case Some(JsonValue.String(v)) => creator = v
+                    case _ => ()
+                }
+                match (bodyMap.get("owner_user_id")) {
+                    case Some(JsonValue.String(v)) => ownerUserId = v
+                    case _ => ()
+                }
+                match (bodyMap.get("agent_id")) {
+                    case Some(JsonValue.String(v)) => agentId = v
+                    case _ => ()
+                }
+            case _ => ()
+        }
+        LrtPersistService.identityCreator = creator
+        LrtPersistService.identityOwnerUserId = ownerUserId
+        LrtPersistService.identityAgentId = agentId
     }
 
     /// 对外暴露当前插件上下文（降级链等需要直接调用 host.* 的组件共用）。
@@ -131,8 +186,57 @@ public class LrtPersistService {
         match (ctxOpt) {
             case None => return LrtPersistService.errResult(1, "plugin context not initialized")
             case Some(ctx) =>
-                if (!userId.isEmpty()) {
-                    dataMap["creator"] = JsonValue.String(userId)
+                // ── 双账号身份落库（design D1）──────────────────────────────
+                // creator = 执行者：显式 body 值 > 当前请求身份 > userId；
+                // owner_user_id = 归属者：显式 body 值 > 当前请求身份。
+                // 空串一律视为"未指定"——uuid 列写空串会报 SQLSTATE 22P02。
+                var effectiveCreator = ""
+                match (dataMap.get("creator")) {
+                    case Some(JsonValue.String(v)) => effectiveCreator = v
+                    case _ => ()
+                }
+                if (effectiveCreator.isEmpty()) {
+                    effectiveCreator = LrtPersistService.identityCreator
+                }
+                if (effectiveCreator.isEmpty()) {
+                    effectiveCreator = userId
+                }
+                if (!effectiveCreator.isEmpty()) {
+                    dataMap["creator"] = JsonValue.String(effectiveCreator)
+                }
+
+                // owner_user_id 仅注入到确实存在该列的表（design D1 三元组第二元）。
+                // 与 agent_id 同理按表白名单收敛：crontab_log 等表无此列，无脑注入
+                // 会触发 SQLSTATE 42703，阻断 crontab_log / metrics 等写库。
+                if (LrtPersistService.ownerAwareTables.contains(table)) {
+                    var effectiveOwner = ""
+                    match (dataMap.get("owner_user_id")) {
+                        case Some(JsonValue.String(v)) => effectiveOwner = v
+                        case _ => ()
+                    }
+                    if (effectiveOwner.isEmpty()) {
+                        effectiveOwner = LrtPersistService.identityOwnerUserId
+                    }
+                    if (!effectiveOwner.isEmpty()) {
+                        dataMap["owner_user_id"] = JsonValue.String(effectiveOwner)
+                    }
+                }
+                // ── agent_id 落库（agent_tasks 专用，NOT NULL）─────────────
+                // 三元组第三元：显式 body 值 > 当前请求身份 > 不写（交由调用方保证必填）。
+                // 仅对 agent_tasks 注入：artifact / evolution 等表无此列（或不应被请求身份污染），
+                // 若对所有表注入会多出不存在的列触发 SQL 报错。
+                if (table == LrtPersistService.TABLE_AGENT_TASKS) {
+                    var effectiveAgentId = ""
+                    match (dataMap.get("agent_id")) {
+                        case Some(JsonValue.String(v)) => effectiveAgentId = v
+                        case _ => ()
+                    }
+                    if (effectiveAgentId.isEmpty()) {
+                        effectiveAgentId = LrtPersistService.identityAgentId
+                    }
+                    if (!effectiveAgentId.isEmpty()) {
+                        dataMap["agent_id"] = JsonValue.String(effectiveAgentId)
+                    }
                 }
                 let execParam = HashMap<String, JsonValue>()
                 execParam["operation"] = JsonValue.String("execute")
@@ -237,6 +341,11 @@ public class LrtPersistService {
         dataMap["parent_task_id"] = JsonValue.Null
         dataMap["status"] = JsonValue.Number(0.0)
         dataMap["priority"] = JsonValue.Number(5.0)
+        // agent_id（NOT NULL）：取自当前请求身份（宿主经 body 透传的 agent 定义 id）。
+        // 空串不写，交由 insert 助手在 agent_tasks 分支兜底；宿主 submitTask 必带，必然非空。
+        if (!LrtPersistService.identityAgentId.isEmpty()) {
+            dataMap["agent_id"] = JsonValue.String(LrtPersistService.identityAgentId)
+        }
         return LrtPersistService.insert(LrtPersistService.TABLE_AGENT_TASKS, dataMap, userId, permArr)
     }
 
@@ -256,6 +365,10 @@ public class LrtPersistService {
         dataMap["parent_task_id"] = JsonValue.String(parentTaskId)
         dataMap["status"] = JsonValue.Number(0.0)
         dataMap["priority"] = JsonValue.Number(5.0)
+        // agent_id（NOT NULL）：与 createRootTask 同口径，取自当前请求身份。
+        if (!LrtPersistService.identityAgentId.isEmpty()) {
+            dataMap["agent_id"] = JsonValue.String(LrtPersistService.identityAgentId)
+        }
         let payloadMap = HashMap<String, JsonValue>()
         payloadMap["sub_goal"] = JsonValue.String(subGoal)
         payloadMap["order"] = JsonValue.Number(Float64(order))

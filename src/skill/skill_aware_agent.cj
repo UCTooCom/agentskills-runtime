@@ -16,15 +16,25 @@ import magic.log.LogUtils
 import stdx.encoding.json.JsonObject
 
 import std.collection.{ArrayList, HashMap}
+import magic.core.AgentSessionContext
+import magic.core.LongRunningTaskToolFactory
+
+let LONG_RUNNING_TASK_TOOL_NAME: String = "long-running-task"
 
 public class SkillAwareAgent <: BaseAgent {
     private var _skillManagerVar: SkillManager
     private let _skillToolAdapters: HashMap<String, SkillToToolAdapter> = HashMap<String, SkillToToolAdapter>()
     // 存储前端注册的工具
     private let _frontendToolAdapters: HashMap<String, FrontendToolAdapter> = HashMap<String, FrontendToolAdapter>()
+    // 会话上下文（userId / sessionId / agentId），供长程任务等需要提交任务的工具使用
+    private let _sessionContext: AgentSessionContext
+    // 长程任务工具工厂（由 magic.app 侧注入，避免 magic.skill 反向依赖 magic.app）
+    private let _lrtToolFactory: ?LongRunningTaskToolFactory
 
     public init(
         skillManager!: SkillManager,
+        sessionContext!: AgentSessionContext,
+        lrtToolFactory!: ?LongRunningTaskToolFactory = None,
         model!: ChatModel,
         executor!: AgentExecutor,
         name!: String = "Skill Aware Agent",
@@ -45,6 +55,8 @@ public class SkillAwareAgent <: BaseAgent {
         )
         
         this._skillManagerVar = skillManager
+        this._sessionContext = sessionContext
+        this._lrtToolFactory = lrtToolFactory
         _registerSkillsAsTools()
     }
 
@@ -63,10 +75,26 @@ public class SkillAwareAgent <: BaseAgent {
         
         for (skill in skills) {
             try {
-                let adapter = SkillToToolAdapter(skill: skill)
-                _skillToolAdapters.add(skill.name, adapter)
-                _toolManager.addTool(adapter)
-                LogUtils.info("Registered skill '${skill.name}' as tool")
+                if (skill.name == LONG_RUNNING_TASK_TOOL_NAME) {
+                    // 长程任务是独立 LRT 提交通道：若注入了工厂，用专用工具接活；
+                    // 否则退回 SkillToToolAdapter（其 BaseSkill.execute 是占位空实现，不会真正触发 LRT，
+                    // 仅用于尚未注入工厂的上下文）。
+                    if (let Some(factory) <- this._lrtToolFactory) {
+                        let lrtTool = factory.create(this._sessionContext)
+                        _toolManager.addTool(lrtTool)
+                        LogUtils.info("Registered long-running-task as dedicated LRT tool")
+                    } else {
+                        let adapter = SkillToToolAdapter(skill: skill)
+                        _skillToolAdapters.add(skill.name, adapter)
+                        _toolManager.addTool(adapter)
+                        LogUtils.info("Registered long-running-task via SkillToToolAdapter (no LRT factory)")
+                    }
+                } else {
+                    let adapter = SkillToToolAdapter(skill: skill)
+                    _skillToolAdapters.add(skill.name, adapter)
+                    _toolManager.addTool(adapter)
+                    LogUtils.info("Registered skill '${skill.name}' as tool")
+                }
             } catch (ex: Exception) {
                 LogUtils.error("Failed to register skill '${skill.name}' as tool: ${ex.message}")
             }

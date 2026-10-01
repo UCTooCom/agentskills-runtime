@@ -15,6 +15,15 @@ import stdx.encoding.json.{JsonValue, JsonObject, JsonNull, JsonString}
  * Allows skills to be used in contexts that expect a Tool
  * This follows clean architecture principle by keeping skills independent
  * and only connecting them via this adapter layer
+ *
+ * 【长程任务链路说明 / T8 决策 2026-09-21】
+ * 本适配器把 Skill 包成 Tool，但底层走的是 `BaseSkill.execute` 的占位实现，
+ * 对 long-running-task 而言是一条**死路**（不会真的触发长程任务）。
+ * 现役活路有两条，任选其一即可：
+ *   1. WebMCP 前缀路由（`长程任务：` / `长程任务:` / `/lrt`）→ handleLongRunningTaskRoute；
+ *   2. `magic.app.tools.LongRunningTaskTool`（方案 B）→ 直接调 LongTaskApiService.submitTask。
+ * 决策：**保留本类为历史包袱，不删除**（它仍被其它技能的 Tool 适配场景引用，
+ * 删除会牵动 @Skill 注册扫描，收益不匹配风险）。请勿用它接长程任务。
  */
 public class SkillToToolAdapter <: Tool {
     private let _skill: Skill

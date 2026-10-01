@@ -1,0 +1,118 @@
+{
+ "candidates": [
+  [
+   "https://wenku.docs.qq.com/search?keyword=2025%E5%B9%B4%E9%AB%98%E8%80%83%E5%8C%96%E5%AD%A6%E8%AF%95%E9%A2%98%E5%8F%8A%E7%AD%94%E6%A1%88&amp;client=qbpcsearch",
+   6
+  ],
+  [
+   "https://wenku.docs.qq.com/detail?docType=6&amp;docId=xRbqIalVZk&amp;client=qbpcsearch",
+   5
+  ],
+  [
+   "https://wenku.docs.qq.com/detail?docType=0&amp;docId=JCY5SyRBpD&amp;client=qbpcsearch",
+   5
+  ],
+  [
+   "https://wenku.docs.qq.com/detail?docType=0&amp;docId=BxwTb1ofyg&amp;client=qbpcsearch",
+   5
+  ],
+  [
+   "https://wenku.docs.qq.com/detail?docType=0&amp;docId=DuN5uF9yw0&amp;client=qbpcsearch",
+   5
+  ],
+  [
+   "http://mp.weixin.qq.com/s?src=11&amp;timestamp=1790086119&amp;ver=6982&amp;signature=2jTednSGC2bDl58-Qp-y6IgdKjEbI1ZNLV4aIU59y1lJxNsC5Zk93KsCf0EovLsXrb6yjC5G46CsOwMb2vC42fLhJ52AAOqJdoPAB7HPWYqadwBZPRx6s-L50q*Llxgk&amp;new=1",
+   4
+  ],
+  [
+   "https://channels.weixin.qq.com/finder-preview/pages/feed?entry_card_type=48&amp;comment_scene=39&amp;appid=66&amp;token=UHUe6AgBEAEaIAgEEhwxNzkwMDg1OTEzMzk0NDY4NjE4NmpzN3paOTZJIhgIAxIUCAMSEK7vDmeqz2sXcZ38B%2FocM8c%3D&amp;entry_scene=66&amp;eid=export%2FUzFfBgAAxI2CPHB0ZCXwjMzT4DCtIriiVwUsVn03EfedUQ8GvpRbuXRxZg",
+   4
+  ],
+  [
+   "https://channels.weixin.qq.com/finder-preview/pages/feed?entry_card_type=48&amp;comment_scene=39&amp;appid=66&amp;token=AfMhhQgBEAEaIAgEEhwxNzkwMDg1OTEzMzk0NDY4NjE4NnBaOFB3RVgyIhgIAxIUCAMSECI%2FiUwEPnTP5%2BTI1ncTgpc%3D&amp;entry_scene=66&amp;eid=export%2FUzFfBgAAxPCAVH5BBjXxjszT4DCtIriiVwUsyOGEK9NJHZWMmjeuA85B4g",
+   4
+  ],
+  [
+   "https://channels.weixin.qq.com/finder-preview/pages/feed?entry_card_type=48&amp;comment_scene=39&amp;appid=66&amp;token=UofzgwgBEAEaIAgEEhwxNzkwMDg1OTEzMzk0NDY4NjE4NmFoSkhROU9tIhgIAxIUCAMSEGHU6UQFLgHXD3lnFmnv8d8%3D&amp;entry_scene=66&amp;eid=export%2FUzFfBgAAxIGnNAYkUlzojszT4DCtIriiVwUsadmzOVcQmIn-CWVhIFbHUA",
+   4
+  ],
+  [
+   "https://baike.baidu.com/item/2025%E5%B9%B4/7710344",
+   4
+  ]
+ ],
+ "fetched": {
+  "https://wenku.docs.qq.com/search?keyword=2025%E5%B9%B4%E9%AB%98%E8%80%83%E5%8C%96%E5%AD%A6%E8%AF%95%E9%A2%98%E5%8F%8A%E7%AD%94%E6%A1%88&amp;client=qbpcsearch": {
+   "file": "r3c_95ca4017",
+   "len": 41159,
+   "plain_len": 1475,
+   "cs": "utf-8",
+   "sig": 6,
+   "qnum": 0
+  },
+  "https://wenku.docs.qq.com/detail?docType=6&amp;docId=xRbqIalVZk&amp;client=qbpcsearch": {
+   "file": "r3c_049f2f44",
+   "len": 17794,
+   "plain_len": 19,
+   "cs": "utf-8",
+   "sig": 0,
+   "qnum": 0
+  },
+  "https://wenku.docs.qq.com/detail?docType=0&amp;docId=JCY5SyRBpD&amp;client=qbpcsearch": {
+   "file": "r3c_a97c3665",
+   "len": 17794,
+   "plain_len": 19,
+   "cs": "utf-8",
+   "sig": 0,
+   "qnum": 0
+  },
+  "https://wenku.docs.qq.com/detail?docType=0&amp;docId=BxwTb1ofyg&amp;client=qbpcsearch": {
+   "file": "r3c_5fbb5689",
+   "len": 17794,
+   "plain_len": 19,
+   "cs": "utf-8",
+   "sig": 0,
+   "qnum": 0
+  },
+  "https://wenku.docs.qq.com/detail?docType=0&amp;docId=DuN5uF9yw0&amp;client=qbpcsearch": {
+   "file": "r3c_5a1c26c1",
+   "len": 17794,
+   "plain_len": 19,
+   "cs": "utf-8",
+   "sig": 0,
+   "qnum": 0
+  },
+  "http://mp.weixin.qq.com/s?src=11&amp;timestamp=1790086119&amp;ver=6982&amp;signature=2jTednSGC2bDl58-Qp-y6IgdKjEbI1ZNLV4aIU59y1lJxNsC5Zk93KsCf0EovLsXrb6yjC5G46CsOwMb2vC42fLhJ52AAOqJdoPAB7HPWYqadwBZPRx6s-L50q*Llxgk&amp;new=1": {
+   "file": "r3c_a0646c02",
+   "len": 31613,
+   "plain_len": 85,
+   "cs": "UTF-8",
+   "sig": 0,
+   "qnum": 0
+  },
+  "https://channels.weixin.qq.com/finder-preview/pages/feed?entry_card_type=48&amp;comment_scene=39&amp;appid=66&amp;token=UHUe6AgBEAEaIAgEEhwxNzkwMDg1OTEzMzk0NDY4NjE4NmpzN3paOTZJIhgIAxIUCAMSEK7vDmeqz2sXcZ38B%2FocM8c%3D&amp;entry_scene=66&amp;eid=export%2FUzFfBgAAxI2CPHB0ZCXwjMzT4DCtIriiVwUsVn03EfedUQ8GvpRbuXRxZg": {
+   "file": "r3c_f700a51f",
+   "len": 2463,
+   "plain_len": 3,
+   "cs": "utf-8",
+   "sig": 0,
+   "qnum": 0
+  },
+  "https://channels.weixin.qq.com/finder-preview/pages/feed?entry_card_type=48&amp;comment_scene=39&amp;appid=66&amp;token=AfMhhQgBEAEaIAgEEhwxNzkwMDg1OTEzMzk0NDY4NjE4NnBaOFB3RVgyIhgIAxIUCAMSECI%2FiUwEPnTP5%2BTI1ncTgpc%3D&amp;entry_scene=66&amp;eid=export%2FUzFfBgAAxPCAVH5BBjXxjszT4DCtIriiVwUsyOGEK9NJHZWMmjeuA85B4g": {
+   "file": "r3c_9339b560",
+   "len": 2463,
+   "plain_len": 3,
+   "cs": "utf-8",
+   "sig": 0,
+   "qnum": 0
+  },
+  "https://channels.weixin.qq.com/finder-preview/pages/feed?entry_card_type=48&amp;comment_scene=39&amp;appid=66&amp;token=UofzgwgBEAEaIAgEEhwxNzkwMDg1OTEzMzk0NDY4NjE4NmFoSkhROU9tIhgIAxIUCAMSEGHU6UQFLgHXD3lnFmnv8d8%3D&amp;entry_scene=66&amp;eid=export%2FUzFfBgAAxIGnNAYkUlzojszT4DCtIriiVwUsadmzOVcQmIn-CWVhIFbHUA": {
+   "file": "r3c_8977b66b",
+   "len": 2463,
+   "plain_len": 3,
+   "cs": "utf-8",
+   "sig": 0,
+   "qnum": 0
+  }
+ }
+}

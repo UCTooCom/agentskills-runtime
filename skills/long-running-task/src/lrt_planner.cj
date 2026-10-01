@@ -43,6 +43,13 @@ public class LrtPlanner {
                     payloadMap["plan"] = enriched
                     payloadMap["planned_via"] = JsonValue.String("lrt-plan")
                     LrtPersistService.patchTaskPayload(taskId, payloadMap, userId, permArr)
+                    // §11.3 plan 类 JSONL（tasks.md 1000）：记录「目标 → 任务树」这一跳，
+                    // 供事后复盘规划是否失真（如 sub_goals 为空、缺口检测漏判）。
+                    let plFields = HashMap<String, JsonValue>()
+                    plFields["goal"] = JsonValue.String(goal)
+                    plFields["planned_via"] = JsonValue.String("lrt-plan")
+                    plFields["sub_goals"] = enriched.get("sub_goals", JsonValue.Null)
+                    LrtTraceLog.emitJsonl(LrtTraceLog.JSONL_TYPE_PLAN, taskId, "", "", 0, plFields)
                 }
                 let response = HashMap<String, JsonValue>()
                 response["errno"] = JsonValue.Number(0.0)
@@ -133,6 +140,16 @@ public class LrtPlanner {
         history.add(JsonValue.from(entry))
         patch["replan_history"] = JsonValue.from(history)
         LrtPersistService.patchTaskPayload(taskId, patch, userId, permArr)
+        // §11.3 replan 类 JSONL（tasks.md 1000）：数据层已写 replan_history，
+        // 这里补「可被采集器按行抓取」的出口。核心观测点是 preserved_count——
+        // 已完成子任务被重跑既浪费预算也可能把好结果覆盖成坏结果。
+        let rpFields = HashMap<String, JsonValue>()
+        rpFields["reason"] = JsonValue.String(if (reason.isEmpty()) { "unspecified" } else { reason })
+        rpFields["regenerated"] = JsonValue.Boolean(regenerated)
+        rpFields["preserved_count"] = JsonValue.Number(Float64(completed.size))
+        rpFields["new_goal"] = JsonValue.String(newGoal)
+        rpFields["replan_seq"] = JsonValue.Number(Float64(history.size))
+        LrtTraceLog.emitJsonl(LrtTraceLog.JSONL_TYPE_REPLAN, taskId, "", "", 0, rpFields)
 
         let pending = LrtPlanner.countPending(withConstraints)
         let response = HashMap<String, JsonValue>()

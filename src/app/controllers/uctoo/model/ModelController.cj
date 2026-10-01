@@ -12,11 +12,20 @@ public class ModelController {
     public func list(req: HttpRequest, res: HttpResponse): Unit {
         try {
             let providers = JsonArray()
+            // 【接入新模型通道必改点之二 · 2026-09-24】
+            // 这份名单是「管理后台模型列表」的数据源，必须与
+            // src/model/model_manager.cj 的 DEFAULT_PROVIDER_MAP **逐项对齐**：
+            // 只改 model_manager 不改这里，通道虽然能跑，但后台看不到、选不到。
+            // 2026-09-24 补入此前已接入却漏登记的 provider：
+            //   ark / siliconflow / google / openrouter / maas / sophnet / orbitai /
+            //   gmicloud / atomgit / evomap
             let providerNames = [
                 "deepseek", "openai", "ollama", "qwen", "stepfun",
                 "dashscope", "zhipu", "moonshot", "baichuan",
                 "minimax", "yi", "volcengine", "azure", "anthropic",
-                "gemini", "mistral", "groq", "tokendance"
+                "gemini", "mistral", "groq", "tokendance",
+                "ark", "siliconflow", "google", "openrouter", "maas",
+                "sophnet", "orbitai", "gmicloud", "atomgit", "evomap"
             ]
             for (name in providerNames) {
                 let obj = JsonObject()

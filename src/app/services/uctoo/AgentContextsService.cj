@@ -95,6 +95,9 @@ public class AgentContextsService {
             if (entity.deletedAt.isSome()) {
                 existingEntity.deletedAt = entity.deletedAt
             }
+            if (entity.taskId.isSome()) {
+                existingEntity.taskId = entity.taskId
+            }
 
             
             // 设置更新时间和ID

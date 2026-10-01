@@ -48,6 +48,7 @@ public enum LrtEventType {
     | GoalAchieved
     | ReviewRequired
     | MonitorAlert
+    | ArtifactReady
 
     /// 事件类型字符串（与前端约定的 `type` 字段值）
     public func wireName(): String {
@@ -62,6 +63,7 @@ public enum LrtEventType {
             case GoalAchieved => "goal_achieved"
             case ReviewRequired => "review_required"
             case MonitorAlert => "monitor_alert"
+            case ArtifactReady => "artifact_ready"
         }
     }
 }
@@ -348,6 +350,43 @@ public class LrtEventBridge {
         this.dispatch(data, sessionId, agentId)
     }
 
+    /**
+     * HTML 产物就绪（让长程任务产出的报告**直接进对话**）
+     *
+     * 背景：长程任务的交付物（解题报告 / 数据分析报告等）此前只登记进
+     * `long_running_task_artifact`，而那张表**只有文件路径**，对话里看不到内容，
+     * 用户得自己去 output 目录翻文件。
+     *
+     * 本事件把 **HTML 产物正文**送到前端：前端 `handleLrtEvent` 收到后 push 一条
+     * assistant 消息（`content.type='html_artifact'`），由 next-remoter 的
+     * `HtmlArtifact.vue` 以 iframe 沙箱渲染 —— 报告即以气泡形式出现在对话里。
+     *
+     * 为什么推正文而不是路径：产物落在本地磁盘（`<runtime>/skills/.../output/...`），
+     * 前端没有静态服务能访问这些路径，只给路径等于给不了内容。
+     *
+     * 体积约束由调用方把关（`LrtHostExecutor.MAX_HTML_ARTIFACT_BYTES`），
+     * 超限产物直接跳过，本方法不重复校验。
+     *
+     * @param title        产物文件名，用作前端卡片标题
+     * @param html         HTML 正文（完整文档）
+     * @param artifactPath 产物绝对路径（排查用，前端不渲染）
+     */
+    public func pushArtifactReady(
+        taskId: String,
+        sessionId: String,
+        agentId: String,
+        title: String,
+        html: String,
+        artifactPath: String,
+        traceId: String
+    ): Unit {
+        let data = this.buildLrtEvent(LrtEventType.ArtifactReady, taskId, agentId, traceId)
+        data.put("title", JsonString(title))
+        data.put("html", JsonString(html))
+        data.put("artifactPath", JsonString(artifactPath))
+        this.dispatch(data, sessionId, agentId)
+    }
+
     // ── 内部实现 ──────────────────────────────────────────────────
 
     /**
@@ -399,7 +438,22 @@ public class LrtEventBridge {
                     LogUtils.debug("[LrtEventBridge] SSE 管理器未注入，跳过 SSE 投递")
                 case Some(mgr) =>
                     if (mgr.hasConnection(sessionId)) {
-                        mgr.pushMessage(sessionId, "lrt_event", data.toString())
+                        // SSE 是**行协议**：SSEConnectionManager 的帧格式是
+                        // `id: N\nevent: T\ndata: ${data}\n\n`，而前端 parseSSEBlock
+                        // 只收以 `data:` 开头的行。data 里只要残留裸换行/回车，
+                        // 一帧就会被切成多段：后续各行没有 data: 前缀 → 被丢弃，
+                        // 剩下的残缺 JSON 连 JSON.parse 都过不了 → 整条事件静默丢失。
+                        //
+                        // stdx 的 JSON 序列化本应把控制字符转义掉（项目内
+                        // JsonString(x).toString() 就是既定转义原语），但库文档
+                        // 并未把它写进契约。因此在协议边界做一次**幂等加固**：
+                        // 已转义时串里没有裸换行，本步是空操作；万一没有转义，
+                        // 就地补成 \r / \n 转义序列，前端解析后仍得到原字符。
+                        var wire = data.toString()
+                        if (wire.contains("\n") || wire.contains("\r")) {
+                            wire = wire.replace("\r", "\\r").replace("\n", "\\n")
+                        }
+                        mgr.pushMessage(sessionId, "lrt_event", wire)
                     }
             }
         } catch (e: Exception) {

@@ -112,8 +112,20 @@ public class AgentTasksService {
             if (entity.deletedAt.isSome()) {
                 existingEntity.deletedAt = entity.deletedAt
             }
+            if (entity.ownerUserId.isSome()) {
+                existingEntity.ownerUserId = entity.ownerUserId
+            }
+            if (entity.aipSessionId.isSome()) {
+                existingEntity.aipSessionId = entity.aipSessionId
+            }
+            if (entity.aipTaskId.isSome()) {
+                existingEntity.aipTaskId = entity.aipTaskId
+            }
+            if (entity.aipTaskState.isSome()) {
+                existingEntity.aipTaskState = entity.aipTaskState
+            }
 
-            
+
             // 设置更新时间和ID
             existingEntity.updatedAt = DateTime.now()
             existingEntity.id = entityId

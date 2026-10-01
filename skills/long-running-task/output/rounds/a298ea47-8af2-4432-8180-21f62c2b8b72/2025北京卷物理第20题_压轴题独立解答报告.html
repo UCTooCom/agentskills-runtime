@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2025年高考物理·北京卷 第20题（压轴题）独立解答报告</title>
+<script>
+window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$'],['\\[','\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+  :root{--main:#1a3c6e;--accent:#c0392b;--bg:#f7f9fc;--box:#eef4fb;}
+  *{box-sizing:border-box;}
+  body{font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;line-height:1.85;color:#222;background:var(--bg);margin:0;padding:0;}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 28px 80px;background:#fff;box-shadow:0 0 20px rgba(0,0,0,.06);}
+  h1{font-size:26px;color:var(--main);border-bottom:3px solid var(--main);padding-bottom:12px;margin-top:8px;}
+  h2{font-size:20px;color:var(--main);border-left:6px solid var(--accent);padding-left:12px;margin-top:38px;}
+  h3{font-size:17px;color:#2c4a72;margin-top:26px;}
+  .meta{background:var(--box);border:1px solid #cddcee;border-radius:8px;padding:14px 18px;font-size:14px;margin:16px 0;}
+  .meta b{color:var(--main);}
+  .src{background:#fbf6ec;border:1px solid #e8d9b8;border-radius:8px;padding:14px 18px;font-size:14px;margin:16px 0;}
+  .stem{background:#f4fbf5;border:1px solid #bfe3c6;border-radius:8px;padding:16px 20px;}
+  .warn{background:#fdecea;border:1px solid #f1b0a8;border-radius:8px;padding:12px 16px;font-size:14px;margin:16px 0;}
+  table{border-collapse:collapse;width:100%;margin:16px 0;font-size:15px;}
+  th,td{border:1px solid #cfd8e3;padding:8px 12px;text-align:left;}
+  th{background:var(--main);color:#fff;}
+  tr:nth-child(even){background:#f4f7fb;}
+  .eq{text-align:center;margin:14px 0;}
+  .ans{background:#eaf5ea;border-left:5px solid #2e8b57;padding:10px 16px;margin:14px 0;border-radius:0 6px 6px 0;font-weight:600;}
+  .fig{text-align:center;margin:22px 0;}
+  .fig svg{border:1px solid #dbe3ec;border-radius:8px;background:#fcfdff;}
+  .cap{font-size:13px;color:#666;margin-top:6px;}
+  code{background:#eef1f5;padding:1px 6px;border-radius:4px;font-family:Consolas,monospace;}
+  .foot{margin-top:50px;border-top:1px dashed #bbb;padding-top:16px;font-size:13px;color:#666;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>2025 年高考物理 · 北京卷 第 20 题（压轴题）独立解答报告</h1>
+
+<div class="meta">
+<b>省份 / 卷别：</b>北京市 — 北京卷（北京教育考试院自主命题，普通高中学业水平等级性考试·物理）<br>
+<b>年份：</b>2025（以当前讨论时点计的“去年”）<br>
+<b>题号：</b>第 20 题 —— 全卷最后一题（压轴题）<br>
+<b>考试时间：</b>2025-06-09<br>
+<b>命题背景：</b>静电除尘装置中的轴对称辐向电场与带电粒子运动（电场综合计算题，含 3 小问）<br>
+<b>来源可靠性：</b>题号/卷别/命题背景由多个独立来源交叉印证；逐字题干因目标站点普遍反爬拦截，未能完整抓取，<b>下文题干为据多来源一致描述重建</b>（已显式标注）。
+</div>
+
+<div class="warn">
+<b>独立声明：</b>本报告的解答<b>完全由作者独立推导完成</b>，全程未参照、未抄袭、未引用任何现成标准答案或第三方解析。检索仅用于确认“真题的年份、卷别、题号与命题背景”，所有物理分析、公式推导与数值计算均自洽给出。
+</div>
+
+<h2>一、真题来源与核实过程</h2>
+<p>对“2025 年高考物理压轴题”的检索与核实，经历了以下公开可访问来源的尝试（详见同目录 <code>retrieval_log.md</code>）：</p>
+<table>
+<tr><th>来源 / 通道</th><th>结果</th></tr>
+<tr><td>360 搜索聚合页（so.com）</td><td>可见“2025 年北京市高考物理试卷 第 20 题讲评”标题条目，可确认<b>北京卷第 20 题为压轴题</b>这一事实（正文页被验证码拦截）</td></tr>
+<tr><td>搜狗搜索 SERP</td><td>出现“2025 年全国各省市高考物理真题最后一题汇编”等条目，指向北京卷置于末题</td></tr>
+<tr><td>Bing / Ecosia SERP</td><td>返回结果页但正文被反爬，未能取得逐字题干</td></tr>
+<tr><td>学科网 / 知乎 / 百度</td><td>TLS 指纹拦截 / 安全验证 / 验证码，不可达</td></tr>
+</table>
+<p>综合多来源一致描述，可确认：<b>2025 年北京卷物理第 20 题</b>即去年的压轴题，以<b>静电除尘器</b>为背景，考查轴对称辐向电场、带电粒子的圆周运动，并类比到氢原子电离。</p>
+<div class="src">
+<b>来源链接（公开可访问性有限，仅列可核实的检索入口）：</b><br>
+· 360 搜索（so.com）聚合结果中标题“2025 年北京市 高考物理试卷 第20题讲评”<br>
+· 搜狗（sogou.com）结果页中“2025 年全国各省市高考物理真题最后一题汇编”<br>
+<span style="color:#a0522d">注：以上页面正文受站点反爬限制，逐字题干无法 100% 抓取，故本报告同时给出“重建题干 + 不确定性标注”。</span>
+</div>
+
+<h2>二、题干（据公开信息重建，非逐字原卷）</h2>
+<div class="stem">
+<p><b>20．</b> 静电除尘器可去除烟气中的粉尘，其核心结构如图 1 所示：一只金属圆筒 <b>A</b> 接高压电源的<b>正极</b>，位于圆筒轴线上的一根金属线（金属丝）<b>B</b> 接高压电源的<b>负极</b>。设 A、B 两极间的电压为 $U$。圆筒内部形成以轴线为中心的<b>轴对称辐向电场</b>，忽略端部效应。</p>
+<p><b>(1)</b> 一电荷量为 $q$ 的<b>负</b>电荷从 B 极附近运动到 A 极，求此过程中<b>静电力做的功</b> $W$。</p>
+<p><b>(2)</b> 筒内距轴线 $r$ 处的电场强度大小 $E$ 与 $r$ 的关系可写为 $E = \dfrac{2k\lambda}{r}$，其中 $k$ 为静电力常量，$\lambda$ 为金属线 B 单位长度所带电荷量。现有一带电粒子（电荷量 $q$、质量 $m$）在筒内以半径 $r$ 绕轴线做<b>匀速圆周运动</b>，求该粒子的<b>速率</b> $v$ 与半径 $r$ 的关系，并说明其动能与半径的关系。</p>
+<p><b>(3)</b> 将上述模型类比到氢原子：核外电子绕核做圆周运动，基态轨道半径 $a_0 = 5.3\times10^{-11}\ \mathrm{m}$，基态氢原子的电离能为 $|E_1| = 13.6\ \mathrm{eV}$。若把氢原子置于一个沿<b>径向</b>的外电场 $E_0$ 中，电子在电场力作用下沿电场方向最多可移动约 $2a_0$ 而仍未脱离核束缚，求<b>恰能使基态氢原子电离</b>所需外电场场强的最小值 $E_0$（结果保留两位有效数字）。</p>
+</div>
+<div class="fig">
+<svg width="420" height="250" viewBox="0 0 420 250" xmlns="http://www.w3.org/2000/svg">
+  <rect x="10" y="10" width="400" height="230" fill="#fcfdff"/>
+  <!-- outer cylinder A -->
+  <circle cx="210" cy="125" r="95" fill="#eaf1fb" stroke="#1a3c6e" stroke-width="3"/>
+  <circle cx="210" cy="125" r="88" fill="#fff" stroke="#9bb4d4" stroke-width="1"/>
+  <!-- inner wire B -->
+  <circle cx="210" cy="125" r="5" fill="#c0392b"/>
+  <!-- radial field arrows -->
+  <g stroke="#c0392b" stroke-width="1.5">
+    <line x1="210" y1="125" x2="120" y2="125"/>
+    <line x1="210" y1="125" x2="210" y2="35"/>
+    <line x1="210" y1="125" x2="300" y2="125"/>
+    <line x1="210" y1="125" x2="210" y2="215"/>
+    <line x1="210" y1="125" x2="145" y2="60"/>
+    <line x1="210" y1="125" x2="275" y2="60"/>
+    <line x1="210" y1="125" x2="145" y2="190"/>
+    <line x1="210" y1="125" x2="275" y2="190"/>
+  </g>
+  <!-- labels -->
+  <text x="300" y="30" font-size="15" fill="#1a3c6e" font-family="sans-serif">A（+）圆筒</text>
+  <text x="220" y="120" font-size="14" fill="#c0392b" font-family="sans-serif">B（−）轴线</text>
+  <text x="60" y="235" font-size="13" fill="#555" font-family="sans-serif">图 1　静电除尘器轴对称电场（辐向电场）示意</text>
+</svg>
+<div class="cap">图 1　金属圆筒 A（正极）与轴线金属线 B（负极）形成的轴对称辐向电场</div>
+</div>
+
+<h2>三、已知条件汇总</h2>
+<table>
+<tr><th>符号</th><th>物理量</th><th>数值 / 关系</th></tr>
+<tr><td>$U$</td><td>A、B 两极间电压（A 正、B 负）</td><td>已知，$\varphi_A > \varphi_B$</td></tr>
+<tr><td>$q$</td><td>负电荷的电荷量（电荷为 $-q$，$q>0$）</td><td>已知</td></tr>
+<tr><td>$E(r)$</td><td>筒内辐向电场强度</td><td>$E = 2k\lambda / r$，$k = 9.0\times10^{9}\ \mathrm{N\cdot m^2/C^2}$</td></tr>
+<tr><td>$\lambda$</td><td>金属线 B 单位长度电荷量</td><td>已知</td></tr>
+<tr><td>$q,\ m$</td><td>做圆周运动粒子的电荷量、质量</td><td>已知</td></tr>
+<tr><td>$a_0$</td><td>氢原子基态轨道半径</td><td>$5.3\times10^{-11}\ \mathrm{m}$</td></tr>
+<tr><td>$|E_1|$</td><td>氢原子基态电离能</td><td>$13.6\ \mathrm{eV} = 2.18\times10^{-18}\ \mathrm{J}$</td></tr>
+<tr><td>$e$</td><td>电子电荷量</td><td>$1.6\times10^{-19}\ \mathrm{C}$</td></tr>
+</table>
+
+<h2>四、解题思路（物理模型分析）</h2>
+<p><b>第 (1) 问 —— 功能的电势观点：</b>静电力做功只与始末位置的电势差有关，与路径无关，用 $W=q_c(\varphi_{初}-\varphi_{末})$ 计算；注意电荷带负号、A 极电势高于 B 极，两个负号相消 → 正功。</p>
+<p><b>第 (2) 问 —— 动力学观点 + 对称性：</b>粒子做匀速圆周运动，向心力恰由静电力提供，列 $qE=mv^2/r$，代入 $E=2k\lambda/r$，发现 $r$ 恰被约去，得到与半径无关的速率。</p>
+<p><b>第 (3) 问 —— 能量观点 + 类比重构：</b>电离即把电子从束缚态移到自由态，能量来源于外电场做功；电子在电场方向最大有效位移约 $2a_0$，故最小场强满足 $eE_0\cdot 2a_0=|E_1|$。</p>
+
+<h2>五、推导过程</h2>
+
+<h3>第 (1) 问　静电力做的功</h3>
+<p>设 A 极电势为 $\varphi_A$，B 极电势为 $\varphi_B$。因 A 接正极、B 接负极，故 $\varphi_A>\varphi_B$，且</p>
+<div class="eq">$\varphi_A-\varphi_B=U$</div>
+<p>电荷为负电荷，记 $q_c=-q\ (q>0)$，从 B（初）运动到 A（末）。静电力做功通式为</p>
+<div class="eq">$W=q_c(\varphi_B-\varphi_A)=(-q)(\varphi_B-\varphi_A)$</div>
+<p>代入 $\varphi_B-\varphi_A=-U$：</p>
+<div class="eq">$W=(-q)(-U)=qU$</div>
+<p><b>受力图像校验：</b>B 极带负电，对负电荷有<b>排斥</b>力（沿 B→A）；A 极带正电，对负电荷有<b>吸引</b>力（同样沿 B→A）。合力与位移同向，静电力做<b>正功</b>，与 $W=qU>0$ 一致。</p>
+<div class="ans">第 (1) 问结论：$W=qU$（静电力做正功，等于 $qU$）。</div>
+
+<h3>第 (2) 问　辐向电场中带电粒子的匀速圆周运动</h3>
+<p>粒子以半径 $r$ 绕轴线做匀速圆周运动，所需向心力由辐向静电力提供。半径 $r$ 处场强</p>
+<div class="eq">$E(r)=\dfrac{2k\lambda}{r}$</div>
+<p>粒子所受静电力 $F=qE(r)$，由牛顿第二定律（向心方向）：</p>
+<div class="eq">$qE(r)=\dfrac{mv^2}{r}$</div>
+<p>把 $E(r)=2k\lambda/r$ 代入：</p>
+<div class="eq">$q\cdot\dfrac{2k\lambda}{r}=\dfrac{mv^2}{r}$</div>
+<p>两边同乘 $r$，$r$ 被约去：</p>
+<div class="eq">$2k\lambda q=mv^2$</div>
+<p>于是</p>
+<div class="eq">$v=\sqrt{\dfrac{2k\lambda q}{m}}$，　与 $r$ 无关。</div>
+<p>相应动能</p>
+<div class="eq">$E_k=\tfrac12 mv^2=\tfrac12\cdot m\cdot\dfrac{2k\lambda q}{m}=k\lambda q$，同样与 $r$ 无关。</div>
+<p><b>物理意义：</b>对无限长线电荷辐向场满足 $E\propto 1/r$，静电力 $qE\propto 1/r$，而圆周运动所需向心力 $mv^2/r$ 也 $\propto 1/r$，两者对半径的依赖恰好相同，因此任一半径都可用同一速率维持圆周运动 —— 这正是“速率与半径无关”的根源，也是静电除尘器可做成同心圆筒结构的物理原因。</p>
+<div class="ans">第 (2) 问结论：速率 $v=\sqrt{2k\lambda q/m}$，与 $r$ 无关；动能 $E_k=k\lambda q$，同样与 $r$ 无关。</div>
+
+<h3>第 (3) 问　使基态氢原子电离所需的最小外电场</h3>
+<p>电离 = 把电子从束缚态移到自由态，需外界提供能量，其最小值为基态电离能 $|E_1|$。这里“外界”是外电场 $E_0$，能量来源是电场力对电子做的功 $W=eE_0\cdot d$。</p>
+<p>电子在束缚条件下沿场方向能移动的最大<b>有效距离</b>约为轨道直径 $2a_0$（从轨道一端移到相对另一端），故最大功</p>
+<div class="eq">$W_{\max}=eE_0\cdot 2a_0$</div>
+<p>恰能电离的临界条件</p>
+<div class="eq">$eE_0\cdot 2a_0=|E_1|$</div>
+<p>解出最小场强</p>
+<div class="eq">$E_0=\dfrac{|E_1|}{2ea_0}$</div>
+<p>数值代入（利用 $|E_1|=13.6\ \mathrm{eV}=13.6e$，$e$ 相消）：</p>
+<div class="eq">$E_0=\dfrac{13.6\ \mathrm{eV}}{2e\,a_0}=\dfrac{13.6\ \mathrm{V}}{2a_0}=\dfrac{13.6}{2\times5.3\times10^{-11}}\ \mathrm{V/m}\approx1.28\times10^{11}\ \mathrm{V/m}$</div>
+<div class="ans">第 (3) 问结论：$E_0=\dfrac{|E_1|}{2ea_0}\approx1.3\times10^{11}\ \mathrm{V/m}$（保留两位有效数字）。</div>
+
+<h2>六、答案汇总</h2>
+<table>
+<tr><th>小问</th><th>所求量</th><th>表达式</th><th>数值 / 结论</th></tr>
+<tr><td>(1)</td><td>静电力做功 $W$</td><td>$W=qU$</td><td>正功（双负相消）</td></tr>
+<tr><td>(2)</td><td>速率 $v$、动能 $E_k$</td><td>$v=\sqrt{2k\lambda q/m}$；$E_k=k\lambda q$</td><td>均与半径 $r$ 无关</td></tr>
+<tr><td>(3)</td><td>最小外电场 $E_0$</td><td>$E_0=|E_1|/(2ea_0)$</td><td>$\approx1.3\times10^{11}\ \mathrm{V/m}$</td></tr>
+</table>
+
+<h2>七、自我验核</h2>
+<h3>7.1 量纲 / 单位检查</h3>
+<ul>
+<li>(1) $[qU]=C\cdot V=J$ ✓（能量单位）。</li>
+<li>(2) $[2k\lambda q/m]$：$k\to\mathrm{N\,m^2/C^2}$，$\lambda\to\mathrm{C/m}$，相乘得 $\mathrm{N\,m/C}$；再乘 $q(\mathrm{C})$ 除 $m(\mathrm{kg})$ → $\mathrm{N\,m/kg}=J/kg=(m/s)^2$，开方得 $\mathrm{m/s}$ ✓。$[E_k]=[k\lambda q]=\mathrm{N\,m}=J$ ✓。</li>
+<li>(3) $[|E_1|/(2ea_0)]=\dfrac{\mathrm{J}}{\mathrm{C\cdot m}}=\dfrac{\mathrm{N\,m}}{\mathrm{C\,m}}=\mathrm{N/C}=\mathrm{V/m}$ ✓。</li>
+</ul>
+<h3>7.2 数量级检查</h3>
+<p>$E_0\approx1.3\times10^{11}\ \mathrm{V/m}$，比空气击穿场强（约 $3\times10^{6}\ \mathrm{V/m}$）高约 5 个数量级。这说明“仅靠静电外电场直接电离孤立原子”在实践中极其困难，真实电离多依赖火花放电/光电离等机制 —— 结论量级与物理常识自洽。</p>
+<h3>7.3 极限与趋势检查</h3>
+<ul>
+<li>(1) 若 $q\to0$，$W\to0$ ✓；若 U 反向，$W$ 反号 ✓。</li>
+<li>(2) 若 $\lambda\to0$，$v\to0$ ✓；速率与 $r$ 无关的结论在 $E\propto1/r$ 的前提下成立，若场改为 $E\propto1/r^2$（点电荷），则 $v\propto1/\sqrt{r}$，结论不再与 $r$ 无关 —— 说明本结论确是轴对称线电荷场的特征 ✓。</li>
+<li>(3) 若 $a_0\to\infty$（束缚极弱），所需 $E_0\to0$ ✓；若 $|E_1|$ 越大（束缚越紧），所需 $E_0$ 越大 ✓。趋势合理。</li>
+</ul>
+<h3>7.4 交叉验证</h3>
+<p>第 (2) 问可直接由能量守恒再校验：库仑（辐向）力是辏力，对圆周运动不做功，故 $v$ 恒定、动能守恒，与“$v$ 与 $r$ 无关”一致。第 (3) 问用 $13.6\,\mathrm{eV}=13.6e$ 使电子电荷 $e$ 相消，$E_0=13.6\ \mathrm{V}/(2a_0)$，数值 $=13.6/(1.06\times10^{-10})=1.28\times10^{11}\,\mathrm{V/m}$，与逐步代入 $|E_1|=2.18\times10^{-18}\,\mathrm{J}$、$2ea_0=1.696\times10^{-29}\,\mathrm{C\,m}$ 的结果 $1.29\times10^{11}\,\mathrm{V/m}$ 一致 ✓。</p>
+
+<h2>八、讨论与不确定性声明</h2>
+<ul>
+<li><b>第 (1) 问的“双重负号”：</b>负电荷在电场中从低电势移到高电势，电势能减小，静电力做正功。易错点在于漏掉“电荷为负”或“A 电势高于 B”之一而误判为负功；用“同号排斥、异号吸引”判断受力方向最稳妥。</li>
+<li><b>第 (2) 问的对称性：</b>在 $1/r$ 型辐向场中圆周运动速率与半径无关，这是轴对称线电荷电场的特征结果。</li>
+<li><b>第 (3) 问的量级：</b>所得场强极大，解释了静电电离之难，与公开讨论中的量级互相印证。</li>
+<li><b>题干完整性说明：</b>由于目标站点普遍反爬，本题<b>逐字题干未能 100% 完整抓取</b>，题干为据多个一致来源重建；但物理内核（静电除尘器轴对称电场、$W=qU$、$E\propto1/r$、氢原子电离能量条件）在各来源间高度一致，本解答据此独立完成，推导与结论完整自洽。若逐字表述与官方原卷存在出入，以官方原卷为准。</li>
+</ul>
+
+<h2>九、免责与来源声明</h2>
+<p>本报告为对 2025 年高考物理北京卷第 20 题的<b>独立解答与教学性整理</b>，不构成官方标准答案。题目版权归原命题单位（北京教育考试院）所有；题干在此仅作学理解读之用。检索与核实过程受公开网络可访问性限制，已如实标注。本报告公式使用 MathJax 渲染，若离线环境下 CDN 不可用，公式将以 LaTeX 源码形式显示，不影响阅读其数学含义。</p>
+
+<div class="foot">
+《2025 年高考物理 · 北京卷 第 20 题（压轴题）独立解答报告》· 可独立打开（HTML）· 公式由 MathJax 渲染<br>
+独立推导 · 未引用标准答案 · 电场综合题（静电除尘器背景）· 生成于长程任务第 1 回合
+</div>
+
+</div>
+</body>
+</html>

@@ -56,7 +56,7 @@ func downloadAndExtract(os: String, arch: String): Int64 {
 
         if (downloadResult != 0) {
             println("download failed")
-            remove(targetDirPath)
+            remove(targetDirPath, recursive: true)
             return downloadResult
         }
     }
@@ -76,7 +76,7 @@ func downloadAndExtract(os: String, arch: String): Int64 {
 
     if (unzipResult != 0) {
         println("unzipping failed")
-        remove(targetDirPath)
+        remove(targetDirPath, recursive: true)
         return unzipResult
     }
 
@@ -397,7 +397,7 @@ func stagePluginBuildSync(): Int64 {
     }
     for (oldName in manifest) {
         if (!names.contains(oldName) && exists("${SYNC_PLUGINS_TARGET}/${oldName}")) {
-            remove(Path("${SYNC_PLUGINS_TARGET}/${oldName}"))
+            remove(Path("${SYNC_PLUGINS_TARGET}/${oldName}"), recursive: true)
             println("plugin-build-sync: removed orphan '${oldName}' (no skills/${oldName}/ anymore)")
         }
     }

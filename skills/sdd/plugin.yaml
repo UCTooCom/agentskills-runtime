@@ -1,0 +1,79 @@
+name: sdd
+version: 1.0.0
+mode: process
+# 注意：不要写 protocol 字段。plugin_config.cj 无 protocol 解析逻辑，写了会被静默忽略；
+# L3 进程轨传输固定为 stdio（与 long-running-task 同款契约）。
+# 注意：command 是「相对**宿主工作目录**」的路径，不是相对插件目录！
+# CordisHostManager.resolvePluginCommand 直接把 `${cwd}/${command}` 交给 launch()，
+# 不做存在性校验、也没有 skills/{name}/ 兜底补全。两种部署形态都带 skills/sdd/ 前缀。
+command: ./skills/sdd/target/release/bin/skill_sdd.exe
+description: SDD 规范驱动开发 L3 进程隔离轨插件（六步编排 + 六子 agent 派生 + 五闸口人在回路）
+enabled: true
+order: 8
+autoRestart: true
+config:
+  # 六步固定；研究步是否执行由入口 enable_research 决定（COMPOSITION condition）
+  maxRounds: 6
+  maxRoundDurationMs: 1800000
+  maxTaskDurationMs: 86400000
+  maxConcurrentTasks: 20
+  concurrentable: false
+  checkpointStrategy: "per-stage"
+  degradationChain:
+    - "cangjie_coder"
+    - "fullstack_codegen"
+    - "template"
+  # 编码产物质量闸门（REQ-SDD-006）：未通过禁止标记完成
+  qualityGate: true
+  # REQ-SDD-012-A 派单结果契约校验
+  contractVerifyEnabled: true
+  # 自动重派上限：失败后重派 1 次，仍失败转人工闸口（禁止无限重试）
+  contractVerifyMaxAttempts: 2
+  # REQ-SDD-012-B 派生成本账本
+  costLedgerEnabled: true
+  # 决策 JSONL 行日志（走 stderr，L3 stdout 被 stdio RPC 独占）
+  decisionJsonlEnabled: true
+env:
+  # 技能根目录绝对路径（推荐设置）。用于解析 templates/ 与阶段文档落盘根目录，
+  # 使 COMPOSITION.yaml 里的 specs/${input.feature_name} 相对路径正确落盘。
+  SDD_SKILL_ROOT: ""
+  # 阶段文档落盘根目录（覆盖时为绝对路径；留空则用 runtime 自有 specs/）
+  SDD_SPECS_DIR: ""
+# 全部需访问表。未在此白名单的表 host.db 调用会被拒绝。
+# 既有表 5 张（agents 为只读，用于查子 agent 定义）+ 本工程新增 2 张。
+# 新增范围严格受 spec.md §6.7 约束：新增表 ≤2、既有表新增列 ≤2，不得再扩张。
+tableWhitelist:
+  - agent_tasks
+  - agent_contexts
+  - long_running_task_artifact
+  - agent_approvals
+  - agents
+  - sdd_projects
+  - sub_agent_invocations
+routes:
+  # ── 六步生成（对应 COMPOSITION.yaml 的 plugin_route）──
+  - method: POST
+    path: /api/v1/uctoo/sdd/gen-research
+  - method: POST
+    path: /api/v1/uctoo/sdd/gen-spec
+  - method: POST
+    path: /api/v1/uctoo/sdd/gen-design
+  - method: POST
+    path: /api/v1/uctoo/sdd/gen-task
+  - method: POST
+    path: /api/v1/uctoo/sdd/gen-code
+  - method: POST
+    path: /api/v1/uctoo/sdd/gen-test
+  # ── 子 agent 派生（主 agent 按名派生 skills/sdd/agents/ 下的子 agent）──
+  - method: POST
+    path: /api/v1/uctoo/sdd/spawn-subagent
+  # ── 闸口决策回执（confirm/revise/abandon）──
+  - method: POST
+    path: /api/v1/uctoo/sdd/review
+  # ── 工程实例查询（读 sdd_projects，design §2.2.1）──
+  - method: GET
+    path: /api/v1/uctoo/sdd/projects/:feature_name
+# 说明：七张表均经 host.db 服务代理读写（cordis_host_services）。
+# 两张新表的**宿主侧五层模块**（Model/DAO/Service/Controller/Route）已由 crudgen 确定性生成
+# （见 logs/crud.md），故本插件不再重复暴露它们的通用 CRUD 路由——
+# 宿主侧写入只走 Service 语义方法，前端写入口按 ADR-001 v2 关闭。

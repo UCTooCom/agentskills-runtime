@@ -205,15 +205,24 @@ public class AgentPersistenceEventHandler {
                     // Ch0 中断语义：状态必须由终止原因推导，不能一律写 completed(2)。
                     // 此前硬编码 2 导致「步数耗尽未闭环」也被记成成功完成，
                     // 使 resolveTaskStatus 形同虚设（从未被调用）。
-                    let finalStatus: Int32 = match (event.agentResponse) {
-                        case Some(resp) => resolveTaskStatus(resp)
-                        case None => 2
+                    // 2026-09-20 修复：event.agentResponse 为 None 意味着执行线程被未捕获
+                    // 异常杀死（ReactExecutor.asyncRun 已兜底，但 AsyncAgentResponse.next()
+                    // 自身的 catch 仍可能走到 None 分支）。此前这里写 2(completed) 但
+                    // result 字段不设置 → 前端看到 status=2 却 result=NULL，永远 loading。
+                    // 现改为 status=3(failed) 并写入可读的失败原因。
+                    // 两分支必须产出同一元组类型 (Int32, Option<String>)，否则 match 结果不是元组、
+                    // 无法用元组模式解构（报 "initializer isn't a tuple to match tuple pattern"）。
+                    // None 分支的整数字面量须显式写成 Int32（3i32），否则默认 Int64 与
+                    // resolveTaskStatus 返回的 Int32 不一致，破坏分支类型统一。
+                    let (finalStatus, resultContent) = match (event.agentResponse) {
+                        case Some(resp) =>
+                            (resolveTaskStatus(resp), Some(toJsonString(resp.content)))
+                        case None =>
+                            (3i32, Some(toJsonString("任务异常终止：未产生 AgentResponse（执行线程崩溃或连接中断）。请查看 runtime 日志定位根因。")))
                     }
                     po.status = Some(finalStatus)
                     po.completedAt = Some(DateTime.now())
-                    if (let Some(resp) <- event.agentResponse) {
-                        po.result = Some(toJsonString(resp.content))
-                    }
+                    po.result = resultContent
                     let updateResult = DbSerialLock.withLock({ => tasksService.update(taskId, po) })
                     if (updateResult.success) {
                         activeTasks.remove(agentName)

@@ -3,7 +3,7 @@ name: due-diligence-agent
 description: 企业信用与风控尽调智能体 —— 自动采集天眼查企业数据、股权穿透、风险分级、生成结构化尽调报告并入库。触发词："尽调"、"企业尽调"、"信用尽调"、"风控尽调"、"供应商尽调"、"客户授信"、"投资尽调"、"竞对分析"、"合规排查"、"Due Diligence"、"KYB"。
 license: MIT
 version: "1.0.0"
-compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request），脚本执行需 Python 3.8+ + requests 库，天眼查 MCP 凭证（TIANYANCHA_MCP_TOKEN）
+compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request），脚本执行需 Node.js v23.10.0（原生 TypeScript 支持，优先）或 Python 3.8+ + requests 库（降级备份），天眼查 MCP 凭证（TIANYANCHA_MCP_TOKEN）
 metadata:
   author: UCToo Team
   version: "1.0.0"
@@ -37,7 +37,7 @@ allowed-tools: network, filesystem, cli
 
 对企业名单进行非空校验、首尾空白清洗、非法字符标注、自动去重。
 
-- **脚本**：`scripts/validate_enterprise_list.py`
+- **脚本**：`scripts/validate_enterprise_list.ts`（优先） / `.py`（降级）
 - **输入**：企业名单（逗号分隔或文件）
 - **输出**：清洗后名单 + 无效条目清单
 - **验收**：空名单报错；重复企业去重并提示；非法条目标注
@@ -61,7 +61,7 @@ allowed-tools: network, filesystem, cli
 
 沿股权关系逐层穿透，计算直接/间接股东、持股比例与路径、最终受益人。
 
-- **脚本**：`scripts/penetrate_equity.py`
+- **脚本**：`scripts/penetrate_equity.ts`（优先） / `.py`（降级）
 - **输入**：`shareholder-info` 返回的股权树 JSON
 - **输出**：穿透结果 JSON（持股比例/穿透层级/持股路径/是否最终受益人）
 - **约束**：防循环（命中已访问节点终止）、层级上限 `--max-depth`（默认 5）
@@ -70,7 +70,7 @@ allowed-tools: network, filesystem, cli
 
 从多源风险数据采集风险条目，按明确规则分级（高/中/低），附可解释依据。
 
-- **脚本**：`scripts/tier_risks.py`
+- **脚本**：`scripts/tier_risks.ts`（优先） / `.py`（降级）
 - **输入**：`dd-fetch` 返回的风险数据
 - **输出**：分级风险 JSON（risk_type/risk_level/level_basis/risk_description/source_tool）
 - **规则**：司法案件 → 高/中/低（按金额/严重程度）；行政处罚 → 中/低；经营异常 → 低
@@ -80,10 +80,11 @@ allowed-tools: network, filesystem, cli
 
 汇编四部分结构化尽调报告，含免责声明。
 
-- **脚本**：`scripts/generate_dd_report.py`
+- **脚本**：`scripts/generate_dd_report.ts`（优先） / `.py`（降级）
 - **四部分**：① 企业基本信息 ② 股权结构含穿透 ③ 风险清单分级标注 ④ 结论与建议
 - **免责声明**："本报告仅供参考，不构成投资/授信/准入决策建议"
 - **格式**：Markdown（核心）/ HTML / DOCX
+- **DOCX 说明**：docx 为 **Python-only 能力**——TS 版本跳过 docx 输出并打印显式警告（Node 无内置 docx 库）；如需 docx 请降级使用 Python 版本（需 `pip install python-docx`）
 - **降级**：LLM 不可用时降级模板生成
 
 ### Step 6：幂等落库（dd-save）
@@ -97,17 +98,37 @@ allowed-tools: network, filesystem, cli
   - 报告表：`enterprise_id` + `report_format`
 - **行级权限**：`creator = userId`（INSERT 时显式设置）
 
+## 脚本运行策略
+
+所有脚本同时提供 **TypeScript 版本（.ts）** 和 **Python 版本（.py）**：
+
+- **优先 TypeScript**：`node --experimental-strip-types scripts/<script>.ts [参数]`（需 Node.js v23.10.0+）
+- **降级 Python**：`python scripts/<script>.py [参数]`（需 Python 3.8+ + requests 库）
+
+降级规则：
+- 编排脚本（`run_batch_dd` / `run_dd_pipeline`）内部调用子脚本时，**先尝试 .ts 版本，执行失败时自动降级到 .py 版本**
+- 也可通过环境变量 `DD_USE_PYTHON=1` 强制全程使用 Python 版本
+- docx 格式输出：Node.js 无内置 docx 库，TS 版本降级跳过（与 Python 中 python-docx 未安装时行为一致），md/html 格式完全可用
+
 ## 使用方式
 
 ### 单企业尽调
 
 ```bash
+# TypeScript（优先）
+node --experimental-strip-types scripts/run_batch_dd.ts --enterprises "腾讯科技（深圳）有限公司" --scene supplier --outdir output/
+
+# Python（降级）
 python scripts/run_batch_dd.py --enterprises "腾讯科技（深圳）有限公司" --scene supplier --outdir output/
 ```
 
 ### 批量尽调
 
 ```bash
+# TypeScript（优先）
+node --experimental-strip-types scripts/run_batch_dd.ts --enterprises "企业A,企业B,企业C" --scene investment --outdir output/
+
+# Python（降级）
 python scripts/run_batch_dd.py --enterprises "企业A,企业B,企业C" --scene investment --outdir output/
 ```
 

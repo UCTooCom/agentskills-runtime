@@ -41,16 +41,29 @@ public class AgentRequest {
      */
     public let maxTool: Int64
 
+    /**
+     * 长程任务（LRT）宿主回合标记。
+     *
+     * 非空表示本次执行来自 LRT 的一个回合（`LrtHostExecutor.runRound`），
+     * 为空表示普通对话/聊天请求。执行器据此区分失败文案：
+     * - 任务回合 → 「任务执行异常中断（第 N 步）…」（保留产物/输出目录提示）
+     * - 普通对话 → 「本次回复失败…」（2026-09-23 定夺：普通聊天套用任务中断模板，
+     *   会让用户误以为系统在自动续跑遗留的 agent_tasks）
+     */
+    public let lrtTaskId: Option<String>
+
     public init(question: String,
                 image!: Option<String> = None,
                 conversation!: Option<Conversation> = None,
                 verbose!: Bool = false,
-                maxTool!: Int64 = 10) {
+                maxTool!: Int64 = 10,
+                lrtTaskId!: Option<String> = None) {
         this.question = question
         this.image = image
         this.conversation = conversation
         this.verbose = verbose
         this.maxTool = maxTool
+        this.lrtTaskId = lrtTaskId
     }
 
     //-----------------------------------------------------------------
@@ -95,13 +108,15 @@ public class AgentRequest {
                          image!: Option<String> = None,
                          conversation!: Option<Conversation> = None,
                          verbose!: Option<Bool> = None,
-                         maxTool!: Option<Int64> = None): AgentRequest {
+                         maxTool!: Option<Int64> = None,
+                         lrtTaskId!: Option<String> = None): AgentRequest {
         let req = AgentRequest(
             question ?? this.question,
             image: image ?? this.image,
             conversation: conversation ?? this.conversation,
             verbose: verbose ?? this.verbose,
             maxTool: maxTool ?? this.maxTool,
+            lrtTaskId: lrtTaskId ?? this.lrtTaskId,
         )
 
         req.parentContext = this.parentContext
@@ -110,6 +125,7 @@ public class AgentRequest {
         req.outputSchema = this.outputSchema
         req.importedFiles = this.importedFiles
         req.dispatchToSubagent = this.dispatchToSubagent
+        // lrtTaskId 已在构造器里透传（public let，不可再赋值）
         return req
     }
 }

@@ -4,7 +4,7 @@
 package magic.skill.application
 
 import magic.skill.domain.models.{SkillManifest, SkillLoadingContext}
-import magic.skill.infrastructure.loaders.{SkillMdLoader, YamlFrontmatterParser}
+import magic.skill.infrastructure.loaders.{SkillMdLoader, YamlFrontmatterParser, BundledAgentScanner}
 import magic.skill.infrastructure.utils.{YamlUtils, MarkdownUtils}
 import std.collection.HashMap
 import std.fs.{exists, Directory, FileInfo}
@@ -64,6 +64,9 @@ public class SkillLoadingService {
         let referencesDirExists = exists("${skillDir}/references/")
         let assetsDirExists = exists("${skillDir}/assets/")
 
+        // T-19（REQ-SDD-011）：与 SkillMdLoader 同一口径探测 bundled 子 agent（约定即注册）
+        let bundledAgents = BundledAgentScanner.scan(skillDir)
+
         // Create and return the SkillManifest
         let skillManifest = SkillManifest(
             name: yamlFrontmatter.name,
@@ -77,7 +80,8 @@ public class SkillLoadingService {
             scriptsDirExists: scriptsDirExists,
             referencesDirExists: referencesDirExists,
             assetsDirExists: assetsDirExists,
-            parameters: []  // Parameters would be extracted from the markdown content or YAML
+            parameters: [],  // Parameters would be extracted from the markdown content or YAML
+            bundledAgents: bundledAgents
         )
 
         LogUtils.info("Successfully created SkillManifest for: ${skillManifest.name}")

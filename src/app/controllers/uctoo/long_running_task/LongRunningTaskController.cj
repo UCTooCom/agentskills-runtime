@@ -82,7 +82,12 @@ public class LongRunningTaskController {
             // priority：缺省不传，交给 service 用 5
             let priority = LongRunningTaskController.intField(body, "priority")
 
-            // cron：缺省不传，交给 service 用 "0 */5 * * * ?"
+            // cron：缺省不传，交给 service 用 6 段式表达式（秒 分 时 日 月 周）。
+            // 注意：不要写成 Quartz 的 `?` 占位符——宿主 SchedulerEngine 用 f_ticktock 的
+            // CronCompiler 解析，遇到 `?` 会判为非法并整行跳过（表现：调度建好了但永不触发）。
+            // 正确写法示例：每 5 分钟一次 = "0 */5 * * * *"（步进写法里那个斜杠是必须的）。
+            // ⚠️ 上面这行的 "0 */5 ..." 只许出现在 // 行注释里：slash-star 一旦落进
+            // slash-star 块注释会提前终止注释，后面的中文就会被当代码解析。
             let cronRaw = LongRunningTaskController.strField(body, "cron")
             let cron: ?String = if (cronRaw.isEmpty()) { None<String> } else { Some<String>(cronRaw) }
 

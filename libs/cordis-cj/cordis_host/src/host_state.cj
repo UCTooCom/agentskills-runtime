@@ -54,6 +54,24 @@ public class HostState {
         }
     }
 
+    /**
+     * 非阻塞版 getInstance：拿不到 state.lock 时返回 None（调用方重试），
+     * 避免 awaitActive 这类启动关键路径因持锁等待而永久挂起。
+     */
+    public func tryGetInstance(id: String): ?PluginInstance {
+        if (!this.lock.tryLock()) {
+            return None
+        }
+        // 显式标注类型 + 不用 if 表达式：此处 None 脱离了函数返回类型的推断上下文，
+        // 裸写会报 "generic type should be used with type argument"。
+        var r: ?PluginInstance = None
+        if (this.actual.contains(id)) {
+            r = Some(this.actual[id])
+        }
+        this.lock.unlock()
+        r
+    }
+
     public func hasService(key: String): Bool {
         synchronized(this.lock) {
             this.serviceIndex.contains(key)

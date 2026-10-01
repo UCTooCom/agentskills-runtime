@@ -25,6 +25,9 @@ public class SkillManifest {
     public let parameters: Array<SkillParameter>  // Definition of parameters the skill accepts
     public let decisionPoints: Array<DecisionPoint>  // 校验通过、可参与人在回路的决策点（spec 5.15）
     public let invalidDecisionPointIds: Array<String>  // 校验失败、**不生效**的决策点 id（spec 5.15.3 异常场景 3）
+    // T-19（REQ-SDD-011）：技能内 bundledAgents 自动探测结果 —— <skill-root>/agents/ 下各声明文件的
+    // 文件名（去 .md 后缀）即子 agent 名。约定即注册：删文件即下线，禁硬编码名单之外的名字。
+    public let bundledAgents: Array<String>
 
     public init(
         name!: String,
@@ -40,7 +43,8 @@ public class SkillManifest {
         assetsDirExists!: Bool,
         parameters!: Array<SkillParameter>,
         decisionPoints!: Array<DecisionPoint> = [],
-        invalidDecisionPointIds!: Array<String> = []
+        invalidDecisionPointIds!: Array<String> = [],
+        bundledAgents!: Array<String> = []
     ) {
         this.name = name
         this.description = description
@@ -56,6 +60,17 @@ public class SkillManifest {
         this.parameters = parameters
         this.decisionPoints = decisionPoints
         this.invalidDecisionPointIds = invalidDecisionPointIds
+        this.bundledAgents = bundledAgents
+    }
+
+    /// 该技能是否声明了名为 agentName 的 bundled 子 agent（T-20 解析顺序：bundledAgents 优先）。
+    public func hasBundledAgent(agentName: String): Bool {
+        for (a in this.bundledAgents) {
+            if (a == agentName) {
+                return true
+            }
+        }
+        return false
     }
 
     /// 按 id 查找一个**有效**决策点。

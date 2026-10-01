@@ -9,6 +9,17 @@ display_name_en: "multi-search-engine"
 visibility: "public"
 ---
 
+## 脚本运行说明
+
+本技能的脚本提供 TypeScript 和 Python 两个版本，**优先使用 TypeScript 版本**以减少对 Python 运行环境的依赖。
+
+- **TypeScript 版本（推荐）**：`scripts/*.ts`（fetch_pages_2025, fetch_gaokao_2025）
+  - 运行方式：`node --experimental-strip-types scripts/<script>.ts`
+  - 依赖：Node.js ≥22.6（推荐 v23.10+），无需额外 npm 包
+- **Python 版本（降级备选）**：`scripts/*.py`
+  - 运行方式：`python scripts/<script>.py`
+  - 仅在 TypeScript 版本运行出错时降级使用
+
 # Multi Search Engine
 
 Integration of 16 search engines for web crawling without API keys.

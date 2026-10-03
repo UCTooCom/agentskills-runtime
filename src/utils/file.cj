@@ -140,6 +140,15 @@ func readFileWithTruncateInfo(
         withLineNumber!: Bool ,
         startLine!: Int64,
         endLine!: Int64): (Bool, String) {
+    // 【2026-10-02 实测修复】endLine < 0 表示「读到文件末尾」。
+    // FileReadTool 的 endLine 默认值就是 -1（见 src/tool/file_tools.cj），而这里此前
+    // 直接拿 -1 参与 `currentLine <= endLine` 比较 —— 恒为假，于是任何一次未显式传
+    // endLine 的读取都一行不收、返回空串，紧接着触发 file_tools.cj 的编码回退分支，
+    // 把中文全部替换成 '?'。
+    // 现场：web 聊天跑 sdd research（日志 agentskills-runtime-20261002-002418）
+    // 5 次 file_read 全部返回 ???，agent 被迫自造 python 脚本绕路，烧掉约 1/3 步数预算。
+    // 修法：负值统一归一到 Int64.Max（无上界），语义与 -1 的约定一致。
+    let upperBound = if (endLine < 0) { Int64.Max } else { endLine }
     var currentLine = 1
     let lines = ArrayList<String>()
 
@@ -148,7 +157,7 @@ func readFileWithTruncateInfo(
         while (let Some(line) <- reader.readln()) {
             if (currentLine < startLine) {
                 // Skip this line
-            } else if (currentLine <= endLine) {
+            } else if (currentLine <= upperBound) {
                 // End of file reached
                 lines.add(line)
             } else {
@@ -162,7 +171,7 @@ func readFileWithTruncateInfo(
         // Format with line number (right-aligned)
         let width = countDigits(currentLine)
         return (
-            currentLine > endLine,
+            currentLine > upperBound,
             String.join(
                 lines.toArray() |>
                     enumerate |>
@@ -177,7 +186,7 @@ func readFileWithTruncateInfo(
         )
     } else {
         return (
-            currentLine > endLine,
+            currentLine > upperBound,
             String.join(lines.toArray(), delimiter: "\n")
         )
     }

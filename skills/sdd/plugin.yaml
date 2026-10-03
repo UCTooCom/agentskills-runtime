@@ -1,5 +1,5 @@
 name: sdd
-version: 1.0.0
+version: 1.2.0   # 2026-10-03：新增铁律 15「大工程拆分」（多子系统 SDD 工程 + 集成契约 + 主工程 SPECS_INDEX 目录）
 mode: process
 # 注意：不要写 protocol 字段。plugin_config.cj 无 protocol 解析逻辑，写了会被静默忽略；
 # L3 进程轨传输固定为 stdio（与 long-running-task 同款契约）。
@@ -50,29 +50,17 @@ tableWhitelist:
   - agents
   - sdd_projects
   - sub_agent_invocations
-routes:
-  # ── 六步生成（对应 COMPOSITION.yaml 的 plugin_route）──
-  - method: POST
-    path: /api/v1/uctoo/sdd/gen-research
-  - method: POST
-    path: /api/v1/uctoo/sdd/gen-spec
-  - method: POST
-    path: /api/v1/uctoo/sdd/gen-design
-  - method: POST
-    path: /api/v1/uctoo/sdd/gen-task
-  - method: POST
-    path: /api/v1/uctoo/sdd/gen-code
-  - method: POST
-    path: /api/v1/uctoo/sdd/gen-test
-  # ── 子 agent 派生（主 agent 按名派生 skills/sdd/agents/ 下的子 agent）──
-  - method: POST
-    path: /api/v1/uctoo/sdd/spawn-subagent
-  # ── 闸口决策回执（confirm/revise/abandon）──
-  - method: POST
-    path: /api/v1/uctoo/sdd/review
-  # ── 工程实例查询（读 sdd_projects，design §2.2.1）──
-  - method: GET
-    path: /api/v1/uctoo/sdd/projects/:feature_name
+# 说明：六步编排的真派生落在**宿主侧**（插件进程没有 host.agent.invoke RPC，跑不了子 agent），
+# 故 HTTP 入口由 runtime 自己注册，**不在此声明**。以下为宿主侧真实路由（见 SKILL.md「路由」）：
+#   POST /api/v1/uctoo/sdd/start        幂等取/建工程
+#   POST /api/v1/uctoo/sdd/run          异步编排（可选 stage 指定起始阶段）
+#   POST /api/v1/uctoo/sdd/run-stage    同步单步（stage 必填）
+#   POST /api/v1/uctoo/sdd/review       闸口决策回执（confirm/revise/abandon）
+#   GET  /api/v1/uctoo/sdd/status[/:featureName]  工程进度查询
+#
+# ⚠ 早期设计稿里的 gen-{research,spec,design,task,code,test} / spawn-subagent /
+# projects/:feature_name **从未实现**，全仓搜不到注册，照它们调一律 404。
+routes: []
 # 说明：七张表均经 host.db 服务代理读写（cordis_host_services）。
 # 两张新表的**宿主侧五层模块**（Model/DAO/Service/Controller/Route）已由 crudgen 确定性生成
 # （见 logs/crud.md），故本插件不再重复暴露它们的通用 CRUD 路由——

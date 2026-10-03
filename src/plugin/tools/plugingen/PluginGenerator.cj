@@ -95,56 +95,191 @@ public class PluginGenerator {
     }
 
     /**
-     * 生成 CRUD 插件（表驱动模式）
+     * 生成 CRUD 插件（多表聚合模式，对齐 crudgen 的「保护区 + 公共产物幂等追加」行为）
+     *
+     * 行为契约（对应方案 B 三特性）：
+     *  1) 一次传入多张表 → 逐表生成 CRUD 五层 + 聚合入口/路由 + 公共产物（plugin.yaml/SKILL.md/cjpm.toml/pkg.cj）。
+     *  2) 再次传入相同插件名 + 不同表 → 仅对新表生成五层，公共产物（含表清单）追加新表，不覆盖旧表信息。
+     *  3) 再次传入相同插件名 + 相同表 → 仅覆盖该表五层 AutoCreateCode 保护区内容（保留二开），公共产物表名不重复。
+     *
+     * 实现要点：
+     *  - 读已有聚合路由中的 `// table:` 标记还原历史表清单，与本次请求表清单去重保序合并；
+     *  - 各表 PO/DAO/Service/Controller/Route 文件名含表名（{{className}}），天然累积；逐表 updateFile 只覆盖保护区；
+     *  - plugin.yaml/SKILL.md/聚合 Plugin/Route 基于合并表清单整体重渲（updateFile 保留二开保护区）；
+     *  - config/plugins.yaml 仅登记一个聚合入口/路由（宿主每插件仅注册单一 entry/routeClass）。
      *
      * @param name 插件名（已规范化）
      * @param dbName 数据库名
-     * @param tableName 表名
+     * @param tableNames 表名数组（≥1）
      * @return 成功与否
      */
-    public func generateCrudPlugin(name: String, dbName: String, tableName: String): Bool {
-        let tableInfo = this.readTableInfo(dbName, tableName)
-        if (tableInfo.fields.isEmpty()) {
-            println("错误: 表 ${dbName}.${tableName} 在 db_info 中无字段记录")
-            println("请先执行 npm run loadDbInfo ${dbName} 刷新数据库信息")
+    public func generateCrudPlugin(name: String, dbName: String, tableNames: Array<String>): Bool {
+        if (tableNames.isEmpty()) {
+            println("错误: 表驱动模式至少需要一个 --table / --tables 参数")
             return false
         }
-
-        let className = tableInfo.className
+        let pluginDir = "${skillsRoot}/${name}"
+        let cjDir = "${pluginDir}/src"
         let pkgName = "skill_${name}"
-        let cjDir = "${skillsRoot}/${name}/src"
-        let variables = this.buildVariables(name, tableInfo)
 
-        // 1. 技能与清单（插件元数据，不编译）
-        this.writeRendered(variables, "SKILL.md.tpl", "${skillsRoot}/${name}/SKILL.md")
-        this.writeRendered(variables, "plugin.yaml.tpl", "${skillsRoot}/${name}/plugin.yaml")
+        // 1. 还原历史表清单 + 与本次请求去重保序合并
+        let existingTables = this.readExistingTables(pluginDir, name)
+        let mergedTables = this.mergeTableList(existingTables, tableNames)
 
-        // 2. 独立 cjpm 包配置（workspace 成员模式）
-        this.writeCjpmToml(name, "${skillsRoot}/${name}/cjpm.toml")
+        // 2. 逐表生成 CRUD 五层（仅本次请求表；已有表靠 AutoCreateCode 保护区保留二开）
+        for (tableName in tableNames) {
+            let tableInfo = this.readTableInfo(dbName, tableName)
+            if (tableInfo.fields.isEmpty()) {
+                println("错误: 表 ${dbName}.${tableName} 在 db_info 中无字段记录")
+                println("请先执行 npm run loadDbInfo ${dbName} 刷新数据库信息")
+                return false
+            }
+            let className = tableInfo.className
+            let variables = this.buildVariables(name, tableInfo)
+            this.writeRendered(variables, "Model.cj.tpl", "${cjDir}/${className}PO.cj")
+            this.writeRendered(variables, "DAO.cj.tpl", "${cjDir}/${className}DAO.cj")
+            this.writeRendered(variables, "Service.cj.tpl", "${cjDir}/${className}Service.cj")
+            this.writeRendered(variables, "Controller.cj.tpl", "${cjDir}/${className}Controller.cj")
+            this.writeRendered(variables, "Route.cj.tpl", "${cjDir}/${className}Route.cj")
+        }
 
-        // 3. 仓颉源码（workspace 成员，独立编译为 libskill_${name}.so）
-        this.writeRendered(variables, "pkg.cj.tpl", "${cjDir}/pkg.cj")
-        this.writeRendered(variables, "Model.cj.tpl", "${cjDir}/${className}PO.cj")
-        this.writeRendered(variables, "DAO.cj.tpl", "${cjDir}/${className}DAO.cj")
-        this.writeRendered(variables, "Service.cj.tpl", "${cjDir}/${className}Service.cj")
-        this.writeRendered(variables, "Controller.cj.tpl", "${cjDir}/${className}Controller.cj")
-        this.writeRendered(variables, "Route.cj.tpl", "${cjDir}/${className}Route.cj")
-        this.writeRendered(variables, "PluginManifestEntry.cj.tpl", "${cjDir}/${className}Plugin.cj")
+        // 3. 聚合入口 Plugin + 聚合路由 Route（基于合并表清单整体重渲，保护区保留二开）
+        let aggVars = this.buildAggregateVariables(name, dbName, mergedTables)
+        let aggClassName = rules.toPascalCase(name)
+        this.writeRendered(aggVars, "pkg.cj.tpl", "${cjDir}/pkg.cj")
+        this.writeRendered(aggVars, "PluginAggregateEntry.cj.tpl", "${cjDir}/${aggClassName}Plugin.cj")
+        this.writeRendered(aggVars, "RouteAggregate.cj.tpl", "${cjDir}/${aggClassName}Route.cj")
 
-        println("插件 ${name} 生成完成：${skillsRoot}/${name}/（包名 ${pkgName}）")
-        println("独立编译：cd ${skillsRoot}/${name} && cjpm build → target/release/libskill_${name}.so")
-        println("宿主加载：经 PluginDylibLoader.loadFromDylib 动态加载")
+        // 4. 公共产物：plugin.yaml / SKILL.md（聚合元数据，整体重渲幂等）
+        this.writeRendered(aggVars, "plugin.yaml.aggregate.tpl", "${pluginDir}/plugin.yaml")
+        this.writeRendered(aggVars, "SKILL.md.aggregate.tpl", "${pluginDir}/SKILL.md")
 
-        // 4. 追加宿主 workspace members（若尚未包含）
+        // 5. 独立 cjpm 包配置（workspace 成员模式，与表无关，幂等覆盖）
+        this.writeCjpmToml(name, "${pluginDir}/cjpm.toml")
+
+        println("插件 ${name} 生成完成：${pluginDir}/（包名 ${pkgName}，合并表清单：${mergedTables}）")
+        println("独立编译：cd ${pluginDir} && cjpm build → target/release/libskill_${name}.so")
+        println("宿主加载：经 PluginHostManager 加载聚合入口 ${pkgName}.${aggClassName}Plugin")
+
+        // 6. 追加宿主 workspace members（若尚未包含）
         this.appendWorkspaceMember(name)
 
-        // 5. 追加宿主加载清单条目
-        this.appendPluginsYamlEntry(name, "${pkgName}.${className}Plugin", "${pkgName}.${className}Route")
+        // 7. 追加/更新宿主加载清单条目（聚合入口 + 聚合路由）
+        this.appendPluginsYamlEntry(name, "${pkgName}.${aggClassName}Plugin", "${pkgName}.${aggClassName}Route")
 
-        // 6. 生成 permissions 菜单节点 + i18 多语言数据（与 crudgen 一致）
+        // 8. 生成 permissions 菜单节点 + i18 多语言数据（按本次请求表幂等，已有表节点跳过）
         // 权限结构：database -> database.{dbName} -> database.{dbName}.{tableName}
-        this.generatePermissionNodes(dbName, tableName)
+        for (tableName in tableNames) {
+            this.generatePermissionNodes(dbName, tableName)
+        }
         return true
+    }
+
+    /// 还原已有插件已生成的表清单（解析聚合路由中的 `// table:` 标记，避免依赖逆向 PascalCase）
+    private func readExistingTables(pluginDir: String, name: String): Array<String> {
+        let cjDir = "${pluginDir}/src"
+        let aggRouteFile = "${cjDir}/${rules.toPascalCase(name)}Route.cj"
+        let result = ArrayList<String>()
+        if (!exists(aggRouteFile)) {
+            return result.toArray()
+        }
+        let content = templateEngine.readText(aggRouteFile)
+        for (line in content.split("\n")) {
+            let t = line.trimAscii()
+            if (t.startsWith("// table: ")) {
+                let tbl = t["// table: ".size..].trimAscii()
+                if (!tbl.isEmpty() && !result.contains(tbl)) {
+                    result.add(tbl)
+                }
+            }
+        }
+        return result.toArray()
+    }
+
+    /// 去重保序合并：历史表在前（保持顺序），新请求中未出现的追加在后
+    private func mergeTableList(existing: Array<String>, requested: Array<String>): Array<String> {
+        let result = ArrayList<String>()
+        for (t in existing) {
+            if (!result.contains(t)) {
+                result.add(t)
+            }
+        }
+        for (t in requested) {
+            if (!result.contains(t)) {
+                result.add(t)
+            }
+        }
+        return result.toArray()
+    }
+
+    /// 汇总聚合模板变量（公共产物与聚合入口/路由用，含表清单驱动的循环体）
+    private func buildAggregateVariables(name: String, dbName: String, tableNames: Array<String>): HashMap<String, String> {
+        let variables = HashMap<String, String>()
+        variables.add("name", name)
+        variables.add("dbName", dbName)
+        variables.add("aggregateClassName", rules.toPascalCase(name))
+
+        let sbTables = StringBuilder()
+        let sbRoutes = StringBuilder()
+        let sbInline = StringBuilder()
+        let sbList = StringBuilder()
+        var firstClassName = ""
+        var idx = 0
+        for (t in tableNames) {
+            let c = rules.toPascalCase(t)
+            if (idx == 0) {
+                firstClassName = c
+            }
+            sbTables.append("  - ${t}\n")
+            sbRoutes.append("  - skill_${name}.${c}Route\n")
+            if (idx > 0) {
+                sbInline.append(", ")
+            }
+            sbInline.append(t)
+            sbList.append("  - **${t}**: `POST/GET /api/v1/${dbName}/${t}/...`（服务类 `${c}Service`）\n")
+            idx += 1
+        }
+        variables.add("tablesDecl", sbTables.toString())
+        variables.add("tableWhitelistDecl", sbTables.toString())
+        variables.add("routesDecl", sbRoutes.toString())
+        variables.add("tablesInline", sbInline.toString())
+        variables.add("tablesList", sbList.toString())
+        variables.add("firstControllerClass", firstClassName)
+        variables.add("onLoadBody", this.buildAggregateOnLoadBody(name, tableNames))
+        variables.add("routeRegisterBody", this.buildAggregateRouteBody(tableNames))
+        return variables
+    }
+
+    /// 聚合 Plugin.onLoad 体：循环装配所有表的 Service 并接线 Controller（接线点模式）
+    private func buildAggregateOnLoadBody(name: String, tableNames: Array<String>): String {
+        let sb = StringBuilder()
+        for (t in tableNames) {
+            let c = rules.toPascalCase(t)
+            sb.append("        // table: ${t}\n")
+            sb.append("        {\n")
+            sb.append("            let service = ${c}Service()\n")
+            sb.append("            ${c}Controller.wiredService = Some(service)\n")
+            sb.append("            context.onCleanup({ =>\n")
+            sb.append("                ${c}Controller.wiredService = None\n")
+            sb.append("            })\n")
+            sb.append("            LogUtils.info(\"[${name}Plugin] wired ${t}\")\n")
+            sb.append("        }\n")
+        }
+        return sb.toString()
+    }
+
+    /// 聚合 Route.register 体：循环委托各表 Route 注册其 8 条 V4 CRUD 路由
+    private func buildAggregateRouteBody(tableNames: Array<String>): String {
+        let sb = StringBuilder()
+        for (t in tableNames) {
+            let c = rules.toPascalCase(t)
+            sb.append("            // table: ${t}\n")
+            sb.append("            {\n")
+            sb.append("                let ctrl = ${c}Controller()\n")
+            sb.append("                ${c}Route().register(r, ctrl)\n")
+            sb.append("            }\n")
+        }
+        return sb.toString()
     }
 
     /**
@@ -432,7 +567,7 @@ public class PluginGenerator {
         this.writeRendered(variables, "plugin.yaml.tpl", "${skillsRoot}/${name}/plugin.yaml")
         this.writeCjpmToml(name, "${skillsRoot}/${name}/cjpm.toml")
         this.writeRendered(variables, "pkg.cj.tpl", "${cjDir}/pkg.cj")
-        this.writeRendered(variables, "PluginManifestEntry.cj.tpl", "${cjDir}/${className}Plugin.cj")
+        this.writeRendered(variables, "PluginEntry.cj.tpl", "${cjDir}/${className}Plugin.cj")
 
         println("空白插件 ${name} 生成完成：${skillsRoot}/${name}/（包名 ${pkgName}）")
         println("独立编译：cd ${skillsRoot}/${name} && cjpm build → target/release/libskill_${name}.so")
@@ -593,7 +728,7 @@ public class PluginGenerator {
         }
     }
 
-    /// 追加 plugins.yaml 条目（已存在同名条目则跳过）
+    /// 追加/更新 plugins.yaml 条目（同名条目整体替换为聚合类，保留 order；首次则追加）
     private func appendPluginsYamlEntry(name: String, classNameFull: String, routeClassFull: String): Unit {
         if (!exists(pluginsYamlPath)) {
             println("提示: ${pluginsYamlPath} 不存在，请按现有格式手动追加插件条目：")
@@ -603,8 +738,13 @@ public class PluginGenerator {
             return
         }
         let content = templateEngine.readText(pluginsYamlPath)
-        if (content.contains("name: ${name}\n") || content.contains("name: ${name}\r")) {
-            println("plugins.yaml 已含 ${name} 条目，跳过追加")
+        if (this.hasEntry(content, name)) {
+            // 已存在同名条目：整体替换为聚合类（保留原有 order），确保重生成后指向聚合入口/路由
+            let oldOrder = this.findEntryOrder(content, name)
+            let newBlock = this.buildPluginEntryBlock(name, classNameFull, routeClassFull, oldOrder)
+            let rebuilt = this.replaceEntryBlock(content, name, newBlock)
+            templateEngine.writeFile(pluginsYamlPath, rebuilt)
+            println("已更新 plugins.yaml 条目: ${name}（聚合类 ${classNameFull}）")
             return
         }
 
@@ -621,6 +761,97 @@ public class PluginGenerator {
         sb.append("    config: {}\n")
         templateEngine.writeFile(pluginsYamlPath, content + sb.toString())
         println("已追加 plugins.yaml 条目: ${name} (order=${order})")
+    }
+
+    /// 是否存在同名插件条目（精确匹配，避免前缀误命中，如 github / githubx）
+    private func hasEntry(content: String, name: String): Bool {
+        for (line in content.split("\n")) {
+            if (line.trimAscii() == "- name: ${name}") {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// 解析同名条目当前的 order 值（缺省 0）
+    private func findEntryOrder(content: String, name: String): Int64 {
+        let lines = content.split("\n")
+        var inTarget = false
+        for (line in lines) {
+            let t = line.trimAscii()
+            if (t == "- name: ${name}") {
+                inTarget = true
+                continue
+            }
+            if (inTarget) {
+                if (t.startsWith("- name:")) {
+                    break
+                }
+                if (t.startsWith("order:")) {
+                    let value = t["order:".size..].trimAscii()
+                    if (let Some(n) <- Int64.tryParse(value)) {
+                        return n
+                    }
+                }
+            }
+        }
+        return 0
+    }
+
+    /// 构建条目块文本（含 order）
+    private func buildPluginEntryBlock(name: String, classNameFull: String, routeClassFull: String, order: Int64): String {
+        let sb = StringBuilder()
+        sb.append("\n  # plugingen 生成的插件\n")
+        sb.append("  - name: ${name}\n")
+        sb.append("    className: ${classNameFull}\n")
+        sb.append("    enabled: true\n")
+        sb.append("    order: ${order}\n")
+        if (!routeClassFull.isEmpty()) {
+            sb.append("    routeClass: ${routeClassFull}\n")
+        }
+        sb.append("    config: {}\n")
+        return sb.toString()
+    }
+
+    /// 替换同名条目块（保留其前的全部内容与块后的后续条目）
+    private func replaceEntryBlock(content: String, name: String, newBlock: String): String {
+        let lines = content.split("\n")
+        var startIdx = -1
+        var endIdx = lines.size
+        for (i in 0..lines.size) {
+            if (lines[i].trimAscii() == "- name: ${name}") {
+                startIdx = i
+                break
+            }
+        }
+        if (startIdx < 0) {
+            return content + newBlock
+        }
+        for (i in (startIdx + 1)..lines.size) {
+            if (lines[i].trimAscii().startsWith("- name:")) {
+                endIdx = i
+                break
+            }
+        }
+        let sb = StringBuilder()
+        for (i in 0..startIdx) {
+            if (i > 0) {
+                sb.append("\n")
+            }
+            sb.append(lines[i])
+        }
+        sb.append(newBlock)
+        for (i in endIdx..lines.size) {
+            sb.append(lines[i])
+            if (i < lines.size - 1) {
+                sb.append("\n")
+            }
+        }
+        let result = sb.toString()
+        if (content.endsWith("\n") && !result.endsWith("\n")) {
+            return result + "\n"
+        }
+        return result
     }
 
     /// 解析现有条目的最大 order，返回下一个序号

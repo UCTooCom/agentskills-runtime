@@ -79,7 +79,7 @@ System.out.println("Runtime installed: " + installed);
 
 // Download runtime if not installed
 if (!installed) {
-    boolean downloaded = runtime.downloadRuntime("0.0.28");
+    boolean downloaded = runtime.downloadRuntime("0.0.29");
     System.out.println("Runtime downloaded: " + downloaded);
 }
 

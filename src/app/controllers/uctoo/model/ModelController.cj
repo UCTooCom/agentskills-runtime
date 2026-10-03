@@ -19,13 +19,15 @@ public class ModelController {
             // 2026-09-24 补入此前已接入却漏登记的 provider：
             //   ark / siliconflow / google / openrouter / maas / sophnet / orbitai /
             //   gmicloud / atomgit / evomap
+            // 2026-10-01 新增：arcbench（Agentic Software Factory Hackathon 平台通道）
             let providerNames = [
                 "deepseek", "openai", "ollama", "qwen", "stepfun",
                 "dashscope", "zhipu", "moonshot", "baichuan",
                 "minimax", "yi", "volcengine", "azure", "anthropic",
                 "gemini", "mistral", "groq", "tokendance",
                 "ark", "siliconflow", "google", "openrouter", "maas",
-                "sophnet", "orbitai", "gmicloud", "atomgit", "evomap"
+                "sophnet", "orbitai", "gmicloud", "atomgit", "evomap",
+                "arcbench"
             ]
             for (name in providerNames) {
                 let obj = JsonObject()

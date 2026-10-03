@@ -45,23 +45,34 @@ case "openai" | "dashscope" | "ark" | "deepseek" | ... | "atomgit" | "gmicloud" 
 顺便在 `createEmbeddingModel`（318 行）/ `createImageModel`（350 行）加分支 —— **前提是该通道真的提供对应能力**。
 EvoMap Gateway 只有 Chat Completions，硬加 embedding/image 会在调用时报「模型不存在」。
 
-### 1.3 `normalizeModelName` 前缀守卫（约 129 行）⚠️ 高频坑
+### 1.3 `parseModel` 不做任何二次处理：写什么就发什么
 
-该函数会把含 `v4-flash` / `v4.1` 等代次前缀的名字收敛成官方 ID。
-若你的模型名形如 `evomap-deepseek-v4-flash`（**带本厂前缀，但不是 deepseek 官方 ID**），
-不加守卫就会被改写成 `deepseek-flash`，请求发到 deepseek 官方 → 401/404。
-
-守卫写法（已内置，新增 provider 自动生效）：
+`parseModel()` 只做一件事：把 `"provider:modelName"` 这个字符串拆成 provider 与模型名两段，
+**不做任何一种改写**——既不收敛厂商官方 ID，也不按名字前缀反推 provider。
 
 ```cj
-for (provider in getAllProviderNames()) {
-    if (provider != "deepseek" && lower.startsWith(provider + "-")) {
-        return name      // 带其它厂商前缀 → 原样返回
-    }
+let items = model.split(":", 2)
+if (items.size == 1) {
+    if (items[0] == "llamacpp") { return ModelConfig(provider: "llamacpp", ...) }
+} else if (items.size == 2) {
+    let provider = items[0].trimAscii()
+    let modelName = items[1].trimAscii()
+    if (!checkProvider(provider)) { throw ModelException(...) }
+    return ModelConfig(provider: provider, kind: kind, name: modelName)
 }
+throw ModelException(...)
 ```
 
-只要第 1.1 步把 provider 注册进 map，这里就自动覆盖，**不需要再改**——但要知道它的存在。
+这条是 2026-10-01 定的口径，前面两处"聪明"逻辑都已删除：
+
+| 已删的东西 | 行为 | 为什么删 |
+|---|---|---|
+| `normalizeModelName()`（v0.0.28 引入） | 把 `deepseek-v4-flash` 收敛成 deepseek **官方**的 `deepseek-flash` | 网关类通道（ArcBench）自报的模型名本来就叫 `deepseek-v4-flash`，改写后网关 `provider_not_selected`（实测） |
+| `inferProvider()` + 回退 `Config.MODEL_PROVIDER` | 裸模型名按前缀猜通道，猜不出就用默认通道 | 用户配置错了就报错，不搞程序里偷偷替他猜通道的第二套行为 |
+
+> 结论：`MODEL_CONFIG` **必须**显式写 `provider:modelName`（带冒号，如 `arcbench:deepseek-v4-flash`）。
+> 写一个裸模型名会直接抛 "xxx is invalid. Only [...] are supported now." —— 这是预期行为，改配置即可。
+> 网关登记名≠厂商官方名时（§6.5），以网关 `GET {base}/models` 的返回为准，逐字抄。
 
 ---
 
@@ -98,7 +109,8 @@ MODEL_CONFIG=evomap:evomap-deepseek-v4-flash
 
 要点：
 
-- `MODEL_CONFIG` 必须是 `provider:modelName` 形式（带冒号）。裸名走 `inferProvider` 按前缀推断，有风险。
+- `MODEL_CONFIG` 必须是 `provider:modelName` 形式（带冒号），程序不替你补前缀、也不猜通道，
+  裸名会直接报错退出（详见 §1.3）。
 - **baseURL 只写到 `/v1` 这一级**，不要带 `/chat/completions`——`OpenAIChatModel` 会在 `create()` 里自己拼
   （`src/model/openai/chat.cj:265`）。写成全路径会变成 `/v1/chat/completions/chat/completions`。
 - 若该厂商 **Hub 与 Gateway 用不同的 key**（如 EvoMap：`ek_` 打 `/api/hub/kg/*`，`sk-evomap-` 只能打
@@ -244,6 +256,31 @@ curl -4 -s --max-time 60 -X POST "<BASE>/chat/completions" \
 5 段会被误解释（实测 `0 * * * *` 被当「秒=0, 分=*」→ **每分钟**触发），
 含 `?` 的表达式会被静默判为不合法而整行跳过（表现为调度永不触发、无报错）。
 
+### 6.5 网关登记名与厂商官方名冲突时，会被"规范化"悄悄改写（2026-10-01 ArcBench 实证）
+
+**症状**：`.env` 里明明写的是 `MODEL_CONFIG=arcbench:deepseek-v4-flash`，请求却失败，
+网关返回 `provider_not_selected: no provider selected`（报的是"模型不存在"，极易误判成网关没部署该模型）。
+
+**根因**：`model_manager.cj` 的 `normalizeModelName()`（v0.0.28 引入，2026-10-01 已删）会把含
+`v4-flash` / `v4-1` / `v4.1` 的名字收敛成 deepseek **官方** ID（`deepseek-v4-flash` → `deepseek-flash`）。
+于是 `.env` 里明明写的 `arcbench:deepseek-v4-flash`，实际发出去的却是网关并不存在的 `deepseek-flash`
+→ `provider_not_selected: no provider selected`。
+
+**判别特征**：该通道是**网关 / 聚合平台**——一个 key 代理多家模型，
+`GET {base}/models` 返回的 id 里含别家厂商名（ArcBench 同时有 deepseek / glm / kimi / minimax / qwen）。
+这类通道**必须**用网关自报的登记名，不能按厂商官方名写。
+
+**修法**：删掉 `normalizeModelName()` 这一层，`parseModel()` 对模型名一律原样透传（详见 §1.3）。
+即 `.env` 里写 `arcbench:deepseek-v4-flash` 就发 `deepseek-v4-flash`，不做任何改写。
+同理 `inferProvider()`（按名字前缀猜通道）与"猜不出就回退 `Config.MODEL_PROVIDER`"的裸名兜底也一并删除，
+裸名走最早版本的路径：直接抛 "xxx is invalid. Only [...] are supported now."。
+
+**接入前必做**（原节"接入前必做"保留）：`curl {base}/models` 拉登记名，逐字写进 `MODEL_CONFIG`；
+别想当然按厂商官方名写。顺带这也解释了为什么 §6.3 要求"先打两枪"——网关的模型清单必须以实际返回为准。
+
+**接入前必做**：先 `curl {base}/models` 拉登记名，再按登记名逐字写进 `MODEL_CONFIG`；
+别想当然按厂商官方名写。顺带这也解释了为什么 §6.3 要求"先打两枪"——网关的模型清单必须以实际返回为准。
+
 ---
 
 ## 7. 变更记录
@@ -254,3 +291,5 @@ curl -4 -s --max-time 60 -X POST "<BASE>/chat/completions" \
 | 2026-09-24 | 补齐 `ModelController.cj` 名单（含此前漏登记的 ark/siliconflow/google/openrouter/maas/sophnet/orbitai/gmicloud/atomgit）；定位出站 IPv6 坑并写入 §6.2；本文件建立 |
 | 2026-09-24 | `.env` 主通道 evomap → atomgit；新增 §6.3「接入前必测 function calling + 空响应」与各通道实测快照 |
 | 2026-09-24 | atomgit 在 runtime 内**必失败**的真因：agent 首轮就带 `tools`，该通道返回 HTTP 200 空体（curl 复现一致），不是网络问题；`.env` 回退 deepseek 官方，但该 key 欠费（402 / `is_available:false`）。实测唯一能跑满 agent 工具链的仍是 sophnet `DeepSeek-V4-Pro-0813` |
+| 2026-10-01 | 新增 **ArcBench** 通道（Agentic Software Factory Hackathon 平台，`https://api.arc-bench.com/v1`，OpenAI 兼容；纯聊天/流式/function calling/system+stop+tools 全部实测通过，DNS 纯 IPv4）。新增 §6.5「网关登记名与厂商官方名冲突」并落地 `parseModel` 的 provider 守卫；`.env` 主通道 deepseek → arcbench（`arcbench:deepseek-v4-flash`）。**LRT_MODEL_\*（L3 插件侧）未切** |
+| 2026-10-01 | **重构**：`parseModel` 恢复"写什么发什么"，删除 `normalizeModelName()`（把 `deepseek-v4-flash` 收敛成官方 `deepseek-flash`，在 ArcBench 网关上实测 `provider_not_selected`）与 `inferProvider()` + `Config.MODEL_PROVIDER` 裸名兜底。原则：**用户配置即事实，程序不做隐藏二次处理；配置错就报错，配置对就用**。§1.3 改写为「不做任何二次处理」，`MODEL_CONFIG` 必须显式写 `provider:modelName` |

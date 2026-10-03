@@ -9,6 +9,7 @@ import magic.app.services.uctoo.{UctooUserService, LoginLogService, SmsLogServic
 import magic.app.utils.auth.{BcryptUtil, AuthorizeUtil, JWTUtil, AuthProvider}
 import magic.log.LogUtils
 import std.time.DateTime
+import std.time.MonoTime
 import std.collection.{HashMap, Map, ArrayList}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonInt, JsonFloat, JsonBool, JsonArray}
 
@@ -53,6 +54,11 @@ public class UctooUserAuthController {
      * 2. 邮箱 + 密码：{ "email": "xxx@example.com", "password": "xxx" }
      */
     public func signin(req: HttpRequest, res: HttpResponse): Unit {
+        // 登录全链路计时（2026-10-03 新增）：
+        // 历史故障表现为「帐号密码错误」，但 login_log 里每次都是 status=1（成功），
+        // 真因是服务端耗时 8~35s 超过前端 15s 超时，浏览器提前取消了请求。
+        // 这里把四个阶段耗时打出来，下次再出现慢登录可直接看日志定位。
+        let tStart = MonoTime.now()
         try {
             // 获取客户端信息用于记录登录日志
             let clientIp = getClientIp(req)
@@ -84,12 +90,14 @@ public class UctooUserAuthController {
                 return
             }
             
-            // 查询用户（优先按用户名查询，如果包含@则按邮箱查询）
+            // 1. 查询用户（优先按用户名查询，如果包含@则按邮箱查询）
+            let tQuery = MonoTime.now()
             let user = if (loginAccount.contains('@')) {
                 userService.findByEmail(loginAccount)
             } else {
                 userService.findByUsername(loginAccount)
             }
+            let msQuery = (MonoTime.now() - tQuery).toMilliseconds()
             
             if (user.isNone()) {
                 // 记录登录失败日志
@@ -107,8 +115,12 @@ public class UctooUserAuthController {
                 return
             }
             
-            // 验证密码
-            if (!bcryptUtil.comparePassword(password, u.password)) {
+            // 2. 验证密码（bcrypt。历史上这是全链路最慢的一段，单独计时）
+            let tBcrypt = MonoTime.now()
+            let passwordOk = bcryptUtil.comparePassword(password, u.password)
+            let msBcrypt = (MonoTime.now() - tBcrypt).toMilliseconds()
+            
+            if (!passwordOk) {
                 // 记录登录失败日志
                 LoginLogService.recordLoginFailed(loginAccount, clientIp, browser, os)
                 res.status(400).json("{\"errno\":\"42007\",\"errmsg\":\"登录失败，用户名或密码错误\"}")
@@ -123,11 +135,25 @@ public class UctooUserAuthController {
                 return
             }
             
-            // 记录登录成功日志
+            // 3. 记录登录成功日志
+            let tLog = MonoTime.now()
             LoginLogService.recordLoginSuccess(loginAccount, clientIp, browser, os, Some<String>(u.id))
+            let msLog = (MonoTime.now() - tLog).toMilliseconds()
             
-            // 授权登录
+            // 4. 授权登录（建会话 + 签 token + 写回响应）
+            let tAuth = MonoTime.now()
             authorizeUtil.authorizeAndEnd(u, req, res, AuthProvider.Local, true)
+            let msAuth = (MonoTime.now() - tAuth).toMilliseconds()
+            
+            let msTotal = (MonoTime.now() - tStart).toMilliseconds()
+            LogUtils.info("SigninTiming",
+                "account=${loginAccount} total=${msTotal}ms query=${msQuery}ms bcrypt=${msBcrypt}ms loginLog=${msLog}ms authorize=${msAuth}ms")
+            if (msTotal > 3000) {
+                // 只报内部告警阈值。前端 axios 超时由前端配置决定，硬编码在这里会随前端调整而失真：
+                // 2026-10-03 实测文案仍写着 15000ms，而前端早已放宽到 30 秒，排查时容易被误导。
+                LogUtils.warn("SigninTiming",
+                    "=== 登录耗时 ${msTotal}ms 超过 3s 内部告警阈值，最慢阶段 bcrypt=${msBcrypt}ms ===")
+            }
             
         } catch (e: Exception) {
             LogUtils.error("Signin failed: ${e.message}")
@@ -573,17 +599,19 @@ public class UctooUserAuthController {
         return (browser, os)
     }
     
+    // 2026-10-03：签名支持「用户名或邮箱」两种登录方式，调用方固定会先读 username 再读 email，
+    // 因此「username 键不存在」是邮箱登录的正常路径而非异常，原先用 INFO 打印会污染日志、
+    // 并被误当成登录失败的根因。缺键一律静默返回空串，仅类型不符才记 debug。
     private func getStringFromJson(obj: JsonObject, key: String): String {
         let valueOpt = obj.get(key)
         if (valueOpt.isNone()) {
-            LogUtils.info("GetStringFromJson", "=== Key '${key}' not found in JsonObject ===")
             return ""
         }
         if (let Some(value) <- valueOpt) {
             if (value is JsonString) {
                 return value.asString().getValue()
             } else {
-                LogUtils.info("GetStringFromJson", "=== Key '${key}' value is not JsonString, type mismatch ===")
+                LogUtils.debug("GetStringFromJson", "=== Key '${key}' value is not JsonString, type mismatch ===")
             }
         }
         ""

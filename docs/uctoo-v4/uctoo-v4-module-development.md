@@ -988,6 +988,8 @@ UCToo V4 提供三个命令行工具用于代码生成，均基于 `cjpm run` �
 | `loaddbinfo` | 从数据库结构加载表信息到 db_info 表 | `magic.app.tools.loaddbinfo` |
 | `crudgen` | 生成后端 CRUD 模块（Model/DAO/Service/Controller/Route） | `magic.app.tools.crudgen` |
 | `crudweb` | 生成 Web 前端管理界面 | `magic.app.tools.crudweb` |
+| `plugingen` | 生成插件 CRUD 模块（PO/DAO/Service/Controller/Route + 聚合入口/路由）到 `skills/{name}/`，支持多表与累积生成 | `magic.plugin.tools.plugingen` |
+| `pluginuninstall` | 与 plugingen 对称的确定性卸载工具（三层卸载模型） | `magic.plugin.tools.pluginuninstall` |
 
 ### 8.2 loaddbinfo - 数据库信息加载工具
 
@@ -1121,7 +1123,57 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --ta
 - 运行前必须先执行 `loaddbinfo` 确保 `db_info` 表中有最新的表结构信息
 - 默认输出目录由 `.env` 中的 `WEB_CRUD_OUTPUT_DIR` 环境变量控制
 
-### 8.5 完整使用流程示例
+### 8.5 plugingen - 插件 CRUD 代码生成工具（多表 / 累积）
+
+从 `db_info` 表读取表结构信息，自动生成插件 CRUD 模块（PO/DAO/Service/Controller/Route 五层）以及聚合入口 Plugin、聚合路由 Route 等公共产物，输出到 `skills/{name}/`。与 `crudgen` 同构，但产物落在插件轨（不触碰宿主 `AutoRouteConfig.cj`）。
+
+**本次新增能力（sync 内嵌轨）**：
+
+1. **一次生成多表**：`--tables a,b,c` 一次生成多张表的五层 CRUD 产物，公共产物正确生成并衔接。
+2. **同名 + 不同表追加**：再次生成传入相同插件名、不同表名时，新表 CRUD 正常生成，公共产物基于「历史表清单 + 本次请求表」去重保序合并后整体重渲，旧表信息与二次开发保留、新表加入、表名不重复。
+3. **同名 + 相同表只覆盖保护区**：再次生成传入相同插件名、相同表名时，只覆盖该表各层 `//#region AutoCreateCode ... //#endregion AutoCreateCode` 区间内的自动生成内容，区间外二次开发保留；公共产物表清单不变（不含重复项）。
+
+> 实现要点：聚合路由文件 `src/{PascalName}Route.cj` 内含 `// table:` 标记行用于还原历史表清单；宿主每插件仅注册单一 `entry`/`routeClass`，故同名多表插件须产出聚合入口 + 聚合路由。多表/累积/保护区能力**仅 sync 内嵌轨支持**，`--mode process` 仍按单表生成。
+
+**运行命令**：
+
+```bash
+# 单表生成（sync 轨，默认）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name entity --db uctoo --table entity"
+
+# 一次生成多表
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name github --db uctoo --tables repository,branch,commit,repository_file"
+
+# 同名插件累积追加新表
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name github --db uctoo --tables issue,pull_request"
+
+# 同名同表重生成（仅刷新保护区）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name github --db uctoo --table repository"
+
+# L3 进程隔离轨（单表）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name mytool --mode process"
+```
+
+**命令行参数**：
+
+| 参数 | 说明 | 必需 |
+|------|------|------|
+| `--name <插件名>` | 插件唯一名（小写字母/数字/下划线，连字符自动转下划线） | 是 |
+| `--db <数据库名>` | 表驱动模式：数据库名（读 db_info 表结构） | 表驱动时必填 |
+| `--table <表名>` | 单张表名（与 `--tables` 二选一，优先级低于 `--tables`） | 与 `--tables` 二选一 |
+| `--tables <表名列表>` | 逗号分隔的多张表名（多表生成与累积） | 与 `--table` 二选一 |
+| `--mode <轨>` | 加载轨：sync（缺省）/ dylib / process | 否 |
+| `--blank` | 生成空白插件骨架（跳过表结构） | 否 |
+| `--help` / `-h` | 显示帮助信息 | 否 |
+
+**注意事项**：
+
+- 运行前必须先执行 `loaddbinfo` 确保 `db_info` 表中有最新的表结构信息
+- 定制代码应放在 `AutoCreateCode` 区域外，避免重新生成时被覆盖；区域内为自动生成，重生成会刷新
+- 生成产物须经 `cjpm build`（build-sync 自动同步 `skills/` → `src/plugins/` 并编译）后由宿主 `PluginHostManager` 加载
+- 详细文档参见 [plugingen 使用手册](../../skills/uctoo-dev-manual/tools/plugingen.md)
+
+### 8.6 完整使用流程示例
 
 以新增 `aip_agent_identity` 表为例：
 
@@ -1132,17 +1184,20 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --ta
 # 步骤2：加载表结构信息到 db_info 表
 cjpm run --skip-build --name magic.app.tools.loaddbinfo --run-args "--db uctoo"
 
-# 步骤3：生成后端 CRUD 模块
+# 步骤3：生成后端 CRUD 模块（仅当需要扩展宿主公共基础设施时）
 cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --table aip_agent_identity"
 
 # 步骤4：生成 Web 前端管理界面
 cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table aip_agent_identity"
 
+# 步骤5（推荐）：优先以插件方式扩展，生成插件 CRUD 模块（支持多表 / 累积）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name aip --db uctoo --tables aip_agent_identity"
+
 # 步骤5：在生成的代码基础上进行迭代开发
 # 定制代码放在 AutoCreateCode 区域外
 ```
 
-### 8.6 V4优化收益
+### 8.7 V4优化收益
 
 基于重构后的模块开发规范,crud-generator的收益：
 

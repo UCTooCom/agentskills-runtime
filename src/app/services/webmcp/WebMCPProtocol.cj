@@ -4,6 +4,7 @@
 package magic.app.services.webmcp
 
 import magic.log.LogUtils
+import magic.config.Config
 import magic.core.skill.{Skill, SkillManager}
 import magic.core.model.{ChatModel, ChatRequest}
 import magic.model.ModelManager
@@ -14,7 +15,7 @@ import magic.core.agent.{AgentRequest, AgentResponse, AgentCancelException}
 import magic.core.agent.AgentDefinition
 import magic.agent.memory.tiered.TieredMemory
 import magic.interaction.EventHandlerManager
-import magic.app.services.bridge.{AgentRuntimeBridge, CheckpointManager, WebSocketSessionManager, SSEEventBridge}
+import magic.app.services.bridge.{AgentRuntimeBridge, CheckpointManager, WebSocketSessionManager, SSEEventBridge, MainAgentPromptResolver}
 import magic.app.models.uctoo.AgentsPO
 import magic.app.services.uctoo.AgentsService
 import magic.tool.webmcp.{SSEConnectionManager, PendingToolCallManager, FrontendToolRegistry, FrontendToolDefinition, WebMCPToolContext, WebMCPToolHelper}
@@ -85,7 +86,9 @@ public class WebMCPProtocol {
         this._chatModel = chatModel
         
         if (skillManager.isSome() && chatModel.isSome()) {
-            let executor = ReactExecutor()
+            // 步数预算走独立的聊天档（Config.chatReactSteps，默认 60，env CHAT_REACT_STEPS）：
+            // 聊天是主入口，探索型请求（读文件 + 探查 + 写产物）用普通档 30 步必撞顶。
+            let executor = ReactExecutor(loop: Config.chatReactSteps)
             
             // 从数据库查询 MAIN agent
             let agentsService = AgentsService()
@@ -125,9 +128,11 @@ public class WebMCPProtocol {
         this._chatModel = chatModel
         
         if (skillManager.isSome() && chatModel.isSome()) {
-            let executor = ReactExecutor()
+            let executor = ReactExecutor(loop: Config.chatReactSteps)
             if (let Some(def) <- agentDef) {
-                let systemPrompt = def.systemPrompt
+                // 系统提示词一律来自可配置数据源：AGENTS.md（Agent 定义文件）→ agents 表 → config 表。
+                // 代码内不硬编码任何策略性提示词文案，详见 MainAgentPromptResolver。
+                let systemPrompt = MainAgentPromptResolver.resolve(agentDef, "WebMCPProtocol")
                 let agentName = def.name
                 let modelName = if (let Some(m) <- def.model) { m } else { "tokendance:mimo-v2.5" }
                 let agentModel = if (modelName.contains(":")) {
@@ -182,11 +187,11 @@ public class WebMCPProtocol {
                     let dbAgent = agentList[0]
                     fallbackName = dbAgent.name
                     this._agentId = dbAgent.id
-                    if (let Some(sp) <- dbAgent.systemPrompt) {
-                        fallbackPrompt = sp
-                    }
                     LogUtils.info("WebMCPProtocol: found MAIN agent from database: ${fallbackName}, UUID=${this._agentId}")
                 }
+                // 同上一分支：提示词只从可配置数据源解析，代码内不写死文案。
+                fallbackPrompt = MainAgentPromptResolver.resolve(None<AgentDefinition>, "WebMCPProtocol")
+
                 
                 let memory = TieredMemory(agentId: this._agentId)
                 this._agent = Some(SkillAwareAgent(
@@ -1291,6 +1296,8 @@ public class WebMCPProtocol {
                         // agent 已有系统提示词，追加技能知识库
                         agent.systemPrompt = agent.systemPrompt + "\n\n" + backendSkillPrompt
                     }
+                    // 交付约束等策略性规则不在这里注入——它们属于 Agent 定义文件（AGENTS.md）
+                    // 的内容，由 MainAgentPromptResolver 随 systemPrompt 一起带入。
 
                     // 加载历史上下文（用于多轮对话）
                     let checkpointManager = CheckpointManager()
@@ -1525,6 +1532,7 @@ public class WebMCPProtocol {
         } else {
             agent.systemPrompt = agent.systemPrompt + "\n\n" + backendSkillPrompt
         }
+        // 策略性提示词（交付约束等）由 AGENTS.md 承载，随 agent.systemPrompt 一并带入，不在此注入。
 
         // 加载历史上下文（用于多轮对话）
         let checkpointManager = CheckpointManager()
@@ -1547,6 +1555,14 @@ public class WebMCPProtocol {
 
         // 创建 Agent 请求
         let agentRequest = AgentRequest(userMessage, conversation: conversation)
+
+        // 本轮开始：清掉上一轮残留的取消标志。
+        // 取消标志（cancelFlags）是会话级的，不随某一轮执行结束而自动清除；
+        // 上一轮点过「停止」后如果没走到清除点，新一轮会一进来就被判定为已取消，
+        // 表现为「发一句话立刻返回空回复」。这里在启动本轮前统一清一次。
+        if (!_sessionId.isEmpty()) {
+            WebSocketSessionManager.instance.clearCancelFlag(_sessionId)
+        }
 
         // 启动 progress 定时器（防止前端超时）
         let stopProgress = AtomicBool(false)
@@ -1599,6 +1615,15 @@ public class WebMCPProtocol {
                                 if (!_sessionId.isEmpty() && sseMgr.hasConnection(_sessionId)) {
                                     SSEEventBridge.instance.pushContentStream(sseMgr, _sessionId, chunk, 0)
                                 }
+                            }
+                            // 协作式取消：前端点「停止」后经 notifications/cancelled 落到本会话的
+                            // 取消标志，这里在每个正文增量处理完后立刻探测。一旦置位就停止迭代，
+                            // 避免后端继续调模型 / 跑工具（此前 agent 必定跑完，用户点了停止照样烧 token）。
+                            // 采用协作式而非强杀： AsyncAgentResponse.next() 是阻塞读，
+                            // 只能在取到下一个 chunk 的间隙让出，对 LLM 流式场景已足够及时。
+                            if (!_sessionId.isEmpty() && WebSocketSessionManager.instance.isCancelled(_sessionId)) {
+                                LogUtils.info("WebMCP completion stream: cancel requested for session ${_sessionId}, stopping iteration")
+                                break
                             }
                         case None =>
                             // 迭代器正常结束
@@ -1850,6 +1875,11 @@ public class WebMCPProtocol {
 
     /**
      * 构建 Agent 系统提示词（包含技能信息、前端工具、页面导航信息）
+     *
+     * 边界说明：本函数只装配**运行时动态数据**（当前装了哪些技能、前端注册了哪些工具、
+     * 该用户能访问哪些菜单）——这些内容在运行时才存在，无法写进静态的 Agent 定义文件。
+     * 任何**策略性 / 业务性提示词**（人格、交付约束、委派规则等）都必须写在
+     * `AGENTS.md` 里由 MainAgentPromptResolver 带入，禁止在本文件或任何 .cj 中硬编码。
      *
      * 注入内容：
      * 1. 基础说明（http_request 工具使用）

@@ -34,6 +34,16 @@ public class WebMCPController {
     /// 到点即主动关闭，由客户端带 lastEventId 重连，避免连接与心跳协程泄漏。
     public static let EVENTS_HEARTBEAT_MAX_TICKS: Int64 = 120
 
+    /// 单次重连回放的条数上限（传给 SSEConnectionManager.replayEvents）。
+    /// 与 SSEEventLog.REPLAY_MAX 默认值一致，显式写出是为了让上限在调用点可见。
+    public static let REPLAY_MAX_FRAMES: Int64 = 200
+
+    /// 回放写帧的分批粒度：每写满这么多帧让出一次（sleep 极短），
+    /// 使内核/前端有机会把已到达的帧消费掉，而不是被一整批数据瞬间灌满。
+    /// 配合 SSEEventLog.REPLAY_MAX（条数上限）共同防止重连回放把浏览器标签页打爆
+    /// （2026-10-02 实测：2048 帧一次性回放 → 前端 Out of Memory）。
+    public static let REPLAY_FLUSH_BATCH: Int64 = 50
+
     private let _skillManager: SkillManager
     private let _chatModel: ChatModel
     private let _agentLoadManager: AgentLoadManager
@@ -184,6 +194,11 @@ public class WebMCPController {
             let (method, requestId) = parseMethodAndId(body)
             if (method.startsWith("notifications/")) {
                 LogUtils.info("WebMCP notification early return: ${method}, skipping protocol initialization")
+                // 通知不参与协议初始化，但 notifications/cancelled 必须落地到会话的取消标志，
+                // 否则前端点了「停止」后端 agent 仍会照常跑完（spec §4.3 / §5.2.1 规则 4）。
+                // 此前这里直接 return，取消信号被静默丢弃，是本条链路断掉的第一环。
+                // 这里在返回前把通知转交给会话绑定的 Protocol，复用其既有的取消处理。
+                dispatchNotificationToSession(body, _extractUserId(req))
                 if (requestId.isSome()) {
                     let resultObj = JsonObject()
                     resultObj.put("success", JsonBool(true))
@@ -253,6 +268,31 @@ public class WebMCPController {
     }
 
     /**
+     * 把通知转交给会话绑定的 Protocol 实例处理
+     *
+     * 只消费 handleMessage 的**副作用**（notifications/cancelled →
+     * WebSocketSessionManager.cancelAgent），不消费其返回值——
+     * 通知该返回什么由调用方按 HTTP 层语义决定，协议层不参与。
+     *
+     * 会话 ID 固定 "webmcp-default"，与本控制器其余分支保持一致，
+     * 保证取消标志打在同一个会话上（真流式分支读的是同一个 _sessionId）。
+     */
+    private func dispatchNotificationToSession(body: String, userId: String): Unit {
+        let sessionId = "webmcp-default"
+        let protocol = if (_sessions.contains(sessionId)) {
+            let p = _sessions.get(sessionId).getOrThrow()
+            _initProtocolInfrastructure(p, sessionId, userId)
+            p
+        } else {
+            let p = WebMCPProtocol(_skillManager, _chatModel, getMainAgentDef())
+            _initProtocolInfrastructure(p, sessionId, userId)
+            _sessions.add(sessionId, p)
+            p
+        }
+        protocol.handleMessage(body)
+    }
+    
+    /**
      * 真流式 HTTP 响应（P2-3.3）
      *
      * 利用 http_lib ConnectionController 劫持连接，实现真流式 HTTP 响应。
@@ -302,6 +342,9 @@ public class WebMCPController {
         // notifications/* 方法提前返回（非流式，无需劫持连接）
         if (method.startsWith("notifications/")) {
             LogUtils.info("WebMCP real stream notification early return: ${method}")
+            // 与 handleStreamableHttp 对齐：notifications/cancelled 必须先落到会话的
+            // 取消标志上，否则真流式分支里正在跑的 agent 收不到停止信号。
+            dispatchNotificationToSession(body, _extractUserId(req))
             if (requestId.isSome()) {
                 let resultObj = JsonObject()
                 resultObj.put("success", JsonBool(true))
@@ -1033,13 +1076,21 @@ public class WebMCPController {
                 //    fromTail 时跳过回放：本轮首次连接只要「连接之后」的新事件，避免回放上轮残留。
                 var missed = ArrayList<String>()
                 if (!fromTail) {
-                    missed = _sseConnectionManager.replayEvents(sessionId, lastEventId)
+                    missed = _sseConnectionManager.replayEvents(sessionId, lastEventId,
+                        maxFrames: WebMCPController.REPLAY_MAX_FRAMES)
                 }
+                var replayIdx: Int64 = 0
                 for (frame in missed) {
                     if (!writeSSE(frame)) {
                         LogUtils.warn("[WebMCPController] Events replay write failed")
                         _sseConnectionManager.unregister(sessionId, subId)
                         return
+                    }
+                    replayIdx++
+                    // 分批让出：每 REPLAY_FLUSH_BATCH 帧睡 2ms，避免在一个协程里连续写满
+                    // socket 发送缓冲，前端一次性收到整批 → 渲染队列堆积 → 内存飙升。
+                    if (replayIdx % WebMCPController.REPLAY_FLUSH_BATCH == 0) {
+                        sleep(Duration.millisecond * 2)
                     }
                 }
                 LogUtils.info("[WebMCPController] Events replay connection established: sessionId=${sessionId}, lastEventId=${lastEventId.toString()}, replayed=${missed.size.toString()}")

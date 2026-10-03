@@ -6,7 +6,9 @@
 
 **源码位置**：`src/app/tools/loaddbinfo/loaddbinfo.cj`
 
-## 用法 TODO：bug命令行模式报找不到数据库连接，但是Web端数据库管理页面加载数据库信息功能可用。
+## 用法
+
+> ⚠️ 已知坑：命令行模式报「找不到数据库连接」，改走 Web 端「数据库管理 → 加载数据库信息」功能（同一份实现）。
 
 ```bash 
 cjpm run --skip-build --name magic.app.tools.loaddbinfo --run-args "--db <数据库名>"
@@ -34,8 +36,8 @@ cjpm run --skip-build --name magic.app.tools.loaddbinfo --run-args "--db <数据
 ## 工具链工作流
 
 ```
-数据库结构
-    ↓cjpm run --skip-build --name magic.app.tools.loaddbinfo --run-args "--db uctoo" # 加载表结构到 db_info 表
+数据库结构（新表 DDL 先落 sql/incremental/，类型口径对齐 sql/uctooDB.sql 同族表）
+    ↓cjpm run --skip-build --name magic.app.tools.loaddbinfo --run-args "--db uctoo" # 加载表结构到 db_info 表（新增/改结构后必须重跑，否则后面三个工具读不到新表）
     ↓cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --table entity" # 生成宿主 CRUD 模块
     ↓cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table entity" # 生成 Web 管理界面
     ↓cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name entity --db uctoo --table entity --mode process" # 生成插件
@@ -45,3 +47,5 @@ cjpm run --skip-build --name magic.app.tools.loaddbinfo --run-args "--db <数据
 
 - 需要先配置 `.env` 文件中的 `orm_*` 数据源配置
 - `db_info` 表是 crudgen/crudweb/plugingen 的数据源，表结构变更后需重新执行
+- **新增表或加列后必须重新跑一次 loaddbinfo**：crudgen/crudweb/plugingen 全部从 `db_info` 读结构，不刷新等于新表不存在，生成工具会报错或生成空壳
+- 新增/变更表结构的完整规范与检查清单见 [增量 SQL 规范](../specs/uctoo-database-sql-convention.md)

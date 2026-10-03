@@ -48,7 +48,12 @@ public class JWTUtil {
             
             token
         } catch (e: Exception) {
-            LogUtils.error("generateAccessToken failed: ${e.message}")
+            // 这里失败 ≠ 用户没权限，返回空 token 后前端拿到 "" 会被判成 401（"密码错误"），
+            // 很容易把人往密码/session 方向带偏。加密库本身炸掉也走这里：
+            // stdx 的 opensslFFI 只认 libcrypto-3-x64.dll，系统装的是 OpenSSL 4.x 时加载失败，
+            // 符号解析异常 → 落到这个 catch → 空 token → 401。
+            // 诊断见 skills/uctoo-dev-manual/specs/runtime-openssl-dll-guide.md。
+            LogUtils.error("generateAccessToken FAILED-TO-SIGN (returning empty token, caller will see 401): ${e.message}")
             ""
         }
     }
@@ -75,7 +80,10 @@ public class JWTUtil {
             
             token
         } catch (e: Exception) {
-            LogUtils.error("generateRefreshToken failed: ${e.message}")
+            // 同 generateAccessToken：加密库（stdx opensslFFI → libcrypto-3-x64.dll）加载失败
+            // 与业务校验失败都会走这里，详见
+            // skills/uctoo-dev-manual/specs/runtime-openssl-dll-guide.md。
+            LogUtils.error("generateRefreshToken FAILED-TO-SIGN (returning empty token): ${e.message}")
             ""
         }
     }

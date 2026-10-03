@@ -854,6 +854,37 @@ main(args: Array<String>): Unit {
     }
     
     println("")
+    println("[STEP] Normalizing OpenSSL 3.x DLL filenames for the stdx loader...")
+
+    // ── 背景（社区上报：新机器搭环境后登录接口 401）──────────────────────────
+    // stdx 的 libcangjie-dynamicLoader-opensslFFI.dll 把文件名写死成 libcrypto-3-x64.dll /
+    // libssl-3-x64.dll（版本号 3 与 -x64 后缀都在二进制里），而上面这一步拷进来的是
+    // libcrypto-3.dll（无 -x64）→ Windows 只会去 PATH 找 OpenSSL：机器上装的是 4.x 时找不到，
+    // SHA256_Init 符号解析失败抛异常 → JWTUtil.cj:50-53 的 catch 吞掉并返回空 token "" →
+    // 前端拿到空 token → DeserializeUserMiddleware 验不出来 → 401（表现为"密码错误"）。
+    // 这里把自带的那份 OpenSSL 3.0.13 复制成加载器认的名字，exe 目录优先于 PATH，
+    // 于是宿主自带 3.x，用户系统装 3.x/4.x/没装都不再影响。
+    // 详见 skills/uctoo-dev-manual/specs/runtime-openssl-dll-guide.md。
+    var opensslCount = 0
+    let libCrypto3 = Path("${binDir}/libcrypto-3.dll")
+    if (exists(libCrypto3)) {
+        if (safeCopy(libCrypto3.toString(), Path("${binDir}/libcrypto-3-x64.dll").toString(), true)) {
+            opensslCount = opensslCount + 1
+        }
+    }
+    let libSsl3 = Path("${binDir}/libssl-3.dll")
+    if (exists(libSsl3)) {
+        if (safeCopy(libSsl3.toString(), Path("${binDir}/libssl-3-x64.dll").toString(), true)) {
+            opensslCount = opensslCount + 1
+        }
+    }
+    if (opensslCount > 0) {
+        println("  [OK] Ensured ${opensslCount.toString()} OpenSSL 3.x DLL(s) named as the stdx loader expects (*-x64.dll)")
+    } else {
+        println("  [WARN] No libcrypto-3.dll / libssl-3.dll in bin/ - stdx openssl FFI may fall back to system OpenSSL")
+    }
+
+    println("")
     println("[STEP] Creating SSL directory structure...")
     
     // Create SSL directories (but DO NOT copy actual certificates - they are sensitive)

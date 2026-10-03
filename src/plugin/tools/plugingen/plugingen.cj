@@ -20,7 +20,9 @@ import pgsql.PostgresDriver
  *
  * 用法：
  *   # 表驱动：从 db_info 读表结构，生成五层 CRUD 插件到 skills/{name}/
+ *   #   单表：--table <表名>；多表（一次生成或分多次累积）：--tables 逗号分隔
  *   plugingen --name <插件名> --db <数据库名> --table <表名>
+ *   plugingen --name <插件名> --db <数据库名> --tables <表1>,<表2>,<表3>
  *
  *   # 空白骨架：仅生成 SKILL.md + plugin.yaml + 包占位 + 插件入口
  *   plugingen --name <插件名> --blank
@@ -29,7 +31,11 @@ import pgsql.PostgresDriver
  *
  * 示例：
  *   plugingen --name entity --db uctoo --table entity
+ *   plugingen --name github --db uctoo --tables repository,branch,commit,repository_file
  *   plugingen --name mytool --blank
+ *
+ * 同名插件分多次生成不同表时会自动累积（公共产物的表清单追加、不覆盖）；
+ * 再次生成相同表只覆盖各层 AutoCreateCode 保护区，保留二次开发。
  */
 main(args: Array<String>) {
     println("Plugin Generator (plugingen) starting...")
@@ -182,8 +188,10 @@ main(args: Array<String>) {
         printHelp()
         return
     }
-    if (!contractOnly && tableName.isEmpty()) {
-        println("错误: 生成 CRUD 代码需要 --table（--tables 仅用于 --contract-only）")
+    // 解析 CRUD 目标表清单（--tables 逗号分隔优先，否则 --table）
+    let tableList = resolveTableList(tableName, tablesRaw)
+    if (!contractOnly && tableList.size == 0) {
+        println("错误: 生成 CRUD 代码需要 --table 或 --tables（多表用逗号分隔，如 repository,branch,commit）")
         printHelp()
         return
     }
@@ -235,7 +243,6 @@ main(args: Array<String>) {
     // §14.1 数据契约骨架（--contract / --contract-only）——
     // 与代码生成共用同一份 db_info 与同一个已初始化的 ORM 连接，故放在这里而非另起工具。
     if (emitContract) {
-        let tableList = resolveTableList(tableName, tablesRaw)
         if (tableList.size == 0) {
             println("错误: --contract 需要 --table 或 --tables")
             return
@@ -251,7 +258,7 @@ main(args: Array<String>) {
     }
 
     let generator = PluginGenerator()
-    if (generator.generateCrudPlugin(normalized, dbName, tableName)) {
+    if (generator.generateCrudPlugin(normalized, dbName, tableList)) {
         println("\n插件生成完成！")
         println("后续步骤:")
         println("1. cjpm build（build-sync 自动同步 skills/ -> src/plugins/ 并编译）")
@@ -297,8 +304,8 @@ func printHelp(): Unit {
     println("选项：")
     println("  --name <插件名>   插件唯一名（小写字母/数字/下划线；连字符自动转下划线）")
     println("  --db <数据库名>   表驱动模式：数据库名（读 db_info 表结构）")
-    println("  --table <表名>    表驱动模式：表名")
-    println("  --tables <表名表> 逗号分隔的多表（供 --contract / --contract-only 用）")
+    println("  --table <表名>    表驱动模式：单表名（与 --tables 二选一）")
+    println("  --tables <表名表> 逗号分隔的多表（CRUD 生成与 --contract 均支持，如 repository,branch,commit）")
     println("  --mode <轨>       加载轨：sync（缺省）/ dylib / process")
     println("  --contract        额外产出 DATA_CONTRACT.yaml 骨架（sync 轨，需连 DB）")
     println("  --contract-only   只产出 DATA_CONTRACT.yaml 骨架（不生成代码）")
@@ -317,6 +324,7 @@ func printHelp(): Unit {
     println("")
     println("示例：")
     println("  plugingen --name entity --db uctoo --table entity")
+    println("  plugingen --name github --db uctoo --tables repository,branch,commit,repository_file")
     println("  plugingen --name mytool --blank")
     println("  plugingen --name mytool --db uctoo --table entity --contract")
     println("  plugingen --name mytool --db uctoo --tables entity,tasks --contract-only")

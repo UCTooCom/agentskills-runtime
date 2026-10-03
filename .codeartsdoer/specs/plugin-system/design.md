@@ -1,5 +1,7 @@
 # 插件系统 - 技术设计文档
 
+> 版本：v5.2（2026-09-10 插件去中心化自动发现方案设计：①新增 §5.5.2——去掉 `plugins.yaml` 中心化配置，配置迁入各自 `plugin.yaml` 实现自完备描述；②复用 `ProgressiveSkillLoader` 目录扫描自动发现 `plugin.yaml`；③新建 `PluginDiscoveryService` + 向后兼容策略；④四阶段可视化演进路线。依据：AIDrivenArchitecture.md §观点1+§观点2"一切皆技能"去中心化。）
+> 版本：v5.1（2026-09-10 表白名单声明式配置修订：①plugins.yaml 新增 `tableWhitelist` 声明式字段，替代宿主代码硬编码；②`PluginManifestEntry.tableWhitelist` 字段 + `fromJsonValue` 解析 + `installHostServicesHook` 从 `processEntries` 读取；③新增 §5.5.1 表白名单声明式配置机制说明及三阶段可视化演进路线。依据：AIDrivenArchitecture.md §观点1"不硬编码业务功能，所有功能可视化配置"。）
 > 版本：v4.2（2026-09-03 复核修订：①新增 §0.6 L3 进程隔离轨实际落地——codelabs 插件完整 V4 CRUD 已实现并测试通过；②新增 §0.7 插件轻量化方案——三个可行优化方向（插件安装到宿主目录/插件 SDK 精简包/WASM 沙箱插件）及推荐实施路径；③host.db 服务实际契约（query/count/execute + `$raw:` 前缀约定）记录到正文；④回收站筛选实际机制（`filter` 查询参数动态构建 WHERE 子句）记录到正文。）
 > 版本：v4.0（2026-08-24 fountain/agentskills-runtime 基础设施深度复用修订）
 > v4.0 核心变更：①将第三章 14 项优化方案**融入第二章设计本体**，消除"设计正文 vs 优化附录"割裂；②修正 HTTP 类型迁移错误——plugin-spi **不依赖 http_lib**（可编译备份验证：dynamic→dynamic 依赖触发 `ld.lld: error: _CGP15http_lib.bufferiiHv was replaced` 符号重复）；③ServiceRegistry/PluginEventBus/PluginDylibLoader 实现方式从"自建"改为"委托/包装 fountain"；④插件发现从"手动反射扫描"改为"BeanFactory.annotationMap + lookupList<Plugin>()"。
@@ -2028,7 +2030,7 @@ L3 轨总控，职责：
 
 宿主在 RPC 连接上注册的服务 handler，插件进程经 `ctx.invoke` 反向调用——插件访问宿主能力的**唯一**入口：
 
-- **host.db**：query/execute 两方法；参数为受限查询描述（参数化 + 表白名单，禁透传任意 SQL 文本）；实现委托宿主 f_orm 数据源/连接池；**行级权限条件由宿主侧强制附加**（插件无法绕过）
+- **host.db**：query/execute 两方法；参数为受限查询描述（参数化 + 表白名单，禁透传任意 SQL 文本）；实现委托宿主 f_orm 数据源/连接池；**行级权限条件由宿主侧强制附加**（插件无法绕过）；**表白名单经 `plugins.yaml` 声明式配置**（§5.5.1），宿主启动时从 `PluginManifestEntry.tableWhitelist` 读取并注入 `setTableWhitelist`，不再硬编码于宿主代码中
 - **host.log**：日志转发 LogUtils（级别/消息/插件名前缀）
 - **host.cache**：键值缓存委托宿主 CacheManager；键空间以插件名隔离（防跨插件越权）
 
@@ -2087,13 +2089,182 @@ plugins:
     env: { LOG_LEVEL: "info" }
     enabled: true
     autoRestart: true          # 缺省 true
+    tableWhitelist:            # host.db 表白名单（声明式配置，缺省空=拒绝全部表）
+      - entity                 # 插件仅可访问白名单内表
 ```
 
 **plugin.yaml**（插件自描述，新增字段）：`mode: process`、`command`（产物路径）、`protocol`（缺省 "jsonrpc-stdio"）。
 
+#### 5.5.1 表白名单声明式配置机制（v5.1 新增，2026-09-10）
+
+**设计哲学**：遵循 AIDrivenArchitecture.md §观点1"不硬编码业务功能到系统中，所有功能均可通过可视化配置实现动态调整"。表白名单从宿主代码硬编码改为 `plugins.yaml` 声明式配置，新增插件/增删表只需修改 YAML 配置，**零宿主代码修改、零宿主重编**。
+
+**实现链路**：
+
+| 层级 | 文件 | 职责 |
+|------|------|------|
+| 配置声明 | `config/plugins.yaml` | `tableWhitelist: [table1, table2, ...]` YAML 数组声明 |
+| 配置解析 | `src/plugin/plugin_config.cj` | `PluginManifestEntry.tableWhitelist: ArrayList<String>` 字段 + `fromJsonValue` 解析 |
+| 运行时应用 | `src/plugin/cordis_host_manager.cj` | `installHostServicesHook` 从 `processEntries` 读取已解析的 `tableWhitelist`，调用 `hostServices.setTableWhitelist()` |
+| 安全执行 | `src/plugin/cordis_host_services.cj` | `executeDbOperation` 白名单校验不变——未配置白名单的插件默认拒绝全部表访问 |
+
+**安全边界不变**：缺省空列表 = 拒绝全部表访问（`CordisHostServices` 白名单校验逻辑不变），插件必须显式声明所需表才能访问。
+
+**可视化/自动化演进路线（三阶段）**：
+
+```
+当前：plugins.yaml 声明式配置（人工编辑 YAML）
+  ↓
+近期：crudweb 生成插件管理页面，可视化编辑 plugins.yaml 的 tableWhitelist
+  ↓
+远期：loaddbinfo 扫描 DDL 自动推断插件关联表，自动填充 tableWhitelist
+```
+
+与 db_info 驱动代码生成（crudgen/crudweb）一脉相承，最终目标是全自动化。
+
+#### 5.5.2 插件去中心化自动发现机制（v5.2 设计，2026-09-10）
+
+**问题背景**：§5.5.1 的 `plugins.yaml` 声明式配置虽消除了宿主代码硬编码，但仍需维护一个**中心化配置文件**——新增插件需编辑 `config/plugins.yaml`，与"一切皆技能"的自完备、自发现设计哲学存在差距。
+
+**设计目标**：去掉 `plugins.yaml` 中心化配置文件，将插件配置信息去中心化迁移到各自的 `plugin.yaml` 中，复用已有的技能目录扫描机制（`ProgressiveSkillLoader`）自动发现 `plugin.yaml` 并加载插件，实现插件信息的**自完备描述 + 自动发现 + 零中心配置**。
+
+**可行性分析**：
+
+| 维度 | 现有机制 | 去中心化复用点 |
+|------|----------|----------------|
+| 目录扫描 | `ProgressiveSkillLoader.loadSkillsProgressively` 已支持多目录 `Directory.walk` + 直接子目录过滤 | 直接复用，扫描子目录时同时发现 `plugin.yaml` |
+| YAML 解析 | `PluginConfigParser` 用 yaml4cj 解析 `plugins.yaml`；`PluginHostManager.parsePluginYamlRoutes` 手写解析 `plugin.yaml` routes | 统一为 yaml4cj 解析 `plugin.yaml` 全量字段 |
+| 插件配置 | `PluginManifestEntry` 从 `plugins.yaml` 解析；`plugin.yaml` 仅 routes 被读取 | `PluginManifestEntry` 改为从 `plugin.yaml` 构造，字段合并 |
+| 路由注册 | `ExternalPluginRouteGateway.registerPluginRoutes` 从 `plugin.yaml` routes 注册 | 不变，routes 仍在 `plugin.yaml` 中 |
+| 宿主服务代理 | `installHostServicesHook` 从 `processEntries` 读取 `tableWhitelist` | 不变，`tableWhitelist` 迁入 `plugin.yaml` 后同样经 `PluginManifestEntry` 传递 |
+
+**方案设计**：
+
+##### 1. plugin.yaml 自完备化
+
+将 `plugins.yaml` 中的宿主侧字段迁移到 `plugin.yaml`，使每个插件的 `plugin.yaml` 成为**唯一配置源**：
+
+```yaml
+# skills/{name}/plugin.yaml — 自完备描述（去中心化后）
+name: due_diligence_agent          # 插件唯一名（原有）
+version: 1.0.0                      # 版本（原有）
+mode: process                       # 加载轨（原有）
+protocol: jsonrpc-stdio             # 通信协议（原有）
+command: ./target/release/bin/skill_due_diligence_agent.exe  # 产物路径（原有）
+description: 企业信用与风控尽调智能体  # 描述（原有）
+
+# ↓ 从 plugins.yaml 迁入的字段
+enabled: true                       # 启用开关（缺省 true）
+order: 6                            # 加载顺序（缺省 0）
+autoRestart: true                   # 崩溃自愈（缺省 true）
+tableWhitelist:                     # host.db 表白名单（从 plugins.yaml 迁入）
+  - due_diligence_task
+  - due_diligence_enterprise
+  - due_diligence_equity
+  - due_diligence_risk
+  - due_diligence_report
+  - due_diligence_mcp_call_log
+
+# ↓ 原有字段不变
+routes:
+  - method: POST
+    path: /api/v1/uctoo/due_diligence_task/add
+  # ... 38 条路由
+```
+
+`plugins.yaml` 中仅 process 模式字段（`command/args/env/autoRestart/tableWhitelist`）迁入 `plugin.yaml`；sync/dylib 模式字段（`className/routeClass`）也迁入对应插件的 `plugin.yaml`。
+
+##### 2. PluginDiscoveryService — 自动发现服务
+
+新建 `src/plugin/plugin_discovery_service.cj`，复用 `ProgressiveSkillLoader` 的目录扫描框架：
+
+```
+PluginDiscoveryService.discover(skillBaseDirectories: Array<String>):
+  for each baseDir:
+    Directory.walk → 遍历直接子目录
+    for each subdir:
+      pluginYamlPath = "${subdir}/plugin.yaml"
+      if (File.exists(pluginYamlPath)):
+        entry = PluginManifestEntry.fromPluginYaml(pluginYamlPath)  ← yaml4cj 全量解析
+        if (entry.enabled && entry.mode == Process):
+          discovered.add(entry)
+  return discovered  ← ArrayList<PluginManifestEntry>
+```
+
+**关键设计**：
+- 复用 `ProgressiveSkillLoader` 的多目录配置（`SKILL_INSTALL_PATH` 环境变量 + 默认 `./skills`）
+- 与 SKILL.md 发现在同一目录扫描中完成，**零额外 I/O 开销**（目录已遍历）
+- `plugin.yaml` 不存在的子目录自动跳过（纯技能目录无插件）
+- `enabled: false` 的插件跳过（与 `plugins.yaml` 的 enabled 语义一致）
+
+##### 3. PluginHostManager.loadAll 改造
+
+```
+loadAll():
+  # 去中心化：自动发现 plugin.yaml
+  discovered = PluginDiscoveryService.discover(skillBaseDirectories)
+  
+  # 向后兼容：如果 config/plugins.yaml 存在，合并其声明（过渡期）
+  if (File.exists("config/plugins.yaml")):
+    legacyList = PluginConfigParser.parseFromFile("config/plugins.yaml")
+    discovered = mergeDiscoveredWithLegacy(discovered, legacyList)
+  
+  # 后续逻辑不变：三轨分发
+  for each entry in discovered:
+    match (entry.mode):
+      case Sync | Dylib => loadSingle(entry, result)
+      case Process => 标记 hasProcess
+  if (hasProcess):
+    mgr.loadProcessPlugins(discovered)
+    registerProcessPluginRoutes(discovered, mgr)
+```
+
+**向后兼容策略**：过渡期 `config/plugins.yaml` 存在时合并其声明（legacy 覆盖 discovered 的同名字段），最终阶段删除 `plugins.yaml` 支持。
+
+##### 4. PluginManifestEntry.fromPluginYaml — 统一解析
+
+将 `PluginManifestEntry.fromJsonValue` 复用为 `fromPluginYaml`（`plugin.yaml` 与 `plugins.yaml` 条目字段同构），同时解析 `routes` 字段为 `ExternalRoute` 列表（替代 `parsePluginYamlRoutes` 手写解析）：
+
+```
+PluginManifestEntry.fromPluginYaml(yamlPath: String):
+  json = yaml4cj.decode(File.read(yamlPath))
+  entry = fromJsonValue(json)   ← 复用现有解析（含 tableWhitelist）
+  entry.routes = parseRoutes(json)  ← 新增 routes 解析
+  return entry
+```
+
+**实施变更清单**：
+
+| 文件 | 改动 | 说明 |
+|------|------|------|
+| `skills/{name}/plugin.yaml` | 新增 `enabled/order/autoRestart/tableWhitelist` 字段 | 从 `plugins.yaml` 迁入，自完备化 |
+| `config/plugins.yaml` | 标记为 deprecated（过渡期保留） | 最终删除 |
+| `src/plugin/plugin_discovery_service.cj` | **新建** | 自动发现服务，复用目录扫描框架 |
+| `src/plugin/plugin_config.cj` | `PluginManifestEntry` 新增 `routes` 字段 + `fromPluginYaml` 方法 | 统一解析入口 |
+| `src/plugin/plugin_host_manager.cj` | `loadAll` 改为先走 `PluginDiscoveryService`，向后兼容合并 `plugins.yaml` | 三轨分发逻辑不变 |
+| `src/plugin/cordis_host_manager.cj` | 不变 | `installHostServicesHook` 从 `processEntries` 读取 `tableWhitelist` 逻辑不变 |
+
+**与 AIDrivenArchitecture.md 的对齐**：
+
+- §观点1"不硬编码业务功能"：去中心化后，新增插件只需放置到技能目录，**零配置文件编辑**（plugin.yaml 随插件分发）
+- §观点2"双驱动"：无 AI 时自动发现机制仍完备运行（确定性目录扫描）；有 AI 时 AI 可经 Agent 工具 inspect/activate/deactivate 插件
+- 与技能发现机制统一：SKILL.md 和 plugin.yaml 在同一目录扫描中发现，"一切皆技能"的插件 = SKILL.md（AI 行为）+ plugin.yaml（确定性能力 + 配置）+ 可执行文件
+
+**可视化/自动化演进路线（去中心化后更新）**：
+
+```
+当前：plugin.yaml 随插件自完备描述（去中心化，自动发现）
+  ↓
+近期：crudweb 生成插件管理页面，可视化查看/编辑各插件 plugin.yaml
+  ↓
+远期：plugingen 生成新插件时自动产出自完备 plugin.yaml（含 tableWhitelist 推断）
+  ↓
+终极：loaddbinfo 扫描 DDL → plugingen 自动生成插件 → plugin.yaml 自完备 → 自动发现加载
+```
+
 ### 5.6 安全边界
 
-- 插件进程对宿主能力的访问**仅经服务代理**（host.db/host.log/host.cache），参数化+表白名单+行级权限宿主侧强制
+- 插件进程对宿主能力的访问**仅经服务代理**（host.db/host.log/host.cache），参数化+表白名单+行级权限宿主侧强制；**表白名单经 `plugin.yaml` 声明式配置**（§5.5.1/§5.5.2），增删表无需重编宿主、无需编辑中心配置
 - 插件间服务调用受 cordis 服务隔离约束（默认不可见其他插件服务）
 - 中间件链（认证/权限/行级/操作日志）全部宿主侧执行，插件无法绕过
 - host.cache 键空间按插件名隔离
@@ -2119,6 +2290,8 @@ cordis EventRegistry（emit/parallel/serial/bail/waterfall）↔ 进程内 Plugi
 
 | 版本 | 日期 | 核心变更 |
 |------|------|---------|
+| v5.2 | 2026-09-10 | 插件去中心化自动发现方案设计：①新增 §5.5.2 插件去中心化自动发现机制——去掉 `plugins.yaml` 中心化配置，配置迁入各自 `plugin.yaml` 实现自完备描述；②复用 `ProgressiveSkillLoader` 目录扫描自动发现 `plugin.yaml`；③新建 `PluginDiscoveryService` + `loadAll` 改造 + 向后兼容策略；④四阶段可视化演进路线。依据：AIDrivenArchitecture.md §观点1+§观点2，用户"一切皆技能"去中心化需求 |
+| v5.1 | 2026-09-10 | 表白名单声明式配置修订：①§5.5 plugins.yaml 示例新增 `tableWhitelist` 字段；②新增 §5.5.1 表白名单声明式配置机制——`PluginManifestEntry.tableWhitelist` 字段 + `fromJsonValue` 解析 + `installHostServicesHook` 从 `processEntries` 读取替代硬编码 + 三阶段可视化演进路线（plugins.yaml → crudweb → loaddbinfo）；③§5.2.3 host.db 描述更新；④§5.6 安全边界描述更新。依据：AIDrivenArchitecture.md §观点1"不硬编码业务功能，所有功能可视化配置" |
 | v5.0 | 2026-08-28 | 阶段四立项修订（cordis-cj 集成）：①新增第五章 L3 进程隔离插件轨设计（三轨定位/宿主三组件/插件形态/生命周期/配置/安全边界/风险闸门）；②新增 ADR-006 引入 cordis-cj 决策（含权衡与一票否决闸门）；③§0.3 路由表新增 L3 进程轨行；④新增 §0.5 六大限制消解对照表；⑤版本历史章节号顺延为第六章。依据：可行性报告附7.14 cordis-cj 完整调研 |
 | v4.0 | 2026-08-24 | fountain/agentskills-runtime 基础设施深度复用修订：①将第三章 14 项优化方案融入第二章设计本体，消除"设计正文 vs 优化附录"割裂；②修正 HTTP 类型迁移错误——plugin-spi 不依赖 http_lib；③ServiceRegistry/PluginEventBus/PluginDylibLoader 实现方式从"自建"改为"委托/包装 fountain"；④插件发现从"手动反射扫描"改为"BeanFactory.annotationMap + lookupList<Plugin>()" |
 | v3.x | 2026-08-24 | v3.1 runtime 自有基础设施复核、v3.0 fountain 深度复用（新增第三章优化方案，从"参考 fountain"升级为"直接复用 fountain 生产级基础设施"） |
@@ -2129,7 +2302,7 @@ cordis EventRegistry（emit/parallel/serial/bail/waterfall）↔ 进程内 Plugi
 
 ---
 
-> **文档状态**：v5.0 阶段四立项（cordis-cj 集成 L3 进程隔离轨）——第五章设计 + ADR-006 决策 + §0.5 限制消解对照就绪，与 spec.md v3.0（REQ-PS-015）、tasks.md v4.0（PS-T022~T030）、可行性报告附7.14 四文档同步。阶段一~三落地状态见 §0（v4.1 实际落地与限制说明）。
+> **文档状态**：v5.2 插件去中心化自动发现方案设计完成——§5.5.2 新增去中心化机制（`plugin.yaml` 自完备 + `PluginDiscoveryService` 自动发现 + 向后兼容策略），四阶段可视化演进路线就绪。v5.1 表白名单声明式配置已落地。与 spec.md v3.3、tasks.md v4.0 同步。
 >
 > **下一步**：①Spike-1 工具链兼容验证（PS-T022：人工独立 cmd 在 apps/cordis-cj 用宿主 cjc 1.0.5 编译，一票否决闸门）；②Spike-2 Windows 可编译性验证（PS-T023：失败则 vendor 剥离 UDS 仅留 stdio）；③双闸门通过后按 PS-T024~T029 顺序推进（vendor → CordisHostManager → 服务代理 → 网关 → 工具适配 → 集成测试）。
 ```

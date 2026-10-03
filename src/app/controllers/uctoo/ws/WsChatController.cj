@@ -9,7 +9,7 @@ import magic.core.agent.{AgentRequest, AgentResponse}
 import magic.core.AgentSessionContext
 import magic.agent.memory.tiered.TieredMemory
 import magic.interaction.EventHandlerManager
-import magic.app.services.bridge.AgentRuntimeBridge
+import magic.app.services.bridge.{AgentRuntimeBridge, MainAgentPromptResolver}
 import magic.app.models.uctoo.AgentMessagesPO
 import magic.app.services.uctoo.AgentMessagesService
 import magic.tool.{TokenManager, SessionContext}
@@ -61,7 +61,8 @@ public class WsChatController {
         // v17: 从 AGENTS.md 动态加载主 Agent 定义（与 WebMCPProtocol.cj 一致的加载机制）
         let mainAgentDef = agentLoadManager.getMainAgent()
         if (let Some(def) <- mainAgentDef) {
-            let systemPrompt = def.systemPrompt
+            // 系统提示词只从可配置数据源解析（AGENTS.md → agents 表 → config 表），代码内不硬编码
+            let systemPrompt = MainAgentPromptResolver.resolve(mainAgentDef, "WsChatController")
             let agentName = def.name
             let modelName = if (let Some(m) <- def.model) { m } else { "deepseek" }
             let agentModel = if (modelName.contains(":")) {
@@ -108,9 +109,11 @@ public class WsChatController {
             )
             LogUtils.info("WsChatController: created agent from AGENTS.md: name=${agentName}, UUID=${_agentId}, systemPrompt length=${systemPrompt.size.toString()}")
         } else {
-            // 降级：AGENTS.md 未找到主 Agent 定义，使用硬编码默认值
-            LogUtils.warn("WsChatController: no main agent found in AGENTS.md, using fallback hardcoded agent")
+            // 降级：AGENTS.md 未找到主 Agent 定义。提示词仍只从可配置数据源解析
+            // （agents 表 MAIN → config 表 MAIN_AGENT_FALLBACK_PROMPT），不使用硬编码文案。
+            LogUtils.warn("WsChatController: no main agent found in AGENTS.md, resolving systemPrompt from configurable sources")
             _agentId = "ws-skill-assistant"
+            let fallbackPrompt = MainAgentPromptResolver.resolve(None<AgentDefinition>, "WsChatController")
             let memory = TieredMemory(agentId: _agentId)
             _agent = SkillAwareAgent(
                 skillManager: skillManager,
@@ -119,6 +122,7 @@ public class WsChatController {
                 executor: executor,
                 name: "Skill Assistant",
                 description: "An intelligent assistant that can use skills to help users",
+                systemPrompt: fallbackPrompt,
                 memory: Some(memory),
                 eventHandlerManager: None // v22修复：不再传 global，避免 agent_op 三层分发中 agent 层与 global 层重复触发（reasoning 推送两次）
             )

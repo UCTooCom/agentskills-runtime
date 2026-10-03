@@ -175,6 +175,24 @@ public class PromptConfig {
         CONVERSATION_SUMMARY_SYSTEM_PROMPT
     }
 
+    /**
+     * 通用提示词文件解析（供三段压缩提示词之外的模块把硬编码提示词外置）。
+     *
+     * 按 `loadFromDirs` 注入的目录顺序查找 `relPath`，首个命中即返回；
+     * 未命中返回**空串**，由调用方决定是回落内置默认还是报错——
+     * 本类不替调用方"猜"一份默认文案。
+     *
+     * 用法：把 `vision-understand.system.md` 这类文件放进
+     * `skills/<name>/prompts/`（技能内，高优先级）或 `./prompts/`（全局兜底）即可覆盖，
+     * 改提示词无需改代码、无需重新编译。
+     */
+    public static func resolveCustom(relPath: String): String {
+        if (relPath.isEmpty()) {
+            return ""
+        }
+        PromptConfig.readFirstMatch(relPath)
+    }
+
     // ── 公开：按 profile 精确探测（供候选链逐项调用）─────────────────
 
     /**

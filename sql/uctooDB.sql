@@ -21025,9 +21025,9 @@ COMMENT ON TABLE "public"."wechat_reply" IS '微信公众号消息';
 -- ----------------------------
 -- Records of wechat_reply
 -- ----------------------------
-INSERT INTO "public"."wechat_reply" VALUES ('5a572101-7b5b-4a25-8a98-4f695ee1b824', 'verify', NULL, NULL, NULL, NULL, '验证码：', 1, 2, 1, NULL, '2024-10-31 10:08:14.668514+08', '2024-10-31 10:08:14.668514+08', NULL, 'wx2cdf8e0dffd4b2b2');
-INSERT INTO "public"."wechat_reply" VALUES ('122969df-f071-46e2-a4a5-bf6b7f757c1b', 'login', NULL, NULL, NULL, NULL, '<a href="https://demo.uctoo.com/pages/home/OrderQrcode">点击：确认登录</a>', 1, 2, 1, NULL, '2024-10-31 10:08:14.668514+08', '2024-10-31 10:08:14.668514+08', NULL, 'wx2cdf8e0dffd4b2b2');
-INSERT INTO "public"."wechat_reply" VALUES ('bb511c96-4be2-482b-a864-d80b680fcdd4', NULL, NULL, NULL, NULL, NULL, '<a href="https://demo.uctoo.com/pages/home/OrderQrcode">点击这里：免费试用</a>', 1, 2, 1, NULL, '2024-10-31 10:08:14.668514+08', '2024-10-31 10:08:14.668514+08', NULL, 'wx2cdf8e0dffd4b2b2');
+INSERT INTO "public"."wechat_reply" VALUES ('5a572101-7b5b-4a25-8a98-4f695ee1b824', 'verify', NULL, NULL, NULL, NULL, '验证码：', 1, 2, 1, NULL, '2024-10-31 10:08:14.668514+08', '2024-10-31 10:08:14.668514+08', NULL, NULL);
+INSERT INTO "public"."wechat_reply" VALUES ('122969df-f071-46e2-a4a5-bf6b7f757c1b', 'login', NULL, NULL, NULL, NULL, '<a href="https://demo.uctoo.com/pages/home/OrderQrcode">点击：确认登录</a>', 1, 2, 1, NULL, '2024-10-31 10:08:14.668514+08', '2024-10-31 10:08:14.668514+08', NULL, NULL);
+INSERT INTO "public"."wechat_reply" VALUES ('bb511c96-4be2-482b-a864-d80b680fcdd4', NULL, NULL, NULL, NULL, NULL, '<a href="https://demo.uctoo.com/pages/home/OrderQrcode">点击这里：免费试用</a>', 1, 2, 1, NULL, '2024-10-31 10:08:14.668514+08', '2024-10-31 10:08:14.668514+08', NULL, NULL);
 
 -- ----------------------------
 -- Table structure for wechat_tags

@@ -158,6 +158,8 @@ FROM public.sub_agent_invocations ORDER BY created_at DESC LIMIT 20;
 | 11 | coder 技能无 `agents/` | `skills/{cangjie,web,app}-coder/` 三处均无该目录（cangjie-coder 的已删并并入四步工作流） |
 | 12 | 子 agent 只靠约定注册 | 唯一来源是各技能 `agents` 子目录；已于 2026-09-28 补齐"删除即下线"（软删） |
 | 13 | 禁改假加载入口 | 真入口是 `SkillManagementService.loadSkillsFromDirectory`；`src/skill/skill_loader.cj:55` 是桩 |
+| 14 | 二次开发底座优先 | 规范源 `uctoo-dev-manual` + `docs/uctoo-v4/*.md`；脚手架走 `loaddbinfo` → `plugingen`/`crudgen`/`crudweb`，禁手撸；插件下线走 `pluginuninstall`。见 `SKILL.md` 铁律 14 |
+| 15 | 大工程拆分为多子系统工程 | 拆分维度优先级（交付面→数据/领域→技术栈→人回路）、颗粒度红线、集成契约先定后动、L2 硬档位、主工程 `SPECS_INDEX.md` 目录与闸口同步。见 `SKILL.md「大工程拆分」` 与铁律 15 |
 
 ---
 
@@ -170,3 +172,5 @@ FROM public.sub_agent_invocations ORDER BY created_at DESC LIMIT 20;
 | 改动阶段集合 | `SddOrchestrationService.STAGES` 唯一定义，别在控制器复制一份 |
 | 新增产物类型 | `artifactFileForStage` / `artifactTypeForStage`；`artifact_type` 只能取既有枚举 |
 | 删子 agent 声明文件 | 重启或触发同步即下线（软删）；确认 `SELECT ... FROM agents WHERE source_path LIKE ...` |
+| 新增模块 / 表 CRUD / 管理界面 / 插件 | 先跑 `loaddbinfo` + `plugingen`/`crudgen`/`crudweb` 出骨架再改，**禁止手撸五层**；`plugingen --mode process` 出的是独立 cjpm 工程，要单独 `cd skills/<name> && cjpm build` |
+| 删除插件 | 走 `pluginuninstall`（运行时/静态资产/DB 痕迹三层）；手删 `skills/{name}/` 会留下 `agent_skills` / `permissions` / `i18` 残留 |

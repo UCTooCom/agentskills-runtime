@@ -99,7 +99,7 @@ PluginDiscoveryService.discover(skillBaseDirectories: Array<String>):
   ↓
 近期：crudweb 生成插件管理页面，可视化查看/编辑各插件 plugin.yaml
   ↓
-远期：plugingen 生成新插件时自动产出自完备 plugin.yaml（含 tableWhitelist 推断）
+远期：plugingen 生成新插件时自动产出自完备 plugin.yaml（含 tableWhitelist 推断）—— **sync 内嵌轨已实现**：`PluginGenerator` 基于（历史 + 本次请求）合并表清单整体重渲聚合 `plugin.yaml`，含 `tableWhitelist` / `tables` / `routes`，支持多表与同名累积（不改 `AutoRouteConfig.cj` 存量轨）
   ↓
 终极：loaddbinfo 扫描 DDL → plugingen 自动生成插件 → plugin.yaml 自完备 → 自动发现加载
 ```

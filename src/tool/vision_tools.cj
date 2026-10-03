@@ -3,6 +3,7 @@
  */
 package magic.tool
 
+import magic.compactor.PromptConfig
 import magic.config.Config
 import magic.core.message.Message
 import magic.core.model.ChatRequest
@@ -62,6 +63,31 @@ public class ImageUnderstandTool <: AbsTool {
     3. 若图片模糊或某部分无法辨认，明确标注「[无法辨认]」，不要编造。
     4. 除转录内容外，不要添加任何评价、解释或客套话。
     """
+
+    // ── 可配置覆盖（与 PromptConfig 三段压缩提示词同一机制）──────────────
+    // 把同名文件放进 `skills/<name>/prompts/`（技能内，高优先级）或 `./prompts/`（全局兜底）
+    // 即可覆盖上面的内置文案，改提示词不需要改代码、不需要重新编译。
+
+    public static let FILE_SYSTEM_PROMPT = "vision-understand.system.md"
+    public static let FILE_DEFAULT_QUESTION = "vision-understand.question.md"
+
+    /// 图片理解的 system 提示词：优先取可配置文件，未配置则回落内置默认
+    public static func resolveSystemPrompt(): String {
+        let custom = PromptConfig.resolveCustom(ImageUnderstandTool.FILE_SYSTEM_PROMPT)
+        if (!custom.trimAscii().isEmpty()) {
+            return custom
+        }
+        ImageUnderstandTool.SYSTEM_PROMPT
+    }
+
+    /// 未显式给 question 时的默认提问：优先取可配置文件，未配置则回落内置默认
+    public static func resolveDefaultQuestion(): String {
+        let custom = PromptConfig.resolveCustom(ImageUnderstandTool.FILE_DEFAULT_QUESTION)
+        if (!custom.trimAscii().isEmpty()) {
+            return custom
+        }
+        ImageUnderstandTool.DEFAULT_QUESTION
+    }
 
     /// base64 体积保护（字符数）。约 10MB，超过则需先裁剪/降采样
     public static let MAX_IMAGE_CHARS: Int64 = 10 * 1024 * 1024
@@ -123,7 +149,7 @@ public class ImageUnderstandTool <: AbsTool {
         let modelOverride = ImageUnderstandTool.extractString(args, "model")
         var question = ImageUnderstandTool.extractString(args, "question")
         if (question.isEmpty()) {
-            question = ImageUnderstandTool.DEFAULT_QUESTION
+            question = ImageUnderstandTool.resolveDefaultQuestion()
         }
 
         // 1) 解析图片来源：本地文件 → base64 data URL；否则用远程直链
@@ -158,7 +184,7 @@ public class ImageUnderstandTool <: AbsTool {
             let model = ModelManager.createChatModel(modelName)
             let answer = model.create(
                 ChatRequest([
-                    Message.system(ImageUnderstandTool.SYSTEM_PROMPT),
+                    Message.system(ImageUnderstandTool.resolveSystemPrompt()),
                     Message.user(question, image: Some(imageRef))
                 ])
             ).message.content

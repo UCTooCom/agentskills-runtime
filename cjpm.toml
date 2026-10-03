@@ -1,19 +1,23 @@
 [package]
   cjc-version = "1.1.3"
-  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=curl\""
+  # -O2：2026-10-03 登录超时根因。
+  # cjc 默认 -O0（无优化），且 --int-overflow 默认 throwing（每个整数运算都插入溢出检查分支）。
+  # bcrypt 单次校验约 6800 万次整数运算，在 -O0 + 溢出检查下被放大到 7~22 秒，
+  # 超过前端 15s 超时，浏览器提前取消后被前端 catch 统一显示成「帐号密码错误」。
+  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std -O2 --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=curl\""
   description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
   link-option = "--allow-multiple-definition"
   name = "magic"
   output-type = "static"
   src-dir = ""
   target-dir = ""
-  version = "0.0.28"
+  version = "0.0.29"
 
 [dependencies]
   plugin_spi = { path = "./libs/plugin-spi" }
   yaml4cj = { path = "./libs/yaml4cj" }
   commonmark4cj = { path = "./libs/commonmark4cj" }
-  f_orm = { path = "./libs/fountain/f_orm" }
+  f_orm = { path = "./libs/fountain/f_orm", compile-option = "-O2" }
   f_data = { path = "./libs/fountain/f_data" }
   f_base = { path = "./libs/fountain/f_base" }
   f_config = { path = "./libs/fountain/f_config" }
@@ -22,13 +26,17 @@
   f_aspect = { path = "./libs/fountain/f_aspect" }
   f_bean = { path = "./libs/fountain/f_bean" }
   charset4cj = { path = "./libs/charset4cj" }
-  jwt4cj = { path = "./libs/jwt4cj", compile-option = "-Woff unused" }
+  jwt4cj = { path = "./libs/jwt4cj", compile-option = "-Woff unused -O2" }
   logcj = { path = "./libs/logcj", compile-option = "-Woff unused" }
   pgsql = { path = "./libs/pgsql-driver", compile-option = "-Woff unused" }
 #  redis_sdk = { path = "../CangjieMagic/resource/TPC/redis-sdk"}
 #  pbkdf2 = { path = "../CangjieMagic/resource/TPC/pbkdf2" }
 #  hicrypto = { path = "../CangjieMagic/resource/TPC/hicrypto" }
-  blowfish = { path = "./libs/blowfish-cj" }
+  # path-dependency 不继承父级 compile-option，热路径依赖必须单独开优化。
+  # --int-overflow=wrapping 在此处语义等价：Blowfish 定义在 uint32 上，add32 已用 & 0xffffffff
+  # 掩码，encipher 内其余操作全是 XOR，中间值恒小于 2^32，不存在 Int64 溢出。
+  # 关掉 throwing 的溢出检查分支即可消除 6800 万次冗余分支，不改变任何计算结果。
+  blowfish = { path = "./libs/blowfish-cj", compile-option = "-O2 --int-overflow=wrapping" }
   json4cj = { path = "./libs/json4cj" }
   cos = { path = "./libs/cos-sdk" }
   cj_mail = { path = "./libs/cj_mail" }
@@ -45,7 +53,10 @@
   # L3 进程隔离插件轨（cordis-cj 集成，spec REQ-PS-015 / design §5）
   # cordis_host 含 organization=ystyle，依赖键须用完整名 ystyle::cordis_host
   # 传递依赖：ystyle::cordis_core（path）、ystyle::jsonrpc 0.7.0、jsonvalue 1.1.0（中心仓拉取）
-  "ystyle::cordis_host" = { path = "./libs/cordis-cj/cordis_host" }
+  # -Woff unused：cordis_host 是 vendored 第三方库（organization=ystyle），
+  # path-dependency 不继承父级 compile-option，父级的 -Woff 对它无效。
+  # plugin_host.cj:642 的 allServicesRegistered 未被调用会持续刷 unused warning。
+  "ystyle::cordis_host" = { path = "./libs/cordis-cj/cordis_host", compile-option = "-Woff unused" }
   # 宿主 L3 代码直接使用 cordis_core 类型（InstanceStatus/DataModel/DataModelNull），
   # 须显式声明为宿主依赖（cordis_host 传递依赖不自动暴露给宿主源码）
   "ystyle::cordis_core" = { path = "./libs/cordis-cj/cordis_core" }
@@ -139,12 +150,12 @@
   path-option = ["./libs/cangjie-stdx-linux-x64-1.1.3.1/linux_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-unknown-windows-gnu]
-  compile-option = "--cfg \"ohos=false\""
+  compile-option = "-O2 --cfg \"ohos=false\""
 [target.x86_64-unknown-windows-gnu.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.x86_64-w64-mingw32]
-  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std --cfg \"ohos=false\""
+  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std -O2 --cfg \"ohos=false\""
 
 [target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]

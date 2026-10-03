@@ -3,6 +3,8 @@
  */
 package magic.app.services.bridge
 
+// 跳步校验里要用 ArrayList（本文件原先只用到 Array，故此前没引 std.collection）
+import std.collection.ArrayList
 import magic.tool.{SubAgentDispatchRequest, SubAgentDispatcher}
 import magic.app.services.uctoo.{
     SddProjectsService, CrontabService, LongRunningTaskArtifactService, AgentApprovalsService
@@ -360,6 +362,105 @@ public class SddOrchestrationService {
     }
 
     /**
+     * **所有**上游阶段（用于"跳步执行"的前置校验）。
+     *
+     * 与 `previousStage` 的区别：`previousStage` 只给紧邻的一步（下游拼上下文用），
+     * 而显式指定阶段时会**跳步**（例：research/spec/design/tasks 已完成，用户直接点
+     * "开始编码"），此时紧邻上游可能缺失中间几份产物，必须一次性把缺件全找出来。
+     *
+     * 未知阶段返回六步全集（调用方须先过 `isKnownStage`）。
+     */
+    public static func upstreamStages(stage: String): ArrayList<String> {
+        var found = false
+        var count: Int64 = 0
+        for (s in SddOrchestrationService.STAGES) {
+            if (s == stage) {
+                found = true
+            }
+            if (!found) {
+                count = count + 1
+            }
+        }
+        let out = ArrayList<String>()
+        for (i in 0..count) {
+            out.add(SddOrchestrationService.STAGES[i])
+        }
+        out
+    }
+
+    /**
+     * 显式指定阶段时的**上游产物前置校验**（跳步执行红线）。
+     *
+     * 为什么必须挡：指定阶段跑 code 而 tasks.md 不存在时，旧行为只是在 prompt 里
+     * 写一句"上游未找到"，子 agent 转头自己编前提——这就是"无依据编码"。
+     * 按项目口径（配置即事实、缺依据必须显式告知），这里直接拦下并给出**可操作**的
+     * 修复提示（把 output_dir 指到已落盘阶段文档的目录）。
+     *
+     * `allowMissing=true` 是唯一的逃生口，含义是"我明知上游缺，仍要跳步"，
+     * 此时不拦，但仍把缺件写进返回文案供日志/前端回显。
+     *
+     * @param stage 目标阶段（须先过 `isKnownStage`）
+     * @param outputDir 阶段文档所在目录（为空则按 runtime 自有 specs/{feature}/ 查）
+     */
+    public func checkUpstream(
+        stage: String,
+        featureName: String,
+        outputDir: String,
+        allowMissing!: Bool = false
+    ): APIResult<String> {
+        let skipResearch = this.skipResearchFor(featureName)
+        let missing = ArrayList<String>()
+        let ups = SddOrchestrationService.upstreamStages(stage)
+        for (i in 0..ups.size) {
+            let up = ups[i]
+            // 研究步被 enable_research 关掉时，它不算缺件（COMPOSITION condition 同款信号）
+            var skipUp = skipResearch && up == "research"
+            if (!skipUp) {
+                // maxChars=1：只问"在不在"，不把正文读进来
+                if (this.readStageArtifact(featureName, up, outputDir, maxChars: 1).isNone()) {
+                    missing.add(up)
+                }
+            }
+        }
+
+        var names = ""
+        for (j in 0..missing.size) {
+            let m = missing[j]
+            if (!names.isEmpty()) {
+                names = names + ", "
+            }
+            names = names + m
+        }
+
+        if (missing.isEmpty()) {
+            return APIResult<String>("upstream ok: stage='${stage}' 所需上游产物齐备（输出目录：${outputDir}）")
+        }
+
+        let why = "阶段 '${stage}' 在输出目录 '${outputDir}' 下找不到上游产物 [${names}]"
+        if (allowMissing) {
+            return APIResult<String>("upstream missing(allowed): ${why} —— 已按 allow_missing_upstream=true 放行，缺件由本阶段自行补齐前提")
+        }
+        APIResult<String>(false, why
+            + "；请先用 output_dir 指到已落盘阶段文档的目录（例：.codeartsdoer/specs/<feature>/ 或 specs/<feature>/），"
+            + "或显式传 allow_missing_upstream=true 表示你接受跳步缺件")
+    }
+
+    /// 工程是否关闭研究步（COMPOSITION condition 信号）：关闭时上游校验跳过 research。
+    private func skipResearchFor(featureName: String): Bool {
+        var skip = false
+        try {
+            match (this.projectsService.getByFeatureName(featureName)) {
+                case Some(po) => skip = !po.enableResearch
+                case None => ()
+            }
+        } catch (_: Exception) {
+            // 读不到工程态时保守按"研究步未跑"处理，缺件照样报出来，不让调用方在不知情下跳步
+            skip = false
+        }
+        skip
+    }
+
+    /**
      * 执行单个 SDD 阶段：真派生子 agent + 推进工程阶段。
      *
      * @param stage        阶段名（research/spec/design/task/code/test）
@@ -666,6 +767,46 @@ public class SddOrchestrationService {
         head + mode + skillLine + sop + ret + "\n\n[本阶段任务]\n" + question
     }
 
+    /**
+     * 阶段上下文包（**两条执行路径共用**，异步 crontab 与同步 run-stage 都走这里）。
+     *
+     * 原本只有异步 `SddOrchestrationExecutor.buildQuestion` 有这份逻辑，同步
+     * `run-stage` 直接把请求体里的 question 原样丢给子 agent——用户指定阶段跑 code
+     * 时必须自己把 tasks.md 内容粘进 question，与"框架显式交接上游产物"的红线自相
+     * 矛盾。抽到服务层后两条路径口径一致：question 可空，上游产物由框架读。
+     *
+     * @param base 调用方自带的补充说明（可空；为空时给一句通用引导）
+     */
+    public func buildStageQuestion(
+        base: String,
+        featureName: String,
+        stage: String,
+        outputDir: String
+    ): String {
+        let idx = SddOrchestrationService.stageIndex(stage)
+        let head = if (base.isEmpty()) { "请执行 SDD 六步编排中的本阶段工作。" } else { base }
+        var tail = "\n\n[SDD 编排] 当前阶段：${stage}（第 ${idx}/6 步）；工程：${featureName}。"
+        if (!outputDir.isEmpty()) {
+            tail = tail + " 产物目录：${outputDir}。"
+        } else {
+            tail = tail + " 产物目录：specs/${featureName}/ 下（runtime 工作目录）。"
+        }
+        tail = tail + " 请把本阶段产物写入该目录。"
+
+        // 上游产物：显式读取，读不到就明确说"没有"，避免子 agent 瞎猜
+        var upstreamBlock = ""
+        let upstream = SddOrchestrationService.previousStage(stage)
+        if (!upstream.isEmpty()) {
+            match (this.readStageArtifact(featureName, upstream, outputDir)) {
+                case Some(body) =>
+                    upstreamBlock = "\n\n[上游阶段产物 ${upstream}]\n${body}"
+                case None =>
+                    upstreamBlock = "\n\n[上游阶段产物 ${upstream}] 未找到（上游可能未产出，请按本阶段模板自行补齐前提）"
+            }
+        }
+        head + tail + upstreamBlock
+    }
+
     private static func nowMillis(): Int64 {
         (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
     }
@@ -800,6 +941,12 @@ public class SddOrchestrationService {
      *   - `once = false`：由执行器在跑完/失败时**自己停表**（引擎摘除 + 库里置 2）；
      *   - cron 六段、无 `?`（Ticktock 口径），每分钟一跳。
      *
+     * @param startStage 起始阶段（**可选**）：给了就只跑这一步然后停表，用于
+     *                   "前面几步已确认、现在直接接着跑 code"这类跳步续跑；
+     *                   不给则按 `sdd_projects.current_stage` 自动推进下一步。
+     *                   与异步执行器 `SddParams.stage` 是同一个键，见 `SddOrchestrationExecutor`。
+     * @param allowMissingUpstream 指定 startStage 且上游产物缺失时是否放行（默认拦）
+     *
      * @return `APIResult<String>` —— data 为新建的 crontab_id
      */
     public func startPipeline(
@@ -813,11 +960,30 @@ public class SddOrchestrationService {
         agentId!: String = "",
         language!: String = "",
         sessionId!: String = "",
-        notifyAgentId!: String = ""
+        notifyAgentId!: String = "",
+        startStage!: String = "",
+        allowMissingUpstream!: Bool = false
     ): APIResult<String> {
         if (featureName.isEmpty()) {
             return APIResult<String>(false, "startPipeline: feature_name 为空")
         }
+
+        // 显式指定起始阶段 = 跳步执行：先拦"上游产物根本不存在"这种跑空的情况
+        if (!startStage.isEmpty()) {
+            if (!SddOrchestrationService.isKnownStage(startStage)) {
+                return APIResult<String>(false, "startPipeline: 未知阶段 '${startStage}'"
+                    + "（可选 research/spec/design/task/code/test）")
+            }
+            let chk = this.checkUpstream(startStage, featureName, outputDir, allowMissing: allowMissingUpstream)
+            if (!chk.success) {
+                let why = match (chk.reason) {
+                    case Some(v) => v
+                    case None => "unknown"
+                }
+                return APIResult<String>(false, "startPipeline: 跳步校验未通过，未建调度行: ${why}")
+            }
+        }
+
         try {
             // 工程必须存在，否则执行器 nextStage 查不到 current_stage 会直接停表
             match (this.projectsService.getByFeatureName(featureName)) {
@@ -847,7 +1013,10 @@ public class SddOrchestrationService {
             // T-12：进度事件回推通道（cron 驱动时无 session，事件只走 WebSocket 广播）
             params.put("session_id", JsonString(sessionId))
             params.put("notify_agent_id", JsonString(notifyAgentId))
-            // 不给 stage：执行器按 current_stage 自动推进下一步
+            // 给了 stage：执行器只跑这一步然后停表（停在哪一步由执行器的
+            // "p.stage 非空即停在闸口"分支决定）；不给则按 current_stage 自动推进。
+            params.put("stage", JsonString(startStage))
+            params.put("allow_missing_upstream", JsonBool(allowMissingUpstream))
 
             let po = CrontabPO()
             po.name = "sdd-${featureName}"

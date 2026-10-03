@@ -111,6 +111,7 @@
 - **f_ticktock 调度框架**：提供时间轮和 CRON 编译器，驱动调度引擎触发任务执行
 - **已有技能集合**：cangjie-coder/crud-generator/sdd-flow/skill-creator 等全部已安装技能
 - **已有插件系统**：三轨插件架构（Sync/Dylib/Process），提供插件加载、路由注册、技能桥接能力
+- **插件发现机制（"一切皆技能"融合）**：插件与技能共用同一套多目录自动加载机制——`PluginDiscoveryService.discover(skillBaseDirectories)` 在扫描技能基目录的同一轮中识别子目录下的 `plugin.yaml`，并由 `SkillBridge` 将插件目录内的 `SKILL.md` 注册进 `SkillManager`。**不存在独立的插件扫描根**，插件放置即被发现
 - **AIP 交互协议**：符合 GB/Z 185.6 标准的智能体间异步交互，支持跨 Agent 协作
 - **WebSocket/SSE 通道**：向用户实时推送任务进度和中间结果
 - **文件系统**：任务产物的落地存储，经 sync 服务与数据库双向同步
@@ -154,9 +155,10 @@ lrt --> user : 交付产物/验核报告
 2. 单次执行回合最大时长：30 分钟（可配置），超时后保存检查点并进入下一回合
 3. 检查点保存延迟 ≤ 500ms（复用已有 CheckpointManager 性能）
 4. 进度通知延迟 ≤ 1s（复用已有 WebSocketEventBridge 性能）
-5. 任务派发到子 Agent 启动延迟 ≤ 2s
+5. 任务派发到子 Agent 启动延迟 ≤ 2s；**首回合同样适用——提交目标后立即触发首回合，不等下一个 CRON 周期**（CRON 触发存在天然粒度等待，不应计入首回合延迟）
 6. 同时执行的长程任务数上限：100（可配置），超出进入优先级队列等待
 7. 任务队列支持最多 10000 个待执行任务
+8. 数据契约注入的 token 开销：单回合注入的表结构信息 ≤ 2000 token（只注入当前步骤声明用到的表，见 5.16 规则 4）
 
 ## **4.2 可靠性**
 
@@ -167,6 +169,8 @@ lrt --> user : 交付产物/验核报告
 5. 任务执行异常必须记录完整错误信息到 agent_tasks.error_message 和 crontab_log
 6. 优雅关闭时，正在执行的回合必须等待完成或保存检查点后退出，最长等待 30 秒
 7. AIP 异步交互模式下，网络中断恢复后必须能继续任务执行而非从头开始
+8. **执行内核不得因单步畸形输出而终止整个长程任务**：无标签/半截标签的 LLM 输出必须走"修复提示 + 重试"，不得静默判定为最终答案（见 5.14）
+9. **内置工具参数必须真实生效**：工具声明的参数（如 `cli_execute` 的 `cwd`）必须有实际行为，禁止"接收但忽略"的死参数（见 5.17）
 
 ## **4.3 安全性**
 
@@ -184,6 +188,8 @@ lrt --> user : 交付产物/验核报告
 3. 必须复用已有 agent_loop_metrics 评估体系，自动采集成功率/Token消耗/耗时/工具调用次数
 4. 必须复用已有 agent_loop_tuning_configs 调优体系，基于评估结果自动优化执行策略
 5. 长程任务的规划过程和决策依据必须可追溯，支持事后复盘和审计
+6. **日志不得被覆盖**：runtime 每次启动必须生成独立日志文件（文件名含启动日期+时间戳），已生成的日志历史默认保留 ≥ 14 天（见 5.18）
+7. **按任务可回溯**：任意长程任务必须能凭 trace_id / task_id 检索出其全部回合、步骤、工具调用与关键决策记录，无需人工翻查巨量日志文件（见 5.18）
 
 ## **4.5 兼容性**
 
@@ -947,6 +953,20 @@ next -> test : 自进化闭环
 
 5. **审计留痕**：所有数据写入操作必须记录审计日志，含操作人、时间、操作类型、影响记录
    - 验收条件：[写入数据] → [审计日志记录操作人/时间/类型/影响记录]
+   > ✅ **实现方式（2026-09-15 定稿；同日人工复核修正口径）**：宿主侧**统一打点**，不要求插件各自实现；
+   > **复用既有 `operate_log` 表**（`module='plugin'`），不另建审计表。
+   > 落点为 `CordisHostServices.executeExecute`（L3 插件 `insert/update/delete` 的唯一通道）
+   > 成功路径 + `executeDbOperation` 的 catch 失败路径，经 `OperateLogService.recordPluginLog()`
+   > 落库：`operate`=insert/update/delete、`route`=表名、`creator`=操作人（无用户上下文时写 NULL）、
+   > `params` 为 JSON `{args, result{success, affected, durationMs}, error?, pluginId?, traceId?}`
+   > （入参脱敏 + 截断）。`query`/`count` 不是写入，不打点。
+   > 审计自身绕开 `host.db` 直连 ORM，避免「写审计触发审计」的递归；写库失败只记 warn，不阻断业务。
+   >
+   > 为什么复用而非新建：初版另建了 `agent_audit_log` 通用表 + 手写 `AuditLogService`，已拆除 ——
+   > 该表缺 `updated_at`（数据库规范要求四列齐备）、模块只有 Service 没有 PO/DAO/Controller/Route
+   > （模块开发指南 §2）、未走 `loaddbinfo → crudgen → crudweb` 流程因此进不了 Web 管理端；
+   > 而 `operate_log` 的表注释就是「操作记录」，既有 `api`/`tool`/`cli` 三类，五层模块与 Web 管理页
+   > 全部在位。评估见 `audit-module-evaluation-20260915.md`。
 
 6. **禁止项**：禁止绕过先查后写直接 INSERT，禁止绕过行级权限设置 creator
    - 验收条件：[写入数据] → [必须先查后写，必须设置 creator=userId]
@@ -1001,33 +1021,33 @@ db -> audit : 记录审计日志
 
 3. **审计留痕**：所有 MCP 调用记录到审计表（如 due_diligence_mcp_call_log），含工具名/入参/耗时/状态
    - 验收条件：[MCP 调用] → [审计表新增记录，含工具名/入参/耗时/状态]
+   > ✅ **实现方式（2026-09-15 定稿；同日人工复核修正口径）**：规则里的「审计表」按**两层**落地，二者并存不替代：
+   > ① **平台级兜底** —— **复用既有 `operate_log` 表**（`module='tool'`，与既有 174 条记录同构），
+   > 在 `McpOpenService.call` 统一打点：它是 REST `/api/v1/uctoo/mcp/open/call`、插件 `host.mcp`、
+   > CLI 三条入口的**汇聚点**，因此不存在"某个入口漏写"。经 `OperateLogService.recordMcpCallLog()`
+   > 落库：`operate`=工具名、`creator`=操作人（无用户上下文时写 NULL）、`params` 为 JSON
+   > `{args, result{success, durationMs}, error?, mcpAlias?, source?, actorType?}`，
+   > 其中 `source` 区分三入口（`mcp_open_rest` / `host.mcp` / `mcp_cli`）。
+   > ② **领域业务表** `due_diligence_mcp_call_log` —— 仍是 due_diligence 插件（黑客松参赛作品，
+   > 非 runtime 核心功能）的表（含 `task_id` 关联），由插件在 `dd-fetch` 阶段经 `host.db` 自行写入，
+   > 宿主开放服务「纯调用不落库」的既有边界（见 due_diligence_agent design §A4）不变。
 
-4. **tableWhitelist 配置**：插件必须配置 tableWhitelist，否则所有 host.db 调用被拒绝并报"no table whitelist configured for plugin"
-   - 验收条件：[插件配置] → [plugin.yaml 含 tableWhitelist，列出全部需访问的表]
-
-5. **permissions 配置**：permissions 空数组会触发行级权限过滤导致查不到数据，须条件式设置
-   - 验收条件：[插件需查全部数据] → [permissions 非空数组或条件式设置]
-
-6. **SSL 校验**：Python 脚本不得禁用 SSL 校验（verify=False），须正常使用 SSL
-   - 验收条件：[Python 脚本 HTTPS 请求] → [verify=True 或默认，不禁用 SSL]
-
-7. **HTTP 库选择**：MCP 调用须优先用 http_lib 库（已替代 stdx http），仓颉代码中优先使用 http_lib
-   - 验收条件：[仓颉代码 HTTP 请求] → [使用 http_lib 库，不使用 stdx http]
-
-8. **本地开发环境**：本地开发环境访问宿主服务须用域名（如 https://javatoarktsapi.uctoo.com），用 127.0.0.1:443 会返回 404
-   - 验收条件：[本地开发访问宿主] → [使用域名经 hosts 解析，不用 127.0.0.1:443]
-
-9. **MCP 调用协议**：调用宿主 MCP 工具用 POST /api/v1/uctoo/mcp/open/call，Authorization: Bearer 携带 accessToken
+4. **MCP 调用协议**：调用宿主 MCP 工具用 POST /api/v1/uctoo/mcp/open/call，Authorization: Bearer 携带 accessToken
    - 验收条件：[调用 MCP 工具] → [POST /api/v1/uctoo/mcp/open/call，Header 含 Authorization: Bearer]
 
-10. **L3 插件工程结构**：L3 进程隔离轨插件为独立 executable 工程，含 cjpm.toml、main.cj（进程入口）、handlers.cj（路由分发+CRUD+自定义 handler）、persist_service.cj（幂等读写封装）、effects.cj（可逆效果注册）
-    - 验收条件：[L3 插件工程] → [含 cjpm.toml + main.cj + handlers.cj + persist_service.cj + effects.cj]
+5. **L3 插件工程结构**：L3 进程隔离轨插件为独立 executable 工程，含 cjpm.toml、main.cj（进程入口）、handlers.cj（路由分发+CRUD+自定义 handler）、persist_service.cj（幂等读写封装）、effects.cj（可逆效果注册）
+   - 验收条件：[L3 插件工程] → [含 cjpm.toml + main.cj + handlers.cj + persist_service.cj + effects.cj]
 
-11. **JSON-RPC over stdio**：L3 插件与宿主通过 JSON-RPC over stdio 通信，崩溃自愈（autoRestart=true）
-    - 验收条件：[插件与宿主通信] → [JSON-RPC over stdio，崩溃后 autoRestart 自动重启]
+6. **JSON-RPC over stdio**：L3 插件与宿主通过 JSON-RPC over stdio 通信，崩溃自愈（autoRestart=true）。**传输固定为 stdio，plugin.yaml 无需也不支持声明 `protocol` 字段**（该字段在 `plugin_config.cj` 中无解析逻辑，写了也会被忽略）
+   - 验收条件：[插件与宿主通信] → [JSON-RPC over stdio，崩溃后 autoRestart 自动重启]
 
-12. **禁止项**：禁止 Python 脚本直连数据库绕过宿主，禁止禁用 SSL 校验，禁止插件不配置 tableWhitelist
-    - 验收条件：[协作执行] → [脚本经 MCP API，SSL 启用，tableWhitelist 已配置]
+7. **插件发现即注册**：插件目录置于任一技能基目录下即被自动发现（与技能多目录加载同一套机制），无需额外注册
+   - 验收条件：[插件放入技能基目录] → [启动日志出现 `[PluginDiscoveryService] discovered plugin: <name>`，且 `SkillBridge` 注册技能数 ≥ 1]
+
+8. **禁止项**：禁止 Python 脚本直连数据库绕过宿主，禁止禁用 SSL 校验，禁止插件不配置 tableWhitelist
+   - 验收条件：[协作执行] → [脚本经 MCP API，SSL 启用，tableWhitelist 已配置]
+
+> **本节只保留业务级规则。** tableWhitelist 必须配置、permissions 空数组陷阱、SSL 校验、http_lib 选择、本地环境域名等**工程实现坑**已移出，集中维护于 `design.md` 附录 A「已知工程坑」。
 
 ### **5.13.2 交互流程**
 
@@ -1065,10 +1085,292 @@ host --> script : 返回MCP响应
    - 系统行为：MCP 调用返回鉴权失败，明确提示"凭证无效或过期"
    - 用户感知：收到凭证无效通知，需更新 .env 中的凭证
 
-3. **本地环境 404**
-   - 触发条件：本地开发用 127.0.0.1:443 访问宿主服务
-   - 系统行为：返回 404，提示使用域名经 hosts 解析
-   - 用户感知：收到 404 错误和域名使用建议
+3. **插件未被发现**
+   - 触发条件：plugin.yaml 不在任何技能基目录下、或 YAML 解析失败
+   - 系统行为：启动日志出现 `[PluginDiscoveryService] failed to parse plugin.yaml`，插件不加载，任务调度时找不到该插件能力
+   - 用户感知：提交目标后规划阶段报"所需插件不可用"
+   - 处理：检查 plugin.yaml 位置与语法，重启 runtime 重新扫描
+
+## **5.14 执行内核健壮性（长程任务的承载底线）**
+
+> 2026-09-11 新增。起因：长程任务的编排层写得再完整，只要底层 ReAct 循环在第 N 步提前返回，任务照样跑不完。此类缺陷已在 Round2 实测确认。
+
+### **5.14.1 业务规则**
+
+1. **畸形输出必须重试，不得终止**：LLM 输出不以任何已知标签开头（纯散文开头、半截标签等），必须抛可修复异常 → 追加修复提示 → 重试。**严禁静默判定为"模型已给出最终答案"而结束循环**
+   - 验收条件：[LLM 输出无标签] → [日志出现修复提示，且**后续仍有下一个 Run Step**]
+
+2. **最终答案必须有显式开标签**：判定为最终答案前，必须确认输出流中真实存在 `<answer>` 开标签，不得仅凭"内容不像工具调用"推断
+   - 验收条件：[输出无 `<answer>` 开标签] → [不判为最终答案]
+
+3. **步数上限可配置**：`Config.maxReactNumber`（异步路径）与 `AgentExecutionExecutor.maxRounds`（同步路径）必须统一由 plugin.yaml `config.maxRounds` 驱动，默认建议 30（格式错误会消耗重试步数，10 步过紧）
+   - 验收条件：[修改 plugin.yaml maxRounds] → [实际生效，无需改代码]
+
+4. **完成判定结构化**：**废弃**基于魔法字符串（如"## 完成总结""投研报告已生成"）的完成判定，改由 `LrtArtifactVerifier` 按产物清单结构化判定
+   - 验收条件：[输出含"已完成"字样但产物缺失] → [不判为完成，继续补执行]
+
+5. **两条链路同等要求**：长程任务链路（crontab → AgentExecutionExecutor）与用户实时提交链路（WebMCP → asyncChat → asyncRun）都必须满足上述 1-4
+   - 验收条件：[前端实时提交一个多步目标] → [同样跑满步骤，不在中途提前结束]
+
+### **5.14.2 交互流程**
+
+```plantuml
+@startuml
+start
+:LLM 输出流;
+if (以已知标签开头?) then (否)
+  :抛 ParserException;
+  :追加修复提示消息;
+  :重试本步;
+  stop
+else (是)
+  if (含 <answer> 开标签?) then (否)
+    :回灌修复消息重试;
+    stop
+  else (是)
+    if (产物校验通过?) then (否)
+      :补执行缺失步骤;
+      stop
+    else (是)
+      :判定完成;
+    endif
+  endif
+endif
+stop
+@enduml
+```
+
+### **5.14.3 异常场景**
+
+1. **连续 N 次格式错误**：触发条件为重试次数达到 `maxRounds` 一半仍在畸形输出；系统行为为停止并上报"模型输出格式持续异常"，保留完整检查点；用户感知为收到失败通知，可从检查点恢复重试
+2. **步数耗尽仍无 answer**：触发条件为达到 `maxRounds`；系统行为为返回已累积内容并标记"未完成，等待下回合"，**不得抛异常断流**；用户感知为进度显示"继续中"，下一回合接着跑
+
+## **5.15 人在回路决策（AI 提供可选方案）**
+
+> 2026-09-11 新增。需求：AI 应提供几个可选方案，供人类参考和选择。
+> 实现原则：**声明在技能，能力在 runtime**——技能作者定义"在哪问、问什么、给哪些选项"，runtime 提供"怎么问、怎么等、怎么回灌"。
+
+### **5.15.1 业务规则**
+
+1. **决策点在技能中声明**：技能 `SKILL.md` 的 frontmatter 增加 `decision-points` 段，声明决策点 id、触发时机、问题、选项列表、默认项、推荐项、超时
+   - 验收条件：[技能含 decision-points] → [runtime 在该步骤前推送选项卡片]
+
+2. **选项必须具备可比较信息**：每个选项至少含 `id` / `label` / `description`，建议含 `tradeoff`（取舍说明）；AI 可指定 `recommended`（推荐项）
+   - 验收条件：[推送选项] → [前端展示 label + description + tradeoff，推荐项高亮]
+
+3. **必须有默认项，禁止无限等待**：每个决策点**必须**声明 `default`。人类超时未选或通道不可用时自动采用默认项，并记一条 `decision_timeout_default_applied` 日志
+   - 验收条件：[人类 300s 未响应] → [自动采用 default，任务继续，不挂死]
+
+4. **选项至少 2 项**：仅"确认/取消"二值语义的应使用普通审批，不得占用决策点机制
+   - 验收条件：[decision-points] → [每个 options.length ≥ 2 且 default 为合法 id]
+
+5. **选择结果回灌上下文**：人类选择后，选项 `id` 与 `label` 必须写入该回合上下文与 `agent_approvals.selected_option`，供后续步骤与事后追溯使用
+   - 验收条件：[人类选择] → [后续步骤可引用该选择；agent_approvals 记录 selected_option]
+
+6. **降级兼容**：前端未改造时，带 options 的审批请求自动降级为文本审批（展示问题 + 选项文本），**后端保证功能可用**
+   - 验收条件：[旧版前端] → [仍可完成决策，不报错]
+
+7. **关键操作仍需人工确认**（沿用 4.3 规则 5）：代码合并、生产部署、数据删除等关键操作，必须经人在回路确认后方可执行
+   - 验收条件：[关键操作] → [推送确认请求，未获批准不执行]
+
+### **5.15.2 交互流程**
+
+```plantuml
+@startuml
+participant "主Agent" as agent
+participant "LrtExecutor" as exec
+participant "web_request_approval\n(扩展options)" as tool
+participant "前端" as ui
+participant "agent_approvals" as db
+
+agent -> exec : 到达 decision-point
+exec -> tool : 请求决策(options/default/recommended)
+tool -> db : 落 pending 记录(含 options)
+tool -> ui : SSE 推送 approval_request(含 options)
+ui --> tool : 返回 selected_option
+tool -> db : 更新 approved + selected_option
+tool --> agent : 回灌选择结果
+agent -> agent : 按选择继续 SOP
+... 超时未响应 ...
+tool -> db : 更新 timeout，采用 default
+tool --> agent : 回灌 default（任务继续）
+@enduml
+```
+
+### **5.15.3 异常场景**
+
+1. **人类超时未选**：触发条件为超过 `timeout_seconds`；系统行为为自动采用 `default` 并记录日志；用户感知为收到"已按默认方案 X 继续"通知
+2. **前端连接不可用**：触发条件为 SSE 通道断开；系统行为为直接采用 `default`，**不阻塞**（参照 `WebMCPToolHelper` 通道不可用时的降级策略）；用户感知为进度通知中说明"未获人工选择，已按默认方案继续"
+3. **选项 id 非法**：触发条件为技能声明的 `default`/`recommended` 不在 `options` 中；系统行为为技能加载时校验失败并告警，该决策点不生效；用户感知为技能加载告警
+
+## **5.16 数据契约（让大模型准确操作数据库）**
+
+> 2026-09-11 新增。需求：大模型不完全清楚如何操作数据库、怎样 CRUD 准确数据以驱动长程任务。
+> 现状：`BuiltinToolsRegistry` 注册的 20 个内置工具中**没有任何数据库工具**，大模型只能靠 HTTP CRUD 路由或 Python 脚本间接落库，且看不到表结构与示例数据。
+
+### **5.16.1 业务规则**
+
+1. **技能声明数据契约**：技能目录下提供 `DATA_CONTRACT.yaml`，声明本技能用到的表、字段（名/类型/必填/枚举/外键）、**幂等键**、写入规则、示例行
+   - 验收条件：[技能需落库] → [技能目录含 DATA_CONTRACT.yaml，覆盖其写入的全部表]
+
+2. **runtime 提供结构查询工具**：提供 `db_schema_lookup(table)`，返回该表的 L1 结构契约；查询结果受 `tableWhitelist` + 行级权限同一套机制保护
+   - 验收条件：[Agent 调 db_schema_lookup] → [返回表结构 + 幂等键 + 示例行；不在白名单的表拒绝]
+
+3. **按步注入，控制 token**：仅注入当前步骤 `uses_tables` 声明的表（1-2 张），注入位置为 ReAct system prompt 的"可用数据契约"小节
+   - 验收条件：[单回合] → [注入的结构信息 ≤ 2000 token（4.1 规则 8）]
+
+4. **示例数据必须给出**：每张表至少 1 条 `sample_rows` 示例，含真实格式的字段值（日期格式、枚举取值、外键引用写法）
+   - 验收条件：[DATA_CONTRACT.yaml] → [每表含 sample_rows]
+
+5. **幂等键必须声明**：每张表必须声明 `idempotent_key`（唯一约束组合），写入规则必须写明"先查后写"的依据
+   - 验收条件：[落库步骤] → [按 idempotent_key 先查，命中 UPDATE 未命中 INSERT]
+
+6. **禁止开放任意 SQL**（沿用 4.3 规则 4）：不提供执行任意 SQL 串的工具；数据操作限定 `query`/`count`/`execute`（增改）三类受控操作
+   - 验收条件：[Agent 数据操作] → [仅能调用受控操作，无任意 SQL 入口]
+
+7. **契约与实现漂移检测**：`db_schema_lookup` 返回的结构以 `db_info` 表为准并与 `DATA_CONTRACT.yaml` 比对，不一致时告警（技能声明过期）
+   - 验收条件：[表结构变更] → [调用时产生 drift 告警日志]
+
+### **5.16.2 交互流程**
+
+```plantuml
+@startuml
+participant "技能\nDATA_CONTRACT.yaml" as contract
+participant "LrtCompositionRunner" as runner
+participant "ReAct\nsystem prompt" as prompt
+participant "大模型" as llm
+participant "db_schema_lookup" as tool
+participant "host.db\n(白名单+行级权限)" as db
+
+contract --> runner : 解析契约
+runner -> prompt : 按 step.uses_tables 注入表结构+示例
+prompt --> llm : 可见"字段叫什么、必填哪些、示例长啥样"
+llm -> tool : 需要更多细节时查询
+tool -> db : 受控查询(白名单+行级过滤)
+db --> tool : 结果
+tool --> llm : 结构/数据
+llm -> db : 按 idempotent_key 先查后写
+@enduml
+```
+
+### **5.16.3 异常场景**
+
+1. **契约缺失**：触发条件为技能无 `DATA_CONTRACT.yaml` 但步骤声明了 `uses_tables`；系统行为为该步骤不注入契约并告警；用户感知为任务继续但落库准确率下降告警
+2. **写入违反幂等键**：触发条件为按 `idempotent_key` 查询命中多条；系统行为为拒绝写入并上报"幂等键不唯一，契约或数据有误"；用户感知为收到数据一致性告警
+3. **字段不在契约中**：触发条件为大模型写入了 `DATA_CONTRACT.yaml` 未声明的字段；系统行为为拒绝并提示"字段未在数据契约中声明，请先更新契约"；用户感知为收到契约更新提示
+
+## **5.17 内置工具可靠性**
+
+> 2026-09-11 新增。需求：内置工具的可靠性需在长程任务落地前复核并做独立测试。
+> 现状：全仓库 `src/` 无任何 `std.unittest` 用例（`cjpm test` 从未建立）；`test-builtin-tools-v2/` 已有 CLI/HTTP/权限/错误四类黑盒测试套件与报告目录。
+
+### **5.17.1 业务规则**
+
+1. **参数必须真实生效**：工具声明的每个入参都必须有实际行为，**禁止"接收但忽略"的死参数**
+   - 验收条件：[工具参数] → [每个参数在代码中被读取并影响执行结果]
+
+2. **cwd 必须生效**：`cli_execute` 的 `cwd` 参数必须真实改变子进程工作目录；执行结果需回显实际生效的工作目录与是否应用成功
+   - 验收条件：[cli_execute 传 cwd] → [子进程 CWD 为该目录，结果含 cwd 与 cwd_applied]
+
+3. **长程任务落地前必须全量复核**：对 20 个内置工具逐个执行独立测试，形成"通过/失败/未覆盖"三态清单，未覆盖项不得作为长程任务的依赖
+   - 验收条件：[进入阶段 3 前] → [存在 20 个工具的复核报告，无"未测"关键工具]
+
+4. **测试方式采用黑盒 + 技能驱动双轨**：以 `test-builtin-tools-v2`（CLI/HTTP 级）为底座，配合 `skills/test-*-tools` 技能形态的用例声明；**不优先建设 `cjpm test`**（成本高，且与"人工在独立 cmd 编译"的协作方式不匹配）
+   - 验收条件：[工具复核] → [可在 runtime 启动后一键跑完并生成报告]
+
+5. **回归绑定**：执行内核与工具的任何修复，必须同步补充对应工具的测试用例
+   - 验收条件：[修复工具缺陷] → [测试套件中新增该缺陷的回归用例]
+
+### **5.17.2 交互流程**
+
+```plantuml
+@startuml
+start
+:启动 runtime(cjpm run);
+:进入 test-builtin-tools-v2;
+fork
+  :cli-tests 验证 CLI 类工具;
+fork again
+  :http-tests 验证 HTTP 接口;
+fork again
+  :permission-tests 验证权限;
+fork again
+  :error-tests 验证错误处理;
+end fork
+:生成 reports/ 三态清单;
+if (存在失败/未覆盖的关键工具?) then (是)
+  :修复并补回归用例;
+  :重新编译 + 重跑;
+else (否)
+  :签署"工具基线就绪";
+endif
+stop
+@enduml
+```
+
+### **5.17.3 异常场景**
+
+1. **工具在长程任务中才暴露缺陷**：触发条件为工具参数在长上下文/多次调用下失效；系统行为为工具调用返回明确错误（而非成功但结果为空）；用户感知为步骤失败并触发降级链
+2. **测试环境缺失依赖**：触发条件为 Python/浏览器/网络等外部依赖不可用；系统行为为测试报告中标记"环境不可用-跳过"而非"通过"；用户感知为明确知道该项未验证
+
+## **5.18 可观测与可回溯**
+
+> 2026-09-11 新增。需求：当前 `logs/agentskills-runtime.log` 为单文件、每次重启覆盖，需改为带日期时间戳、不覆盖历史。
+
+### **5.18.1 业务规则**
+
+1. **日志不被覆盖**：runtime 每次启动生成独立日志文件，文件名含启动日期 + 时间戳（模板 `<basename>-<yyyyMMdd>-<HHmmss>.log`）；写文件必须用追加模式
+   - 验收条件：[连续重启 3 次] → [logs/ 下存在 3 个独立日志文件，历史内容完好]
+
+2. **保留期可配置**：新增保留期配置（默认 14 天），启动时清理超期日志；**只删除符合命名模板的文件**，不匹配模板的文件（如人工备份）一律不动
+   - 验收条件：[存在 20 天前的模板文件] → [被清理；同目录人工备份文件不受影响]
+
+3. **固定入口不失效**：保留一个**固定名入口**指向当前活跃日志，既有查看习惯与脚本不因改名而失效。
+   **入口形态定为指针文件 `logs/current-log.txt`**（内容为活跃日志的相对路径，一行），而非同名 `.log` 文件。
+   - **为什么是指针文件而不是 `logs/agentskills-runtime.log`**：① Windows 普通用户创建软链常无权限，
+     拷贝整个日志又会产生第二份持续增长的文件；② 若把活跃日志直接叫回固定名，就与「每次启动独立文件」互相抵消，
+     回归到本规则要解决的"重启覆盖"问题；③ 指针文件内容即权威路径，脚本读一次就能定位活跃日志，且永不与历史日志混淆。
+   - **迁移说明（2026-09-15 标注，对应 review 偏差 #8）**：仍按旧路径 `logs/agentskills-runtime.log` 写死的采集脚本需改为
+     「先读 `logs/current-log.txt` 取路径，再采集该文件」。这是**已知的一次性迁移成本**，优于长期保留一份拷贝日志。
+   - 验收条件：[查看 logs/current-log.txt] → [内容指向本次启动的活跃日志且该文件可读]
+
+4. **兼容开关**：提供开关可关闭时间戳命名（回退到固定文件名），供已硬编码日志路径的外部采集器平滑过渡
+   - 验收条件：[开关置 false] → [沿用原固定文件名行为]
+
+5. **按任务可回溯**：每次长程任务生成 `trace_id`，贯穿全部回合/步骤/工具调用日志；支持按 `trace_id` 或 `task_id` 检索完整执行轨迹
+   - 验收条件：[给定 task_id] → [能拉出该任务全部回合、步骤、工具调用与关键决策记录]
+
+6. **关键决策留痕**：规划结果、重规划原因、降级链尝试记录、人在回路的选择，必须各写一条结构化（JSON 行）日志，供事后复盘与自进化闭环做根因分析
+   - 验收条件：[任务执行] → [日志中存在 plan/replan/degradation/decision 四类结构化记录]
+
+7. **复用既有 trace 事件**：进度与追踪优先复用已存在的 `trace_start` / `trace_step` / `trace_token_usage` / `trace_end` 事件，不重复建模
+   - 验收条件：[长程任务执行] → [前端收到 trace_* 事件，无需新增通道]
+
+### **5.18.2 交互流程**
+
+```plantuml
+@startuml
+participant "runtime 启动" as boot
+participant "LogUtils\n(log_utils_impl.cj)" as log
+participant "logs/ 目录" as dir
+participant "长程任务" as task
+participant "WebSocketEventBridge" as ws
+
+boot -> log : 读 LOG_FILE / LOG_FILE_TIMESTAMPED
+log -> log : 生成 <name>-<yyyyMMdd>-<HHmmss>.log
+log -> dir : OpenMode.Append 打开
+log -> dir : 清理超期模板文件(保留期内不动)
+log -> dir : 维护 current 入口
+task -> log : 每条日志带 trace_id/task_id/round/step
+task -> ws : trace_* 事件推送
+@enduml
+```
+
+### **5.18.3 异常场景**
+
+1. **日志目录无写权限**：触发条件为 logs/ 不可写；系统行为为降级到 stderr 并明确告警，**不因日志失败而阻断启动**；用户感知为控制台出现日志降级告警
+2. **日志磁盘占满**：触发条件为磁盘空间不足；系统行为为按保留期激进清理并告警；用户感知为收到磁盘水位告警
+3. **同秒重启冲突**：触发条件为同一秒内多次启动；系统行为为文件名追加 `-1`/`-2` 序号；用户感知为无感知，日志文件各自独立
 
 # **6. 数据约束**
 
@@ -1077,7 +1379,8 @@ host --> script : 返回MCP响应
 1. **id**：任务唯一标识，UUID，由数据库自动生成
 2. **agent_id**：关联执行该任务的 Agent ID，必须存在于 agents 表
 3. **parent_task_id**：父任务 ID，NULL 表示根任务，非 NULL 必须指向已存在的 agent_tasks 记录
-4. **status**：任务状态，取值范围 0-待处理/1-进行中/2-完成/3-失败/4-已取消/5-暂停，状态流转必须符合状态机规则
+4. **status**：任务状态，取值范围 0-待处理/1-进行中/2-完成/3-失败/4-已取消/5-暂停/**6-等待下回合**，状态流转必须符合状态机规则
+   - **禁止状态倒退**：进行中(1) 与 等待下回合(6) 之间可双向流转，**但二者均不得回退到 待处理(0)**。回合超时/回合结束时若任务未完成，必须保持 1 或置为 6，**不得置 0**（置 0 会让任务被当成新任务重新派发，丢失回合上下文）
 5. **priority**：任务优先级，取值范围 1-5，数值越大优先级越高，影响调度顺序
 6. **payload**：任务内容，JSON 格式，根任务含原始目标描述，子任务含具体执行指令
 7. **result**：任务结果，JSON 格式，任务完成后写入，含执行产物和验核结果
@@ -1098,6 +1401,7 @@ host --> script : 返回MCP响应
 1. **task**：任务标识，格式为 agent_execution://<agentId>，由 AgentExecutionExecutor 解析
 2. **cron**：CRON 表达式，6 位格式（秒 分 时 日 月 周），必须可被 f_ticktock 编译
 3. **status**：调度状态，1-正常/2-禁用，暂停任务时设为 2，恢复时设为 1
+   - **必须显式设为 1**：`CrontabPO.status` 默认值为 **0**，而 `SchedulerEngine` 只认 `status == 1`（`SchedulerEngine.cj:114,169`）。**创建长程任务调度记录时必须显式写入 `status=1`**，否则任务永不触发且无任何报错
 4. **timeout**：执行超时时间（秒），0 表示不限制，建议长程任务设为 1800（30 分钟）
 5. **max_retries**：最大重试次数，0 表示不重试
 6. **concurrentable**：是否允许并发执行，长程任务建议设为 false
@@ -1124,25 +1428,44 @@ host --> script : 返回MCP响应
 
 ## **6.6 插件配置（plugin.yaml）**
 
+> 以下为 `plugin_config.cj` 中**真实被解析**的字段（已核对 `src/plugin/plugin_config.cj:131-235`）。
+
 1. **name**：插件名，必须为 long-running-task
-2. **mode**：加载轨，必须为 process（L3 进程隔离轨）
+2. **mode**：加载轨，必须为 process（L3 进程隔离轨）；可选 sync/dylib/process
 3. **command**：插件可执行文件路径，指向预编译的插件二进制
-4. **enabled**：是否启用，true 表示加载该插件
-5. **autoRestart**：是否自动重启，true 表示进程崩溃后自动重启
-6. **config**：插件配置，JSON 格式，含执行回合上限、检查点策略、质量闸门配置等
-7. **tableWhitelist**：配置表白名单，必须配置，否则 host.db 调用被拒绝，列出插件需访问的全部表名
-8. **routes**：声明所有路由，含 CRUD 路由（add/edit/del/empty-recycle-bin/:id/:limit/:page）和自定义路由（如 dd-fetch/dd-save）
-9. **protocol**：通信协议，必须为 jsonrpc-stdio（L3 插件与宿主通过 JSON-RPC over stdio 通信）
+4. **args**：命令行参数数组（可选）
+5. **env**：环境变量数组（可选）
+6. **enabled**：是否启用，true 表示加载该插件
+7. **order**：加载顺序，数值小的先加载（`PluginDiscoveryService` 按 order 排序）
+8. **autoRestart**：是否自动重启，true 表示进程崩溃后自动重启
+9. **config**：插件配置，JSON 格式，含执行回合上限（`maxRounds`）、检查点策略、质量闸门配置、降级策略链配置等——**即原设计中独立成表的 `long_running_task_config`，改为复用此段，不再新增表**
+10. **className**：Sync/Dylib 轨的类名（process 轨不需要）
+11. **routeClass**：Sync/Dylib 轨的路由类（process 轨不需要）
+12. **tableWhitelist**：配置表白名单，必须配置，否则 host.db 调用被拒绝，列出插件需访问的全部表名
+13. **routes**：声明所有路由，含 CRUD 路由（add/edit/del/empty-recycle-bin/:id/:limit/:page）和自定义路由（如 lrt-plan/lrt-execute/lrt-verify）
+
+> **已删除的字段**：原第 9 条 `protocol: jsonrpc-stdio`。经核对 `plugin_config.cj` 全字段解析逻辑，**`protocol` 无任何解析代码，写了也会被静默忽略**；L3 进程轨与宿主的传输固定为 stdio，无需声明。
 
 ## **6.7 步骤编排配置（COMPOSITION.yaml）**
 
+> **本节为 2026-09-11 修订版。** 以三个已跑通技能实际在用的格式为准（编排执行选型已定 **方案 A**：技能优先，不可变基础设施服务于技能）。
+> ⚠️ 注意：此格式与 `src/skill/composition_definition.cj` 中定义的 schema（`skill_name` + `sequential/parallel/conditional` + `input_mapping`）**不同源**。后者目前仅被 `SkillCompositionsService` 的 CRUD API 使用（DB 存储态），不参与运行时调度。
+
 1. **name**：编排名，必须与技能名一致
 2. **version**：编排版本号
-3. **steps**：步骤数组，每个步骤含 name/step_type/depends_on/input 四个必需字段
-4. **step.name**：步骤名，唯一标识，用于 depends_on 引用
-5. **step.step_type**：步骤类型，取值 script（脚本执行）/plugin（插件路由调用）/output（输出聚合）
+3. **steps**：步骤数组，每个步骤含 name/step_type/depends_on 三个必需字段
+4. **step.name**：步骤名，唯一标识，用于 depends_on 与 `${step-name.output}` 引用
+5. **step.step_type**：步骤类型，取值 **script**（脚本执行）/ **plugin**（插件路由调用）/ **output**（输出聚合）
 6. **step.depends_on**：依赖步骤名数组，声明 DAG 依赖关系，空数组表示无依赖（可并行）
-7. **step.script**：脚本路径（step_type=script 时必填），指向 scripts/ 目录下的脚本文件
+7. **step.script**：脚本路径（step_type=script 时必填），指向技能目录下 scripts/ 中的脚本文件
 8. **step.plugin_route**：插件路由路径（step_type=plugin 时必填），指向 plugin.yaml routes 中声明的自定义路由
-9. **step.input**：步骤输入参数，JSON 格式，支持 ${input.xxx} 引用编排输入、${step-name.output} 引用上一步产出
-10. **step.depends_on 传递性**：依赖关系具有传递性，A 依赖 B、B 依赖 C，则 A 隐式依赖 C，DAG 不得存在循环依赖
+9. **step.input**：步骤输入参数，JSON 格式
+   - 支持 `${input.xxx}` 引用编排级输入
+   - 支持 `${step-name.output}` 引用上一步产出
+   - 支持 `${env.YYYYMMDD}` 等环境/日期模板
+   - **引用未就绪的产出时必须报错并指出缺失依赖，禁止静默替换为空串**
+10. **step.uses_tables**（新增）：本步骤用到的表名数组，用于按步注入数据契约（见 5.16）；未声明则不注入
+11. **step.degradation_chain**（新增）：降级链，按顺序尝试，取值 cli_execute / builtin_tool / llm / template；未声明时默认 `[cli_execute, builtin_tool, llm]`
+12. **step.cwd**（新增）：script 步骤的工作目录，相对技能目录解析；**必须真实生效**（见 5.17 规则 2）
+13. **step.depends_on 传递性**：依赖关系具有传递性，A 依赖 B、B 依赖 C，则 A 隐式依赖 C，DAG 不得存在循环依赖
+14. **执行语义数量**：6 步 SOP 对应 6 个业务步骤 + 1 个 `output` 聚合节点（共 7 个 step）。**术语统一为"6 步 SOP + 1 个产出聚合节点"**

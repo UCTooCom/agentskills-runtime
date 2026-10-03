@@ -13,6 +13,7 @@ import std.env.getWorkingDirectory
 import std.process.{ProcessRedirect, SubProcess}
 import std.time.DateTime
 import std.core.Duration
+import std.core.StringBuilder
 import std.io.{InputStream, OutputStream}
 import std.fs.{Path, FileInfo, exists}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonArray, JsonBool, JsonInt}
@@ -107,8 +108,22 @@ public class CliTool <: NativeFuncTool {
                 "{ \"name\": \"navigate_url\", \"arguments\": { \"url\": \"/vue-pro/database/uctoo/entity\" } }。"))
             return resp.toJsonString()
         }
-        // Round2 修复：旧代码这里算出 workingDir 之后**从未使用**（死代码），
-        // 子进程 CWD 恒为 runtime 根目录，相对路径脚本必然失败。现在真正透传给 newProcess。
+        // v12（2026-10-02 事故修复）：破坏性命令护栏（详见 guardDestructive 注释）。
+        // 放在 wrapForWindowsShell 之前，命中即不放行——拿到 shell 就拦不住了。
+        let destructiveRefusal = CliTool.guardDestructive(command, commandArgs, cwd)
+        if (let Some(reason) <- destructiveRefusal) {
+            LogUtils.warn("[CliTool] Refused destructive command: ${command} ${argsStr} -> ${reason}")
+            let resp = JsonObject()
+            resp.put("success", JsonBool(false))
+            resp.put("refused", JsonBool(true))
+            resp.put("error", JsonString(
+                "拒绝执行破坏性命令：${reason}。这些目录/文件是 runtime 自身的运行与编译依赖，" +
+                "删除后 runtime 无法启动或无法编译，必须由人工在独立终端确认后再操作。" +
+                "如果确实需要清理编译产物，请只删除具体子目录（例如 target/release 下的单个包），" +
+                "不要整目录递归删除。"))
+            return resp.toJsonString()
+        }
+
         let workingDir: ?Path = CliTool.resolveWorkingDirectory(cwd)
 
         let startTime = DateTime.now()
@@ -187,6 +202,149 @@ public class CliTool <: NativeFuncTool {
             }
         }
         return false
+    }
+
+    /// v12（2026-10-02 事故修复）：破坏性命令护栏。
+    ///
+    /// 事故经过：定时 crontab 触发的 agent 因为 question 解析为空，顺着历史上下文给自己"派活"，
+    /// 执行了整目录递归删除，把 runtime 的 `target/` 编译产物和 `libs/` 第三方库全删了，
+    /// 之后 runtime 编译不过，只能人工 `cjpm clean` + 全量重编（一次几十分钟）。
+    ///
+    /// 根因已修在 `AgentExecutionExecutor`（question 必须从 parameters 取 + 定时触发不续跑历史
+    /// 上下文）。但根因修完不等于风险清零：CLI 侧此前**没有任何兜底**，agent 只要想删谁也拦不住。
+    /// 这里是最后一道防线：破坏性命令命中受保护路径时直接拒绝，并把原因结构化回给 agent，
+    /// 让它收到明确指令而不是"删完了才发现启动不了"。
+    ///
+    /// 命中条件（两者同时成立才拒绝）：
+    ///   1. 命令属于破坏性集合（rm / del / rmdir / rd / Remove-Item / git clean / git reset / git checkout / ...）；
+    ///   2. 目标路径命中受保护项——或是 runtime 自身目录树内的路径，
+    ///      或是 `target|libs|src|sql|skills|logs|.codeartsdoer|.git|cjpm.toml|.env` 这类关键名字，
+    ///      或是"没写路径"（默认作用于 cwd，而 cwd 就是 runtime 根目录）。
+    ///
+    /// 不拦截：客户项目自己目录里的删除（不在 runtime 目录树内、且不含上述关键名字），
+    /// 因为那些本来就是 agent 正常工作的一部分。
+    protected static func guardDestructive(command: String, commandArgs: Array<String>, cwd: String): ?String {
+        let base = CliTool.basename(command).toAsciiLower()
+        if (base.isEmpty()) {
+            return None
+        }
+
+        let destructiveNames = ["rm", "del", "rmdir", "rd", "erase", "rmtree", "shred", "format", "diskutil"]
+        var destructive = false
+        for (n in destructiveNames) {
+            if (base == n || base == "${n}.exe" || base == "${n}.cmd" || base == "${n}.com") {
+                destructive = true
+            }
+        }
+        // PowerShell 形态：`powershell -Command "Remove-Item -Recurse -Force xxx"`
+        let joined = CliTool.joinTokens(command, commandArgs).toAsciiLower()
+        if ((base.contains("powershell") || base.contains("pwsh")) && joined.contains("remove-item")) {
+            destructive = true
+        }
+        // Git 抹工作区：`git clean -fd` / `git reset --hard` / `git checkout -- .`
+        if (base == "git" || base == "git.exe") {
+            if (commandArgs.size > 0) {
+                let sub = commandArgs[0].toAsciiLower()
+                if (sub == "clean" || sub == "reset" || sub == "checkout") {
+                    destructive = true
+                }
+            }
+        }
+        if (!destructive) {
+            return None
+        }
+
+        let root = CliTool.normalizePath(CliTool.runtimeRoot())
+        let protectedNames = ["target", "libs", "sql", "skills", "logs", ".codeartsdoer",
+            ".git", ".env", "cjpm.toml", "agents.md", "node_modules"]
+
+        var targets = ArrayList<String>()
+        for (a in commandArgs) {
+            // 跳过 -rf / --force / /S /Q 这类开关，只保留像路径的实参
+            if (!a.startsWith("-") && !a.startsWith("/") && !a.isEmpty()) {
+                targets.add(a)
+            }
+        }
+        if (targets.size == 0) {
+            // 没写路径 = 作用于当前工作目录（默认就是 runtime 根目录），直接拒
+            return Some("破坏性命令未指定路径，默认作用于当前工作目录（runtime 根目录）")
+        }
+
+        for (t in targets) {
+            let norm = CliTool.normalizePath(t)
+            if (norm.isEmpty()) {
+                return Some("破坏性命令的路径为空，默认作用于 runtime 根目录")
+            }
+            for (name in protectedNames) {
+                if (norm.contains(name)) {
+                    return Some("目标路径命中受保护项 `${name}`（${t}）")
+                }
+            }
+            if (!root.isEmpty()) {
+                let abs = CliTool.normalizePath(CliTool.resolveUnder(cwd, t))
+                if (!abs.isEmpty() && abs.contains(root)) {
+                    return Some("目标路径位于 runtime 自身目录内（${t}）")
+                }
+            }
+        }
+        return None
+    }
+
+    /// 取命令的可执行名（去掉目录前缀与 .exe 之外不做其它处理）
+    protected static func basename(command: String): String {
+        let raw = command.trimAscii()
+        if (raw.isEmpty()) {
+            return ""
+        }
+        let norm = raw.replace("\\", "/")
+        let idx = norm.lastIndexOf("/")
+        if (let Some(i) <- idx && i + 1 < norm.size) {
+            return norm[(i + 1)..].trimAscii()
+        }
+        norm.trimAscii()
+    }
+
+    /// 命令 + 实参拼成一行（仅用于关键字检测）
+    protected static func joinTokens(command: String, commandArgs: Array<String>): String {
+        var sb = StringBuilder()
+        sb.append(command)
+        for (a in commandArgs) {
+            sb.append(" ")
+            sb.append(a)
+        }
+        sb.toString()
+    }
+
+    /// 路径归一：反斜杠转斜杠 + 转小写，便于做包含判断
+    protected static func normalizePath(p: String): String {
+        if (p.isEmpty()) {
+            return ""
+        }
+        p.trimAscii().replace("\\", "/").toAsciiLower()
+    }
+
+    /// runtime 自身根目录（进程工作目录）
+    protected static func runtimeRoot(): String {
+        try {
+            getWorkingDirectory().toString()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    /// 相对路径按 cwd 解析；相对路径串以 runtime 根目录为兜底
+    protected static func resolveUnder(cwd: String, target: String): String {
+        if (target.startsWith("/") || target.contains(":")) {
+            return target
+        }
+        if (!cwd.isEmpty()) {
+            return "${cwd}/${target}"
+        }
+        try {
+            "${getWorkingDirectory().toString()}/${target}"
+        } catch (_: Exception) {
+            target
+        }
     }
 
     /**

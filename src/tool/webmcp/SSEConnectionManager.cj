@@ -13,6 +13,16 @@ import magic.log.LogUtils
  */
 private class SSEEventLog {
     public static let CAP: Int64 = 2048
+
+    /// 单次重连回放的**条数上限**：超出时只回放最近这些条，最旧的丢弃并补一条截断通知帧。
+    /// 由来（2026-10-02 实测）：一次重连全量回放了 2048 帧（会话累计 9042 个事件），
+    /// 前端要一次性接收并渲染 30 步的工具输出 + 十几 KB markdown，标签页直接 Out of Memory。
+    public static let REPLAY_MAX: Int64 = 200
+
+    /// 单帧**字节上限**：超过则降级为"省略帧"（只留 id 与字节数）。
+    /// 一条工具输出或长文本增量可以是几十 KB，几十条这样的帧就足以打爆前端内存。
+    public static let MAX_FRAME_BYTES: Int64 = 8192
+
     public let frames: ArrayList<(Int64, String)> = ArrayList<(Int64, String)>()
     public init() {}
 }
@@ -181,19 +191,51 @@ public class SSEConnectionManager {
      * @param fromId 客户端已收到的最后一个事件 id（不含）；传 0 表示从头回放本会话缓冲
      * @return SSE 帧字符串列表（每个元素已含 "id:/event:/data:" 完整格式）
      */
-    public func replayEvents(sessionId: String, fromId: Int64): ArrayList<String> {
+    public func replayEvents(sessionId: String, fromId: Int64, maxFrames!: Int64 = 0): ArrayList<String> {
+        let cap = if (maxFrames <= 0) { SSEEventLog.REPLAY_MAX } else { maxFrames }
         let result = ArrayList<String>()
         synchronized(_mutex) {
             let logOpt = _buffers.get(sessionId)
             if (logOpt.isSome()) {
                 for ((id, f) in logOpt.getOrThrow().frames) {
                     if (id > fromId) {
-                        result.add(f)
+                        result.add(this.summarizeFrame(f))
                     }
                 }
             }
         }
-        return result
+        if (result.size <= cap) {
+            return result
+        }
+        // 超限：只保留最近的 cap 条。重连的客户端关心的是"当前进展"，全量回放旧事件
+        // 既无意义又会把前端一次性打爆（见 SSEEventLog.REPLAY_MAX 的由来）。
+        // 丢弃前补一条 replay-truncated 帧，让前端知道"前面还有，被截断了"，而不是静默失真。
+        let drop = result.size - cap
+        var i: Int64 = 0
+        while (i < drop) {
+            result.remove(at: 0)
+            i += 1
+        }
+        let trimmed = ArrayList<String>()
+        trimmed.add("id: 0\nevent: replay-truncated\ndata: {\"omitted\":${drop.toString()},\"kept\":${cap.toString()}}\n\n")
+        for (f in result) {
+            trimmed.add(f)
+        }
+        LogUtils.info("[SSEConnectionManager] Replay truncated: sessionId=${sessionId}, dropped ${drop.toString()} oldest frames, kept ${cap.toString()}")
+        return trimmed
+    }
+
+    /// 单帧降级：超过 MAX_FRAME_BYTES 的帧只保留 id 与字节数，避免回放把前端内存打爆
+    private func summarizeFrame(frame: String): String {
+        if (frame.size <= SSEEventLog.MAX_FRAME_BYTES) {
+            return frame
+        }
+        var eventId = "0"
+        let parts = frame.split("\n")
+        if (parts.size > 0 && parts[0].startsWith("id: ")) {
+            eventId = parts[0][4..parts[0].size]
+        }
+        return "id: ${eventId}\nevent: replay-omitted\ndata: {\"eventId\":${eventId},\"bytes\":${frame.size.toString()},\"reason\":\"frame larger than ${SSEEventLog.MAX_FRAME_BYTES.toString()} bytes\"}\n\n"
     }
 
     /**

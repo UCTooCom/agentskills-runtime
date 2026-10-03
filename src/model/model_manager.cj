@@ -79,6 +79,9 @@ private let DEFAULT_PROVIDER_MAP = HashMap<String, ProviderConfig>([
     ("evomap",    ProviderConfig("EVOMAP_BASE_URL", // OpenAI-compatible Chat Completions Gateway
                                 "https://api.evomap.ai/v1",
                                 "EVOMAP_API_KEY")),
+    ("arcbench",  ProviderConfig("ARCBENCH_BASE_URL", // ArcBench 黑客松网关（OpenAI 兼容）
+                                "https://api.arc-bench.com/v1",
+                                "ARCBENCH_API_KEY")),
     ("tokendance", ProviderConfig("TOKENDANCE_BASE_URL", // openai-compatible
                                  "https://tokendance.space/gateway/v1",
                                  "TOKENDANCE_API_KEY")),
@@ -96,57 +99,6 @@ private func getAllProviderNames(): Array<String> {
 
 private func checkProvider(provider: String): Bool {
     return DEFAULT_PROVIDER_MAP.keys().contains(provider)
-}
-
-/**
- * 从裸模型名推断 provider：取已知 provider 名里能匹配名字前缀的那个
- * （"deepseek-v4-1-flash" → "deepseek"）。匹配不到返回空串。
- */
-private func inferProvider(modelName: String): String {
-    let lowered = modelName.toAsciiLower()
-    for (provider in getAllProviderNames()) {
-        if (lowered.startsWith(provider)) {
-            return provider
-        }
-    }
-    return ""
-}
-
-/**
- * 把历史 / 别名 / 自造的模型名规范化成厂商**当前的官方 ID**。
- *
- * 依据 DeepSeek 官方《模型 & 价格》页（api-docs.deepseek.com/zh-cn/quick_start/pricing，
- * 2026-09-18 核实）：正式模型 ID 已简化为 `deepseek-flash`（对应 DeepSeek-V4.1-Flash）
- * 与 `deepseek-v4-pro`；`deepseek-v4-flash`、`deepseek-v4-flash-vision-exp` 虽仍可调用，
- * 但对应模型已下线，请求改由 DeepSeek-V4.1-Flash 提供服务。
- *
- * 而 `deepseek-v4-1-flash` 是**配置里自造的写法，官方从未提供此 ID**（原样发给厂商 API
- * 有风险）。此前 `Agents` 表的 `model` 列正是被写成这个名字，导致加载 Agent 时抛
- * "deepseek-v4-1-flash is invalid"。
- *
- * 不规范化就会把已废弃甚至不存在的 ID 原样发给厂商 API；规范化后老配置无需改库也能继续用。
- */
-private func normalizeModelName(name: String): String {
-    let lower = name.toAsciiLower()
-    // 带其他厂商前缀的模型名（如 evomap-deepseek-v4-flash）不是 deepseek 官方裸 ID，
-    // 不应被下面的 deepseek 规范化改写——否则会丢掉 evomap- 前缀、错发给 deepseek 官方。
-    // 仅当模型名以「非 deepseek 的已知 provider 名 + 连字符」开头时才整名原样返回。
-    for (provider in getAllProviderNames()) {
-        if (provider != "deepseek" && lower.startsWith(provider + "-")) {
-            return name
-        }
-    }
-    if (lower.contains("deepseek")) {
-        // 仅对带代次前缀的写法做收敛（v4-1 / v4.1 / v4-flash / v4_flash），
-        // 已经是 canonical 的 `deepseek-flash` / `deepseek-v4-pro` 原样返回。
-        if (lower.contains("v4-1") || lower.contains("v4.1") || lower.contains("v4-flash") || lower.contains("v4_flash")) {
-            if (lower.contains("pro")) {
-                return "deepseek-v4-pro"
-            }
-            return "deepseek-flash"
-        }
-    }
-    return name
 }
 
 private func getDefaultBaseURL(provider: String, kind: String): String {
@@ -233,37 +185,38 @@ public class ModelConfig {
 private func parseModel(model: String, kind!: String): ModelConfig {
     let items = model.split(":", 2)
     if (items.size == 1) {
-        let bareName = items[0].trimAscii()
-        if (bareName == "llamacpp") {
+        if (items[0] == "llamacpp") {
             return ModelConfig(provider: "llamacpp", kind: kind, name: "unknown")
         }
-        // 裸模型名（没有 "provider:name" 前缀）。
+        // 裸模型名（没有 provider 前缀）一律报错退出——不再猜测它属于哪个通道。
         //
-        // 实测来源：`Agents` 表的 `model` 列被直接写成 "deepseek-v4-1-flash"
-        // （而 .env 里规范的写法是 MODEL_CONFIG=deepseek:deepseek-flash），
-        // 于是 AgentExecutionExecutor 加载 Agent 时逐个抛
-        // "deepseek-v4-1-flash is invalid. Only [...] are supported now."。
-        //
-        // 两步兜底：先按官方最新 ID 规范化模型名，再按 provider 名前缀推断 provider；
-        // 推断不出就退到 Config.MODEL_PROVIDER。
-        let canonicalName = normalizeModelName(bareName)
-        let inferred = inferProvider(canonicalName)
-        if (inferred.size > 0) {
-            return ModelConfig(provider: inferred, kind: kind, name: canonicalName)
-        }
-        let fallback = Config.MODEL_PROVIDER
-        if (checkProvider(fallback)) {
-            return ModelConfig(provider: fallback, kind: kind, name: canonicalName)
-        }
+        // 提示文案里给出可复制的修法：库里 `Agents.model` 列、`.env` 的 MODEL_CONFIG
+        // 都要写成 `provider:modelName`。批量修复脚本见 sql/fix_agent_model_prefix.sql
+        // （2026-10-02：定时任务 agent-loop-main 连报 20 条 `deepseek-flash is invalid`，
+        // 根因就是库里存的是裸名）。
+        throw ModelException(
+            "${model} is invalid: bare model name is not accepted (no provider prefix). " +
+            "Write it as `provider:modelName`, e.g. `arcbench:deepseek-v4-flash`. " +
+            "Only ${getAllProviderNames()} are supported now."
+        )
     } else if (items.size == 2) {
         let provider = items[0].trimAscii()
         let modelName = items[1].trimAscii()
         if (!checkProvider(provider)) {
             throw ModelException("${model} is invalid. Only ${getAllProviderNames()} are supported now.")
         }
-        // 同样做官方 ID 规范化：`deepseek:deepseek-v4-1-flash` 这类老配置
-        // 会在这里被收敛成 `deepseek-flash`，无需改库。
-        return ModelConfig(provider: provider, kind: kind, name: normalizeModelName(modelName))
+        // 模型 ID 原样使用，不做任何改写。
+        //
+        // 这里此前有两层多余动作，均已移除：
+        // 1) v0.0.28 起加的 deepseek 官方 ID 规范化（normalizeModelName）——会把
+        //    `deepseek-v4-flash` 收敛成 `deepseek-flash`。对 ArcBench 这类 OpenAI 兼容
+        //    网关，其自报的模型名本来就叫 `deepseek-v4-flash`，改写后网关不认，实测
+        //    返回 provider_not_selected。
+        // 2) 按名字前缀反推 provider（inferProvider）+ 回退 Config.MODEL_PROVIDER 的兜底。
+        //
+        // 原则：用户怎么配置就怎么走。配置错了就报错，配置对了就用，不搞程序里偷偷
+        // 二次处理、用户却不知道的行为。
+        return ModelConfig(provider: provider, kind: kind, name: modelName)
     }
     throw ModelException("${model} is invalid. Only ${getAllProviderNames()} are supported now.")
 }
@@ -287,7 +240,7 @@ public struct ModelManager {
     public static func createChatModel(modelConfig: ModelConfig): ChatModel {
         match (modelConfig.provider) {
             case "openai" | "dashscope" | "ark" | "deepseek" |
-                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" | "orbitai" | "atomgit" | "gmicloud" | "evomap" =>
+                 "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" | "orbitai" | "atomgit" | "gmicloud" | "evomap" | "arcbench" =>
                 return OpenAIChatModel(modelConfig.provider, modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)
             case "tokendance" =>
                 return TokendanceChatModel(modelConfig.provider, modelConfig.name, apiKey: modelConfig.apiKey, baseURL: modelConfig.baseURL)

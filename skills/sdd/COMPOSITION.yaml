@@ -1,4 +1,14 @@
 # ============================================================================
+# ⚠ 下方每个 plugin 步的 `plugin_route` 仍是**早期设计稿**（gen-{research,spec,design,task,code,test}），
+# 宿主侧从未注册这些路径（全仓搜不到实现），照它们调一律 404。
+# 六步的真实执行入口是宿主侧 `SddOrchestrationExecutor`（crontab scheme `sdd://<feature_name>`）：
+#   单步   POST /api/v1/uctoo/sdd/run-stage   {stage: "<本步名>", ...}
+#   异步整条 POST /api/v1/uctoo/sdd/run      {stage: "<起始步，可选>"}（不给 stage 则从 current_stage 续跑）
+#   工程      POST /api/v1/uctoo/sdd/start
+# 即"当前执行哪一步"由请求体的 `stage` 字段决定，不再靠 plugin_route 路由到不同 HTTP 路径。
+# 本文档当前的作用是**编排契约与验收口径**（step 名 / depends_on / input / acceptance_criteria），
+# 执行层与之对齐的方式是 `SddOrchestrationService.STAGES` + `subAgentForStage`，不是这条 route。
+#
 # SDD 规范驱动开发 —— 六步编排（方案 A 文件态格式：script / plugin / output）
 # 格式要素与 skills/long-running-task/COMPOSITION.yaml 完全一致：
 #   step_type / script / plugin_route / depends_on / condition /

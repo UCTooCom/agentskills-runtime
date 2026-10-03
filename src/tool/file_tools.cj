@@ -8,7 +8,7 @@ import magic.jsonable.TypeSchema
 import magic.log.LogUtils
 import magic.utils.readFile
 import magic.utils.removeIfExists
-import std.collection.HashMap
+import std.collection.{HashMap, ArrayList}
 import std.convert.*
 import std.env.getWorkingDirectory
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonArray}
@@ -125,32 +125,43 @@ public class FileReadTool <: NativeFuncTool {
                             if (rawBytes.size >= 3 && rawBytes[0] == 0xEF && rawBytes[1] == 0xBB && rawBytes[2] == 0xBF) {
                                 startIdx = 3
                             }
-                            // 容错解码：UTF-8 失败则替换非法字符为 ?（0x3F）后返回非空
-                            let safeBytes = Array<Byte>(rawBytes.size - startIdx, { _ => 0 })
-                            var safeIdx = 0
-                            var i = startIdx
-                            while (i < rawBytes.size) {
-                                let b = rawBytes[i]
-                                if (b < 0x80) {
-                                    // ASCII 字符（0-127）直接保留
-                                    safeBytes[safeIdx] = b
-                                    safeIdx++
-                                } else {
-                                    // 非 ASCII 字符替换为 ?（0x3F），避免 UTF-8 解码失败
-                                    safeBytes[safeIdx] = 0x3F
-                                    safeIdx++
-                                }
-                                i++
+                            // 【2026-10-02 修正】回退的目标是「尽量保真」，不是「保非空」。
+                            // 旧实现把**每个**非 ASCII 字节都替换成 '?'，一个三字节汉字变成 ??? ，
+                            // agent 拿到的是被破坏的内容（sdd research 全程乱码的根因之一，
+                            // 日志 agentskills-runtime-20261002-002418：5 次读取全部 ??? ）。
+                            // 现分两级：
+                            //   1) 原字节整段 UTF-8 解码，成功就原样返回（encoding=utf-8）；
+                            //   2) 失败才降级：按 UTF-8 序列长度整体跳过，一个字符只写一个 '?'，
+                            //      并在结果里标 encoding=lossy，让调用方知道内容不可信。
+                            var decoded = ""
+                            var decodedOk = false
+                            try {
+                                decoded = String.fromUtf8(rawBytes[startIdx..rawBytes.size])
+                                decodedOk = !decoded.isEmpty()
+                            } catch (decEx: Exception) {
+                                LogUtils.warn("[FileReadTool] Strict UTF-8 decode failed for ${normalizedPathStr}: ${decEx.message}")
+                                decodedOk = false
                             }
-                            let fallbackContent = String.fromUtf8(safeBytes[0..safeIdx])
-                            if (!fallbackContent.isEmpty()) {
-                                LogUtils.info("[FileReadTool] Encoding fallback succeeded for ${normalizedPathStr}, length: ${fallbackContent.size.toString()}")
+                            if (decodedOk) {
+                                LogUtils.info("[FileReadTool] Encoding fallback succeeded (utf-8 passthrough) for ${normalizedPathStr}, length: ${decoded.size.toString()}")
                                 let result = JsonObject()
                                 result.put("success", JsonString("true"))
                                 result.put("path", JsonString(normalizedPathStr))
-                                result.put("content", JsonString(fallbackContent))
-                                result.put("lineCount", JsonString(fallbackContent.split("\n").size.toString()))
-                                result.put("encoding", JsonString("fallback: UTF-8 BOM stripped + non-ASCII replaced with ?"))
+                                result.put("content", JsonString(decoded))
+                                result.put("lineCount", JsonString(decoded.split("\n").size.toString()))
+                                result.put("encoding", JsonString("utf-8 (BOM stripped by fallback)"))
+                                return result.toJsonString()
+                            }
+                            // 二级降级：ASCII 全保留，非法/超长序列按「一个字符一个 ?」
+                            let lossy = FileReadTool.decodeLossyUtf8(rawBytes, startIdx)
+                            if (!lossy.isEmpty()) {
+                                LogUtils.info("[FileReadTool] Encoding fallback succeeded (lossy) for ${normalizedPathStr}, length: ${lossy.size.toString()}")
+                                let result = JsonObject()
+                                result.put("success", JsonString("true"))
+                                result.put("path", JsonString(normalizedPathStr))
+                                result.put("content", JsonString(lossy))
+                                result.put("lineCount", JsonString(lossy.split("\n").size.toString()))
+                                result.put("encoding", JsonString("lossy: invalid UTF-8 sequences replaced with ? (content untrusted)"))
                                 return result.toJsonString()
                             }
                         } catch (fbEx: Exception) {
@@ -232,6 +243,54 @@ public class FileReadTool <: NativeFuncTool {
             }
         }
         return defaultValue
+    }
+
+    /**
+     * 容错解码（回退的最后一级）：ASCII 原样保留，多字节/非法序列按「一个字符一个 ?」降级。
+     *
+     * 与旧实现的差别：旧实现逐字节替换，一个三字节汉字变成 ??? 三个问号，长度与语义双失真；
+     * 这里按 UTF-8 首字节推断序列长度整体跳过，问号数量与字符数一致。
+     *
+     * @param bytes 文件原始字节
+     * @param start 起始下标（已跳过 BOM）
+     * @return 解码后的字符串；无法解码时返回空串
+     */
+    private static func decodeLossyUtf8(bytes: Array<Byte>, start: Int64): String {
+        let questionMark: Byte = 0x3F
+        let safe = ArrayList<Byte>()
+        var i = start
+        while (i < bytes.size) {
+            let b = bytes[i]
+            if (b < 0x80) {
+                safe.add(b)
+                i += 1
+            } else {
+                safe.add(questionMark)
+                i += FileReadTool.utf8SequenceLength(b)
+            }
+        }
+        if (safe.isEmpty()) {
+            return ""
+        }
+        try {
+            return String.fromUtf8(safe.toArray())
+        } catch (_: Exception) {
+            return ""
+        }
+    }
+
+    /// 按 UTF-8 首字节推断序列长度；非法首字节按 1 字节跳过，避免死循环
+    private static func utf8SequenceLength(b: Byte): Int64 {
+        if (b >= 0xF0) {
+            return 4
+        }
+        if (b >= 0xE0) {
+            return 3
+        }
+        if (b >= 0xC0) {
+            return 2
+        }
+        return 1
     }
 }
 

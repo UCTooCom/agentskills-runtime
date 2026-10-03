@@ -13,6 +13,21 @@ import magic.log.LogUtils
 public class ReactExecutor <: AgentExecutor {
     public ReactExecutor(private let loop!: Int64 = Config.normalReactSteps) {}
 
+    /**
+     * 步数预算耗尽时强制前置的提示文案。
+     *
+     * 目的：触顶（MaxStepsExhausted）与正常收敛（Completed）是两种不同的终态。
+     * 终止原因已经落进 AgentExecution 供持久化层区分（status=5），但用户侧看到的是
+     * 一条普通回复 —— 必须让"没跑完"这件事在答案里自己说出来，否则用户会以为已完成
+     * （2026-10-02 sdd research 未落盘事件的直接教训）。
+     */
+    private static func maxStepsNotice(steps: Int64): String {
+        return "[步数预算耗尽] 本轮 ReAct 在 ${steps.toString()} 步处触顶提前结束，任务未闭环：" +
+               "可能还有产物未落盘、收尾步骤未执行。\n" +
+               "建议：把任务拆小后重发，或明确要求交给长程任务（LRT）子系统执行。\n\n" +
+               "以下是已完成的阶段性结果：\n\n"
+    }
+
     override public prop name: String {
         get() { "react" }
     }
@@ -36,7 +51,16 @@ public class ReactExecutor <: AgentExecutor {
             }
             let answer = task.summarize()
             task.markMaxStepsExhausted()
-            return AgentResponse(AgentResponseStatus.Success, answer, execution: task.execution)
+            // 【2026-10-02 修复】步数耗尽此前被当成 Success 静默返回：运行时确实记了
+            // terminationReason=MaxStepsExhausted（落库 status=5），但前端拿到的是一条
+            // 与普通成功回复毫无区别的内容，用户无法判断"任务到底闭环没有"。
+            // 现场：web 聊天跑 sdd research，30 步触顶后把研究文档当聊天正文吐出，
+            // 用户以为已完成，实际 research.md 从未落盘（日志 20261002-002418）。
+            // 修法：答案最前面强制插入未闭环提示，让"触顶"这件事对用户可见。
+            LogUtils.warn("Exceed the max react loop (${this.loop.toString()} steps), task NOT closed")
+            return AgentResponse(AgentResponseStatus.Success,
+                ReactExecutor.maxStepsNotice(this.loop) + answer,
+                execution: task.execution)
         } finally {
             task.end()
         }
@@ -71,9 +95,14 @@ public class ReactExecutor <: AgentExecutor {
                     }
                     task.handleAgentStepEvent()
                 }
-                LogUtils.info("Exceed the max react loop")
+                LogUtils.warn("Exceed the max react loop (${this.loop.toString()} steps), task NOT closed")
                 task.markMaxStepsExhausted()
-                return task.asyncSummarize()
+                // 同上：触顶不再是"静默成功"，答案流最前面插入未闭环提示
+                let summary = task.asyncSummarize()
+                return AsyncAgentResponse(
+                    MaxStepsNoticeIterator(ReactExecutor.maxStepsNotice(this.loop), summary),
+                    execution: task.execution
+                )
             } catch (ex: Exception) {
                 // 异步 ReAct 循环此前没有任何异常隔离：LLM 调用失败、工具未捕获异常、
                 // UnsupportedException 等都会冒泡到 AsyncAgentResponse.next() 的 catch，
@@ -104,5 +133,31 @@ public class ReactExecutor <: AgentExecutor {
             }
         }
         return AsyncAgentResponse(FutureIteratorWrapper(task, fut), execution: task.execution)
+    }
+}
+
+/**
+ * 在答案流最前面插入一条提示的迭代器包装（步数预算耗尽场景专用）。
+ *
+ * 为什么需要包装而不是改 task.asyncSummarize()：异步路径下总结内容是流式产出的，
+ * 外层只能拿到 Iterator<String>；包一层既不触碰 summarize 的内部实现，也不影响
+ * 内层 AsyncAgentResponse 自己的 finish 回调（它的 next() 仍会被调到最后）。
+ */
+private class MaxStepsNoticeIterator <: Iterator<String> {
+    private var _sent: Bool = false
+    private let _notice: String
+    private let _inner: Iterator<String>
+
+    public init(notice: String, inner: Iterator<String>) {
+        this._notice = notice
+        this._inner = inner
+    }
+
+    public func next(): Option<String> {
+        if (!_sent) {
+            _sent = true
+            return Some(_notice)
+        }
+        return _inner.next()
     }
 }

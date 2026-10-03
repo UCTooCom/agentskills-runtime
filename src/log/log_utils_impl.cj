@@ -69,6 +69,36 @@ struct LogUtilsImpl {
     /// 因写锁不可用而被丢弃的日志条数（仅用于诊断，前 5 次打 stderr）
     private static var DROPPED_COUNT: Int64 = 0
 
+    /// 单条日志正文的字数上限。
+    ///
+    /// 背景（2026-10-02 OOM 事故排查）：日志写锁一旦被某条**超大** msg 占用（比如整段
+    /// 对话上下文 / 整个文件内容 / HTTP body 被打进日志），其它线程就会撞上
+    /// `log write lock busy over 500ms, message dropped`。那次 cmd 里正是这条 LOG-DROP
+    /// 和 `Out of memory` 成对出现——观测面把控制面堵住是排查里最坏的一类信号。
+    /// 这里只做一件事：无论调用方塞进来多少内容，进入写锁前先裁剪到有界长度，
+    /// 保证持锁时间恒定在微秒级，宁可丢中间片段也不丢首尾（首尾才是定位线索）。
+    private static let LOG_BODY_MAX: Int64 = 8000
+
+    /// 把日志正文裁剪成有界长度：保留头尾，中间以 `[... N chars skipped ...]` 替代。
+    private static func boundedMsg(msg: String): String {
+        // 必须走 Rune 视图：仓颉 String 是 UTF-8，msg[0..n] 是**按字节**切，
+        // 日志正文全是中文，直接字节切会在汉字中间断开，得到非法 UTF-8（落盘后变 `?`）。
+        // 项目既有结论见 char_delta_splitter.cj:9-17（toRuneArray + String(Array<Rune>)）。
+        let runes = msg.toRuneArray()
+        let size = runes.size
+        if (size <= LOG_BODY_MAX) {
+            return msg
+        }
+        let headLen = LOG_BODY_MAX / 3
+        let tailLen = LOG_BODY_MAX / 3
+        let head = String(runes[0..headLen])
+        var tail = ""
+        if (size - tailLen >= headLen) {
+            tail = String(runes[(size - tailLen)..])
+        }
+        return "${head}...[${size - headLen - tailLen} chars skipped]...${tail}"
+    }
+
     /// 有界地拿日志写锁后执行 action。
     ///
     /// 为什么不用 synchronized(WRITE_LOCK)：synchronized 是**无限期**等待。
@@ -370,50 +400,50 @@ struct LogUtilsImpl {
     //------------------------------------------------------------
 
     public static func trace(msg: String): Unit {
-        withWriteLock({ => LOGGER.trace(msg) })
+        withWriteLock({ => LOGGER.trace(boundedMsg(msg)) })
     }
 
     public static func agentTrace(name: String, msg: String): Unit {
-        withWriteLock({ => getNamedLogger(name).trace("[${name}] ${msg}") })
+        withWriteLock({ => getNamedLogger(name).trace(boundedMsg("[${name}] ${msg}")) })
     }
 
     //------------------------------------------------------------
 
     public static func debug(msg: String): Unit {
-        withWriteLock({ => LOGGER.debug(msg) })
+        withWriteLock({ => LOGGER.debug(boundedMsg(msg)) })
     }
 
     public static func agentDebug(name: String, msg: String): Unit {
-        withWriteLock({ => getNamedLogger(name).debug("[${name}] ${msg}") })
+        withWriteLock({ => getNamedLogger(name).debug(boundedMsg("[${name}] ${msg}")) })
     }
 
     //------------------------------------------------------------
 
     public static func info(msg: String): Unit {
-        withWriteLock({ => LOGGER.info(msg) })
+        withWriteLock({ => LOGGER.info(boundedMsg(msg)) })
     }
 
     public static func agentInfo(name: String, msg: String): Unit {
-        withWriteLock({ => getNamedLogger(name).info("[${name}] ${msg}") })
+        withWriteLock({ => getNamedLogger(name).info(boundedMsg("[${name}] ${msg}")) })
     }
 
     //------------------------------------------------------------
 
     public static func warn(msg: String): Unit {
-        withWriteLock({ => LOGGER.warn(msg) })
+        withWriteLock({ => LOGGER.warn(boundedMsg(msg)) })
     }
 
     public static func agentWarn(name: String, msg: String): Unit {
-        withWriteLock({ => getNamedLogger(name).warn("[${name}] ${msg}") })
+        withWriteLock({ => getNamedLogger(name).warn(boundedMsg("[${name}] ${msg}")) })
     }
 
     //------------------------------------------------------------
 
     public static func error(msg: String): Unit {
-        withWriteLock({ => LOGGER.error(msg) })
+        withWriteLock({ => LOGGER.error(boundedMsg(msg)) })
     }
 
     public static func agentError(name: String, msg: String): Unit {
-        withWriteLock({ => getNamedLogger(name).error("[${name}] ${msg}") })
+        withWriteLock({ => getNamedLogger(name).error(boundedMsg("[${name}] ${msg}")) })
     }
 }

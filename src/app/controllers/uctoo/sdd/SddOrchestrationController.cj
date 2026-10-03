@@ -85,8 +85,15 @@ public class SddOrchestrationController {
     /**
      * 执行单个 SDD 阶段：真派生子 agent + 推进工程阶段。
      *
-     * 请求体：`{stage, feature_name, question, task_id?, parent_task_id?, output_dir?, agent_id?, language?}`
-     * `question` 必填——Isolated 模式下子 agent 的全部上下文都塞在这一个字段里。
+     * 请求体：`{stage, feature_name, question?, task_id?, parent_task_id?, output_dir?, agent_id?, language?, allow_missing_upstream?}`
+     *
+     * `question` **可选**：不传时由编排服务按异步路径同款的 `buildStageQuestion` 自动
+     * 拼装（读上游阶段产物 + 产物目录引导），不要求调用方手工粘上下文。
+     * 传了则作为补充说明拼在自动拼装的上下文之前。
+     *
+     * `stage` 非空即"指定阶段执行"（跳步）：会先过 `checkUpstream`——
+     * 上游产物缺件时**直接拦下**并返回可操作的修复提示（把 output_dir 指到已落盘
+     * 阶段文档的目录），除非显式 `allow_missing_upstream=true`。
      *
      * `stage=code` 时**不派生子 agent**：由主 agent 加载编程技能后按 SOP 执行，
      * 因此 `agent_id`（主 agent 定义 id）对该步是**必需**的，缺失时编排服务显式失败。
@@ -105,6 +112,8 @@ public class SddOrchestrationController {
             let stage = SddOrchestrationController.strField(obj, "stage")
             let featureName = SddOrchestrationController.strField(obj, "feature_name")
             let question = SddOrchestrationController.strField(obj, "question")
+            let allowMissing = SddOrchestrationController.boolField(obj, "allow_missing_upstream", false)
+            let outputDir = SddOrchestrationController.strField(obj, "output_dir")
 
             if (stage.isEmpty()) {
                 res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少 stage 参数\"}")
@@ -114,20 +123,30 @@ public class SddOrchestrationController {
                 res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少 feature_name 参数\"}")
                 return
             }
-            if (question.isEmpty()) {
-                res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"缺少 question 参数（Isolated 模式下子 agent 的全部上下文靠它传递）\"}")
-                return
-            }
             // 阶段白名单只认 SddOrchestrationService.STAGES 一处定义
             if (!SddOrchestrationController.isKnownStage(stage)) {
                 res.status(400).json("{\"errno\":\"40002\",\"errmsg\":\"未知阶段 '${stage}'\"}")
                 return
             }
 
+            // 指定阶段 = 跳步：先校验上游产物齐不齐（缺件拦下，给可操作修复提示）
+            let chk = this.orchestration.checkUpstream(stage, featureName, outputDir, allowMissing: allowMissing)
+            if (!chk.success) {
+                let why = match (chk.reason) {
+                    case Some(v) => v
+                    case None => "unknown"
+                }
+                res.status(400).json("{\"errno\":\"40003\",\"errmsg\":\"${why}\"}")
+                return
+            }
+
+            // 上下文统一由编排服务拼（question 可空）：与异步 crontab 路径同口径
+            let built = this.orchestration.buildStageQuestion(question, featureName, stage, outputDir)
+
             let result = this.orchestration.runStage(
                 stage,
                 featureName,
-                question,
+                built,
                 userId,
                 SddOrchestrationController.strField(obj, "task_id"),
                 SddOrchestrationController.strField(obj, "parent_task_id"),
@@ -153,11 +172,16 @@ public class SddOrchestrationController {
      * 适合单步探针/联调）；`run` **异步**跑整条流水线（每 tick 推进一步，
      * 见 `SddOrchestrationExecutor`），HTTP 不阻塞。
      *
-     * 请求体：`{feature_name, question, task_id?, parent_task_id?, output_dir?, auto?, agent_id?, language?}`
+     * 请求体：`{feature_name, question, task_id?, parent_task_id?, output_dir?, auto?, agent_id?, language?, stage?, allow_missing_upstream?}`
      * 响应体：`{crontab_id, feature_name, async}` —— 进度另用 `status` 查询。
      *
      * `agent_id` / `language` 会原样写进调度行 parameters：跑到 code 步时要用
      * （主 agent 直执行，不派生编码子 agent），没传会导致该步失败并提示。
+     *
+     * `stage`（可选）= **指定阶段执行**：前面几步已确认时传 `"code"` 就只跑编码这一步，
+     * 跑完停在当前闸口等人工决策，不再自动往下推。不给 stage 则按
+     * `sdd_projects.current_stage` 自动推进下一步。
+     * 给了 stage 会先过上游产物校验；确知上游缺件仍要跳步，传 `allow_missing_upstream=true`。
      */
     public func run(req: HttpRequest, res: HttpResponse): Unit {
         try {
@@ -190,7 +214,9 @@ public class SddOrchestrationController {
                 agentId: SddOrchestrationController.strField(obj, "agent_id"),
                 language: SddOrchestrationController.strField(obj, "language"),
                 sessionId: SddOrchestrationController.strField(obj, "session_id"),
-                notifyAgentId: SddOrchestrationController.strField(obj, "notify_agent_id")
+                notifyAgentId: SddOrchestrationController.strField(obj, "notify_agent_id"),
+                startStage: SddOrchestrationController.strField(obj, "stage"),
+                allowMissingUpstream: SddOrchestrationController.boolField(obj, "allow_missing_upstream", false)
             )
             if (!r.success) {
                 SddOrchestrationController.writeFail(res, r.reason)

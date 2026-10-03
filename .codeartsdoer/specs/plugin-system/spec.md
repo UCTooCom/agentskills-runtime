@@ -1,5 +1,7 @@
 # 插件系统需求规格
 
+> 版本：v3.3（2026-09-10 插件去中心化自动发现方案：①新增 REQ-PS-016——去掉 `plugins.yaml` 中心化配置，配置迁入各自 `plugin.yaml` 实现自完备描述；②复用 `ProgressiveSkillLoader` 目录扫描自动发现 `plugin.yaml`；③新建 `PluginDiscoveryService` + `loadAll` 改造 + 向后兼容策略。依据：AIDrivenArchitecture.md §观点1+§观点2"一切皆技能"去中心化。详见 design.md §5.5.2。）
+> 版本：v3.2（2026-09-10 表白名单声明式配置修订：①`plugins.yaml` 新增 `tableWhitelist` 声明式字段，替代宿主代码硬编码；②`PluginManifestEntry.tableWhitelist` 字段 + `fromJsonValue` 解析 + `installHostServicesHook` 从 `processEntries` 读取；③增删插件表无需重编宿主，遵循 AIDrivenArchitecture.md"不硬编码业务功能"设计哲学。）
 > 版本：v3.1（2026-09-03 复核修订：①L3 进程隔离轨 codelabs 插件完整 V4 CRUD 已实现并测试通过——列表/编辑/删除/回收站/创建全部功能正确；②plugingen 新增 `CrudPluginGenerator` 表驱动生成器，可从数据库结构生成完整 CRUD 进程插件（plugin.yaml + cjpm.toml + main.cj + handlers.cj + effects.cj + README.md）；③host.db 服务支持 `$raw:` 前缀约定生成原始 SQL 函数（如 `CURRENT_TIMESTAMP`、`gen_random_uuid()`）；④回收站筛选基于 `filter` 查询参数动态构建 WHERE 子句（`{"deleted_at":{"not":null}}` → `deleted_at IS NOT NULL`）；⑤`empty-recycle-bin` 路由已实现。⑥README.md/web 端 `codelabs-table.vue` 的 `res.codelabss` 双 s 键名符合 API 规范 §8.2（表名+s 复数）。）
 > 版本：v3.0（2026-08-28 阶段四立项修订：新增 REQ-PS-015 L3 进程隔离插件轨（cordis-cj 集成），演进路标插入阶段四（L3 轨），插件市场顺延为阶段五；REQ-PS-012 附 v3 修订——附7.13 HTTP 契约 SPI 拆分对 L3 轨不再是必须。依据：可行性报告附7.14 cordis-cj 完整调研。）
 > 版本：v2.2（2026-08-28 实际落地修订：同步实际实现方案与架构/框架/仓颉语言限制条件。①双轨并存退化为单轨（宿主内嵌轨），原因 cjpm `[workspace]` 与 `[package]` 互斥；②插件深度依赖宿主子包，独立包模式产生循环依赖；③仓颉反射 API 在 LTO 下剪除未引用类，需 generated_anchors.cj 显式锚定；④动态库标准库符号重复，需 `--dy-std` 编译选项；⑤插件包名必须为简单标识符（`skill_{name}`），不能是带点号的限定名；⑥HMR/合流性无定理背书，对外表述"确定性插件生命周期"。详见下方"§0 实际落地与限制条件"。）
@@ -254,7 +256,7 @@ agentskills-runtime 需要一套跨平台的纯仓颉插件系统，支撑 ROADM
 - **宿主集成组件**（全部位于 `src/plugin/`，magic.plugin 包，存量 src/app 零改动）：
   - `CordisHostManager`：包装 `ystyle::cordis_host` 的 PluginManager(stdio)/PluginHost/reconcile 循环；从 `plugins.yaml` 读取 `mode: process` 插件生成期望状态
   - `ExternalPluginRouteGateway`：为 process 插件注册 UCTOO V4 路由（POST /add、/edit、/del 等），handler 序列化 HTTP 请求（method/path/pathParams/queryParams/body/userId）→ `invoke` 插件进程 → 插件返回 `{errno, errmsg}` 或数据对象 → 网关回写；中间件链（CORS → DeserializeUser → RequirePermission → RowLevel → OperateLog）在宿主侧执行，V4 API 规范与 RBAC/行级权限体系完全保留
-  - **宿主侧服务代理**：宿主在 RPC 连接上注册 `host.db`/`host.log`/`host.cache` 等服务 handler，插件进程经 `ctx.invoke` 反向调用（数据访问复用宿主 f_orm/连接池/权限过滤，插件不直连数据库）
+  - **宿主侧服务代理**：宿主在 RPC 连接上注册 `host.db`/`host.log`/`host.cache` 等服务 handler，插件进程经 `ctx.invoke` 反向调用（数据访问复用宿主 f_orm/连接池/权限过滤，插件不直连数据库）；**host.db 表白名单经 `plugin.yaml` 声明式配置**（`tableWhitelist` 字段，§5.5.1 声明式配置 / §5.5.2 去中心化自动发现），宿主启动时从 `PluginManifestEntry.tableWhitelist` 读取并注入，增删表无需重编宿主、无需编辑中心配置
 - **插件形态**：独立 cjpm 工程（output-type = "executable"，--static），入口为 `PluginRuntime.run(...)` 显式 API 写法（**禁用 `@Plugin` 宏**——规避 cjpm 宏包 organization 跨模块缺陷，与 cordis-cj 官方对外部插件作者的建议一致）；依赖 `ystyle::cordis_plugin` + `jsonvalue`
 - **插件生命周期语义**（对齐 Cordis/DSH）：
   - 启停：`plugin_activate`/`plugin_deactivate` Agent 工具映射为 reconcile 期望状态 enabled 变更 → 拉起/terminate（杀进程 = OS 级资源回收，卸载确定性优于 dlclose）
@@ -264,6 +266,19 @@ agentskills-runtime 需要一套跨平台的纯仓颉插件系统，支撑 ROADM
 - **生成与卸载工具适配**：plugingen 新增 `mode: process` 输出形态（三维一体目录 + 独立 cjpm.toml + PluginRuntime.run 入口模板）；pluginuninstall 新增 process 轨支持（终止进程 + 删除二进制与清单 + 清数据库痕迹）
 - **跨进程事件（阶段四后期，可选增强）**：cordis EventRegistry（五种派发 emit/parallel/serial/bail/waterfall + 类型安全）与进程内 PluginEventBus 桥接
 - **与"一切皆技能"的关系**：L3 轨使"第三方开发者独立发布插件（可闭源、故障隔离、AI 动态启停）"的插件市场门槛真正达成——技能 = SKILL.md（AI 行为）+ 独立可执行插件（确定性能力）+ plugin.yaml（清单），AI 经 Agent 工具对插件进程做 inspect/activate/deactivate 即 DSH tool-cordis 自引用语义的进程级等价物
+
+### REQ-PS-016: 插件去中心化自动发现（阶段四增强，v3.3 新增）
+
+> **设计动因**：REQ-PS-015 的 `plugins.yaml` 声明式配置（v3.2）虽消除了宿主代码硬编码，但仍需维护一个**中心化配置文件**——新增插件需编辑 `config/plugins.yaml`，与 AIDrivenArchitecture.md §观点2"一切皆技能"的自完备、自发现设计哲学存在差距。详见 design.md §5.5.2。
+
+- **plugin.yaml 自完备化**：将 `plugins.yaml` 中的宿主侧字段（`enabled`/`order`/`autoRestart`/`tableWhitelist`）迁移到各自的 `skills/{name}/plugin.yaml`，使每个插件的 `plugin.yaml` 成为**唯一配置源**（name/version/mode/protocol/command/description/routes 原有字段 + 迁入字段）
+- **PluginDiscoveryService 自动发现**：新建 `src/plugin/plugin_discovery_service.cj`，复用 `ProgressiveSkillLoader` 的多目录扫描框架（`Directory.walk` + 直接子目录过滤），在遍历子目录时同时发现 `plugin.yaml`，与 SKILL.md 发现在同一目录扫描中完成（零额外 I/O 开销）
+- **PluginHostManager.loadAll 改造**：先走 `PluginDiscoveryService.discover()` 自动发现，向后兼容——过渡期 `config/plugins.yaml` 存在时合并其声明（legacy 覆盖 discovered 的同名字段），最终阶段删除 `plugins.yaml` 支持
+- **PluginManifestEntry.fromPluginYaml 统一解析**：复用 `fromJsonValue`（`plugin.yaml` 与 `plugins.yaml` 条目字段同构），同时新增 `routes` 字段解析（替代 `parsePluginYamlRoutes` 手写解析）
+- **与 AIDrivenArchitecture.md 的对齐**：
+  - §观点1"不硬编码业务功能"：去中心化后，新增插件只需放置到技能目录，**零配置文件编辑**（plugin.yaml 随插件分发）
+  - §观点2"双驱动"：无 AI 时自动发现机制仍完备运行（确定性目录扫描）；有 AI 时 AI 可经 Agent 工具 inspect/activate/deactivate 插件
+  - 与技能发现机制统一：SKILL.md 和 plugin.yaml 在同一目录扫描中发现，"一切皆技能"的插件 = SKILL.md（AI 行为）+ plugin.yaml（确定性能力 + 配置）+ 可执行文件
 
 ## 演进路标（v3 修订：插入阶段四 L3 进程隔离轨，2026-08-28，与附7.14.8 一致）
 
@@ -295,6 +310,9 @@ agentskills-runtime 需要一套跨平台的纯仓颉插件系统，支撑 ROADM
 - [ ] 崩溃自愈：杀插件进程后 reconcile 自动重拉，宿主与相邻插件无感知（阶段四验收）
 - [ ] plugin_activate/plugin_deactivate 对 process 插件生效（拉起/杀进程），agent_skills.runtime_status 正确回写
 - [ ] plugingen `mode: process` 生成 → 独立 `cjpm build` → 放置即生效（不重编宿主、不重启宿主）
+- [ ] **去中心化自动发现**：`PluginDiscoveryService` 扫描技能目录自动发现 `plugin.yaml`，新增插件只需放置到 `skills/` 目录——零中心配置编辑（REQ-PS-016 验收）
+- [ ] **向后兼容**：过渡期 `config/plugins.yaml` 存在时，legacy 声明合并覆盖 discovered 字段，已有插件行为不回归（REQ-PS-016 验收）
+- [ ] **plugin.yaml 自完备**：`enabled`/`order`/`autoRestart`/`tableWhitelist` 字段从 `plugins.yaml` 迁入 `plugin.yaml` 后，宿主正确读取并生效（REQ-PS-016 验收）
 - [ ] 全部代码仅依赖仓颉标准库（不依赖 `ohos.ark_interop` 等鸿蒙系统库）
 - [ ] 存量 `src/app` 代码零改动（阶段一硬约束的直接验证，L3 轨同样适用——集成代码全部在 src/plugin/）
 

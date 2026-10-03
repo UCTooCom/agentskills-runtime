@@ -203,6 +203,13 @@ private let C_ORIG: Array<Int64> = [
     0x4f727068, 0x65616e42, 0x65686f6c, 0x64657253, 0x63727944, 0x6f756274
 ]
 
+// 模拟 32 位无符号加法溢出。
+// 原先定义在 encipher 内部（每次调用都会重建闭包），提升至模块级后在
+// 单次登录的上百万次调用中只存在一份。
+private func add32(a: Int64, b: Int64): Int64 {
+    (a + b) & 0xffffffff
+}
+
 /**
  * Bcrypt class for password hashing and verification
  */
@@ -325,8 +332,10 @@ public class Bcrypt {
         
         let actualRounds = 1 << rounds
         
-        var P = ArrayList<Int64>(P_ORIG.size, { i => P_ORIG[i] })
-        var S = ArrayList<Int64>(S_ORIG.size, { i => S_ORIG[i] })
+        // P/S 用定长 Array 而非 ArrayList：encipher 每次调用要读写 S 约 64 次，
+        // 单次登录累计约 6800 万次下标访问，ArrayList 的动态派发与装箱会显著放大开销。
+        var P = Array<Int64>(P_ORIG.size, { i => P_ORIG[i] })
+        var S = Array<Int64>(S_ORIG.size, { i => S_ORIG[i] })
         
         ekskey(saltb, passwordb, P, S)
         
@@ -342,7 +351,8 @@ public class Bcrypt {
         
         for (_ in 0..64) {
             for (j in 0..(clen >> 1)) {
-                let lr = encipher([cdata[j << 1], cdata[(j << 1) + 1]], P, S)
+                // 直接传标量，避免为入参新建临时 Array（此处共 64 x 3 次调用）
+                let lr = encipher(cdata[j << 1], cdata[(j << 1) + 1], P, S)
                 cdata[j << 1] = lr[0]
                 cdata[(j << 1) + 1] = lr[1]
             }
@@ -361,17 +371,18 @@ public class Bcrypt {
     }
     
     // Blowfish encipher
-    private static func encipher(lr: Array<Int64>, P: ArrayList<Int64>, S: ArrayList<Int64>): Array<Int64> {
-        var l = lr[0]
-        var r = lr[1]
+    // 性能说明（2026-10-03 登录超时根因修复）：
+    // 原实现签名为 `encipher(lr: Array<Int64>, ...): Array<Int64>`，每次调用 `return [r ^ P[17], l]`
+    // 都会新建一个长度为 2 的 Array，且嵌套闭包 add32 也在每次调用时被重建。
+    // bcrypt cost=10 时单次 verify 需调用本函数 1,067,721 次（ekskey 521 + 2^10 x 2 x 521 + 收尾 192），
+    // 即每次登录多出百万级堆分配，实测登录耗时被推高到 8~35 秒，超过前端 15 秒超时。
+    // 现改为「标量入参 + 元组返回」，元组是值类型不再触发堆分配；add32 提升为模块级函数。
+    private static func encipher(lr0: Int64, lr1: Int64, P: Array<Int64>, S: Array<Int64>): (Int64, Int64) {
+        var l = lr0
+        var r = lr1
         
         l ^= P[0]
         var n: Int64 = 0
-        
-        // Helper to simulate 32-bit overflow
-        func add32(a: Int64, b: Int64): Int64 {
-            ((a + b) & 0xffffffff)
-        }
         
         // Unrolled 16 rounds
         n = add32(S[(l >> 24) & 0xff], S[0x100 | ((l >> 16) & 0xff)])
@@ -446,7 +457,9 @@ public class Bcrypt {
         n = add32(n, S[0x300 | (r & 0xff)])
         l ^= n ^ P[16]
         
-        return [r ^ P[17], l]
+        // 以元组返回（值类型，不产生堆分配）。注意保持原有交换语义：
+        // 调用方拿到的第 0 项是 r ^ P[17]，第 1 项是 l。
+        (r ^ P[17], l)
     }
     
     // Stream to word conversion
@@ -461,9 +474,12 @@ public class Bcrypt {
     }
     
     // Key expansion
-    private static func key(key: Array<Byte>, P: ArrayList<Int64>, S: ArrayList<Int64>): Unit {
+    private static func key(key: Array<Byte>, P: Array<Int64>, S: Array<Int64>): Unit {
         var offset: Int64 = 0
-        var lr: Array<Int64> = [0, 0]
+        // 原先这里用 `lr: Array<Int64>` 承载左右两半并每轮换绑到新数组；
+        // 改为两个标量变量，避免每轮一次堆分配。
+        var lr0: Int64 = 0
+        var lr1: Int64 = 0
         let plen = P.size
         let slen = S.size
         
@@ -474,22 +490,28 @@ public class Bcrypt {
         }
         
         for (i in 0..plen : 2) {
-            lr = encipher(lr, P, S)
-            P[i] = lr[0]
-            P[i + 1] = lr[1]
+            let (nl, nr) = encipher(lr0, lr1, P, S)
+            lr0 = nl
+            lr1 = nr
+            P[i] = lr0
+            P[i + 1] = lr1
         }
         
         for (i in 0..slen : 2) {
-            lr = encipher(lr, P, S)
-            S[i] = lr[0]
-            S[i + 1] = lr[1]
+            let (nl, nr) = encipher(lr0, lr1, P, S)
+            lr0 = nl
+            lr1 = nr
+            S[i] = lr0
+            S[i + 1] = lr1
         }
     }
     
     // Expensive key setup
-    private static func ekskey(data: Array<Byte>, key: Array<Byte>, P: ArrayList<Int64>, S: ArrayList<Int64>): Unit {
+    private static func ekskey(data: Array<Byte>, key: Array<Byte>, P: Array<Int64>, S: Array<Int64>): Unit {
         var offp: Int64 = 0
-        var lr: Array<Int64> = [0, 0]
+        // 同 key()：用两个标量替代 lr 数组，消去每轮一次的堆分配
+        var lr0: Int64 = 0
+        var lr1: Int64 = 0
         let plen = P.size
         let slen = S.size
         
@@ -504,25 +526,29 @@ public class Bcrypt {
         for (i in 0..plen : 2) {
             var (word, newOff) = streamToWord(data, offp)
             offp = newOff
-            lr[0] ^= word
+            lr0 ^= word
             (word, newOff) = streamToWord(data, offp)
             offp = newOff
-            lr[1] ^= word
-            lr = encipher(lr, P, S)
-            P[i] = lr[0]
-            P[i + 1] = lr[1]
+            lr1 ^= word
+            let (nl, nr) = encipher(lr0, lr1, P, S)
+            lr0 = nl
+            lr1 = nr
+            P[i] = lr0
+            P[i + 1] = lr1
         }
         
         for (i in 0..slen : 2) {
             var (word, newOff) = streamToWord(data, offp)
             offp = newOff
-            lr[0] ^= word
+            lr0 ^= word
             (word, newOff) = streamToWord(data, offp)
             offp = newOff
-            lr[1] ^= word
-            lr = encipher(lr, P, S)
-            S[i] = lr[0]
-            S[i + 1] = lr[1]
+            lr1 ^= word
+            let (nl, nr) = encipher(lr0, lr1, P, S)
+            lr0 = nl
+            lr1 = nr
+            S[i] = lr0
+            S[i + 1] = lr1
         }
     }
     

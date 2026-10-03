@@ -32,7 +32,7 @@
  * 必填：
  *   `feature_name` 工程唯一键（也可从 URI 路径段取，parameters 优先）
  * 可选：
- *   `stage`       指定阶段（给了就只跑这一步然后停表；不给则自动推进下一步）
+ *   `stage`       指定阶段（给了就只跑这一步然后停表；不给则按 current_stage 自动推进下一步）
  *   `question`    交给子 agent 的上下文包（Isolated 模式下全部上下文靠它）
  *   `task_id` / `parent_task_id` / `output_dir` / `user_id`
  *   `auto`        是否自动推进（默认 true；为 false 时跑完当前步即停表）
@@ -40,6 +40,7 @@
  *                 后按 SOP 执行（不派生编码子 agent），缺它时 code 步显式失败
  *   `language`    cangjie / web / app —— code 步据此选编程技能
  *                 （cangjie-coder / web-coder / app-coder，过渡期路由 fullstack-codegen / frontend-dev）
+ *   `allow_missing_upstream`（可选） 指定 stage 且上游产物缺件时放行，默认拦下
  *
  * ## 产物落盘与上下文交接（已落地）
  *
@@ -83,6 +84,8 @@ public struct SddParams {
     public let sessionId: String
     /// 事件归属的 agent 标识（WebSocket 广播按它归档）
     public let notifyAgentId: String
+    /// 跳步执行时上游产物缺件是否放行（`allow_missing_upstream`）
+    public let allowMissingUpstream: Bool
 
     public init(
         featureName: String,
@@ -96,7 +99,8 @@ public struct SddParams {
         agentId: String,
         language: String,
         sessionId: String,
-        notifyAgentId: String
+        notifyAgentId: String,
+        allowMissingUpstream: Bool
     ) {
         this.featureName = featureName
         this.stage = stage
@@ -110,6 +114,7 @@ public struct SddParams {
         this.language = language
         this.sessionId = sessionId
         this.notifyAgentId = notifyAgentId
+        this.allowMissingUpstream = allowMissingUpstream
     }
 }
 
@@ -160,9 +165,9 @@ public class SddOrchestrationExecutor <: CrontabExecutor {
         // 2) 执行该阶段：派生步（research/spec/design/task/test）走真派生子 agent；
         //    直执行步（code）走"主 agent + 编程技能 + SOP"（见 SERVICE 的 HOST_DIRECT_STAGES）
         let orchestration = SddOrchestrationService.withHostDispatcher()
-        let question = SddOrchestrationExecutor.buildQuestion(
-            p.question, featureName, target, p.outputDir, orchestration
-        )
+        // 上下文包由编排服务统一拼（上游产物显式读出），p.question 可空、只当补充说明。
+        // 与同步 run-stage 走的是同一个 buildStageQuestion，两条路径口径不再分叉。
+        let question = orchestration.buildStageQuestion(p.question, featureName, target, p.outputDir)
         let r = orchestration.runStage(
             target,
             featureName,
@@ -318,57 +323,10 @@ public class SddOrchestrationExecutor <: CrontabExecutor {
     }
 
     /**
-     * 拼本阶段的上下文包。
-     *
-     * 上游产物由框架**显式读取**后拼进 question（经 `readStageArtifact`），
-     * 不再让子 agent 各自去 output_dir 猜前序文件名——这是六步间确定性交接的落点。
-     * 产物按 Rune 截断（中文多字节安全），避免撑爆子 agent 上下文窗口。
+     * 本阶段的上下文包拼装**已上移到** `SddOrchestrationService.buildStageQuestion`
+     * （与同步 run-stage 口径一致），此处不再保留一份副本——两份实现迟早会分叉，
+     * 而分叉的代价是"同一个阶段两条路径跑出不同上下文"。
      */
-    private static func buildQuestion(
-        base: String,
-        featureName: String,
-        stage: String,
-        outputDir: String,
-        orchestration: SddOrchestrationService
-    ): String {
-        let idx = SddOrchestrationExecutor.stageIndex(stage)
-        let head = if (base.isEmpty()) {
-            "请执行 SDD 六步编排中的本阶段工作。"
-        } else {
-            base
-        }
-        var tail = "\n\n[SDD 编排] 当前阶段：${stage}（第 ${idx}/6 步）；工程：${featureName}。"
-        if (!outputDir.isEmpty()) {
-            tail = tail + " 产物目录：${outputDir}。"
-        } else {
-            tail = tail + " 产物目录：specs/${featureName}/ 下（runtime 工作目录）。"
-        }
-        tail = tail + " 请把本阶段产物写入该目录。"
-
-        // 上游产物：显式读取，读不到就明确说"没有"，避免子 agent 瞎猜
-        var upstreamBlock = ""
-        let upstream = SddOrchestrationService.previousStage(stage)
-        if (!upstream.isEmpty()) {
-            let upOpt = orchestration.readStageArtifact(featureName, upstream, outputDir)
-            if (let Some(body) <- upOpt) {
-                upstreamBlock = "\n\n[上游阶段产物 ${upstream}]\n${body}"
-            } else {
-                upstreamBlock = "\n\n[上游阶段产物 ${upstream}] 未找到（上游可能未产出，请按本阶段模板自行补齐前提）"
-            }
-        }
-        head + tail + upstreamBlock
-    }
-
-    private static func stageIndex(stage: String): Int32 {
-        var i: Int32 = 0
-        for (s in SddOrchestrationService.STAGES) {
-            i = i + 1
-            if (s == stage) {
-                return i
-            }
-        }
-        0
-    }
 
     /** 推进/标记工程状态。只走语义方法，不用通用 update（ADR-001）。 */
     private static func markStatus(featureName: String, stage: String, status: String, userId: String): Unit {
@@ -448,6 +406,7 @@ public class SddOrchestrationExecutor <: CrontabExecutor {
         var language = ""
         var sessionId = ""
         var notifyAgentId = ""
+        var allowMissingUpstream = false
         if (!parameters.isEmpty()) {
             try {
                 let parsed = JsonValue.fromStr(parameters)
@@ -465,6 +424,7 @@ public class SddOrchestrationExecutor <: CrontabExecutor {
                     language = stringField(obj, "language")
                     sessionId = stringField(obj, "session_id")
                     notifyAgentId = stringField(obj, "notify_agent_id")
+                    allowMissingUpstream = boolField(obj, "allow_missing_upstream", false)
                 }
             } catch (_: Exception) {
                 // 保持默认：parameters 是宿主自己写的，解析失败说明数据被人工改坏，
@@ -472,7 +432,7 @@ public class SddOrchestrationExecutor <: CrontabExecutor {
             }
         }
         SddParams(featureName, stage, question, taskId, parentTaskId, outputDir, userId, auto,
-            agentId, language, sessionId, notifyAgentId)
+            agentId, language, sessionId, notifyAgentId, allowMissingUpstream)
     }
 
     private static func stringField(obj: JsonObject, key: String): String {

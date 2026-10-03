@@ -120,7 +120,7 @@ public class ConsoleAppender <: LogAppender {
 
 public class Logger {
     private var name: String
-    private var level: LogLevel = LogLevel.INFO
+    private var level: LogLevel = LogLevel.INFO  //WARN
     private var appenders: ArrayList<LogAppender> = ArrayList<LogAppender>()
     private let mutex = ReentrantMutex()
     
@@ -224,7 +224,7 @@ public class LoggerFactory {
             }
             
             let logger = Logger(name)
-            logger.setLevel(LogLevel.INFO)
+            logger.setLevel(LogLevel.INFO)  //WARN
             logger.addAppender(ConsoleAppender())
             loggers[name] = logger
             return logger

@@ -6,11 +6,8 @@ package magic.plugin.tools.plugingen
 import std.collection.{ArrayList, HashMap}
 import std.convert.*
 import std.fs.exists
-import std.time.DateTime
-import f_orm.{ORM, SqlExecutor}
+import f_orm.ORM
 import magic.app.models.uctoo.DbInfoPO
-import magic.app.models.uctoo.PermissionsPO
-import magic.app.models.uctoo.I18PO
 
 /**
  * 表字段信息（db_info 行）
@@ -308,7 +305,10 @@ public class PluginGenerator {
         variables.add("pkgName", pkgName)
 
         // 1. 技能与清单
-        this.writeRendered(variables, "SKILL.md.tpl", "${pluginDir}/SKILL.md")
+        // 用 process 轨专用模板：sync 轨的 SKILL.md.tpl 依赖 {{dbName}}/{{tableName}}，
+        // 而 process 轨变量里没有这两个键，直接复用会产出**未被替换的模板占位符**
+        // （生成出 `CRUD capability for the {{tableName}} table` 这种废文档）。
+        this.writeRendered(variables, "SKILL.process.md.tpl", "${pluginDir}/SKILL.md")
         this.writeProcessPluginYaml(name, className, pluginDir)
 
         // 2. 独立 cjpm executable 工程配置
@@ -385,6 +385,11 @@ public class PluginGenerator {
         sb.append("  \"ystyle::cordis_core\" = { path = \"../../libs/cordis-cj/cordis_core\" }\n")
         sb.append("  \"jsonvalue\" = { path = \"../../libs/jsonvalue\" }\n")
         sb.append("  \"ystyle::jsonrpc\" = { path = \"../../libs/jsonrpc\" }\n")
+        sb.append("\n")
+        // stdx 动态库搜索路径：cordis/jsonvalue 依赖 stdx（json 编解码、DataModel 等），
+        // 缺这一段编译能过但运行期找不到 stdx DLL（对标已验证的 codelabs/cjpm.toml）
+        sb.append("[target.x86_64-w64-mingw32.bin-dependencies]\n")
+        sb.append("  path-option = [\"../../libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64/cjnative/dynamic/stdx\"]\n")
         templateEngine.writeFile("${pluginDir}/cjpm.toml", sb.toString())
         println("已生成: ${pluginDir}/cjpm.toml")
     }
@@ -438,7 +443,10 @@ public class PluginGenerator {
         sb.append(" */\n")
         sb.append("package ${pkgName}\n\n")
         sb.append("import ystyle::cordis_plugin.PluginContext\n")
-        sb.append("import jsonvalue.*\n\n")
+        sb.append("import jsonvalue.*\n")
+        // okResult 用了 HashMap 与 DataModelInt64/DataModelString，缺 import 会编译失败
+        sb.append("import std.collection.HashMap\n")
+        sb.append("import stdx.serialization.serialization\n\n")
         sb.append("public class ${className}Handlers {\n")
         sb.append("    public static func register(ctx: PluginContext): Unit {\n")
         sb.append("        // V4 CRUD: add/edit/del/get/list\n")
@@ -522,22 +530,33 @@ public class PluginGenerator {
         sb.append("cd ${pluginDir}\n")
         sb.append("cjpm build\n")
         sb.append("```\n\n")
-        sb.append("产物：`target/release/skill_${name}.exe`\n\n")
+        sb.append("产物：`target/release/bin/skill_${name}.exe`\n\n")
+        sb.append("**独立编译即可，不需要重编宿主**（插件不进宿主编译图）。\n\n")
         sb.append("## 登记到宿主\n\n")
-        sb.append("在宿主 `config/plugins.yaml` 追加：\n\n")
+        sb.append("无需改任何集中式配置——宿主启动时扫描 `skills/*/plugin.yaml` 去中心化发现\n")
+        sb.append("（`PluginDiscoveryService.discover`），`mode: process` 的条目交由\n")
+        sb.append("`CordisHostManager` 经 stdio JSON-RPC 拉起。本目录 `plugin.yaml` 已写好：\n\n")
         sb.append("```yaml\n")
-        sb.append("plugins:\n")
-        sb.append("  - name: ${name}\n")
-        sb.append("    mode: process\n")
-        sb.append("    command: ./skills/${name}/target/release/skill_${name}.exe\n")
-        sb.append("    enabled: true\n")
-        sb.append("    autoRestart: true\n")
+        sb.append("name: ${name}\n")
+        sb.append("mode: process\n")
+        sb.append("command: ./skills/${name}/target/release/bin/skill_${name}.exe\n")
+        sb.append("enabled: true\n")
+        sb.append("autoRestart: true\n")
         sb.append("```\n\n")
+        sb.append("生效方式二选一：\n\n")
+        sb.append("- **等周期调谐**（默认 60s，`PLUGIN_RECONCILE_INTERVAL_SECONDS` 控制，\n")
+        sb.append("  设 0 关闭）——新增插件目录不重启宿主即可生效；\n")
+        sb.append("- **立即生效**：Agent 工具 `plugin_refresh`，或重启宿主。\n\n")
         sb.append("## 约束\n\n")
-        sb.append("- 依赖仅 `ystyle::cordis_plugin` + `jsonvalue`（+仓颉标准库）——零 magic 包依赖\n")
+        sb.append("- 依赖仅 `ystyle::cordis_plugin` / `cordis_core` / `jsonvalue` / `ystyle::jsonrpc`\n")
+        sb.append("  （+ 仓颉标准库）——**零 magic 包依赖**，这是插件能独立编译的前提\n")
         sb.append("- 禁用 `@Plugin` 宏：用显式 API `PluginRuntime.run(...)`\n")
-        sb.append("- 数据访问一律经 `host.db` 服务代理（不直连数据库）\n")
-        sb.append("- 独立 `cjpm build` 产出可执行文件，放置 + plugins.yaml 登记即生效\n")
+        sb.append("- **stdout 是协议通道**：日志/诊断只走 `stderr`（`eprintln`）；\n")
+        sb.append("  任何 `print`/`println` 会破坏 JSON-RPC 帧导致握手失败\n")
+        sb.append("- 数据访问一律经 `host.db` 服务代理（不直连数据库）；\n")
+        sb.append("  凭证经 `host.secret` 按引用名代取，进程内不落明文\n")
+        sb.append("- 失败返回结构化错误（如 `{ errno, errmsg }`）而**不抛 JSON-RPC error**，\n")
+        sb.append("  这样宿主能把原始错误原文透传给调用方\n")
         templateEngine.writeFile("${pluginDir}/README.md", sb.toString())
         println("已生成: ${pluginDir}/README.md")
     }
@@ -871,331 +890,20 @@ public class PluginGenerator {
         return maxOrder + 1
     }
 
-    // ==================== 权限菜单节点生成（与 crudgen 一致） ====================
+    // ==================== 权限菜单节点生成 ====================
     //
-    // 向 permissions 表写入三级菜单结构：
-    //   database -> database.{dbName} -> database.{dbName}.{tableName}
-    // 并向 i18 表插入多语言 title。
-    // 幂等：节点已存在则跳过；软删除则恢复；不存在则创建。
+    // 与 process 轨共用 PermissionNodeGenerator。
+    // 历史教训：这段实现原先只存在于本文件（sync 轨），process 轨的 CrudPluginGenerator
+    // 没有 ⇒ 生成出的 L3 插件没有任何 permissions 节点，crudweb 页面「存在但菜单里点不到」。
+    // 统一委托后两个轨道行为一致，不会再单边遗漏。
 
-    /// 默认 creator（与 crudgen 一致，根管理员 UUID）
-    private static let DEFAULT_CREATOR = "505cf909-5e0e-4dde-b215-74274d2cc548"
+    private let permissionNodes = PermissionNodeGenerator()
 
-    /// 生成权限菜单节点（幂等，不更新已存在节点）
+    /// 生成一张表的权限菜单节点（幂等；已存在跳过、软删除则恢复）
+    /// @param dbName 数据库名
+    /// @param tableName 表名
+    /// @return 成功与否
     public func generatePermissionNodes(dbName: String, tableName: String): Bool {
-        try {
-            let executor = ORM.executor()
-            let tablePermissionName = "database.${dbName}.${tableName}"
-
-            // 1. 获取或创建 database 父节点（处理软删除）
-            let (databaseParentId, parentCreator) = this.ensureDatabaseParentNode(executor)
-
-            // 2. 获取或创建 database.{dbName} 节点（处理软删除）
-            let dbNodeId = this.ensureDatabaseNode(executor, dbName, databaseParentId, parentCreator)
-
-            // 3. 检查表权限节点是否存在（包括软删除的）
-            let existingTable = executor.setSql('''
-                SELECT * FROM permissions
-                WHERE permission_name = ${arg(tablePermissionName)}
-            ''').first<PermissionsPO>()
-
-            match (existingTable) {
-                case Some(table) =>
-                    if (table.deletedAt.isNone()) {
-                        println("表权限节点已存在: ${tablePermissionName}")
-                    } else {
-                        executor.setSql('''
-                            UPDATE permissions
-                            SET deleted_at = NULL,
-                                updated_at = NOW(),
-                                title = ${arg("menu.${tablePermissionName}")},
-                                path = ${arg(tableName)},
-                                parent_id = ${arg(dbNodeId)}
-                            WHERE id = ${arg(table.id)}
-                        ''').update
-                        println("已恢复软删除的表权限节点: ${tablePermissionName}")
-                    }
-                case None =>
-                    let now = DateTime.now()
-                    let tablePermission = PermissionsPO()
-                    tablePermission.permissionName = tablePermissionName
-                    tablePermission.typeVal = 1
-                    tablePermission.hidden = 1
-                    tablePermission.weight = 1
-                    tablePermission.creator = Some(parentCreator)
-                    tablePermission.createdAt = now
-                    tablePermission.updatedAt = now
-                    tablePermission.path = Some(tableName)
-                    tablePermission.title = Some(tableName)
-                    tablePermission.parentId = Some(dbNodeId)
-                    tablePermission.menuType = Some("normal")
-                    tablePermission.locale = Some("menu.database.${dbName}.${tableName}")
-                    tablePermission.component = Some("database/${dbName}/${tableName}/index")
-
-                    executor.setSql('''
-                        INSERT INTO permissions(
-                            id, permission_name, level, icon, module, component, redirect,
-                            type, hidden, weight, creator, created_at, updated_at,
-                            deleted_at, keepalive, path, title, parent_id, meta,
-                            method, menu_type, locale
-                        ) VALUES (
-                            gen_random_uuid(),
-                            ${arg(tablePermission.permissionName)},
-                            ${optArg(tablePermission.level)},
-                            ${optArg(tablePermission.icon)},
-                            ${optArg(tablePermission.module)},
-                            ${optArg(tablePermission.component)},
-                            ${optArg(tablePermission.redirect)},
-                            ${optArg(tablePermission.typeVal)},
-                            ${optArg(tablePermission.hidden)},
-                            ${optArg(tablePermission.weight)},
-                            ${arg(parentCreator)},
-                            NOW(),
-                            NOW(),
-                            null,
-                            1,
-                            ${arg(tablePermission.path.getOrThrow())},
-                            ${arg(tablePermission.title.getOrThrow())},
-                            ${arg(dbNodeId)},
-                            ${optArg(tablePermission.meta)},
-                            ${optArg(tablePermission.method)},
-                            ${arg(tablePermission.menuType.getOrThrow())},
-                            ${arg(tablePermission.locale.getOrThrow())}
-                        )
-                    ''').update
-
-                    println("已生成表权限节点: ${tablePermissionName}")
-
-                    // 插入 i18 多语言数据
-                    match (tablePermission.locale) {
-                        case Some(localeKey) => this.insertI18Data(executor, localeKey, tableName)
-                        case None => println("locale 为空，跳过 i18 数据插入")
-                    }
-            }
-
-            return true
-        } catch (e: Exception) {
-            println("生成权限节点失败: ${e.message}")
-            return false
-        }
-    }
-
-    /// 确保 database 父节点存在（幂等，处理软删除）
-    /// @return (parentId, creator)
-    private func ensureDatabaseParentNode(executor: SqlExecutor): (String, String) {
-        let databasePermissionName = "database"
-
-        let existing = executor.setSql('''
-            SELECT * FROM permissions
-            WHERE permission_name = ${arg(databasePermissionName)} AND deleted_at IS NULL
-        ''').first<PermissionsPO>()
-
-        match (existing) {
-            case Some(node) =>
-                let creator = match (node.creator) {
-                    case Some(c) => c
-                    case None => DEFAULT_CREATOR
-                }
-                return (node.id, creator)
-            case None =>
-                let softDeleted = executor.setSql('''
-                    SELECT * FROM permissions
-                    WHERE permission_name = ${arg(databasePermissionName)} AND deleted_at IS NOT NULL
-                    ORDER BY updated_at DESC
-                    LIMIT 1
-                ''').first<PermissionsPO>()
-
-                match (softDeleted) {
-                    case Some(deletedNode) =>
-                        executor.setSql('''
-                            UPDATE permissions
-                            SET deleted_at = NULL, updated_at = NOW()
-                            WHERE id = ${arg(deletedNode.id)}
-                        ''').update
-                        println("已恢复软删除的权限节点: ${databasePermissionName}")
-                        let creator = match (deletedNode.creator) {
-                            case Some(c) => c
-                            case None => DEFAULT_CREATOR
-                        }
-                        return (deletedNode.id, creator)
-                    case None =>
-                        let creator = DEFAULT_CREATOR
-
-                        executor.setSql('''
-                            INSERT INTO permissions(
-                                id, permission_name, level, icon, module, component, redirect,
-                                type, hidden, weight, creator, created_at, updated_at,
-                                deleted_at, keepalive, path, title, parent_id, meta,
-                                method, menu_type, locale
-                            ) VALUES (
-                                gen_random_uuid(),
-                                ${arg(databasePermissionName)},
-                                NULL,
-                                NULL,
-                                NULL,
-                                NULL,
-                                NULL,
-                                1,
-                                1,
-                                1,
-                                ${arg(creator)},
-                                NOW(),
-                                NOW(),
-                                null,
-                                1,
-                                ${arg(databasePermissionName)},
-                                ${arg(databasePermissionName)},
-                                NULL,
-                                NULL,
-                                NULL,
-                                'normal',
-                                ${arg("menu.${databasePermissionName}")}
-                            )
-                        ''').update
-
-                        println("已生成权限节点: ${databasePermissionName}")
-
-                        let newNode = executor.setSql('''
-                            SELECT * FROM permissions
-                            WHERE permission_name = ${arg(databasePermissionName)} AND deleted_at IS NULL
-                        ''').first<PermissionsPO>()
-
-                        match (newNode) {
-                            case Some(n) => return (n.id, creator)
-                            case None => return (DEFAULT_CREATOR, creator)
-                        }
-                }
-        }
-    }
-
-    /// 确保 database.{dbName} 节点存在（幂等，处理软删除）
-    private func ensureDatabaseNode(executor: SqlExecutor, dbName: String, parentId: String, creator: String): String {
-        let dbPermissionName = "database.${dbName}"
-
-        let existing = executor.setSql('''
-            SELECT * FROM permissions
-            WHERE permission_name = ${arg(dbPermissionName)} AND deleted_at IS NULL
-        ''').first<PermissionsPO>()
-
-        match (existing) {
-            case Some(node) =>
-                return node.id
-            case None =>
-                let softDeleted = executor.setSql('''
-                    SELECT * FROM permissions
-                    WHERE permission_name = ${arg(dbPermissionName)} AND deleted_at IS NOT NULL
-                    ORDER BY updated_at DESC
-                    LIMIT 1
-                ''').first<PermissionsPO>()
-
-                match (softDeleted) {
-                    case Some(deletedNode) =>
-                        executor.setSql('''
-                            UPDATE permissions
-                            SET deleted_at = NULL,
-                                updated_at = NOW(),
-                                parent_id = ${arg(parentId)}
-                            WHERE id = ${arg(deletedNode.id)}
-                        ''').update
-                        println("已恢复软删除的数据库节点: ${dbPermissionName}")
-                        return deletedNode.id
-                    case None =>
-                        executor.setSql('''
-                            INSERT INTO permissions(
-                                id, permission_name, level, icon, module, component, redirect,
-                                type, hidden, weight, creator, created_at, updated_at,
-                                deleted_at, keepalive, path, title, parent_id, meta,
-                                method, menu_type, locale
-                            ) VALUES (
-                                gen_random_uuid(),
-                                ${arg(dbPermissionName)},
-                                NULL,
-                                NULL,
-                                NULL,
-                                NULL,
-                                NULL,
-                                1,
-                                1,
-                                1,
-                                ${arg(creator)},
-                                NOW(),
-                                NOW(),
-                                null,
-                                1,
-                                ${arg(dbName)},
-                                ${arg(dbName)},
-                                ${arg(parentId)},
-                                NULL,
-                                NULL,
-                                'normal',
-                                ${arg("menu.${dbPermissionName}")}
-                            )
-                        ''').update
-
-                        println("已生成数据库节点: ${dbPermissionName}")
-
-                        let newNode = executor.setSql('''
-                            SELECT * FROM permissions
-                            WHERE permission_name = ${arg(dbPermissionName)} AND deleted_at IS NULL
-                        ''').first<PermissionsPO>()
-
-                        match (newNode) {
-                            case Some(n) => return n.id
-                            case None => return DEFAULT_CREATOR
-                        }
-                }
-        }
-    }
-
-    /// 插入 i18 多语言数据（幂等，处理软删除）
-    private func insertI18Data(executor: SqlExecutor, key: String, content: String): Unit {
-        try {
-            let existing = executor.setSql('''
-                SELECT * FROM i18
-                WHERE key = ${arg(key)} AND deleted_at IS NULL
-            ''').first<I18PO>()
-
-            match (existing) {
-                case Some(i18) =>
-                    println("i18 数据已存在: ${key}")
-                case None =>
-                    let softDeleted = executor.setSql('''
-                        SELECT * FROM i18
-                        WHERE key = ${arg(key)} AND deleted_at IS NOT NULL
-                        ORDER BY updated_at DESC
-                        LIMIT 1
-                    ''').first<I18PO>()
-
-                    match (softDeleted) {
-                        case Some(deletedI18) =>
-                            executor.setSql('''
-                                UPDATE i18
-                                SET deleted_at = NULL,
-                                    content = ${arg(content)},
-                                    updated_at = NOW()
-                                WHERE id = ${arg(deletedI18.id)}
-                            ''').update
-                            println("已恢复软删除的 i18 数据: ${key}")
-                        case None =>
-                            executor.setSql('''
-                                INSERT INTO i18(
-                                    id, key, content, lang_id, creator, created_at, updated_at, deleted_at
-                                ) VALUES (
-                                    gen_random_uuid(),
-                                    ${arg(key)},
-                                    ${arg(content)},
-                                    '00000000-0000-0000-0000-000000000002',
-                                    NULL,
-                                    NOW(),
-                                    NOW(),
-                                    NULL
-                                )
-                            ''').update
-                            println("已生成 i18 数据: ${key}")
-                    }
-            }
-        } catch (e: Exception) {
-            println("插入 i18 数据失败: ${e.message}")
-        }
+        this.permissionNodes.generatePermissionNodes(dbName, tableName)
     }
 }

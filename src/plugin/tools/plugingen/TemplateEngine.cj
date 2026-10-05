@@ -15,6 +15,27 @@ import std.fs.{Directory, File, Path, exists}
  */
 public class TemplateEngine {
 
+    // ── 保护区标记常量 ──
+    //
+    // 保护区标记必须与目标产物的注释语法匹配，否则标记行会被当成语法错误：
+    //   - 仓颉源码（.cj）：行注释 `//`
+    //   - YAML / TOML：行注释 `#`
+    //   - Markdown：`#` 会被解析成 ATX 标题，必须用 HTML 注释 `<!-- -->`
+    //
+    // ⚠️ 标记本身全是 ASCII，`findSubstring` 与切片都按字节处理，跨语言通用无乱码风险。
+
+    /// 仓颉源码保护区标记（行注释）
+    public static let CJ_REGION_START = "//#region AutoCreateCode"
+    public static let CJ_REGION_END = "//#endregion AutoCreateCode"
+
+    /// YAML / TOML 保护区标记（行注释）
+    public static let CONF_REGION_START = "#region AutoCreateCode"
+    public static let CONF_REGION_END = "#endregion AutoCreateCode"
+
+    /// Markdown 保护区标记（HTML 注释，不参与渲染）
+    public static let MD_REGION_START = "<!-- #region AutoCreateCode -->"
+    public static let MD_REGION_END = "<!-- #endregion AutoCreateCode -->"
+
     /// 加载模板文件（读取失败返回空串）
     public func loadTemplate(templatePath: String): String {
         try {
@@ -35,29 +56,51 @@ public class TemplateEngine {
     }
 
     /**
-     * 增量更新文件（保持 AutoCreateCode 区域机制）
+     * 增量更新文件（保持 AutoCreateCode 区域机制，仓颉源码用 `//` 标记）
      *
      * 目标文件存在且含 AutoCreateCode 标记对时：保留区域外自定义代码，
      * 只替换标记之间的内容；否则整文件写入。
      */
     public func updateFile(targetPath: String, newContent: String): Unit {
-        let start = "//#region AutoCreateCode"
-        let end = "//#endregion AutoCreateCode"
+        this.updateFileWithMarkers(
+            targetPath,
+            newContent,
+            TemplateEngine.CJ_REGION_START,
+            TemplateEngine.CJ_REGION_END
+        )
+    }
 
+    /**
+     * 增量更新文件（自定义保护区标记对）
+     *
+     * 与 `updateFile` 同语义，但标记由调用方给定 —— YAML / TOML 用 `#region`，
+     * Markdown 用 HTML 注释，否则标记行会被目标语言的解析器当语法处理。
+     *
+     * @param targetPath 目标文件路径
+     * @param newContent 新内容（须自带一对标记）
+     * @param startMark 保护区起始标记
+     * @param endMark 保护区结束标记
+     */
+    public func updateFileWithMarkers(
+        targetPath: String,
+        newContent: String,
+        startMark: String,
+        endMark: String
+    ): Unit {
         if (this.fileExists(targetPath)) {
             let existing = this.readText(targetPath)
-            let startIdxOpt = findSubstring(existing, start)
-            let endIdxOpt = findSubstring(existing, end)
+            let startIdxOpt = findSubstring(existing, startMark)
+            let endIdxOpt = findSubstring(existing, endMark)
 
             if (let Some(startIdx) <- startIdxOpt) {
                 if (let Some(endIdx) <- endIdxOpt) {
                     if (endIdx > startIdx) {
                         let header = existing[0..startIdx]
-                        let footer = existing[endIdx + end.size..existing.size]
-                        if (let Some(newStart) <- findSubstring(newContent, start)) {
-                            if (let Some(newEnd) <- findSubstring(newContent, end)) {
+                        let footer = existing[endIdx + endMark.size..existing.size]
+                        if (let Some(newStart) <- findSubstring(newContent, startMark)) {
+                            if (let Some(newEnd) <- findSubstring(newContent, endMark)) {
                                 if (newEnd > newStart) {
-                                    let middle = newContent[newStart..newEnd + end.size]
+                                    let middle = newContent[newStart..newEnd + endMark.size]
                                     this.writeFile(targetPath, header + middle + footer)
                                     return
                                 }

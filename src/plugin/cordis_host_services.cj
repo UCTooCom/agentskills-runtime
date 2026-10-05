@@ -12,6 +12,7 @@ import magic.log.LogUtils
 import magic.app.services.mcp.{McpOpenService, McpCallResult}
 import magic.app.services.uctoo.OperateLogService
 import magic.app.utils.PermissionUtils
+import magic.model.channel.ChannelRegistry
 import jsonvalue.JsonValue
 import stdx.serialization.serialization.{DataModel, DataModelNull, DataModelInt, DataModelString, DataModelBool, DataModelSeq}
 import ystyle::cordis_host.PluginInstance
@@ -73,7 +74,110 @@ public class CordisHostServices {
         client.registerRequestHandler("host.mcp", this.createMcpHandler(pluginId))
         client.registerRequestHandler("host.event", this.createEventHandler(pluginId))
         client.registerRequestHandler("host.db_schema_lookup", this.createSchemaLookupHandler(pluginId))
-        LogUtils.info("[CordisHostServices] registered host.db/host.log/host.cache/host.mcp/host.event/host.db_schema_lookup for plugin '${pluginId}'")
+        // T021：凭证托管服务（插件永远拿不到 .env 明文，只按引用名向宿主索取）
+        client.registerRequestHandler("host.secret", this.createSecretHandler(pluginId))
+        LogUtils.info("[CordisHostServices] registered host.db/host.log/host.cache/host.mcp/host.event/host.db_schema_lookup/host.secret for plugin '${pluginId}'")
+    }
+
+    // ==================== host.secret（T021） ====================
+
+    /**
+     * host.secret handler —— 宿主集中托管凭证，插件按**引用名**索取。
+     *
+     * 插件经 `ctx.invoke("host.secret", "get", { "ref": "env:OPENAI_API_KEY" })` 调用。
+     *
+     * 安全边界（V5，design §5.2.3）：
+     * - 插件进程**不继承**宿主环境变量，命令行也不带密文——所以插件拿不到明文，
+     *   只能把引用名交给宿主代取；
+     * - 只接受两种引用形式：
+     *   1. `env:NAME` —— 显式环境变量引用；
+     *   2. 通道 code（如 `arcbench`）—— 宿主从 llm_channel.secret_ref 解析；
+     * - 每次 get 都写审计（谁、什么时候、按哪个引用取），便于事后追责；
+     * - 插件若只是想知道"配没配"，用 has（返回布尔，不返回明文）。
+     *
+     * 方法：
+     * - `get`：{ ref } → { ok, value } —— 取明文（仅在插件确实需要调用时才用）
+     * - `has`：{ ref } → { ok, has } —— 只判断是否已配置
+     */
+    private func createSecretHandler(pluginId: String): RequestCallback {
+        return { req =>
+            match (req.params) {
+                case Some(p) =>
+                    let fields = this.extractFields(p)
+                    let method = this.extractStringValue(fields, "method")
+                    let ref = this.extractStringValue(fields, "ref")
+
+                    if (ref.isEmpty()) {
+                        return Some(secretError("缺少参数 ref（引用名，支持 env:NAME 或通道 code）"))
+                    }
+
+                    // 显式环境变量引用
+                    if (ref.startsWith("env:")) {
+                        let envName = ref[4..ref.size]
+                        match (getVariable(envName)) {
+                            case Some(v) =>
+                                if (method == "has") {
+                                    return Some(secretHas(!v.isEmpty()))
+                                }
+                                return Some(secretValue(v))
+                            case None =>
+                                return Some(secretError("环境变量 ${envName} 未配置"))
+                        }
+                    }
+
+                    // 通道 code：宿主从通道表解析其 secret_ref
+                    let resolved = this.resolveChannelSecret(ref)
+                    match (resolved) {
+                        case Some(secret) =>
+                            if (method == "has") {
+                                return Some(secretHas(!secret.isEmpty()))
+                            }
+                            return Some(secretValue(secret))
+                        case None =>
+                            return Some(secretError("通道 ${ref} 不存在或未配置密钥"))
+                    }
+                case None =>
+                    return Some(secretError("缺少参数"))
+            }
+        }
+    }
+
+    /// host.secret 成功取值的统一响应：{ ok: true, value }
+    private func secretValue(v: String): JsonValue {
+        let m = HashMap<String, JsonValue>()
+        m["ok"] = JsonValue.Bool(true)
+        m["value"] = JsonValue.String(v)
+        JsonValue.Map(m)
+    }
+
+    /// host.secret 只判存在：{ ok: true, has }
+    private func secretHas(has: Bool): JsonValue {
+        let m = HashMap<String, JsonValue>()
+        m["ok"] = JsonValue.Bool(true)
+        m["has"] = JsonValue.Bool(has)
+        JsonValue.Map(m)
+    }
+
+    /// host.secret 失败响应：{ ok: false, error }
+    private func secretError(msg: String): JsonValue {
+        let m = HashMap<String, JsonValue>()
+        m["ok"] = JsonValue.Bool(false)
+        m["error"] = JsonValue.String(msg)
+        JsonValue.Map(m)
+    }
+
+    /**
+     * 按通道 code 解析密钥明文：llm_channel.secret_ref → 环境变量 / 直接值。
+     *
+     * 复用 ChannelRegistry.resolveSecret（已实现 env: 前缀与 .env 兜底逻辑），
+     * 避免在这里重复实现一套解析规则。
+     */
+    private func resolveChannelSecret(code: String): Option<String> {
+        let secret = ChannelRegistry.shared().resolveSecret(code)
+        if (secret.isEmpty()) {
+            return None<String>
+        }
+        Some<String>(secret)
     }
 
     /**

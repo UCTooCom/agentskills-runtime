@@ -406,8 +406,8 @@ loaddbinfo  →  plugingen（优先，插件）
     - 明显超出单次预算的工程改用 `long_running_task` 提交，不要在主对话里硬跑到底。
 14. **二次开发底座优先（2026-10-03 补充）**：迭代 runtime / uctoo 时
     **① 规范以 `uctoo-dev-manual` + `docs/uctoo-v4/*.md` 为准**（不在本技能内复述条款）；
-    **② 脚手架优先跑内置确定性工具** `loaddbinfo` → `plugingen`（优先做成插件，默认 sync 内嵌轨，
-    需故障隔离 `--mode process`）／`crudgen`（仅宿主公共基础设施）／`crudweb`（管理界面），
+    **② 脚手架优先跑内置确定性工具** `loaddbinfo` → `plugingen`（优先做成插件，默认 L3 进程隔离轨 process，
+    需退回宿主内嵌 sync 轨显式加 `--mode sync`）／`crudgen`（仅宿主公共基础设施）／`crudweb`（管理界面），
     **禁止手撸五层骨架**；下线走对称的 `pluginuninstall`，禁止手删 `skills/{name}/` 目录（会留库痕迹）；
     **③ 生成物当骨架做最小适配**，不推倒重写；
     **    ④ 生成后必补** `sql/incremental/` 增量 DDL（涨幅受铁律 9 白名单额度约束）+ 新增宿主路由的

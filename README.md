@@ -78,25 +78,24 @@ Build a domestically developed and controllable AI agent skill runtime, promote 
 
 ## Business Case & Value Proposition
 
-### Submission
+### AgenticSoftwareFactoryHackathon Submission
 
 **Final Submission Checklist:**
 
-- Software Application Track: Beichen Commercial Management — Beichen Industrial Cloud Community Challenge
-- Work Name: AgentSkills-runtime — Domestic AI Agent Using Cangjie Programming Language
-- Slogan: With Chinese wisdom, build global intelligence connectivity, co-create new productive forces in the AI era
-- Work Description: Using the fully self-developed AgentSkills-runtime (ASR) next-generation AI-driven development framework, we developed a complete solution for the Beichen Industrial Cloud Community. The main deliverables for this competition include: 1) Updated ASR to v0.0.27, releasing the "everything is a skill" plugin system, benchmarked against deepseek-harness's "everything is a plugin" approach — ASR's plugin system is more intelligent with strong security, high performance, native intelligence, and deterministic design principles more suitable for enterprise customers. 2) Developed an online supply-demand matching portal subsystem for the Beichen Industrial Cloud Community. 3) Developed the Industrial Policy Assistant and Finance Matching Agent for the two key challenges of "precision policy empowerment" and "systematized financial services", enabling resident enterprises to intelligently match industrial needs and financial services.
-- Project Images: (to be supplemented)
-- GitHub Repositories (set Topic to `#shenicest-fission`):
-  1. AI-Driven Development Framework: https://atomgit.com/UCToo/agentskills-runtime
-  2. shenicest Hackathon SDD Docs: `apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon`
-  3. Beichen Policy Assistant: `apps/agentskills-runtime/skills/beichen-policy-assistant`
-  4. Beichen Finance Matching: `apps/agentskills-runtime/skills/beichen-finance-matching`
-  5. Supply-Demand Portal: https://atomgit.com/UCToo/web-admin
-- Project Documentation (background, target users, tech stack, innovation, team division, development process, and follow-up plans): [`apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon/shenicest项目文档-AgentSkills-runtime.docx`](https://atomgit.com/UCToo/agentskills-runtime/blob/main/.codeartsdoer/specs/shenicestHackathon/shenicest%E9%A1%B9%E7%9B%AE%E6%96%87%E6%A1%A3-AgentSkills-runtime.docx)
-- Demo Video: [beichen policy assistant Demo Recording](./public/beichen_demo.mp4)
+- Competition: ArcBench Agentic Software Factory Hackathon
+- Team: UCTooCom
+- Work Name: Agentic Software Factory based on AgentSkills-runtime
+- Work Description: With the fully self-developed AgentSkills-runtime (Cangjie language + Fountain ORM + PostgreSQL) as the backend and `apps/web-admin/web` (Vue 3 + Vite + pinia-orm + OpenTiny) as the frontend, we built an agentic software factory system that compiles large requirements into two reliable business applications: a GitHub-style software engineering collaboration platform (the `skills/github` plugin, 10 tables: repository/branch/commit/repository_file/issue_comment/milestone/label/pull_request/pr_review/branch_protection) and a Google Sheets-style online spreadsheet workbench (the `skills/sheets` plugin, 5 tables: workbook/worksheet/cell/validation_rule/pivot_table), delivering the core value of requirement decomposition, module delegation, and end-to-end verifiability. Both business modules follow the SDD iron rule "prefer the existing foundation" and were generated through the deterministic toolchain `loaddbinfo → plugingen (L3 process-isolated plugin) → crudweb`; plugin capabilities are provided three-in-one as Service + Skill + Route, with matching web-admin database management UIs.
+- Project Images: `apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon/asfh1.png`, `asfh2.png`
+- Code Repositories (set Topic to `#agentic-software-factory`):
+  1. Agent Runtime Framework: https://atomgit.com/UCToo/agentskills-runtime
+  2. Hackathon SDD Docs: `apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon`
+  3. GitHub Collaboration Platform Plugin: `apps/agentskills-runtime/skills/github`
+  4. Spreadsheet Workbench Plugin: `apps/agentskills-runtime/skills/sheets`
+  5. Visual Management Frontend: https://atomgit.com/UCToo/web-admin
+- Project Documentation (requirements specification: component positioning, domain terms, roles & boundaries, DFX constraints, core capabilities, data model): `apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon/spec.md`
+- Demo Video: (to be supplemented)
 - Live Demo Link (optional): https://demo.uctoo.com
-- Zhihu Article: "Major Update: Everything is a Skill Plugin System" https://zhuanlan.zhihu.com/p/2077145055673037317
 
 > **Competition Entry**: Financial Industry Agent Hackathon (2026/07/27 - 2026/08/08)
 > **Demo Video**: [Investment Research Assistant Demo Recording](./public/demo.mp4)

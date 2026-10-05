@@ -130,14 +130,18 @@ public class CordisHostManager {
      * 从 PluginList 启动所有 mode:process 条目（期望状态生成 → reconcile）
      *
      * @param list plugin.yaml 自动发现产物
+     * @param traceReset 是否重置 await_trace.txt。启动期传 true（保证卡死时能看到现场）；
+     *        运行期调谐（T025 reconcile）传 false，避免周期性调谐冲掉启动期诊断现场。
      * @return LoadResult（loaded/skipped/failed，与 PluginHostManager.loadAll 同构）
      */
-    public func loadProcessPlugins(list: PluginList): LoadResult {
+    public func loadProcessPlugins(list: PluginList, traceReset!: Bool = true): LoadResult {
         let result = LoadResult()
         let desired = ArrayList<PluginEntry>()
         // 重置必须放在入口：这样即便主线程卡在后面某个 println 上，
         // await_trace.txt 也一定存在且能看到「最后一条真的执行到的 trace」。
-        this.traceAwaitReset()
+        if (traceReset) {
+            this.traceAwaitReset()
+        }
 
         // 应急开关：CORDIS_SKIP_PROCESS_PLUGINS=sdd（多个用逗号或空格分隔）可让
         // 指定的 process 插件**完全不启动**（在拉起前就跳过，不占端口、不握手）。

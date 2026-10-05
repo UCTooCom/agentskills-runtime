@@ -52,6 +52,9 @@ public class PluginHostManager {
     /// 懒初始化：仅当发现的 plugin.yaml 含 mode:process 条目时才创建
     private var cordisHostManager: ?CordisHostManager = None
 
+    /// 最近一次 loadAll/reconcile 的技能基目录（T025 周期调谐复用，免重复传参）
+    private var lastSkillDirs: Array<String> = Array<String>()
+
     public init(
         registry!: PluginRegistry,
         loader!: PluginLoader,
@@ -110,6 +113,7 @@ public class PluginHostManager {
      */
     public func loadAll(skillBaseDirectories: Array<String>): LoadResult {
         let result = LoadResult()
+        this.lastSkillDirs = skillBaseDirectories
 
         let discoveryService = PluginDiscoveryService()
         let list = discoveryService.discover(skillBaseDirectories)
@@ -155,7 +159,122 @@ public class PluginHostManager {
         return result
     }
 
-    /// process 轨 V4 CRUD 路由注册
+    // ── T025 运行时增量发现 ───────────────────────────────────────────
+
+    /**
+     * 运行时增量调谐：重新扫描 plugin.yaml，只对「尚未加载」的新插件做加载 + 路由注册
+     *
+     * 与 loadAll 的区别（这是本方法存在的理由）：
+     * - loadAll 是启动期全量加载，只在 main.cj 调一次；新增 skills/<name>/ 目录后
+     *   不重启宿主就永远发现不了。
+     * - reconcile 是幂等增量：已加载的一律跳过（sync/dylib 轨查 registry，
+     *   process 轨查 cordis state.actual），因此可以周期调用。
+     *
+     * 路由注册（ExternalPluginRouteGateway.registerPluginRoutes）**非幂等**
+     * ——每调一次就往 Router 里塞一份新 handler，所以这里只对新增条目重新注册，
+     * 绝不能拿全量 list 重跑，否则路由表会重复膨胀。
+     *
+     * 不做的事（有意为之）：
+     * - 不卸载「目录已删除」的插件。误删目录导致线上插件被杀风险高于收益，
+     *   下线请显式走 pluginuninstall / plugin_deactivate。
+     * - 不 reload 已加载但配置变了的插件。热更新语义复杂（进程重启 + 状态迁移），
+     *   留给显式 restart 工具。
+     *
+     * @param skillBaseDirectories 技能基目录；传空数组则复用最近一次 loadAll 的目录
+     * @return LoadResult：loaded=本次新增成功，skipped=已存在/disabled，failed=新增失败
+     */
+    public func reconcile(skillBaseDirectories!: Array<String> = Array<String>()): LoadResult {
+        let result = LoadResult()
+        let dirs = if (skillBaseDirectories.isEmpty()) {
+            this.lastSkillDirs
+        } else {
+            this.lastSkillDirs = skillBaseDirectories
+            skillBaseDirectories
+        }
+        if (dirs.isEmpty()) {
+            result.failed.add("(no skill base directory: call loadAll first)")
+            return result
+        }
+
+        let list = PluginDiscoveryService().discover(dirs)
+        if (list.plugins.size == 0) {
+            return result
+        }
+
+        // 差集：只保留未加载的新条目
+        let freshList = PluginList()
+        for (entry in list.plugins) {
+            if (!entry.enabled) {
+                result.skipped.add("${entry.name}(disabled)")
+                continue
+            }
+            if (this.isLoaded(entry)) {
+                result.skipped.add("${entry.name}(already-loaded)")
+                continue
+            }
+            freshList.plugins.add(entry)
+        }
+        if (freshList.plugins.size == 0) {
+            LogUtils.info("[PluginHostManager] reconcile: no new plugins (scanned=${list.plugins.size})")
+            return result
+        }
+        LogUtils.info(
+            "[PluginHostManager] reconcile: ${freshList.plugins.size} new plugin(s) detected " +
+            "(scanned=${list.plugins.size})")
+
+        // 逐轨加载新增条目
+        var hasProcess = false
+        for (entry in freshList.plugins) {
+            match (entry.mode) {
+                case PluginMode.Sync | PluginMode.Dylib =>
+                    this.loadSingle(entry, result)
+                case PluginMode.Process =>
+                    hasProcess = true
+            }
+        }
+
+        if (hasProcess) {
+            let mgr = this.ensureCordisHostManager()
+            // traceReset=false：周期调谐不能冲掉启动期 await_trace 诊断现场
+            let procResult = mgr.loadProcessPlugins(freshList, traceReset: false)
+            for (name in procResult.loaded) {
+                result.loaded.add(name)
+            }
+            for (name in procResult.failed) {
+                result.failed.add(name)
+            }
+            for (name in procResult.skipped) {
+                result.skipped.add(name)
+            }
+            // 只注册新增 process 插件的路由（registerPluginRoutes 非幂等）
+            this.registerProcessPluginRoutes(freshList, mgr)
+        }
+
+        LogUtils.info("[PluginHostManager] reconcile finished: ${result.summary()}")
+        return result
+    }
+
+    /// 条目是否已加载（sync/dylib 查注册表，process 查 cordis 存活实例）
+    private func isLoaded(entry: PluginManifestEntry): Bool {
+        match (entry.mode) {
+            case PluginMode.Sync | PluginMode.Dylib =>
+                return this.registry.get(entry.name).isSome()
+            case PluginMode.Process =>
+                match (this.cordisHostManager) {
+                    case Some(mgr) => return mgr.getInstance(entry.name).isSome()
+                    // CordisHostManager 还没建（本次是首个 process 插件）→ 必然未加载
+                    case None => return false
+                }
+        }
+    }
+
+    /// 最近一次 loadAll/reconcile 使用的技能基目录（只读快照）
+    public func skillBaseDirectories(): Array<String> {
+        this.lastSkillDirs
+    }
+
+    /// process 轨 CRUD 路由注册
+
     /// 使用 PluginManifestEntry.httpRoutes（从 plugin.yaml 解析的 HTTP 路由声明），
     /// 经 ExternalPluginRouteGateway 注册到宿主路由表
     private func registerProcessPluginRoutes(list: PluginList, mgr: CordisHostManager): Unit {

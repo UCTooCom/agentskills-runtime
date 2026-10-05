@@ -78,25 +78,24 @@ AgentSkills Runtime 是一个全面的框架，用于构建和执行 AI 智能�
 
 ## 落地案例与价值说明书 (Business Case & Value Proposition)
 
-### shenicest黑客松提交
+### AgenticSoftwareFactoryHackathon黑客松提交
 
 **最终提交清单：**
 
-- 软件应用赛道：北辰商管 北⾠产业云社区命题
-- 作品名称：AgentSkills-runtime采用仓颉编程语言的国产AIAgent
-- 作品 Slogan：以中国智慧，筑全球智联，共建AI时代新质生产力
-- 作品描述：采用全栈自研的AgentSkills-runtime（简称asr）新一代AI驱动开发框架，开发了北辰产业云社区完整的解决方案。本次参赛主要完成的开发产物如下：1）更新asr v0.0.27版本，发布了一切皆技能的插件系统，对标deepseek-harness的一切皆插件方案，asr的插件系统更加智能，并且具有强安全、高性能、原生智能，以及更加适用于企业级客户的确定性设计理念。2）针对北辰产业云社区需求，开发了线上供需对接官网子系统。3）针对北辰产业云社区需求的政策赋能精准化和⾦融服务体系化两个课题，开发了产业政策智能体和⾦融匹配智能体。实现了入驻企业智能化对接产业需求和金融服务。
-- 项目图片：（待补充）
-- GitHub 代码仓库（设置 Topic 为 `#shenicest-fission`）：
-  1. AI驱动开发框架 https://atomgit.com/UCToo/agentskills-runtime
-  2. shenicest黑客松规范驱动开发文档 `apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon`
-  3. 北辰政策助手 `apps/agentskills-runtime/skills/beichen-policy-assistant`
-  4. 北辰金融对接 `apps/agentskills-runtime/skills/beichen-finance-matching`
-  5. 供需对接官网 https://atomgit.com/UCToo/web-admin
-- 项目文档（项目背景、目标用户、技术栈、创新点、团队分工、开发过程及后续计划等）：[`apps/agentskills-runtime/.codeartsdoer/specs/shenicestHackathon/shenicest项目文档-AgentSkills-runtime.docx`](https://atomgit.com/UCToo/agentskills-runtime/blob/main/.codeartsdoer/specs/shenicestHackathon/shenicest%E9%A1%B9%E7%9B%AE%E6%96%87%E6%A1%A3-AgentSkills-runtime.docx)
-- 作品演示视频：[北辰政策助手 Demo 录屏](./public/beichen_demo.mp4)
+- 赛事：ArcBench Agentic Software Factory Hackathon（智能体软件工厂黑客松）
+- 参赛队伍：UCTooCom
+- 作品名称：基于 AgentSkills-runtime 的智能体软件工厂（Agentic Software Factory）
+- 作品描述：以全栈自研的 AgentSkills-runtime（仓颉语言 + Fountain ORM + PostgreSQL）为后端、`apps/web-admin/web`（Vue 3 + Vite + pinia-orm + OpenTiny）为前端，构建智能体软件工厂系统，将大型需求编译为两个可靠的业务应用：GitHub 风格的软件工程协作平台（`skills/github` 插件，10 张表：repository/branch/commit/repository_file/issue_comment/milestone/label/pull_request/pr_review/branch_protection）和 Google Sheets 风格的在线电子表格工作台（`skills/sheets` 插件，5 张表：workbook/worksheet/cell/validation_rule/pivot_table），实现需求拆解、模块委派、全流程可验证的核心价值。两个业务模块均遵循 SDD 铁律「二次开发底座优先」，通过 `loaddbinfo → plugingen（L3 进程隔离轨插件）→ crudweb` 确定性工具链生成，插件能力以 Service + Skill + Route 三维一体提供，并配套 web-admin 数据库管理界面。
+- 项目图片：`apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon/asfh1.png`、`asfh2.png`
+- 代码仓库（设置 Topic 为 `#agentic-software-factory`）：
+  1. 智能体运行时框架 https://atomgit.com/UCToo/agentskills-runtime
+  2. 黑客松规范驱动开发文档 `apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon`
+  3. GitHub 协作平台插件 `apps/agentskills-runtime/skills/github`
+  4. 电子表格工作台插件 `apps/agentskills-runtime/skills/sheets`
+  5. 可视化管理前端 https://atomgit.com/UCToo/web-admin
+- 项目文档（需求规格说明书：组件定位、领域术语、角色边界、DFX 约束、核心能力、数据模型等）：`apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon/spec.md`
+- 作品演示视频：（待补充）
 - 可直接体验项目的链接（可选）：https://demo.uctoo.com
-- 知乎文章：《重大更新，一切皆技能的插件系统》 https://zhuanlan.zhihu.com/p/2077145055673037317
 
 > **参赛作品**：金融行业应用 Agent 黑客松（2026/07/27 - 2026/08/08）
 > **演示视频**：[智能投研助理 Demo 录屏](./public/demo.mp4)

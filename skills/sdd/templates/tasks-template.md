@@ -17,8 +17,8 @@
      CRUD→`uctoo-v4-module-development` + `uctoo-v4-orm-specification`；中间件→`uctoo-v4-middleware-guide`；
      权限→`user-permission-system` / `row-level-permission-system`）。
   2. **脚手架优先确定性代码生成工具**，禁止手撸：
-     `loaddbinfo`（灌表结构到 `db_info`）→ `plugingen`（**功能拓展优先做成插件**，默认 sync 内嵌轨，
-     需故障隔离加 `--mode process`）／`crudgen`（**仅**往宿主 `src/app/` 补公共基础设施）／
+     `loaddbinfo`（灌表结构到 `db_info`）→ `plugingen`（**功能拓展优先做成插件**，默认 L3 进程隔离轨 process，
+     需退回内嵌 sync 轨显式加 `--mode sync`）／`crudgen`（**仅**往宿主 `src/app/` 补公共基础设施）／
      `crudweb`（管理界面）；下线插件用对称的 `pluginuninstall`，不要手动删 `skills/{name}` 目录。
      命令一律 `cjpm run --skip-build --name <包名> --run-args "<参数>"`。
   3. **工具链坑位**：`loaddbinfo` 命令行模式有未修问题（见 `skills/uctoo-dev-manual/tools/loaddbinfo.md` 顶部 TODO），

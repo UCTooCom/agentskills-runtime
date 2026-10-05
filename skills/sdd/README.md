@@ -83,7 +83,7 @@ plugins:
 配套的确定性代码生成工具（一律 `cjpm run --skip-build --name <包名> --run-args "<参数>"`）：
 
 ```
-loaddbinfo → plugingen（优先做成插件，默认 sync 内嵌轨）／crudgen（仅宿主公共基础设施）／crudweb（管理界面）
+loaddbinfo → plugingen（优先做成插件，默认 L3 进程隔离轨 process）／crudgen（仅宿主公共基础设施）／crudweb（管理界面）
             下线走对称的 pluginuninstall，别手删 skills/{name}/（会留 DB 痕迹）
 ```
 

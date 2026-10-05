@@ -336,3 +336,106 @@ public class PluginDeactivateTool <: PluginToolBase {
         }
     }
 }
+
+/**
+ * PluginRefreshTool - 重新扫描并增量加载新插件（plugin_refresh）
+ *
+ * T025 运行时发现的手动入口：宿主启动后才放进 skills/ 的插件目录（或改完 plugin.yaml
+ * 新增了条目），不需要重启进程就能被加载并注册路由。
+ *
+ * 语义是**增量**而非全量：已加载的一律跳过；目录被删掉的插件不会被卸载
+ * （下线请显式用 plugin_deactivate / pluginuninstall）。
+ *
+ * 可选参数 skill_dirs：覆盖默认扫描目录（默认复用启动时的技能基目录）。
+ */
+public class PluginRefreshTool <: PluginToolBase {
+    public static let NAME = "plugin_refresh"
+
+    public static let DESC = """
+    Rescan plugin directories and load any plugins that are not loaded yet.
+    Use this after adding a new plugin directory (with plugin.yaml) or editing an
+    existing plugin.yaml, instead of restarting the host. Incremental: already
+    loaded plugins are skipped, and plugins whose directory disappeared are NOT
+    unloaded (use plugin_deactivate for that).
+    """
+
+    public init() {
+        super()
+        _extra = HashMap([
+            ("filterable", "true"),
+            ("terminal", "false"),
+            ("compactable", "true")
+        ])
+    }
+
+    public prop name: String {
+        get() { PluginRefreshTool.NAME }
+    }
+
+    public prop description: String {
+        get() { PluginRefreshTool.DESC }
+    }
+
+    public prop parameters: Array<ToolParameter> {
+        get() {
+            [
+                ToolParameter(
+                    "skill_dirs",
+                    "Optional. Array of skill base directories to scan. Defaults to the directories " +
+                    "used at host startup.",
+                    TypeSchema.Arr(TypeSchema.Str)
+                )
+            ]
+        }
+    }
+
+    public prop retType: TypeSchema {
+        get() { TypeSchema.Str }
+    }
+
+    public prop examples: Array<String> {
+        get() {
+            [
+                "{}",
+                """
+                {
+                  "skill_dirs": ["./skills"]
+                }
+                """
+            ]
+        }
+    }
+
+    override public func invoke(args: HashMap<String, JsonValue>): ToolResponse {
+        if (PluginToolBase.managerOrNull().isNone()) {
+            return PluginToolBase.buildError("PluginHostManager not initialized")
+        }
+        let manager = PluginToolBase.managerOrNull().getOrThrow()
+        var dirs: Array<String> = Array<String>()
+        if (let Some(raw) <- args.get("skill_dirs")) {
+            if (let Some(arr) <- JsonUtils.asJsonArray(raw)) {
+                for (item in arr.getItems()) {
+                    if (let Some(s) <- JsonUtils.toString(item)) {
+                        dirs.add(s)
+                    }
+                }
+            }
+        }
+        let result = if (dirs.isEmpty()) {
+            manager.reconcile()
+        } else {
+            manager.reconcile(dirs)
+        }
+        if (!result.failed.isEmpty()) {
+            return PluginToolBase.buildError(
+                "reconcile finished with failures: ${String.join(result.failed.toArray(), delimiter: \", \")} " +
+                "(loaded=${result.loaded.size}, skipped=${result.skipped.size})")
+        }
+        return PluginToolBase.buildOk([
+            ("action", "reconciled"),
+            ("loaded", result.loaded.size.toString()),
+            ("skipped", result.skipped.size.toString()),
+            ("loaded_names", String.join(result.loaded.toArray(), delimiter: ","))
+        ])
+    }
+}

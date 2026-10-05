@@ -59,8 +59,8 @@
 # 1) 先把表结构灌进 db_info（工具链第一步，后面三个都从它读）
 cjpm run --skip-build --name magic.app.tools.loaddbinfo   --run-args "--db uctoo"
 
-# 2a) 功能拓展优先做成插件（默认内嵌 sync 轨；要故障隔离就 --mode process）
-cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --db uctoo --table <表> [--mode process]"
+# 2a) 功能拓展优先做成插件（默认 L3 进程隔离轨 process；需退回内嵌 sync 轨显式加 --mode sync）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --db uctoo --table <表> [--mode sync]"
 
 # 2b) 只有需要往宿主 src/app/ 补公共基础设施时才用 crudgen
 cjpm run --skip-build --name magic.app.tools.crudgen     --run-args "--db uctoo --table <表>"

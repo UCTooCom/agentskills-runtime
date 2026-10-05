@@ -45,7 +45,7 @@ main(args: Array<String>) {
     var dbName = ""
     var tableName = ""
     var blank = false
-    var mode = "sync"  // 缺省 sync 轨；process 轨产出独立 cjpm executable 工程
+    var mode = "process"  // 缺省 L3 process 轨（进程隔离，独立 cjpm executable 工程）；内嵌 sync 轨需显式 --mode sync
     // §14.1 数据契约骨架：--contract 与代码一起产出；--contract-only 只产出契约
     var emitContract = false
     var contractOnly = false
@@ -139,24 +139,65 @@ main(args: Array<String>) {
     }
 
     // L3 进程隔离轨：独立 cjpm executable 工程（design §5.3）
-    // 不走表驱动（进程插件经 host.db 服务代理访问数据，不直接依赖 f_orm/DbInfoPO）
+    // 不走表驱动的 db_info 读取（进程插件经 host.db 服务代理访问数据，不直接依赖 f_orm/DbInfoPO）
     if (mode == "process") {
         if (emitContract) {
             println("提示: process 轨不连 DB（无 db_info 可读），--contract 已忽略")
             println("      需要契约骨架时请用 sync 轨：plugingen --name <名> --db <库> --tables <表...> --contract-only")
         }
-        // 如果同时指定了 --db 和 --table，生成完整 CRUD 进程插件（对标 codelabs）
-        if (!dbName.isEmpty() && !tableName.isEmpty()) {
+        // 解析本次请求的表清单（--tables 逗号分隔优先，否则 --table）
+        let procTableList = resolveTableList(tableName, tablesRaw)
+        // 同时指定了 --db 与（--table / --tables），生成 CRUD 进程插件（对标 codelabs / long-running-task）
+        if (!dbName.isEmpty() && !procTableList.isEmpty()) {
+            if (procTableList.size > 1) {
+                println("检测到 --tables ${procTableList.size} 张表，将生成多表 CRUD 进程插件（表名作为运行时参数共用一个 handlers.cj）")
+            }
+            // ⚠️ process 轨生成权限菜单节点（CrudPluginGenerator.generate 第7步）需要连 DB 写
+            // permissions / i18 表，故在此显式初始化 ORM（与下方 sync 分支同口径）。进程插件本身
+            // 不读 db_info（列结构以 TODO 占位），但写权限节点必须连 DB，否则报
+            // "default datasource is not specified" 导致权限节点 0/全部失败。
+            let pEnvPaths = [Path("./.env"), Path("../.env")]
+            var pEnvMap = HashMap<String, String>()
+            var pEnvLoaded = false
+            for (envPath in pEnvPaths) {
+                if (let Some(map) <- loadEnvFile(envPath)) {
+                    println("已加载 .env: ${envPath}")
+                    pEnvMap = map
+                    pEnvLoaded = true
+                    break
+                }
+            }
+            if (!pEnvLoaded) {
+                println("警告: 未找到可用 .env，process 轨权限菜单节点可能因缺数据源而失败")
+            }
+            Config.set([
+                ("orm_drivers", envGetOrDefault(pEnvMap, "orm_drivers", "postgres")),
+                ("orm_defaultDriver", envGetOrDefault(pEnvMap, "orm_defaultDriver", "postgres")),
+                ("orm_connectionUrl", envGetOrDefault(pEnvMap, "orm_connectionUrl", "")),
+                ("postgres_orm_connectionUrl", envGetOrDefault(pEnvMap, "postgres_orm_connectionUrl", envGetOrDefault(pEnvMap, "orm_connectionUrl", "")))
+            ])
+            ORMConfig.refresh {
+            }
+            if (!initializeORM()) {
+                println("警告: process 轨 ORM 初始化失败，权限菜单节点将写入失败，请检查 .env 与数据库可达性")
+            }
             let crudGen = CrudPluginGenerator()
-            if (crudGen.generate(normalized, dbName, tableName)) {
+            if (crudGen.generate(normalized, dbName, procTableList)) {
                 println("\nCRUD 进程轨插件生成完成！")
                 println("后续步骤:")
                 println("1. cd skills/${normalized} && cjpm build（产出 target/release/bin/skill_${normalized}.exe）")
-                println("2. 在 config/plugins.yaml 追加 mode:process + command 条目")
-                println("3. 启动宿主后经 CordisHostManager 加载，路由经 ExternalPluginRouteGateway 注册")
+                println("2. 插件注册已写入 skills/${normalized}/plugin.yaml（宿主启动自动发现该文件，无需改 config/plugins.yaml）")
+                println("3. 重启宿主即经 CordisHostManager 拉起，路由经 ExternalPluginRouteGateway 注册（可选：集中式 config/plugins.yaml 仅作工具/文档备份）")
             } else {
                 println("\n生成失败，请检查上述错误信息")
             }
+            return
+        }
+        // 只给了 --db 没给表（或给了 --tables 但缺 --db）：显式提示，不静默丢弃
+        if (!dbName.isEmpty() && !tablesRaw.trimAscii().isEmpty()) {
+            println("错误: --mode process 生成 CRUD 插件需要 --db 与（--table 或 --tables）同时提供")
+            println("      当前已给 --db ${dbName}，请补充表名参数")
+            printHelp()
             return
         }
         // 否则生成空白进程插件骨架
@@ -165,8 +206,8 @@ main(args: Array<String>) {
             println("\nL3 进程轨插件生成完成！")
             println("后续步骤:")
             println("1. cd skills/${normalized} && cjpm build（产出 target/release/skill_${normalized}.exe）")
-            println("2. 在 config/plugins.yaml 追加 mode:process + command 条目")
-            println("3. 启动宿主后经 CordisHostManager 加载，路由经 ExternalPluginRouteGateway 注册")
+            println("2. 插件注册已写入 skills/${normalized}/plugin.yaml（宿主启动自动发现该文件，无需改 config/plugins.yaml）")
+            println("3. 重启宿主即经 CordisHostManager 拉起，路由经 ExternalPluginRouteGateway 注册（可选：集中式 config/plugins.yaml 仅作工具/文档备份）")
         } else {
             println("\n生成失败，请检查上述错误信息")
         }
@@ -306,7 +347,7 @@ func printHelp(): Unit {
     println("  --db <数据库名>   表驱动模式：数据库名（读 db_info 表结构）")
     println("  --table <表名>    表驱动模式：单表名（与 --tables 二选一）")
     println("  --tables <表名表> 逗号分隔的多表（CRUD 生成与 --contract 均支持，如 repository,branch,commit）")
-    println("  --mode <轨>       加载轨：sync（缺省）/ dylib / process")
+    println("  --mode <轨>       加载轨：process（缺省）/ sync / dylib（内嵌 sync 需显式 --mode sync）")
     println("  --contract        额外产出 DATA_CONTRACT.yaml 骨架（sync 轨，需连 DB）")
     println("  --contract-only   只产出 DATA_CONTRACT.yaml 骨架（不生成代码）")
     println("  --blank           生成空白插件骨架（跳过表结构）")
@@ -320,7 +361,7 @@ func printHelp(): Unit {
     println("  skills/{name}/plugin.yaml       插件清单（design.md §2.5）")
     println("  skills/{name}/DATA_CONTRACT.yaml 数据契约骨架（仅 --contract/--contract-only）")
     println("  skills/{name}/scripts/cj/       仓颉源码（包 magic.plugins.{name}）")
-    println("  config/plugins.yaml             自动追加启用条目")
+    println("  config/plugins.yaml             需手动追加启用条目（见各生成分支\"后续步骤\"）")
     println("")
     println("示例：")
     println("  plugingen --name entity --db uctoo --table entity")

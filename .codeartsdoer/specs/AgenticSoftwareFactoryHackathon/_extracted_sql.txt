@@ -1,0 +1,225 @@
+TOTAL BLOCKS: 13
+
+===== BLOCK 0 =====
+DDL → sql/incremental/xxx.sql
+  → loaddbinfo（刷新 db_info 表元数据）
+  → crudgen（生成后端五层模块：PO/DAO/Service/Controller/Route）
+  → crudweb（生成前端 store 模型 + views CRUD 页面）
+  → 迭代定制（手写业务逻辑）
+
+===== BLOCK 1 =====
+### 2.1.2 服务/组件总体架构
+
+===== BLOCK 2 =====
+### 2.1.3 关键组件设计
+
+- **GitHub 协作平台 Service 层**：`src/app/services/github/` 下按模块组织，RepositoryService 负责仓库 CRUD + 可见性控制 + Fork，BranchService 负责分支管理 + 保护规则，CommitService 负责提交历史 + 差异，PullRequestService 负责 PR 生命周期 + 合并 + 评审。
+- **电子表格工作台 Service 层**：`src/app/services/sheets/` 下，WorkbookService 负责工作簿 CRUD + CSV 导入导出，WorksheetService 负责工作表管理，CellService 负责单元格 CRUD + 批量操作，FormulaService 负责公式解析 + 计算 + 依赖重算，PivotTableService 负责透视表聚合。
+- **前端公式引擎**：纯前端实现，复用 `xlsx@^0.18.0` 库的 CSV 解析能力 + 自定义公式计算器（支持 SUM/AVERAGE/COUNT/MAX/MIN/IF/STDEV/HYPERLINK/SIN/SUMIF/PMT 等函数 + 相对引用调整 + 依赖链重算 + 循环引用检测 + 错误标识 #DIV/0!/#REF!/#CIRC!）。
+
+---
+
+## 2.2 数据设计
+
+### 2.2.1 GitHub 协作平台增量表设计
+
+> 所有 DDL 放置于 `sql/incremental/hackathon_github_repository.sql` 和 `hackathon_github_issue_pr.sql`，遵循 uctoo-v4 数据库设计规范（UUID 主键、timestamptz、creator 行级权限、软删除）。
+
+#### 2.2.1.1 repository（仓库）
+
+===== BLOCK 3 =====
+#### 2.2.1.2 branch（分支）
+
+===== BLOCK 4 =====
+#### 2.2.1.3 commit（提交）
+
+===== BLOCK 5 =====
+#### 2.2.1.4 repository_file（文件树）
+
+===== BLOCK 6 =====
+#### 2.2.1.5 issue_comment / milestone / label / pull_request / pr_review / branch_protection
+
+===== BLOCK 7 =====
+### 2.2.2 电子表格工作台增量表设计
+
+> DDL 放置于 `sql/incremental/hackathon_sheets_workbook.sql`。
+
+===== BLOCK 8 =====
+### 2.2.3 种子数据设计
+
+> DDL 放置于 `sql/incremental/hackathon_seed_data.sql`，预置赛题要求的隔离浏览器会话种子数据。
+
+种子数据覆盖以下实体（均为预定义 UUID，保证跨会话一致）：
+
+| 实体 | 数量 | 关键字段 |
+|------|------|----------|
+| 账户（uctoo_user） | 5+ | username/email/password（合规密码）/email_verified=true/status=available |
+| 组织（company） | 2+ | company_name/org_type='github-org'/member_count |
+| 仓库（repository） | 5+ | name/visibility=public/private/default_branch=main |
+| 分支（branch） | 8+ | name/repository_id/is_default |
+| 提交（commit） | 10+ | hash/message/author_id/verified |
+| 文件（repository_file） | 15+ | path/content/branch_id |
+| Issue（tasks, task_type='issue'） | 8+ | title/description/task_status/priority |
+| PR（pull_request） | 4+ | title/status/base_branch/compare_branch |
+| 工作簿（workbook） | 3+ | name/owner_id/last_updated |
+| 工作表（worksheet） | 5+ | name/workbook_id/position |
+| 单元格（cell） | 50+ | coordinate/value/formula |
+
+### 2.2.4 菜单权限数据设计
+
+> DDL 放置于 `sql/incremental/hackathon_permissions_menu.sql`，通过插入 `permissions` 表注册前端动态路由。
+
+===== BLOCK 9 =====
+---
+
+## 2.3 API 设计
+
+### 2.3.1 API 规范约定
+
+遵循 `docs/uctoo-v4/uctoo-v4-api-specification.md` 规范：
+
+| 约定 | 规则 |
+|------|------|
+| 基础路径 | `/api/v1/uctoo/{table_name}` |
+| 列表键名 | 表名 + `s`（如 `repositories` / `branches` / `workbooks`） |
+| 响应格式 | `{ "data": {}, "currentPage": 1, "totalCount": 100, "totalPage": 10 }` |
+| 错误响应 | `{ "errno": "40001", "errmsg": "参数错误" }` |
+| HTTP 方法 | GET（查询）/ POST（创建）/ PUT（更新）/ DELETE（删除） |
+| 资源路径 | `/api/v1/uctoo/{table}/{id}` |
+| 操作路径 | `/api/v1/uctoo/{table}/{action}` |
+
+### 2.3.2 GitHub 协作平台 API 列表
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/v1/uctoo/repositories` | 仓库列表（支持搜索/筛选/排序） |
+| POST | `/api/v1/uctoo/repositories` | 创建仓库 |
+| GET | `/api/v1/uctoo/repositories/:id` | 仓库详情 |
+| PUT | `/api/v1/uctoo/repositories/:id` | 更新仓库（含可见性变更） |
+| POST | `/api/v1/uctoo/repositories/:id/fork` | Fork 仓库 |
+| GET | `/api/v1/uctoo/repositories/:id/branches` | 分支列表 |
+| POST | `/api/v1/uctoo/repositories/:id/branches` | 创建分支 |
+| GET | `/api/v1/uctoo/repositories/:id/commits` | 提交历史 |
+| GET | `/api/v1/uctoo/repositories/:id/files` | 文件树（按分支） |
+| PUT | `/api/v1/uctoo/repositories/:id/files/:file_id` | 在线编辑文件 |
+| GET | `/api/v1/uctoo/repositories/:id/issues` | Issue 列表（复用 tasks 表） |
+| POST | `/api/v1/uctoo/repositories/:id/issues` | 创建 Issue |
+| GET | `/api/v1/uctoo/repositories/:id/pull-requests` | PR 列表 |
+| POST | `/api/v1/uctoo/repositories/:id/pull-requests` | 创建 PR |
+| POST | `/api/v1/uctoo/pull-requests/:id/reviews` | 提交 PR 评审 |
+| POST | `/api/v1/uctoo/pull-requests/:id/merge` | 合并 PR |
+| GET | `/api/v1/uctoo/repositories/:id/milestones` | 里程碑列表 |
+| GET | `/api/v1/uctoo/repositories/:id/labels` | 标签列表 |
+| POST | `/api/v1/uctoo/repositories/:id/branch-protections` | 设置分支保护 |
+
+### 2.3.3 电子表格工作台 API 列表
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/v1/uctoo/workbooks` | 工作簿列表（含 Last updated） |
+| POST | `/api/v1/uctoo/workbooks` | 创建空白工作簿 |
+| GET | `/api/v1/uctoo/workbooks/:id` | 打开工作簿（含工作表/单元格完整状态） |
+| PUT | `/api/v1/uctoo/workbooks/:id` | 重命名工作簿 |
+| POST | `/api/v1/uctoo/workbooks/import-csv` | CSV 导入（上传文件 → 解析 → 创建工作簿） |
+| GET | `/api/v1/uctoo/workbooks/:id/export-csv` | CSV 导出当前活动工作表 |
+| POST | `/api/v1/uctoo/workbooks/:id/worksheets` | 添加工作表 |
+| PUT | `/api/v1/uctoo/worksheets/:id` | 重命名/删除工作表 |
+| GET | `/api/v1/uctoo/worksheets/:id/cells` | 获取工作表所有单元格 |
+| PUT | `/api/v1/uctoo/worksheets/:id/cells` | 批量更新单元格（含公式） |
+| POST | `/api/v1/uctoo/worksheets/:id/cells/batch` | 批量操作（插入/删除行列/粘贴） |
+| POST | `/api/v1/uctoo/worksheets/:id/validation-rules` | 设置数据验证规则 |
+| POST | `/api/v1/uctoo/worksheets/:id/pivot-tables` | 创建透视表 |
+| POST | `/api/v1/uctoo/worksheets/:id/pivot-tables/:pt_id/refresh` | 刷新透视表 |
+
+---
+
+## 2.4 前端设计
+
+### 2.4.1 GitHub 协作平台前端
+
+===== BLOCK 10 =====
+### 2.4.2 电子表格工作台前端
+
+===== BLOCK 11 =====
+### 2.4.3 Store 模型设计
+
+每个新增表对应一个 pinia-orm store 模型，遵循 UMI 架构同构设计：
+
+===== BLOCK 12 =====
+### 2.4.4 路由与菜单设计
+
+新增两个路由模块文件：
+
+- `src/router/routes/modules/collab.ts` — GitHub 协作平台路由（Layout + 子路由）
+- `src/router/routes/modules/sheets.ts` — 电子表格工作台路由
+
+路由通过 `permissions` 表动态加载（`flushRouter()` → `menuStore.getMenuList()` → `toRoutes()`），无需手动注册。
+
+---
+
+## 2.5 安全设计
+
+### 2.5.1 认证机制
+
+复用现有 JWT 认证中间件（`PermissionMiddleware.cj`）：
+
+1. **注册**：校验用户名格式（1-39 个小写 ASCII 字母/数字/单连字符）、邮箱格式、密码复杂度（12-128 字符，含大写/小写/数字/特殊字符）；校验通过后存储账户并标记 `email_verified=true`
+2. **登录**：验证凭据，失败时返回统一消息 `"Invalid credentials"`（不透露账户是否存在）；成功后创建 `uctoo_session` 记录
+3. **登出**：立即销毁当前会话，后续请求需重新认证
+4. **密码恢复**：提交邮箱后直接显示固定验证码 `123456` 和密码重置表单
+
+### 2.5.2 权限控制
+
+复用 `data_access_authorization` 行级数据权限 + `role_has_permission` 角色权限：
+
+| 操作 | 权限要求 |
+|------|----------|
+| 浏览公开仓库 | 无需认证（访客可访问） |
+| 创建仓库/组织/Issue/PR/工作簿 | 已认证用户 |
+| 更改仓库可见性/删除仓库 | 仓库 Admin |
+| 管理 PR 评审 | 授权评审者 |
+| 合并 PR | 满足分支保护要求（评审通过 + 状态检查通过） |
+| 管理组织成员/团队 | 组织 Owner |
+| 编辑工作簿 | 工作簿 owner 或授权用户 |
+
+### 2.5.3 数据安全
+
+1. **密码安全**：禁止在任何页面、错误消息或恢复流程中显示完整密码；注册/登录/恢复失败后不重新显示密码字段
+2. **SQL 注入防护**：Fountain ORM 参数化查询，禁止拼接 SQL
+3. **XSS 防护**：Vue 3 模板自动转义 + CSP 头部
+4. **会话安全**：登出、密码变更和恢复后立即改变后续请求可见的会话状态
+
+---
+
+## 2.6 性能设计
+
+### 2.6.1 性能目标
+
+| 指标 | 目标 | 对应 spec.md DFX |
+|------|------|------------------|
+| 核心页面首次加载 | ≤ 3 秒 | §4.1-1 |
+| 列表查询接口响应 | ≤ 1 秒（单页 30 条） | §4.1-2 |
+| 仓库文件树加载 | ≤ 2 秒（文件数 ≤ 1000） | §4.1-3 |
+| 单元格编辑延迟 | ≤ 100 毫秒（前端即时反馈） | §4.1-4 |
+| 公式重算延迟 | ≤ 500 毫秒（依赖链深度 ≤ 10） | §4.1-5 |
+
+### 2.6.2 优化策略
+
+| 策略 | 说明 |
+|------|------|
+| 数据库索引 | 所有查询路径均有对应索引（唯一索引 + 普通索引 + 软删除过滤索引） |
+| 分页查询 | 列表 API 默认分页（pageSize=30），避免全量返回 |
+| 前端虚拟滚动 | 文件树/单元格网格超 1000 行时启用虚拟滚动 |
+| 公式增量重算 | 仅重算依赖链上的单元格，不全量重算 |
+| CSV 流式解析 | 大文件 CSV 导入使用流式解析，避免内存溢出 |
+| CDN 静态资源 | 前端静态资源通过 CDN 分发 |
+
+---
+
+## 2.7 智能体软件工厂核心设计
+
+> 本节对应 spec.md §5 中「智能体软件工厂核心增量」需求，复用已有智能体基础设施，通过新增编译技能实现需求拆解、模块委派和全流程验证。
+
+### 2.7.1 需求编译器
+
+复用 `agent_tasks` + `orchestration_plans` + `orchestration_steps` 三张表，新增编译技能 `skills/hackathon-compiler/`：

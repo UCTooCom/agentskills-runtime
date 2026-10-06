@@ -1,0 +1,87 @@
+# sheets 插件清单（plugingen process 轨生成）
+# 保护区外为二开区：停用插件（enabled: false）、调 order、改 command 路径请改这里，重新生成不会被覆盖。
+name: sheets
+version: 1.0.0
+mode: process
+command: ./skills/sheets/target/release/bin/skill_sheets.exe
+enabled: true
+order: 10
+autoRestart: true
+#region AutoCreateCode
+# ↓ 本行以下由 plugingen 自动维护，重新生成会覆盖；表清单与路由随 --tables 累积刷新。
+description: L3 进程隔离轨插件 sheets（5 张表）
+tableWhitelist:
+  - workbook
+  - worksheet
+  - cell
+  - validation_rule
+  - pivot_table
+routes:
+  # workbook CRUD
+  - method: POST
+    path: /api/v1/uctoo/workbook/add
+  - method: POST
+    path: /api/v1/uctoo/workbook/edit
+  - method: POST
+    path: /api/v1/uctoo/workbook/del
+  - method: POST
+    path: /api/v1/uctoo/workbook/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/workbook/:id
+  - method: GET
+    path: /api/v1/uctoo/workbook/:limit/:page
+  # worksheet CRUD
+  - method: POST
+    path: /api/v1/uctoo/worksheet/add
+  - method: POST
+    path: /api/v1/uctoo/worksheet/edit
+  - method: POST
+    path: /api/v1/uctoo/worksheet/del
+  - method: POST
+    path: /api/v1/uctoo/worksheet/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/worksheet/:id
+  - method: GET
+    path: /api/v1/uctoo/worksheet/:limit/:page
+  # cell CRUD
+  - method: POST
+    path: /api/v1/uctoo/cell/add
+  - method: POST
+    path: /api/v1/uctoo/cell/edit
+  - method: POST
+    path: /api/v1/uctoo/cell/del
+  - method: POST
+    path: /api/v1/uctoo/cell/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/cell/:id
+  - method: GET
+    path: /api/v1/uctoo/cell/:limit/:page
+  # validation_rule CRUD
+  - method: POST
+    path: /api/v1/uctoo/validation_rule/add
+  - method: POST
+    path: /api/v1/uctoo/validation_rule/edit
+  - method: POST
+    path: /api/v1/uctoo/validation_rule/del
+  - method: POST
+    path: /api/v1/uctoo/validation_rule/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/validation_rule/:id
+  - method: GET
+    path: /api/v1/uctoo/validation_rule/:limit/:page
+  # pivot_table CRUD
+  - method: POST
+    path: /api/v1/uctoo/pivot_table/add
+  - method: POST
+    path: /api/v1/uctoo/pivot_table/edit
+  - method: POST
+    path: /api/v1/uctoo/pivot_table/del
+  - method: POST
+    path: /api/v1/uctoo/pivot_table/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/pivot_table/:id
+  - method: GET
+    path: /api/v1/uctoo/pivot_table/:limit/:page
+#endregion AutoCreateCode
+# ── 二次开发区 ──
+# 需要追加自定义路由 / 额外白名单表时写在本区（在 routes 之外另起键），重新生成会保留。

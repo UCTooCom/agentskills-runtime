@@ -76,6 +76,10 @@ import magic.app.routes.uctoo.llm_usage_logs.LlmUsageLogsRoute
 import magic.app.controllers.uctoo.llm_usage_logs.LlmUsageLogsController
 import magic.app.routes.uctoo.model_pricing.ModelPricingRoute
 import magic.app.controllers.uctoo.model_pricing.ModelPricingController
+import magic.app.routes.uctoo.llm_channel.LlmChannelRoute
+import magic.app.controllers.uctoo.llm_channel.LlmChannelController
+import magic.app.routes.uctoo.llm_channel.LlmRouteRuleRoute
+import magic.app.controllers.uctoo.llm_channel.LlmRouteRuleController
 import magic.app.routes.uctoo.agent_groups.AgentGroupsRoute
 import magic.app.controllers.uctoo.agent_groups.AgentGroupsController
 import magic.app.routes.uctoo.agent_executors.AgentExecutorsRoute
@@ -1247,6 +1251,32 @@ public class AutoRouteConfig {
                 let service = ModelPricingService()
                 let controller = ModelPricingController(service)
                 let route = ModelPricingRoute(router, controller)
+                route.register()
+            }
+        ))
+
+        // LlmChannel 路由（T012：通道管理 API — list/detail/add/edit/del/toggle/default/test/reload）
+        registry.add(RouteEntry(
+            "llm_channel",
+            "/api/v1/uctoo/llm_channel",
+            10,
+            true,
+            { router: Router =>
+                let controller = LlmChannelController()
+                let route = LlmChannelRoute(router, controller)
+                route.register()
+            }
+        ))
+
+        // LlmRouteRule 路由（T027：通道路由规则 list/add/edit/del/evaluate）
+        registry.add(RouteEntry(
+            "llm_route_rule",
+            "/api/v1/uctoo/llm_route_rule",
+            10,
+            true,
+            { router: Router =>
+                let controller = LlmRouteRuleController()
+                let route = LlmRouteRuleRoute(router, controller)
                 route.register()
             }
         ))

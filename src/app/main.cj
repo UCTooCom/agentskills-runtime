@@ -38,6 +38,8 @@ import magic.skill.application.{ProgressiveSkillLoader, SkillManagementService}
 import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
 import magic.log.LogUtils
 import magic.model.ModelManager
+import magic.model.LazyChatModel
+import magic.model.channel.{ChannelService, ChannelRegistry, ChannelProbe, PluginAdapterBridge}
 // 启动卡死定位：stdout 走 4KB 缓冲管道，被 kill 时尾部整段丢失；
 // traceStartup 直接落盘 logs/startup-trace.txt，给「最后一条执行到的语句」。
 import magic.utils.traceStartup
@@ -70,7 +72,7 @@ import magic.app.routes.uctoo.sync.SyncRoute // 导入同步路由
 import magic.app.services.billing.{BillingEventHandler, QuotaCheckHandler} // 导入计费事件处理器
 import magic.app.services.bridge.{WebSocketEventBridge, AgentRuntimeBridge, LrtEventBridge} // 导入桥接层
 import magic.app.services.bridge.AgentPersistenceEventHandler // 导入持久化事件处理器
-import magic.plugin.{PluginHostManager, PluginRegistry, PluginLoader, PluginEventBus, PluginRouteScanner, SkillBridge, PluginAgentTools, PluginInspectTool, PluginActivateTool, PluginDeactivateTool, PluginSyncBridge} // 导入插件系统
+import magic.plugin.{PluginHostManager, PluginRegistry, PluginLoader, PluginEventBus, PluginRouteScanner, SkillBridge, PluginAgentTools, PluginInspectTool, PluginActivateTool, PluginDeactivateTool, PluginRefreshTool, PluginSyncBridge, LlmChannelAgentTools, LlmChannelListTool, LlmChannelTestTool, LlmChannelProbeTool, LlmChannelSwitchTool} // 导入插件系统
 import std.core.Duration
 
 /**
@@ -231,15 +233,47 @@ public class Application {
             "stepfun:step-3"
         }
         LogUtils.info("Using chat model: ${modelName}")
-        _chatModel = None
-        _chatModelError = None
+        // T010：不再启动期建实例、也不因模型创建失败跳过路由注册。
+        // 改用 LazyChatModel —— 构造永不抛错，真实 ChatModel 在请求边界按 ChannelRegistry 解析，
+        // 因此「通道失败/未就绪」不再阉割 chat 路由（REQ-DMC-017 V3）。
+        _chatModel = Some(LazyChatModel(modelName))
+        LogUtils.info("Chat model resolver (lazy) prepared: ${modelName}")
+
+        // T010/M2：启动装配通道注册表（DB 优先，空/失败退化为内置种子，保证断库仍可用 V7）。
+        // 与 LazyChatModel 配合：注册表就绪后，下一请求按注册表解析真实通道实例。
         try {
-            _chatModel = Some(ModelManager.createChatModel(modelName))
-            LogUtils.info("Chat model created successfully")
+            ChannelService.shared().seedIfEmpty()
+            ChannelRegistry.shared().load()
+            ChannelService.shared().loadRouteRules()
+            // T030：把通道服务注入 Agent 工具，并按 .env 开关决定 Agent 能否自动切通道
+            injectChannelAgentTools()
+            LogUtils.info("ChannelRegistry bootstrap done: ${ChannelRegistry.shared().listSnapshots().size} channels, default=${ChannelRegistry.shared().getDefaultCode()}")
         } catch (e: Exception) {
-            _chatModelError = Some("${e.message}")
-            LogUtils.error("Chat model creation failed (framework continues with degraded AI): ${e.message}")
-            println("WARN: Chat model configuration invalid - AI features disabled until fixed. Error: ${e.message}")
+            LogUtils.error("ChannelRegistry bootstrap failed (lazy resolution will fall back to legacy providers): ${e.message}")
+        }
+
+        // T011：备用 2s 定时轮询（多实例 / 外部直接改库 → 事件总线覆盖不到时兜底刷新，满足 V1）
+        spawn {
+            while (true) {
+                sleep(Duration.second * 2)
+                try {
+                    ChannelRegistry.shared().refresh()
+                } catch (_: Exception) {}
+            }
+        }
+
+        // T026：周期健康探活（默认 60s，比注册表轮询慢一个量级，避免对大模型 API 打太密）。
+        // 连续失败 -> degraded（从 catalog 摘除），恢复 -> enabled；仅写 health 快照与状态，
+        // 不 bump revision（不打断进行中会话）。DB 不可用 / 注册表未就绪时静默跳过。
+        spawn {
+            while (true) {
+                sleep(Duration.second * 60)
+                try {
+                    if (ChannelRegistry.shared().isLoaded()) {
+                        ChannelProbe.shared().probeHealthAll()
+                    }
+                } catch (_: Exception) {}
+            }
         }
 
         // 初始化并加载 Agent
@@ -408,15 +442,47 @@ public class Application {
             "stepfun:step-3"
         }
         LogUtils.info("Using chat model: ${modelName}")
-        _chatModel = None
-        _chatModelError = None
+        // T010：不再启动期建实例、也不因模型创建失败跳过路由注册。
+        // 改用 LazyChatModel —— 构造永不抛错，真实 ChatModel 在请求边界按 ChannelRegistry 解析，
+        // 因此「通道失败/未就绪」不再阉割 chat 路由（REQ-DMC-017 V3）。
+        _chatModel = Some(LazyChatModel(modelName))
+        LogUtils.info("Chat model resolver (lazy) prepared: ${modelName}")
+
+        // T010/M2：启动装配通道注册表（DB 优先，空/失败退化为内置种子，保证断库仍可用 V7）。
+        // 与 LazyChatModel 配合：注册表就绪后，下一请求按注册表解析真实通道实例。
         try {
-            _chatModel = Some(ModelManager.createChatModel(modelName))
-            LogUtils.info("Chat model created successfully")
+            ChannelService.shared().seedIfEmpty()
+            ChannelRegistry.shared().load()
+            ChannelService.shared().loadRouteRules()
+            // T030：把通道服务注入 Agent 工具，并按 .env 开关决定 Agent 能否自动切通道
+            injectChannelAgentTools()
+            LogUtils.info("ChannelRegistry bootstrap done: ${ChannelRegistry.shared().listSnapshots().size} channels, default=${ChannelRegistry.shared().getDefaultCode()}")
         } catch (e: Exception) {
-            _chatModelError = Some("${e.message}")
-            LogUtils.error("Chat model creation failed (framework continues with degraded AI): ${e.message}")
-            println("WARN: Chat model configuration invalid - AI features disabled until fixed. Error: ${e.message}")
+            LogUtils.error("ChannelRegistry bootstrap failed (lazy resolution will fall back to legacy providers): ${e.message}")
+        }
+
+        // T011：备用 2s 定时轮询（多实例 / 外部直接改库 → 事件总线覆盖不到时兜底刷新，满足 V1）
+        spawn {
+            while (true) {
+                sleep(Duration.second * 2)
+                try {
+                    ChannelRegistry.shared().refresh()
+                } catch (_: Exception) {}
+            }
+        }
+
+        // T026：周期健康探活（默认 60s，比注册表轮询慢一个量级，避免对大模型 API 打太密）。
+        // 连续失败 -> degraded（从 catalog 摘除），恢复 -> enabled；仅写 health 快照与状态，
+        // 不 bump revision（不打断进行中会话）。DB 不可用 / 注册表未就绪时静默跳过。
+        spawn {
+            while (true) {
+                sleep(Duration.second * 60)
+                try {
+                    if (ChannelRegistry.shared().isLoaded()) {
+                        ChannelProbe.shared().probeHealthAll()
+                    }
+                } catch (_: Exception) {}
+            }
         }
 
         // 初始化并加载 Agent
@@ -569,6 +635,13 @@ public class Application {
         toolManager.addTool(PluginInspectTool())
         toolManager.addTool(PluginActivateTool())
         toolManager.addTool(PluginDeactivateTool())
+        // T025：运行时增量发现（新增 skills/<name>/ 后免重启，工具为手动入口）
+        toolManager.addTool(PluginRefreshTool())
+        // 大模型通道工具（T030；ChannelService 延迟注入 + 自动切换开关，见下方通道系统启动段）
+        toolManager.addTool(LlmChannelListTool())
+        toolManager.addTool(LlmChannelTestTool())
+        toolManager.addTool(LlmChannelProbeTool())
+        toolManager.addTool(LlmChannelSwitchTool())
         let toolDispatcher = ToolDispatcher(
             toolManager,
             permissionProvider,
@@ -787,6 +860,17 @@ public class Application {
             this._pluginManager = Some(pluginManager)
             // 注入插件管理器供 Agent 自引用工具调用（plugin_inspect/activate/deactivate）
             PluginAgentTools.setPluginManager(pluginManager)
+            // T023：把插件实例解析器注入通道适配器桥，使 protocol=plugin:<name> 的通道
+            // 能通过 stdio JSON-RPC 调 L3 插件（模式B）。用函数槽注入而非直接 import
+            // magic.plugin —— 避免 channel → plugin → channel 的包循环。
+            PluginAdapterBridge.shared().setInstanceResolver({ name =>
+                // 实例在 CordisHostManager 上（返回 ?PluginInstance）；
+                // PluginHostManager 只暴露 cordisHost()，None = 未启用 L3 进程轨
+                match (pluginManager.cordisHost()) {
+                    case Some(hostMgr) => hostMgr.getInstance(name)
+                    case None => None
+                }
+            })
 
             // L1 反射锚点：确保示例插件类被静态链接进本可执行文件
             // （cjpm/LTO 只保留可达代码；L2 动态库加载落地后可移除）
@@ -809,6 +893,65 @@ public class Application {
             traceStartup("TRACE[main.configureRoutes] >>> LogUtils.info(Plugin system loaded) done")
             println("[STARTUP-DIAG] <<< pluginManager.loadAll returned")
             eprintln("[DIAG] main: pluginManager.loadAll RETURNED; next = PluginRouteScanner + server.start")
+
+            // T025：运行时增量发现。启动后新增 skills/<name>/ 目录（或改 plugin.yaml 加条目）
+            // 无需重启即可被发现、加载并注册路由。reconcile 内部幂等——已加载的一律跳过，
+            // 目录被删掉的插件不卸载（下线走 plugin_deactivate / pluginuninstall）。
+            // 间隔由 PLUGIN_RECONCILE_INTERVAL_SECONDS 控制，默认 60s；设 0 关闭周期调谐
+            // （此时仍可用 plugin_refresh 工具手动触发）。
+            // Int64.parse 对非法输入抛异常，启动关键路径必须 try 兜住：
+            // 配错一个 .env 值不该让整个宿主起不来，退回默认 60s 即可。
+            var reconcileInterval: Int64 = 60
+            match (getVariable("PLUGIN_RECONCILE_INTERVAL_SECONDS")) {
+                case Some(v) =>
+                    try {
+                        reconcileInterval = Int64.parse(v)
+                    } catch (_: Exception) {
+                        LogUtils.warn(
+                            "[main] invalid PLUGIN_RECONCILE_INTERVAL_SECONDS='${v}', fallback to 60s")
+                        reconcileInterval = 60
+                    }
+                case None => ()
+            }
+            if (reconcileInterval < 0) {
+                LogUtils.warn(
+                    "[main] negative PLUGIN_RECONCILE_INTERVAL_SECONDS=${reconcileInterval}, fallback to 60s")
+                reconcileInterval = 60
+            }
+            if (reconcileInterval > 0) {
+                let reconcileManager = pluginManager
+                // spawn 的 lambda 不允许捕获可变变量（仓颉：capturing mutable variables
+                // needs to be called directly），先固化成不可变局部值再进闭包
+                let intervalSeconds = reconcileInterval
+                LogUtils.info(
+                    "[main] plugin runtime reconcile enabled, interval=${reconcileInterval}s " +
+                    "(new plugin dirs are picked up without restart; manual trigger: plugin_refresh tool)")
+                spawn {
+                    while (true) {
+                        sleep(Duration.second * intervalSeconds)
+                        try {
+                            let r = reconcileManager.reconcile()
+                            if (!r.loaded.isEmpty()) {
+                                LogUtils.info(
+                                    "[main] plugin reconcile loaded new plugin(s): " +
+                                    String.join(r.loaded.toArray(), delimiter: ", "))
+                            }
+                            if (!r.failed.isEmpty()) {
+                                LogUtils.error(
+                                    "[main] plugin reconcile failure(s): " +
+                                    String.join(r.failed.toArray(), delimiter: ", "))
+                            }
+                        } catch (e: Exception) {
+                            // 调谐是观测/加载辅助面，异常不得影响宿主主循环
+                            LogUtils.error("[main] plugin reconcile error: ${e.message}")
+                        }
+                    }
+                }
+            } else {
+                LogUtils.info(
+                    "[main] plugin runtime reconcile DISABLED (PLUGIN_RECONCILE_INTERVAL_SECONDS=0); " +
+                    "use plugin_refresh tool to load new plugins manually")
+            }
         } catch (e: Exception) {
             LogUtils.error("Plugin system startup failed (framework continues): ${e.message}")
         }
@@ -859,6 +1002,33 @@ public class Application {
 /// 技能基目录与 ProgressiveSkillLoader 保持一致：
 ///   - ${SKILL_INSTALL_PATH} 或 ${currentDir}/skills
 ///   - ${currentDir}/src/examples
+/**
+ * T030：把 ChannelService 注入 Agent 通道工具，并设置「允许 Agent 自动切换通道」开关。
+ *
+ * 开关来源：.env 的 LLM_CHANNEL_AUTO_SWITCH（默认 false = 禁止 Agent 自行切默认通道）。
+ * 读取时机：启动装配期（Config 静态 var 已就绪），改 .env 须重启。
+ *
+ * 单独抽成函数的原因：HTTP / WebSocket 两条 init 路径都要调，内容必须一致。
+ */
+func injectChannelAgentTools(): Unit {
+    try {
+        LlmChannelAgentTools.setChannelService(ChannelService.shared())
+        var autoSwitch = "false"
+        if (let Some(v) <- getVariable("LLM_CHANNEL_AUTO_SWITCH")) {
+            if (!v.isEmpty()) { autoSwitch = v }
+        }
+        let enabled = autoSwitch == "true" || autoSwitch == "1" || autoSwitch == "TRUE"
+        LlmChannelAgentTools.setAutoSwitchEnabled(enabled)
+        if (enabled) {
+            LogUtils.warn("LLM_CHANNEL_AUTO_SWITCH 已开启：Agent 工具可自行切换默认大模型通道（写审计 source=agent）")
+        } else {
+            LogUtils.info("LLM_CHANNEL_AUTO_SWITCH 未开启：Agent 工具仅可只读/探测，切换需管理员在界面操作")
+        }
+    } catch (e: Exception) {
+        LogUtils.error("injectChannelAgentTools 失败（通道工具将不可用）：${e.message}")
+    }
+}
+
 func discoverSkillPromptDirs(): ArrayList<String> {
     let currentDir = getWorkingDirectory().toString()
     let skillInstallPath = if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {

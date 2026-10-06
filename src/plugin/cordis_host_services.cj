@@ -9,6 +9,7 @@ import std.math.numeric.Decimal
 import std.time.DateTime
 import std.core.Duration
 import magic.log.LogUtils
+import magic.utils.getEnv
 import magic.app.services.mcp.{McpOpenService, McpCallResult}
 import magic.app.services.uctoo.OperateLogService
 import magic.app.utils.PermissionUtils
@@ -114,7 +115,9 @@ public class CordisHostServices {
                     // 显式环境变量引用
                     if (ref.startsWith("env:")) {
                         let envName = ref[4..ref.size]
-                        match (getVariable(envName)) {
+                        // 用工程封装的 getEnv（magic.utils）：它已按 cjc 版本分叉
+                        // 处理 std.env.getVariable / std.os.getEnv，别再裸调底层 API
+                        match (getEnv(envName)) {
                             case Some(v) =>
                                 if (method == "has") {
                                     return Some(secretHas(!v.isEmpty()))
@@ -145,7 +148,7 @@ public class CordisHostServices {
     /// host.secret 成功取值的统一响应：{ ok: true, value }
     private func secretValue(v: String): JsonValue {
         let m = HashMap<String, JsonValue>()
-        m["ok"] = JsonValue.Bool(true)
+        m["ok"] = JsonValue.Boolean(true)
         m["value"] = JsonValue.String(v)
         JsonValue.Map(m)
     }
@@ -153,15 +156,15 @@ public class CordisHostServices {
     /// host.secret 只判存在：{ ok: true, has }
     private func secretHas(has: Bool): JsonValue {
         let m = HashMap<String, JsonValue>()
-        m["ok"] = JsonValue.Bool(true)
-        m["has"] = JsonValue.Bool(has)
+        m["ok"] = JsonValue.Boolean(true)
+        m["has"] = JsonValue.Boolean(has)
         JsonValue.Map(m)
     }
 
     /// host.secret 失败响应：{ ok: false, error }
     private func secretError(msg: String): JsonValue {
         let m = HashMap<String, JsonValue>()
-        m["ok"] = JsonValue.Bool(false)
+        m["ok"] = JsonValue.Boolean(false)
         m["error"] = JsonValue.String(msg)
         JsonValue.Map(m)
     }

@@ -411,7 +411,8 @@ public class PluginRefreshTool <: PluginToolBase {
             return PluginToolBase.buildError("PluginHostManager not initialized")
         }
         let manager = PluginToolBase.managerOrNull().getOrThrow()
-        var dirs: Array<String> = Array<String>()
+        // Array 是定长数组，没有 add；要先收集就用 ArrayList，传入时再 toArray()
+        let dirs = ArrayList<String>()
         if (let Some(raw) <- args.get("skill_dirs")) {
             if (let Some(arr) <- JsonUtils.asJsonArray(raw)) {
                 for (item in arr.getItems()) {
@@ -424,11 +425,17 @@ public class PluginRefreshTool <: PluginToolBase {
         let result = if (dirs.isEmpty()) {
             manager.reconcile()
         } else {
-            manager.reconcile(dirs)
+            // skillBaseDirectories 是命名参数（`x!: T`），位置传参会报错，
+            // 必须写 `参数名: 值`（同文件 manager.inspect(name: ...) 的写法）
+            manager.reconcile(skillBaseDirectories: dirs.toArray())
         }
         if (!result.failed.isEmpty()) {
+            // 先拼好失败清单再插值：仓颉单行字符串中不允许出现单独的反斜杠，
+            // 若在插值 ${} 里内联带引号的 delimiter 参数就得转义，
+            // 会触发 "unterminated string interpolation"；抽变量可让字符串内零反斜杠。
+            let failedNames = String.join(result.failed.toArray(), delimiter: ", ")
             return PluginToolBase.buildError(
-                "reconcile finished with failures: ${String.join(result.failed.toArray(), delimiter: \", \")} " +
+                "reconcile finished with failures: ${failedNames} " +
                 "(loaded=${result.loaded.size}, skipped=${result.skipped.size})")
         }
         return PluginToolBase.buildOk([

@@ -234,14 +234,21 @@ public class Config {
     /// 避免「找到题目图片却步数耗尽」的中断（2026-09-15 实测教训）。
     public static var longRunningTaskSteps = Config.parseIntEnv("LRT_REACT_STEPS", 100)
 
-    /// WebMCP 聊天链路（/mcp + /events）的主 agent ReAct 步数预算，默认 60。
+    /// WebMCP 聊天链路（/mcp + /events）的主 agent ReAct 步数预算，默认 600。
     ///
     /// 为什么单独一档：聊天是直接面向人的主入口，一次请求往往要「读若干文件 + 探查
     /// 代码 + 写产物」，30 步（normalReactSteps）对探索型任务必撞顶。
     /// 现场：2026-10-02 用户让 agent 撰写赛题研究文档，第 30 步触顶 → 文档只在聊天里
     /// 吐出、没落成 research.md（日志 agentskills-runtime-20261002-002418）。
+    ///
+    /// 2026-10-03 二次放宽到 600（原 60）：runtime 自主推进大型软件工程 spec
+    /// （.codeartsdoer/specs/AgenticSoftwareFactoryHackathon）时，60 步同样触顶 → 任务
+    /// 落 status=5（步数耗尽未闭环）且成果未落盘（日志 agentskills-runtime-20261003-191027）。
+    /// 单个大型软件工程 spec 的「读 spec/改码/写 SQL/核文档」远超 60 步，故再放大一个量级。
+    /// 注意：上限只放不放杀，任务真做完时 ReAct 会自然收敛（产出 <answer> 即退出），
+    /// 不会空转到 600 步；真正的成本护栏是[a] SSE 仍在推则连接不断、[b] 用户可随时中止。
     /// 环境变量可覆盖：`CHAT_REACT_STEPS`。
-    public static var chatReactSteps = Config.parseIntEnv("CHAT_REACT_STEPS", 60)
+    public static var chatReactSteps = Config.parseIntEnv("CHAT_REACT_STEPS", 600)
 
     /**
      * 从环境变量读取 Int64 配置，解析失败回退默认值。

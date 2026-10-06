@@ -86,8 +86,9 @@ public class WebMCPProtocol {
         this._chatModel = chatModel
         
         if (skillManager.isSome() && chatModel.isSome()) {
-            // 步数预算走独立的聊天档（Config.chatReactSteps，默认 60，env CHAT_REACT_STEPS）：
-            // 聊天是主入口，探索型请求（读文件 + 探查 + 写产物）用普通档 30 步必撞顶。
+            // 步数预算走独立的聊天档（Config.chatReactSteps，默认 600，env CHAT_REACT_STEPS）：
+            // 聊天是主入口，探索型请求（读文件 + 探查 + 写产物）用普通档 30 步必撞顶；
+            // 自主推进大型软件工程 spec 时 60 步也不够（见 Config.chatReactSteps 注释）。
             let executor = ReactExecutor(loop: Config.chatReactSteps)
             
             // 从数据库查询 MAIN agent
@@ -1203,6 +1204,35 @@ public class WebMCPProtocol {
      * 处理 completion/complete 请求
      * MCP 协议标准方法，用于完成对话并返回最终响应
      */
+    /**
+     * T036 / REQ-DMC-021：解析「聊天请求级」通道指定。
+     *
+     * 用户端聊天框切换器（design.md §9.1）把用户选中的通道随**每条请求**显式带来：
+     *   params.model = "<channel>:<modelId>"
+     * 优先级：请求级指定 > Agent `def.model` > 全局默认通道。
+     *
+     * 严格语义（V6）：必须是 `provider:model` 形式；不带 ":" 视为非法并忽略，**不猜通道**。
+     * 无状态：只在本次请求生效，服务端不建会话态；进行中流式会话按 drain 语义不受影响（V4）。
+     * 解析失败只降级、不报错：沿用原通道继续聊天，不让「切换器选错通道」把会话打挂。
+     */
+    private func resolveRequestChatModel(spec: String): Option<ChatModel> {
+        if (spec.isEmpty()) {
+            return None<ChatModel>
+        }
+        if (!spec.contains(":")) {
+            LogUtils.warn("WebMCP 请求级 model 已忽略（非 provider:model 语义，不猜通道）：${spec}")
+            return None<ChatModel>
+        }
+        try {
+            let m = ModelManager.createChatModel(spec)
+            LogUtils.info("WebMCP 请求级通道生效：${spec}")
+            return Some(m)
+        } catch (e: Exception) {
+            LogUtils.error("WebMCP 请求级通道解析失败，沿用默认通道：${spec}，原因：${e.message}")
+            return None<ChatModel>
+        }
+    }
+
     private func handleCompletionComplete(obj: JsonObject): String {
         let requestId = obj.get("id")
 
@@ -1213,6 +1243,7 @@ public class WebMCPProtocol {
         var userMessage = ""
         var systemMessage = ""  // 新增：存储 system 角色的消息内容
         var isStream = true  // 默认流式响应
+        var requestModelSpec = ""  // T036：请求级通道指定（"<channel>:<modelId>"）
 
         if (params.isSome()) {
             let paramsVal = params.getOrThrow()
@@ -1225,6 +1256,15 @@ public class WebMCPProtocol {
                     let streamVal = streamParam.getOrThrow()
                     if (streamVal is JsonBool) {
                         isStream = streamVal.asBool().getValue()
+                    }
+                }
+
+                // T036 / REQ-DMC-021：聊天框切换器随请求带来的通道选择
+                let modelParam = paramsObj.get("model")
+                if (modelParam.isSome()) {
+                    let modelVal = modelParam.getOrThrow()
+                    if (modelVal is JsonString) {
+                        requestModelSpec = modelVal.asString().getValue()
                     }
                 }
 
@@ -1272,6 +1312,9 @@ public class WebMCPProtocol {
         }
 
         LogUtils.debug("WebMCP completion/complete user message: ${userMessage}")
+
+        // T036：请求级通道解析（一次解析，agent 分支与降级分支共用）
+        let requestChatModel = resolveRequestChatModel(requestModelSpec)
 
         // 同步处理请求，返回完整响应
         var responseContent = "WebMCP server received your message."
@@ -1337,6 +1380,11 @@ public class WebMCPProtocol {
                         }
                     }
 
+                    // T036 / REQ-DMC-021：请求级通道覆盖（优先级 请求级 > def.model > 全局默认）
+                    if (let Some(m) <- requestChatModel) {
+                        agent.model = m
+                    }
+
                     // v16 实时思维链：初始化SSEEventBridge，在ReAct执行过程中实时推送reasoning到SSE
                     SSEEventBridge.instance.initialize(_sseConnectionManager, _sessionId)
 
@@ -1365,8 +1413,13 @@ public class WebMCPProtocol {
                             AgentRuntimeBridge.instance.syncToDatabase(agent.name, agent)
                         } catch (_: Exception) {}
                     }
-                } else if (let Some(cm) <- _chatModel) {
+                } else if (_chatModel.isSome()) {
                     // 降级到直接调用 ChatModel（不支持技能）
+                    var cm = _chatModel.getOrThrow()
+                    // T036：无 agent 的降级分支同样尊重请求级通道指定
+                    if (let Some(m) <- requestChatModel) {
+                        cm = m
+                    }
                     let request = ChatRequest([Message(MessageRole.User, userMessage)], temperature: None, stop: None, tools: [])
                     let chatResponse = cm.create(request)
                     responseContent = chatResponse.message.content
@@ -1442,6 +1495,7 @@ public class WebMCPProtocol {
         var userMessage = ""
         var systemMessage = ""
         var isStream = true
+        var requestModelSpec = ""  // T036：请求级通道指定（"<channel>:<modelId>"）
 
         if (params.isSome()) {
             let paramsVal = params.getOrThrow()
@@ -1453,6 +1507,15 @@ public class WebMCPProtocol {
                     let streamVal = streamParam.getOrThrow()
                     if (streamVal is JsonBool) {
                         isStream = streamVal.asBool().getValue()
+                    }
+                }
+
+                // T036 / REQ-DMC-021：聊天框切换器随请求带来的通道选择
+                let modelParam = paramsObj.get("model")
+                if (modelParam.isSome()) {
+                    let modelVal = modelParam.getOrThrow()
+                    if (modelVal is JsonString) {
+                        requestModelSpec = modelVal.asString().getValue()
                     }
                 }
 
@@ -1520,6 +1583,12 @@ public class WebMCPProtocol {
         }
 
         let agent = _agent.getOrThrow()
+
+        // T036 / REQ-DMC-021：请求级通道覆盖（优先级 请求级 > def.model > 全局默认）
+        let requestChatModel = resolveRequestChatModel(requestModelSpec)
+        if (let Some(m) <- requestChatModel) {
+            agent.model = m
+        }
 
         // 合并系统提示词：前端 system 消息 + 后端技能知识库
         let backendSkillPrompt = buildAgentSystemPrompt()

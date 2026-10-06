@@ -1,0 +1,24 @@
+[package]
+  cjc-version = "1.1.3"
+  compile-option = "--dy-std -Woff all"
+  description = "L3 进程隔离轨插件 llm_channel_tokendance（独立 executable 工程）"
+  link-option = ""
+  name = "skill_llm_channel_tokendance"
+  output-type = "executable"
+  src-dir = "src"
+  target-dir = "target"
+  version = "1.0.0"
+  package-configuration = {}
+  scripts = {}
+
+[dependencies]
+  "ystyle::cordis_plugin" = { path = "../../libs/cordis-cj/cordis_plugin" }
+  "ystyle::cordis_core" = { path = "../../libs/cordis-cj/cordis_core" }
+  "jsonvalue" = { path = "../../libs/jsonvalue" }
+  "ystyle::jsonrpc" = { path = "../../libs/jsonrpc" }
+
+# stdx 的 DLL 运行时定位。缺这段编译能过，但**运行时找不到 libcrypto-3-x64.dll 等 DLL**
+# 而起不来（症状是插件进程秒退，宿主侧只看到「通道不可用」）。
+# 插件链（cordis-cj）依赖 stdx，必须显式声明。
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["../../libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]

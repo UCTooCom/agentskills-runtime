@@ -1,0 +1,157 @@
+# github 插件清单（plugingen process 轨生成）
+# 保护区外为二开区：停用插件（enabled: false）、调 order、改 command 路径请改这里，重新生成不会被覆盖。
+name: github
+version: 1.0.0
+mode: process
+command: ./skills/github/target/release/bin/skill_github.exe
+enabled: true
+order: 10
+autoRestart: true
+#region AutoCreateCode
+# ↓ 本行以下由 plugingen 自动维护，重新生成会覆盖；表清单与路由随 --tables 累积刷新。
+description: L3 进程隔离轨插件 github（10 张表）
+tableWhitelist:
+  - issue_comment
+  - milestone
+  - label
+  - pull_request
+  - pr_review
+  - branch_protection
+  - repository
+  - branch
+  - commit
+  - repository_file
+routes:
+  # issue_comment CRUD
+  - method: POST
+    path: /api/v1/uctoo/issue_comment/add
+  - method: POST
+    path: /api/v1/uctoo/issue_comment/edit
+  - method: POST
+    path: /api/v1/uctoo/issue_comment/del
+  - method: POST
+    path: /api/v1/uctoo/issue_comment/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/issue_comment/:id
+  - method: GET
+    path: /api/v1/uctoo/issue_comment/:limit/:page
+  # milestone CRUD
+  - method: POST
+    path: /api/v1/uctoo/milestone/add
+  - method: POST
+    path: /api/v1/uctoo/milestone/edit
+  - method: POST
+    path: /api/v1/uctoo/milestone/del
+  - method: POST
+    path: /api/v1/uctoo/milestone/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/milestone/:id
+  - method: GET
+    path: /api/v1/uctoo/milestone/:limit/:page
+  # label CRUD
+  - method: POST
+    path: /api/v1/uctoo/label/add
+  - method: POST
+    path: /api/v1/uctoo/label/edit
+  - method: POST
+    path: /api/v1/uctoo/label/del
+  - method: POST
+    path: /api/v1/uctoo/label/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/label/:id
+  - method: GET
+    path: /api/v1/uctoo/label/:limit/:page
+  # pull_request CRUD
+  - method: POST
+    path: /api/v1/uctoo/pull_request/add
+  - method: POST
+    path: /api/v1/uctoo/pull_request/edit
+  - method: POST
+    path: /api/v1/uctoo/pull_request/del
+  - method: POST
+    path: /api/v1/uctoo/pull_request/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/pull_request/:id
+  - method: GET
+    path: /api/v1/uctoo/pull_request/:limit/:page
+  # pr_review CRUD
+  - method: POST
+    path: /api/v1/uctoo/pr_review/add
+  - method: POST
+    path: /api/v1/uctoo/pr_review/edit
+  - method: POST
+    path: /api/v1/uctoo/pr_review/del
+  - method: POST
+    path: /api/v1/uctoo/pr_review/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/pr_review/:id
+  - method: GET
+    path: /api/v1/uctoo/pr_review/:limit/:page
+  # branch_protection CRUD
+  - method: POST
+    path: /api/v1/uctoo/branch_protection/add
+  - method: POST
+    path: /api/v1/uctoo/branch_protection/edit
+  - method: POST
+    path: /api/v1/uctoo/branch_protection/del
+  - method: POST
+    path: /api/v1/uctoo/branch_protection/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/branch_protection/:id
+  - method: GET
+    path: /api/v1/uctoo/branch_protection/:limit/:page
+  # repository CRUD
+  - method: POST
+    path: /api/v1/uctoo/repository/add
+  - method: POST
+    path: /api/v1/uctoo/repository/edit
+  - method: POST
+    path: /api/v1/uctoo/repository/del
+  - method: POST
+    path: /api/v1/uctoo/repository/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/repository/:id
+  - method: GET
+    path: /api/v1/uctoo/repository/:limit/:page
+  # branch CRUD
+  - method: POST
+    path: /api/v1/uctoo/branch/add
+  - method: POST
+    path: /api/v1/uctoo/branch/edit
+  - method: POST
+    path: /api/v1/uctoo/branch/del
+  - method: POST
+    path: /api/v1/uctoo/branch/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/branch/:id
+  - method: GET
+    path: /api/v1/uctoo/branch/:limit/:page
+  # commit CRUD
+  - method: POST
+    path: /api/v1/uctoo/commit/add
+  - method: POST
+    path: /api/v1/uctoo/commit/edit
+  - method: POST
+    path: /api/v1/uctoo/commit/del
+  - method: POST
+    path: /api/v1/uctoo/commit/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/commit/:id
+  - method: GET
+    path: /api/v1/uctoo/commit/:limit/:page
+  # repository_file CRUD
+  - method: POST
+    path: /api/v1/uctoo/repository_file/add
+  - method: POST
+    path: /api/v1/uctoo/repository_file/edit
+  - method: POST
+    path: /api/v1/uctoo/repository_file/del
+  - method: POST
+    path: /api/v1/uctoo/repository_file/empty-recycle-bin
+  - method: GET
+    path: /api/v1/uctoo/repository_file/:id
+  - method: GET
+    path: /api/v1/uctoo/repository_file/:limit/:page
+#endregion AutoCreateCode
+# ── 二次开发区 ──
+# 需要追加自定义路由 / 额外白名单表时写在本区（在 routes 之外另起键），重新生成会保留。

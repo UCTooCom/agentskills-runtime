@@ -1,0 +1,36 @@
+# llm_channel_tokendance —— L3 进程隔离轨的大模型通道适配器插件（T024）
+#
+# 定位：protocol = "plugin:llm_channel_tokendance" 的通道由本插件实现。
+#   宿主侧（AdapterFactory / PluginChatModel / ChannelProbe）只保留
+#   「跨进程调用 + 熔断 + 回退」骨架，协议细节与密钥使用都在本进程内完成。
+#   契约：docs/ref/llm-adapter-contract.md（adapter.describe / chat / chatStream / probe）
+#
+# 骨架由确定性生成器产出（cjpm run --skip-build --name magic.plugin.tools.plugingen
+#   --run-args "--name llm-channel-tokendance --mode process"），
+#   adapter 相关产物（src/adapter.cj、src/adapter_http.cj）与本文件的二开说明为二次开发。
+#
+# ── 改动本文件前必读 ────────────────────────────────────────────────
+# 1. **stdout 是 JSON-RPC 协议通道**（cordis NewlineFraming 逐行解析）。
+#    插件内任何日志/诊断必须走 stderr；print/println 会破坏协议帧导致握手失败。
+# 2. 插件**不继承**宿主环境变量，命令行也不带密文。
+#    密钥由插件经 ctx.invoke("host.secret","get",{ref:"env:TOKENDANCE_API_KEY"}) 代取。
+# 3. 失败时插件返回 result.ok=false + error 字段，**不抛 JSON-RPC error**，
+#    这样宿主才能把原始错误原文透传到界面。
+name: llm_channel_tokendance
+version: 1.0.0
+mode: process
+# command 相对**宿主工作目录**解析，必须带 skills/{name}/ 前缀
+# （CordisHostManager.resolvePluginCommand 先试 `${cwd}/${command}`，
+#   不存在时才按 `skills/{name}/` 前缀兜底；写全前缀可避免依赖兜底分支）。
+command: ./skills/llm_channel_tokendance/target/release/bin/skill_llm_channel_tokendance.exe
+description: L3 大模型通道适配器插件（Tokendance 专用网关，模式B protocol=plugin:llm_channel_tokendance）
+enabled: true
+# 排在 CRUD 类插件之后：适配器不提供 HTTP 路由，只提供 adapter.* 服务
+order: 30
+autoRestart: true
+# 适配器不碰数据库（不出网给宿主写数据），无表白名单
+tableWhitelist: []
+# 适配器**不提供 HTTP 路由**：宿主通过 protocol=plugin:<name> 走 stdio JSON-RPC
+# 调用 adapter.* 四个方法，不经 ExternalPluginRouteGateway。
+# 如需 HTTP 端点（如回调 webhook）再在下方追加 routes:。
+# ⚠️ registerPluginRoutes 非幂等：重复注册会让路由表膨胀，改动路由后须核对注册次数。

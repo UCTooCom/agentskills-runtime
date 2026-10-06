@@ -17,6 +17,7 @@ import magic.model.siliconflow.SiliconflowImageModel
 import magic.model.zhipuai.ZhipuAIImageModel
 import magic.model.stepfun.{StepFunChatModel, StepFunEmbeddingModel, StepFunImageModel}
 import magic.model.tokendance.{TokendanceChatModel, TokendanceEmbeddingModel}
+import magic.model.channel.{ChannelRegistry, AdapterFactory, ModelInstanceCache, ModelRouter}
 import std.convert.*
 import std.collection.HashMap
 import std.collection.{filter, collectArray}
@@ -98,6 +99,11 @@ private func getAllProviderNames(): Array<String> {
 }
 
 private func checkProvider(provider: String): Bool {
+    // 注册表优先（DB 通道 + 内置种子兜底）；注册表未加载时退化为静态常量表（离线兜底）。
+    // 经 ModelRouter.hasProvider 统一判定，使 ModelRouter 成为选路解析的单一入口（T006 去死代码）。
+    if (ModelRouter.shared().hasProvider(provider)) {
+        return true
+    }
     return DEFAULT_PROVIDER_MAP.keys().contains(provider)
 }
 
@@ -234,6 +240,15 @@ public struct ModelManager {
             return fn()
         }
         let modelConfig = parseModel(modelName, kind: "chat")
+        // Phase 0：优先走注册表（DB/种子通道）构造实例，支持热切换与密钥托管；
+        // 注册表无该 provider（离线兜底）时退回旧 DEFAULT_PROVIDER_MAP 直连（保留 env 覆盖逃生舱）
+        // Phase 2：经 ModelRouter 解析（等价于原 ChannelRegistry.getChannel，但作为选路单一入口，
+        // 为后续多候选 / 能力过滤 / 策略路由预留落点；T006 去死代码）。
+        if (let Some(ch) <- ModelRouter.shared().resolveChannel(modelConfig.provider)) {
+            return ModelInstanceCache.shared().getOrBuild(ch.code, modelConfig.name, ch.revision) {
+                => AdapterFactory.buildChatModel(ch, modelConfig.name)
+            }
+        }
         return ModelManager.createChatModel(modelConfig)
     }
 
@@ -263,6 +278,9 @@ public struct ModelManager {
             return fn()
         }
         let modelConfig = parseModel(modelName, kind: "embedding")
+        if (let Some(ch) <- ChannelRegistry.shared().getChannel(modelConfig.provider)) {
+            return AdapterFactory.buildEmbeddingModel(ch, modelConfig.name)
+        }
         return ModelManager.createEmbeddingModel(modelConfig)
     }
 
@@ -295,6 +313,9 @@ public struct ModelManager {
             return fn()
         }
         let modelConfig = parseModel(modelName, kind: "image")
+        if (let Some(ch) <- ChannelRegistry.shared().getChannel(modelConfig.provider)) {
+            return AdapterFactory.buildImageModel(ch, modelConfig.name)
+        }
         return ModelManager.createImageModel(modelConfig)
     }
 

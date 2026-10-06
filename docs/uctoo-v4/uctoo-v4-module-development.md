@@ -1127,18 +1127,18 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --ta
 
 从 `db_info` 表读取表结构信息，自动生成插件 CRUD 模块（PO/DAO/Service/Controller/Route 五层）以及聚合入口 Plugin、聚合路由 Route 等公共产物，输出到 `skills/{name}/`。与 `crudgen` 同构，但产物落在插件轨（不触碰宿主 `AutoRouteConfig.cj`）。
 
-**本次新增能力（sync 内嵌轨）**：
+**本次新增能力（sync 内嵌轨与 L3 process 轨均已支持）**：
 
 1. **一次生成多表**：`--tables a,b,c` 一次生成多张表的五层 CRUD 产物，公共产物正确生成并衔接。
 2. **同名 + 不同表追加**：再次生成传入相同插件名、不同表名时，新表 CRUD 正常生成，公共产物基于「历史表清单 + 本次请求表」去重保序合并后整体重渲，旧表信息与二次开发保留、新表加入、表名不重复。
 3. **同名 + 相同表只覆盖保护区**：再次生成传入相同插件名、相同表名时，只覆盖该表各层 `//#region AutoCreateCode ... //#endregion AutoCreateCode` 区间内的自动生成内容，区间外二次开发保留；公共产物表清单不变（不含重复项）。
 
-> 实现要点：聚合路由文件 `src/{PascalName}Route.cj` 内含 `// table:` 标记行用于还原历史表清单；宿主每插件仅注册单一 `entry`/`routeClass`，故同名多表插件须产出聚合入口 + 聚合路由。多表/累积/保护区能力**仅 sync 内嵌轨支持**，`--mode process` 仍按单表生成。
+> 实现要点：聚合路由文件 `src/{PascalName}Route.cj` 内含 `// table:` 标记行用于还原历史表清单；宿主每插件仅注册单一 `entry`/`routeClass`，故同名多表插件须产出聚合入口 + 聚合路由。多表/累积/保护区能力在 **sync 内嵌轨与 L3 process 轨均已支持**（process 轨多表共用一个 `handlers.cj`，表名作为运行时参数，范式对齐已验证的 `long-running-task` 插件）；`--mode dylib` 仍为单表。
 
 **运行命令**：
 
 ```bash
-# 单表生成（sync 轨，默认）
+# 单表生成（默认 L3 process 轨；加 --mode sync 退回 sync 内嵌轨）
 cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name entity --db uctoo --table entity"
 
 # 一次生成多表
@@ -1162,7 +1162,7 @@ cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name myt
 | `--db <数据库名>` | 表驱动模式：数据库名（读 db_info 表结构） | 表驱动时必填 |
 | `--table <表名>` | 单张表名（与 `--tables` 二选一，优先级低于 `--tables`） | 与 `--tables` 二选一 |
 | `--tables <表名列表>` | 逗号分隔的多张表名（多表生成与累积） | 与 `--table` 二选一 |
-| `--mode <轨>` | 加载轨：sync（缺省）/ dylib / process | 否 |
+| `--mode <轨>` | 加载轨：process（缺省）/ sync / dylib | 否 |
 | `--blank` | 生成空白插件骨架（跳过表结构） | 否 |
 | `--help` / `-h` | 显示帮助信息 | 否 |
 

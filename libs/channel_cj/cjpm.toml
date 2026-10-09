@@ -5,7 +5,7 @@
   version = "1.0.0"
   target-dir = ""
   output-type = "static"
-  compile-option = "-Woff unused"
+  compile-option = "-Woff unused -O2"
   override-compile-option = ""
   link-option = ""
   package-configuration = {}

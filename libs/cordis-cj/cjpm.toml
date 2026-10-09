@@ -2,7 +2,7 @@
   members = ["cordis_core", "cordis_host", "cordis_plugin", "cordis_examples", "cordis_tests"]
   build-members = ["cordis_core", "cordis_host", "cordis_plugin", "cordis_examples", "cordis_tests"]
   test-members = ["cordis_core", "cordis_host", "cordis_plugin", "cordis_examples", "cordis_tests"]
-  compile-option = ""
+  compile-option = "-O2"
   override-compile-option = ""
   link-option = ""
   target-dir = ""

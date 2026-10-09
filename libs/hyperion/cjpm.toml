@@ -6,7 +6,7 @@
   name = "hyperion"
   description = "Hyperion: A Tcp Transport Implementation"
   version = "3.0.0"
-  compile-option = "-Woff all"
+  compile-option = "-Woff all -O2"
   link-option = ""
   output-type = "static"
   src-dir = "src"

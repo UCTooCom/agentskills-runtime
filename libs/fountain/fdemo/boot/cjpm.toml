@@ -7,7 +7,7 @@
   src-dir = ""
   output-type = "dynamic"
   compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  override-compile-option = "--dy-std -O2"
   #compile-option = "-g -O0 --dy-std"
   #override-compile-option = "-g -O0 --dy-std"
   link-option = ""

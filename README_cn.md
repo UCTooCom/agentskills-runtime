@@ -1,7 +1,7 @@
 # AgentSkills Runtime ：AI驱动开发框架
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.27-blue.svg)](https://github.com/UCTooCom/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.29-blue.svg)](https://github.com/UCTooCom/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## 项目简介
@@ -94,7 +94,7 @@ AgentSkills Runtime 是一个全面的框架，用于构建和执行 AI 智能�
   4. 电子表格工作台插件 `apps/agentskills-runtime/skills/sheets`
   5. 可视化管理前端 https://atomgit.com/UCToo/web-admin
 - 项目文档（需求规格说明书：组件定位、领域术语、角色边界、DFX 约束、核心能力、数据模型等）：`apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon/spec.md`
-- 作品演示视频：（待补充）
+- 作品演示视频：官网 https://www.uctoo.com 可直接观看产品介绍视频
 - 可直接体验项目的链接（可选）：https://demo.uctoo.com
 
 > **参赛作品**：金融行业应用 Agent 黑客松（2026/07/27 - 2026/08/08）

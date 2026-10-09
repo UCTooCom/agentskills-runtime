@@ -27,8 +27,8 @@
   f_bean = { path = "./libs/fountain/f_bean" }
   charset4cj = { path = "./libs/charset4cj" }
   jwt4cj = { path = "./libs/jwt4cj", compile-option = "-Woff unused -O2" }
-  logcj = { path = "./libs/logcj", compile-option = "-Woff unused" }
-  pgsql = { path = "./libs/pgsql-driver", compile-option = "-Woff unused" }
+  logcj = { path = "./libs/logcj", compile-option = "-Woff unused -O2" }
+  pgsql = { path = "./libs/pgsql-driver", compile-option = "-Woff unused -O2" }
 #  redis_sdk = { path = "../CangjieMagic/resource/TPC/redis-sdk"}
 #  pbkdf2 = { path = "../CangjieMagic/resource/TPC/pbkdf2" }
 #  hicrypto = { path = "../CangjieMagic/resource/TPC/hicrypto" }
@@ -40,8 +40,8 @@
   json4cj = { path = "./libs/json4cj" }
   cos = { path = "./libs/cos-sdk" }
   cj_mail = { path = "./libs/cj_mail" }
-  activemq4cj = { path = "./libs/activemq4cj", compile-option = "-Woff unused" }
-  hyperion = { path = "./libs/hyperion", compile-option = "-Woff unused" }
+  activemq4cj = { path = "./libs/activemq4cj", compile-option = "-Woff unused -O2" }
+  hyperion = { path = "./libs/hyperion", compile-option = "-Woff unused -O2" }
   http_lib = { path = "./libs/http_lib", output-type = "static" }
   quic_cj = { path = "./libs/quic_cj", output-type = "static" }
   kaca_json = { path = "./libs/kaca_json", output-type = "static" }
@@ -56,7 +56,7 @@
   # -Woff unused：cordis_host 是 vendored 第三方库（organization=ystyle），
   # path-dependency 不继承父级 compile-option，父级的 -Woff 对它无效。
   # plugin_host.cj:642 的 allServicesRegistered 未被调用会持续刷 unused warning。
-  "ystyle::cordis_host" = { path = "./libs/cordis-cj/cordis_host", compile-option = "-Woff unused" }
+  "ystyle::cordis_host" = { path = "./libs/cordis-cj/cordis_host", compile-option = "-Woff unused -O2" }
   # 宿主 L3 代码直接使用 cordis_core 类型（InstanceStatus/DataModel/DataModelNull），
   # 须显式声明为宿主依赖（cordis_host 传递依赖不自动暴露给宿主源码）
   "ystyle::cordis_core" = { path = "./libs/cordis-cj/cordis_core" }
@@ -76,17 +76,17 @@
   lto = "thin"          # 链接时优化: full|thin (thin编译更快,full优化更好)
 
 [target.aarch64-linux-ohos]
-  compile-option = "-B \"${DEVECO_CANGJIE_HOME}/compiler/third_party/llvm/bin\" -B \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/build/linux_ohos_aarch64_llvm/openssl\" --sysroot \"${DEVECO_CANGJIE_HOME}/musl\" --cfg \"ohos=true\""
+  compile-option = "-B \"${DEVECO_CANGJIE_HOME}/compiler/third_party/llvm/bin\" -B \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/build/linux_ohos_aarch64_llvm/openssl\" --sysroot \"${DEVECO_CANGJIE_HOME}/musl\" --cfg \"ohos=true\" -O2"
   [target.aarch64-linux-ohos.bin-dependencies]
     path-option = [ "${AARCH64_LIBS}", "${AARCH64_MACRO_LIBS}" ]
 
 [target.x86_64-linux-ohos]
-  compile-option = "-B \"${DEVECO_CANGJIE_HOME}/compiler/third_party/llvm/bin\" -B \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/x86_64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/x86_64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/build/linux_ohos_x86_64_llvm/openssl\" --sysroot \"${DEVECO_CANGJIE_HOME}/musl\" --cfg \"ohos=true\""
+  compile-option = "-B \"${DEVECO_CANGJIE_HOME}/compiler/third_party/llvm/bin\" -B \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/x86_64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/x86_64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/build/linux_ohos_x86_64_llvm/openssl\" --sysroot \"${DEVECO_CANGJIE_HOME}/musl\" --cfg \"ohos=true\" -O2"
   [target.x86_64-linux-ohos.bin-dependencies]
     path-option = [ "${X86_64_OHOS_LIBS}", "${X86_64_OHOS_MACRO_LIBS}" ]
 
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "--cfg \"ohos=false\""
+  compile-option = "--cfg \"ohos=false\" -O2"
 
 
 # [package.package-configuration."magic.examples.doc_translator"]
@@ -161,17 +161,17 @@
   path-option = ["./libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "--cfg \"ohos=false\""
+  compile-option = "--cfg \"ohos=false\" -O2"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-linux-aarch64-1.1.3.1/linux_aarch64_cjnative/dynamic/stdx"]
 
 [target.x86_64-apple-darwin]
-  compile-option = "--cfg \"ohos=false\""
+  compile-option = "--cfg \"ohos=false\" -O2"
 [target.x86_64-apple-darwin.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-mac-x64-1.1.3.1/darwin_x86_64_cjnative/dynamic/stdx"]
 
 [target.aarch64-apple-darwin]
-  compile-option = "--cfg \"ohos=false\""
+  compile-option = "--cfg \"ohos=false\" -O2"
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["./libs/cangjie-stdx-mac-aarch64-1.1.3.1/darwin_aarch64_cjnative/dynamic/stdx"]
 

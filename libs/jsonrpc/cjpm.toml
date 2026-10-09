@@ -5,7 +5,7 @@
   description = "JSON-RPC 2.0 通用框架"
   version = "0.7.0"
   output-type = "static"
-  compile-option = ""
+  compile-option = "-O2"
   override-compile-option = ""
   link-option = ""
   include = ["src"]

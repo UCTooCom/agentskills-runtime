@@ -9,7 +9,7 @@
   target-dir = ""
   script-dir = ""
   output-type = "static"
-  compile-option = "-Woff unused"
+  compile-option = "-Woff unused -O2"
   override-compile-option = ""
   link-option = ""
   license = ["Apache-2.0"]

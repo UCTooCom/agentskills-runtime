@@ -1,7 +1,7 @@
 # AgentSkills Runtime
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.27-blue.svg)](https://github.com/uctoo/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.29-blue.svg)](https://github.com/uctoo/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## Project Introduction
@@ -94,7 +94,7 @@ Build a domestically developed and controllable AI agent skill runtime, promote 
   4. Spreadsheet Workbench Plugin: `apps/agentskills-runtime/skills/sheets`
   5. Visual Management Frontend: https://atomgit.com/UCToo/web-admin
 - Project Documentation (requirements specification: component positioning, domain terms, roles & boundaries, DFX constraints, core capabilities, data model): `apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon/spec.md`
-- Demo Video: (to be supplemented)
+- Demo Video: The official website https://www.uctoo.com lets you watch the product introduction video directly
 - Live Demo Link (optional): https://demo.uctoo.com
 
 > **Competition Entry**: Financial Industry Agent Hackathon (2026/07/27 - 2026/08/08)

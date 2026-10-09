@@ -3,11 +3,11 @@ cjc-version = "1.1.3"
 name = "compress4cj"
 version = "0.1.0"
 output-type = "static"
-compile-option = "-Woff unused"
+compile-option = "-Woff unused -O2"
 description = "多格式压缩/解压库，支持 DEFLATE/zlib/gzip/brotli/bzip2/LZW"
 
 [profile.build]
 incremental = true
 
 [profile.test.build]
-compile-option = "-Woff unused"
+compile-option = "-Woff unused -O2"

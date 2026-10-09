@@ -7,7 +7,7 @@
   target-dir = ""
   script-dir = ""
   output-type = "executable"
-  compile-option = ""
+  compile-option = "-O2"
   override-compile-option = ""
   link-option = ""
   include = ["src"]

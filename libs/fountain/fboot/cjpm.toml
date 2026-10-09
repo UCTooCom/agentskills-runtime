@@ -27,19 +27,19 @@
   override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.aarch64-unknown-linux-gnu]
   compile-option = "--dy-std -ldl"
-  override-compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl -O2"
 [target.x86_64-w64-mingw32]
   compile-option = "--dy-std -lcrypt32"
-  override-compile-option = "--dy-std -lcrypt32"
+  override-compile-option = "--dy-std -lcrypt32 -O2"
 [target.x86_64-apple-darwin]
   compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  override-compile-option = "--dy-std -O2"
 [target.aarch64-apple-darwin]
   compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  override-compile-option = "--dy-std -O2"
 [target.aarch64-linux-ohos]
   compile-option = "--dy-std -ldl"
-  override-compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl -O2"
 [target.x86_64-linux-ohos]
   compile-option = "--dy-std -ldl"
-  override-compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl -O2"

@@ -6,7 +6,12 @@
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
-  compile-option = "-Woff unused"
+  # 2026-10-06 复核：登录慢根因。
+  # 根 cjpm.toml 里 blowfish 依赖声明的 -O2 会被本包的 override-compile-option="" 剥离，
+  # 导致 bcrypt 实际以 -O0 + 默认 throwing 溢出检查编译（单次校验 6800 万次整数运算 → 数秒~20s）。
+  # 必须在本包自身的 compile-option 里显式带 -O2 与 --int-overflow=wrapping，override-compile-option=""
+  # 的语义是「只用本包 compile-option」，因此下列选项才会真正生效。
+  compile-option = "-Woff unused -O2 --int-overflow=wrapping"
   override-compile-option = ""
   link-option = ""
   package-configuration = {}

@@ -7,7 +7,7 @@
   target-dir = ""
   script-dir = ""
   output-type = "static"
-  compile-option = "-Woff deprecated"
+  compile-option = "-Woff deprecated -O2"
   override-compile-option = ""
   link-option = ""
   package-configuration = {}

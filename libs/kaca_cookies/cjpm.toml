@@ -4,6 +4,8 @@
   description = "Cookie parsing and storage aligned with WPT behavior"
   version = "0.8.0"
   output-type = "static"
+  # 2026-10-06：显式开启 -O2。本包原无 compile-option，会回退到 cjc 默认 -O0。
+  compile-option = "-O2"
 
 [dependencies]
 

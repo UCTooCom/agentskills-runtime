@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 框架插件机制横向对比分析报告 — deepseek-harness / openclaw / hermes-agent / agentskills-runtime</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1a1d24; --ink-2:#4b5563; --ink-3:#8b93a1;
+    --line:#e3e6ec; --line-2:#eef0f4;
+    --dsh:#4D6BFE; --oc:#0ea5a4; --hm:#b45309; --asr:#7c3aed;
+    --ok:#15803d; --warn:#b45309; --bad:#b91c1c; --neutral:#6b7280;
+    --code-bg:#f2f4f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 24px 80px}
+  header.hero{background:linear-gradient(135deg,#1e2330 0%,#2d3446 60%,#3a4260 100%);
+    color:#fff;border-radius:14px;padding:38px 40px;margin-bottom:28px}
+  header.hero h1{margin:0 0 10px;font-size:27px;line-height:1.35;font-weight:650;letter-spacing:.2px}
+  header.hero .sub{color:#c3c9d6;font-size:14.5px;line-height:1.7}
+  header.hero .meta{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px}
+  header.hero .meta span{background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.16);
+    padding:4px 11px;border-radius:20px;font-size:12.5px;color:#e2e6ef}
+  h2{font-size:21px;margin:44px 0 14px;padding-bottom:9px;border-bottom:2px solid var(--line);font-weight:650}
+  h3{font-size:17px;margin:28px 0 10px;font-weight:640;color:#22262f}
+  h4{font-size:15px;margin:18px 0 8px;font-weight:640;color:#333844}
+  p{margin:10px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:22px 24px;margin:16px 0}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  @media(max-width:900px){.grid4,.grid2{grid-template-columns:1fr}}
+  .proj{border:1px solid var(--line);border-radius:10px;padding:16px 17px;background:#fff;border-top:4px solid var(--neutral)}
+  .proj.dsh{border-top-color:var(--dsh)} .proj.oc{border-top-color:var(--oc)}
+  .proj.hm{border-top-color:var(--hm)} .proj.asr{border-top-color:var(--asr)}
+  .proj .nm{font-weight:680;font-size:15px;margin-bottom:3px}
+  .proj .tag{font-size:11.5px;color:#fff;display:inline-block;padding:1px 8px;border-radius:4px;margin-bottom:9px}
+  .proj.dsh .tag{background:var(--dsh)} .proj.oc .tag{background:var(--oc)}
+  .proj.hm .tag{background:var(--hm)} .proj.asr .tag{background:var(--asr)}
+  .proj dl{margin:0;font-size:13px;line-height:1.65}
+  .proj dt{color:var(--ink-3);font-size:11.5px;margin-top:7px}
+  .proj dd{margin:0;color:var(--ink-2)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;margin:12px 0}
+  caption{caption-side:top;text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:7px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#f0f2f6;font-weight:640;font-size:13px;white-space:nowrap}
+  td.dim{font-weight:640;background:#fafbfc;width:150px}
+  tbody tr:nth-child(even) td{background:#fcfcfd}
+  code{background:var(--code-bg);padding:1px 5px;border-radius:4px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-word}
+  pre{background:#1e2330;color:#dfe4ee;padding:14px 16px;border-radius:8px;overflow-x:auto;
+    font-size:12.5px;line-height:1.65;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre code{background:none;color:inherit;padding:0}
+  .ev{font-size:12px;color:var(--ink-3);font-style:normal}
+  .ev code{font-size:11.5px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:11px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .p-ok{background:#e6f6ea;color:var(--ok)} .p-warn{background:#fdf3e3;color:var(--warn)}
+  .p-bad{background:#fdeaea;color:var(--bad)} .p-neu{background:#eef0f4;color:var(--neutral)}
+  .bar{display:flex;align-items:center;gap:8px;margin:3px 0}
+  .bar .lb{width:88px;font-size:12px;color:var(--ink-2);flex-shrink:0}
+  /* 注意：.tr / .fl 是 <span>，默认 display:inline 会让 width/height 失效（进度条全白）。
+     必须显式 display:block —— 这是本节进度条渲染的关键。 */
+  .bar .tr{display:block;flex:1;background:#eef0f4;height:15px;border-radius:8px;overflow:hidden}
+  .bar .fl{display:block;height:100%;border-radius:8px}
+  .bar .vl{width:30px;font-size:11.5px;color:var(--ink-3);text-align:right;flex-shrink:0}
+  .note{border-left:3px solid var(--dsh);background:#f4f6ff;padding:11px 15px;margin:14px 0;
+    border-radius:0 7px 7px 0;font-size:13.5px;color:#333844}
+  .note.w{border-left-color:var(--warn);background:#fdf8ef}
+  .note.g{border-left-color:var(--ok);background:#f2f9f4}
+  .note.r{border-left-color:var(--bad);background:#fdf2f2}
+  ul,ol{margin:9px 0;padding-left:22px} li{margin:5px 0}
+  .small{font-size:13px;color:var(--ink-2)}
+  .ctr{text-align:center}
+  .radar-wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;margin:16px 0}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);
+    font-size:12.5px;color:var(--ink-3);line-height:1.8}
+  .tocbox{background:#fff;border:1px solid var(--line);border-radius:11px;padding:16px 22px;margin:18px 0}
+  .tocbox ol{columns:2;column-gap:34px;margin:6px 0}
+  @media(max-width:700px){.tocbox ol{columns:1}}
+  a{color:var(--dsh)}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--ink-2);margin:8px 0}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Agent 框架插件机制横向对比分析报告</h1>
+  <div class="sub">
+    对 <strong>deepseek-harness（Cordis）</strong>、<strong>openclaw</strong>、<strong>hermes-agent</strong>、<strong>agentskills-runtime</strong>
+    四个同类型开源项目的插件（扩展）机制做源码级对照，输出统一维度下的差异、权衡与可借鉴点。
+  </div>
+  <div class="meta">
+    <span>报告日期：2026-10-17</span>
+    <span>分析方法：源码实证（非文档转述）</span>
+    <span>对比维度：D1–D12 共 12 项</span>
+    <span>证据粒度：文件 / 行号</span>
+  </div>
+</header>
+
+<div class="tocbox">
+  <strong>目录</strong>
+  <ol>
+    <li><a href="#s1">评估方法与公平性声明</a></li>
+    <li><a href="#s2">四项目画像速览</a></li>
+    <li><a href="#s3">十二维度对比总矩阵（D1–D12）</a></li>
+    <li><a href="#s4">分维度深度剖析（D1–D12）</a></li>
+    <li><a href="#s5">隔离模型专题：四种哲学</a></li>
+    <li><a href="#s6">插件开发者支持实操对照</a></li>
+    <li><a href="#s7">成熟度校正评分</a></li>
+    <li><a href="#s8">根因解读：为什么它们如此不同</a></li>
+    <li><a href="#s9">对 ASR 的启示</a></li>
+    <li><a href="#s11">拓展 AgentSkills 标准的定位：拓展 vs 创新</a></li>
+    <li><a href="#s10">附录：证据索引</a></li>
+  </ol>
+</div>
+
+<!-- ============ 1 ============ -->
+<h2 id="s1">1. 评估方法与公平性声明</h2>
+
+<div class="card">
+<h3>1.1 怎么做到的"公平"</h3>
+<p>这四个项目处在<strong>完全不同的成熟度阶段</strong>：openclaw 是已大规模分发的产品（版本号 <code>2026.10.4</code>），
+hermes-agent 标称 <code>1.0.0</code>，deepseek-harness 自我声明为 <code>0.2.1-alpha.3</code> 的"开发者预览"，
+agentskills-runtime 为 <code>v0.0.29</code>。若直接按"现状谁更强"打分，等于用工程投入量碾压设计理念，这不公平。</p>
+
+<p>因此本报告把每个维度拆成<strong>两个独立口径</strong>分别评估：</p>
+<ul>
+  <li><strong>设计完备度（Design）</strong>——机制在架构层面被设计到什么程度，是否覆盖了关键问题。看的是"想到了没有"。</li>
+  <li><strong>落地成熟度（Maturity）</strong>——该机制实际实现到什么程度、是否有生态规模支撑。看的是"做出来了没有"。</li>
+</ul>
+
+<div class="note g">
+<strong>评分口径（1–5 分）</strong><br>
+5 = 该维度业界一流 / 4 = 完整且可用 / 3 = 有方案但有明显缺口 / 2 = 只有雏形 / 1 = 基本缺失。<br>
+每个结论都尽量给出<strong>源码证据</strong>（文件路径 + 关键标识），而非文档转述。文档与代码矛盾时，<strong>以代码为准</strong>。
+</div>
+
+<h3>1.2 证据等级</h3>
+<table>
+  <thead><tr><th>等级</th><th>含义</th><th>本报告中的用法</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill p-ok">A · 源码确证</span></td><td>直接读到实现代码 / 类型定义 / 常量表</td><td>用于所有关键结论</td></tr>
+    <tr><td><span class="pill p-warn">B · 文档确证</span></td><td>官方 README / 设计文档明确陈述</td><td>用于补充设计意图</td></tr>
+    <tr><td><span class="pill p-neu">C · 推断</span></td><td>由结构推断，未直接验证</td><td>仅用于次要描述，会显式标注</td></tr>
+  </tbody>
+</table>
+
+<h3>1.3 边界声明</h3>
+<ul>
+  <li>本报告只看<strong>插件/扩展机制</strong>本身，不评价 Agent 能力、模型适配、UI 等其它方面。</li>
+  <li>四个项目均为 MIT 系许可（ASR 为 MIT，其 package.json 元数据标 ISC，以仓库 LICENSE 为准）。</li>
+  <li><strong>缩写约定</strong>（全文与图表通用）：<strong>DSH</strong> = deepseek-harness，<strong>OC</strong> = openclaw，<strong>HM</strong> = hermes-agent，<strong>ASR</strong> = agentskills-runtime。ASR 即本项目，其缩写取自 <em>A</em>gent<em>S</em>kills-<em>R</em>untime。</li>
+  <li>"插件"在各项目中叫法不同（plugin / extension / bundle / skill / MCP），本报告统一按"<strong>宿主能力的可装卸扩展单元</strong>"来理解，并在各章节标明其原生术语。</li>
+</ul>
+</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="s2">2. 四项目画像速览</h2>
+
+<div class="grid4">
+  <div class="proj dsh">
+    <div class="tag">deepseek-harness（DSH）</div>
+    <div class="nm">Cordis · 一切皆插件</div>
+    <dl>
+      <dt>版本 / 许可</dt><dd>0.2.1-alpha.3 · MIT</dd>
+      <dt>语言 / 运行时</dt><dd>TypeScript · Node</dd>
+      <dt>插件内核</dt><dd>Cordis（Context + Fiber + Service）</dd>
+      <dt>规模</dt><dd>58 个 packages 目录</dd>
+      <dt>核心特征</dt><dd>声明式组合（<code>cordis.yml</code>）+ 依赖注入 + HMR</dd>
+    </dl>
+  </div>
+  <div class="proj oc">
+    <div class="tag">openclaw（OC）</div>
+    <div class="nm">扩展 + 能力契约</div>
+    <dl>
+      <dt>版本 / 许可</dt><dd>2026.10.4 · MIT</dd>
+      <dt>语言 / 运行时</dt><dd>TypeScript · Node（含 Rust crates）</dd>
+      <dt>插件内核</dt><dd><code>src/plugins</code> + plugin-sdk 契约包</dd>
+      <dt>规模</dt><dd><strong>180 个 extensions</strong></dd>
+      <dt>核心特征</dt><dd>清单能力声明 + 安装期能力同意（consent）</dd>
+    </dl>
+  </div>
+  <div class="proj hm">
+    <div class="tag">hermes-agent（HM）</div>
+    <div class="nm">Python 插件 + 双隔离档</div>
+    <dl>
+      <dt>版本 / 许可</dt><dd>1.0.0 · MIT</dd>
+      <dt>语言 / 运行时</dt><dd>Python（+ Electron 桌面端）</dd>
+      <dt>插件内核</dt><dd><code>PluginManager</code> + <code>PluginHost</code></dd>
+      <dt>规模</dt><dd>65 个 optional-mcps 目录</dd>
+      <dt>核心特征</dt><dd>可切换 in-process / host 进程隔离</dd>
+    </dl>
+  </div>
+  <div class="proj asr">
+    <div class="tag">agentskills-runtime（ASR）</div>
+    <div class="nm">三轨插件 + Skill 融合</div>
+    <dl>
+      <dt>版本 / 许可</dt><dd>v0.0.29 · MIT</dd>
+      <dt>语言 / 运行时</dt><dd>仓颉（Cangjie）· 原生二进制</dd>
+      <dt>插件内核</dt><dd><code>magic.plugin</code> + cordis-cj（L3）</dd>
+      <dt>规模</dt><dd>51 个 skills 目录</dd>
+      <dt>核心特征</dt><dd>Sync / Dylib / Process 三轨并存</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="note">
+<strong>先说一个容易误判的点：</strong>四个项目的"扩展单元"不是同一种东西。
+deepseek-harness 的 bundle 是<strong>运行时可装卸的 npm 包</strong>；
+openclaw 的 extension 多为<strong>随产品分发的内置集成</strong>（180 个，含 anthropic/openai 等 provider），第三方插件走另一条"外部代码插件"通道；
+hermes 的 plugin 是 <strong>Python 包 / 目录</strong>，另有 65 个 MCP 目录是<strong>审批制的连接器目录</strong>而非插件；
+agentskills-runtime 的 plugin 与 <strong>SKILL.md 技能</strong>是"三维一体"融合的。把它们都叫"插件"直接比数量会失真，本报告按机制比，不按数量比。
+</div>
+
+<!-- ============ 3 ============ -->
+<h2 id="s3">3. 十二维度对比总矩阵（D1–D12）</h2>
+
+<div class="card">
+<p class="small">读法：每格先给结论，<span class="ev">斜体灰字</span>为源码证据。D1–D12 详见 <a href="#s4">第 4 节</a>；其中 D11（开发者支持）与 D12（原生智能 / 自进化）为本版新增。</p>
+<table>
+  <thead>
+    <tr><th style="width:130px">维度</th><th>deepseek-harness</th><th>openclaw</th><th>hermes-agent</th><th>agentskills-runtime</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="dim">D1 插件形态</td>
+      <td>导出 <code>apply(ctx)</code> 的模块；函数 / 对象 / Service 类三种<span class="ev"><br>docs/cordis-tutorial/01-first-plugin.md</span></td>
+      <td>npm 包 + <code>openclaw.plugin.json</code> 清单<span class="ev"><br>extensions/a2a/openclaw.plugin.json</span></td>
+      <td>Python 包（<code>__init__.py</code> + <code>register()</code>）或目录 + <code>plugin.yaml</code><span class="ev"><br>hermes_cli/plugins.py:6</span></td>
+      <td>仓颉包 + <code>plugin.yaml</code>（三轨 mode）+ <code>SKILL.md</code><span class="ev"><br>src/plugin/plugin_config.cj:23</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D2 清单 / 版本契约</td>
+      <td><code>cordis.yml</code> 组合 + peer deps 校验 + <code>compatibility.json</code> 版本豁免<span class="ev"><br>plugin-manager/README.md:69-75</span></td>
+      <td>package.json 内 <code>openclaw.compat.pluginApi</code> + <code>openclaw.build.openclawVersion</code> 必填<span class="ev"><br>plugin-package-contract/src/index.ts:29-32</span></td>
+      <td><code>plugin.yaml</code> + <code>requires_hermes</code> 版本范围 + 依赖探测<span class="ev"><br>plugin_validate.py:115,576</span></td>
+      <td><code>plugin.yaml</code>（name/className/mode/order/config/env…）<span class="ev"><br>plugin_config.cj:72-112</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D3 发现 / 加载</td>
+      <td>Loader 读 yml → 模块说明符解析 → 并发挂载<span class="ev"><br>01-first-plugin.md:31</span></td>
+      <td>discovery 扫描 + activation planner 规划 + 懒激活<span class="ev"><br>src/plugins/activation-planner.ts:76</span></td>
+      <td>入口组 <code>hermes_agent.plugins</code> + 目录扫描 + 后台发现<span class="ev"><br>plugins.py:6,1774</span></td>
+      <td>去中心化扫描 <code>plugin.yaml</code> + <code>@PluginAnnotation</code> 反射锚点防 LTO 剪除；运行时 <code>ClassTypeInfo.get → findAnnotation&lt;PluginAnnotation&gt; → ConstructorInfo.apply</code> 实例化，零配置注册、热插拔<span class="ev"><br>plugin_discovery_service.cj:29；plugin_loader.cj:48-61；generated_anchors.cj:2</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D4 隔离模型</td>
+      <td><span class="pill p-bad">进程内</span>（文档明示）；动态定义跑 <code>node:vm</code> realm<span class="ev"><br>plugin-manager/README.md:31；cordis-host-runner/README.md</span></td>
+      <td><span class="pill p-warn">进程内为主</span>；有 worker-runtime 任务池<span class="ev"><br>packages/worker-runtime/src</span></td>
+      <td><span class="pill p-ok">双档可切换</span> <code>in_process</code> / <code>host</code>（每 profile 一进程）<span class="ev"><br>plugin_isolation.py:28-30</span></td>
+      <td><span class="pill p-ok">三轨</span> Sync（编译进宿主）/ Dylib（<code>PackageInfo.load</code>）/ Process（子进程 stdio）<span class="ev"><br>plugin_config.cj:14-26</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D5 通信 / IPC</td>
+      <td>同进程直接调用；无跨进程 IPC 需求</td>
+      <td>同进程 facade 调用；gateway-protocol 用于外部<span class="ev"><br>packages/gateway-protocol</span></td>
+      <td>Channel + generation 代次 + 对象代理（ref proxy）<span class="ev"><br>plugin_host.py:307-447</span></td>
+      <td>JSON-RPC over stdio（L3）<span class="ev"><br>cordis_host_manager.cj:24,32</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D6 生命周期 / DI</td>
+      <td><span class="pill p-ok">最强</span> Fiber 状态机 + <code>inject</code> 声明依赖 + effect 逆序清理 + HMR<span class="ev"><br>docs/cordis-api/fiber.md</span></td>
+      <td>activation-context / lifecycle / registry<span class="ev"><br>src/plugins/activation-context.ts</span></td>
+      <td>load/unload 回调 + 超时保护 + 代次重启<span class="ev"><br>plugins.py:413,1106</span></td>
+      <td>状态机（register/unregister/snapshot/restore）+ 事件总线 emit/waterfall<span class="ev"><br>plugin_registry.cj:39-160</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D7 扩展点覆盖</td>
+      <td><strong>一切皆插件</strong>：工具/服务/UI/命令/channel 全走同一 ctx</td>
+      <td>channel / provider / tool / hook / skill / theme / model catalog…清单声明式</td>
+      <td>21 个 <code>register_*</code>：tool/hook/middleware/platform/memory/CLI…<span class="ev"><br>plugins.py（21 处）</span></td>
+      <td>Service / Route / Skill / MCP；HTTP 路由外挂；<strong>一切皆技能</strong>（plugin + SKILL.md 三维一体，业界首创将开发框架插件机制与智能体技能机制有机融合，并拓展 AgentSkills 开放标准支持仓颉静态二进制发布）+ <strong>多技能并行执行</strong>（<code>src/skill/parallel</code>）<span class="ev"><br>skill_bridge.cj:57-92；src/skill/parallel</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D8 权限 / 安全</td>
+      <td>审批门（<code>danger-full-access</code>）+ sandbox 模式；<strong>自述未做安全审计</strong><span class="ev"><br>SAFETY.md:3</span></td>
+      <td><span class="pill p-ok">能力同意（consent）</span>：安装前比对声明面 + reviewToken 确认<span class="ev"><br>capability-consent.ts:135</span></td>
+      <td><span class="pill p-ok">能力探针</span>：实际 import 探测注册项 vs 声明 diff；内置工具冲突检测<span class="ev"><br>plugin_validate.py:388-440</span></td>
+      <td><code>tableWhitelist</code> 表级白名单（声明式）<span class="ev"><br>plugin_config.cj:106-108</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D9 分发 / 生态治理</td>
+      <td><span class="pill p-ok">最完整</span>：多 registry 回退、官方 catalog、build script 审批、失败回滚<span class="ev"><br>plugin-manager/README.md:56,155-162</span></td>
+      <td>ClawHub catalog 客户端<span class="ev"><br>catalog-discovery.ts:499-523</span></td>
+      <td>MCP 目录经 PR 评审准入（"Presence = approval"）<span class="ev"><br>optional-mcps/airtable/manifest.yaml:2</span></td>
+      <td>plugingen 脚手架 + pluginuninstall 三层卸载<span class="ev"><br>src/plugin/tools/plugingen</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D10 开发体验</td>
+      <td><span class="pill p-ok">HMR 原生</span>；PENDING 诊断；7 章教程<span class="ev"><br>06-composition-and-hmr.md</span></td>
+      <td>契约守卫测试（contracts/ 目录大量 *.contract.test.ts）</td>
+      <td><code>hermes plugin dev/validate</code> CLI + 校验报告<span class="ev"><br>plugin_dev.py, plugin_validate.py</span></td>
+      <td><span class="pill p-warn">受静态语言限制</span>：改插件需重编宿主（Sync 轨）<span class="ev"><br>spec.md §0.2 限制 #1</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D11 开发者支持</td>
+      <td><span class="pill p-bad">无脚手架</span>；<code>dsh plugin</code> 只是 pnpm 转发器。靠 7 章可运行教程起步<span class="ev"><br>apps/cli/src/plugin.ts:70-107</span></td>
+      <td><span class="pill p-ok">最完整</span> <code>plugins init --type tool|provider|feature</code> 生成 7 个文件（含测试 + vitest）<span class="ev"><br>plugins-authoring-command.ts:716-753</span></td>
+      <td><span class="pill p-warn">无脚手架</span>；有 <code>plugins doctor</code>（真运行时验证）+ <code>validate</code><span class="ev"><br>plugin_dev.py:370-432</span></td>
+      <td><span class="pill p-ok">plugingen + 确定性工具链</span>：plugingen 默认生成 L3 process 轨<strong>独立 cjpm 工程</strong>可单独编译；另有 <code>loaddbinfo / crudgen / crudweb / pluginuninstall</code> 确定性代码生成工具链与 <code>sdd / long-running-task / uctoo-dev-manual</code> AI 驱动开发 SOP 技能<span class="ev"><br>plugingen.cj:48；src/app/tools；src/plugin/tools</span></td>
+    </tr>
+    <tr>
+      <td class="dim">D12 原生智能 / 自进化</td>
+      <td><span class="pill p-warn">赋能强、自主弱</span>：工具 schema 全自动注入 + SKILL.md + 模型可自装插件；<strong>零反思/零学习库</strong><span class="ev"><br>tools/src/index.ts:857；packages/boot/plugin-manager</span></td>
+      <td><span class="pill p-ok">四家最强</span>：<code>skill_workshop</code> Agent 自写技能 + 后台自动评审 + <code>reloadAndResume</code> 自改自重载<span class="ev"><br>skill-workshop-tool.ts:305；self-learning.md:12</span></td>
+      <td><span class="pill p-ok">技能层闭环</span>：每轮后 fork 自评写 memory/skill + <code>skill_manage</code> + <code>/learn</code> + curator；<strong>契约禁止改框架代码</strong><span class="ev"><br>background_review.py:1-6；skill_manager_tool.py:862</span></td>
+      <td><span class="pill p-ok">插件↔技能三维一体 + 确定性代码腿</span>：SKILL.md 自动转 LLM Tool + 每请求注入 prompt；<strong>三腿自进化闭环（技能 / 代码 / 数据库）</strong>中<strong>代码腿由确定性代码生成工具链（loaddbinfo / crudgen / crudweb / plugingen / pluginuninstall）承载——可确定地演进框架代码</strong>，并非仅产出方案<span class="ev"><br>skill_bridge.cj:57-92；src/app/tools；src/plugin/tools</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============ 4 ============ -->
+<h2 id="s4">4. 分维度深度剖析</h2>
+
+<h3>D1 · 插件的定义形态</h3>
+<div class="card">
+<p><strong>deepseek-harness</strong> 把插件定义压到最简：一个导出 <code>apply</code> 的模块就是插件，并接受三种形状（函数 / 带 apply 的对象 / Service 子类）。
+整个应用不是"代码启动框架"，而是 <code>cordis.yml</code> 组合出来的插件树——教程里明确写 "There is no framework bootstrap code in your file"。
+这是<strong>"一切皆插件"最彻底的表达</strong>。</p>
+<pre><code>// docs/cordis-tutorial/01-first-plugin.md:11-19
+export const name = 'hello'
+export function apply(ctx: Context) {
+  console.log('hello from my first plugin')
+}
+// cordis.yml
+- name: './hello.ts'</code></pre>
+
+<p><strong>openclaw</strong> 走"包 + 清单"：扩展目录带 <code>openclaw.plugin.json</code>，声明 id、分类、激活条件、channel、configSchema。清单是
+<strong>机器可读的能力契约</strong>，加载器照着清单决定给它什么。</p>
+
+<p><strong>hermes-agent</strong> 是 Python 生态的典型：既支持 setuptools entry-point 组 <code>hermes_agent.plugins</code>，也支持目录 + <code>plugin.yaml</code>，
+插件入口是包里的 <code>register(ctx)</code>。</p>
+
+<p><strong>agentskills-runtime</strong> 用 <code>plugin.yaml</code> 描述，且每条带 <code>mode</code> 字段决定走哪条轨：</p>
+<pre><code># src/plugin/plugin_config.cj:44-67（清单示例）
+plugins:
+  - name: memory-postgres
+    className: magic.plugins.memory.MemoryPostgresPlugin
+    mode: sync            # 缺省 sync；可选 sync/dylib/process
+    order: 1
+    config: { connectionString: "postgres://..." }
+  - name: external-tool
+    mode: process         # L3 进程隔离轨
+    command: ./skills/external-tool/target/release/skill_external_tool.exe
+    args: ["--log-level", "info"]
+    autoRestart: true</code></pre>
+<div class="note">
+<strong>点评（公平）：</strong>DSH 的"零样板"体验最好，代价是插件形态与宿主语言强绑定（必须 TS 模块）。
+agentskills-runtime 的 <code>mode</code> 字段是<strong>四家里唯一把"隔离档位"写成清单一等公民的</strong>——插件作者显式选择跑在哪，
+这在静态编译语言里是必要的（编译进宿主 vs 动态库 vs 子进程，代价差一个数量级）。DSH/hermes 的隔离是宿主全局开关，
+runtime 是<strong>逐插件声明</strong>，粒度更细。
+</div>
+</div>
+
+<h3>D2 · 清单与版本契约</h3>
+<div class="card">
+<p>插件生态真正的难点不是"能不能装"，而是<strong>"装上去会不会因为版本不匹配把宿主搞崩"</strong>。四家的应对差异明显：</p>
+<table>
+  <thead><tr><th>项目</th><th>版本约束机制</th><th>冲突时的行为</th></tr></thead>
+  <tbody>
+    <tr><td>deepseek-harness</td><td>安装前用 pnpm 解析 registry spec 的 <strong>peer deps</strong> 与 DSH 版本比对；不兼容直接拒绝<span class="ev">plugin-manager/README.md:69</span></td><td>拒绝 + 报错 <code>incompatible-version</code>；支持 <code>compatibility.json</code> 按 <code>pkg@ver → runtime版本</code> 精确豁免，但需 <code>acceptRisk: true</code></td></tr>
+    <tr><td>openclaw</td><td>package.json 两个<strong>必填</strong>字段：<code>openclaw.compat.pluginApi</code>、<code>openclaw.build.openclawVersion</code><span class="ev">plugin-package-contract/src/index.ts:29-32</span></td><td>缺字段即校验失败（<code>listMissingExternalCodePluginFieldPaths</code>）</td></tr>
+    <tr><td>hermes-agent</td><td><code>requires_hermes</code> 版本范围 + <code>requires_env</code> + Python 依赖探测<span class="ev">plugin_validate.py:115,164,576</span></td><td>校验报告逐项列出（ValidationReport）</td></tr>
+    <tr><td>agentskills-runtime</td><td>清单含 <code>version</code>，但<strong>未见宿主版本 range 约束的等价机制</strong><span class="ev">skills/hello/plugin.yaml</span></td><td>—</td></tr>
+  </tbody>
+</table>
+<div class="note w">
+<strong>agentskills-runtime 的明确短板：</strong>它的 Sync 轨是<strong>编译期</strong>合并进宿主的，版本冲突在编译阶段就暴露了，所以"运行时版本协商"的必要性确实低于其他三家（这不是偷懒，是静态语言的天然免疫）。
+但 Dylib / Process 两轨一旦成熟，插件与宿主就是<strong>二进制 ABI 关系</strong>——那时候没有版本 range 校验会比动态语言更危险（动态语言不兼容只是报错，ABI 不兼容是段错误）。
+<strong>建议：L2/L3 轨正式启用前，必须补 ABI/pluginApi 版本协商。</strong>
+</div>
+</div>
+
+<h3>D3 · 发现与加载</h3>
+<div class="card">
+<ul>
+  <li><strong>deepseek-harness</strong>：Loader 插件读 <code>cordis.yml</code>，把每个 <code>name</code> 当模块说明符解析（相对路径或 npm 包名），<strong>并发挂载</strong>。关键设计：列表顺序不保证加载顺序，<strong>顺序由 <code>inject</code> 声明的服务依赖推导</strong>。</li>
+  <li><strong>openclaw</strong>：<code>activation-planner</code> 解析清单的 <code>activation</code> 段（如 <code>onStartup: false</code>）决定激活时机，配合 discovery-state 做按需加载——<strong>懒激活</strong>是大生态的必要优化（180 个扩展不可能全启动）。</li>
+  <li><strong>hermes-agent</strong>：入口组 + 目录扫描，另有 <code>start_background_plugin_discovery()</code> 把发现挪到后台线程，避免拖慢启动<span class="ev">plugins.py:1774</span>。</li>
+  <li><strong>agentskills-runtime</strong>：<code>PluginDiscoveryService.discover()</code> 去中心化扫描 <code>plugin.yaml</code>；因为仓颉 LTO 会剪除未被静态引用的类，必须靠 build-sync 生成 <code>generated_anchors.cj</code> 显式实例化来"锚住"插件类<span class="ev">spec.md §0.2 限制 #3</span>。扫描到声明后，<code>PluginLoader</code> 经 <code>ClassTypeInfo.get → findAnnotation&lt;PluginAnnotation&gt; → ConstructorInfo.apply</code> 在运行期动态定位并实例化插件类，无需维护静态注册表——新插件放入目录即生效（零配置注册、热插拔）。</li>
+</ul>
+<div class="note">
+<strong>值得记的一点：</strong>DSH 用"依赖推导顺序"取代"声明顺序"，这是个真正的架构洞见——插件多了以后，人工维护顺序必然出错。
+agentskills-runtime 用 <code>order</code> 数字字段排序，在 51 个 skill 规模下够用，但规模上去后会重蹈覆辙。
+</div>
+</div>
+
+<h3>D4 · 隔离模型</h3>
+<p>这是四家差异最大、也最值得单独成章的维度，见 <a href="#s5">第 5 节专题</a>。</p>
+
+<h3>D5 · 通信与 IPC</h3>
+<div class="card">
+<p>只有<strong>真正跨了进程</strong>的两家需要 IPC，它们的实现都很讲究：</p>
+<ul>
+  <li><strong>hermes-agent</strong> 的 <code>PluginHost</code> 是一个相当完整的 RPC 层：Channel 传输、<code>generation</code> 代次（宿主重载后旧代次的调用被拒绝）、
+  对象代理（<code>_ObjectSlot</code> + <code>_object_proxy</code>，把插件侧对象的方法表发给宿主，宿主构造 ABC 子类，方法调用回到插件进程执行）。
+  还显式列出了<strong>"无法跨进程"的方法清单</strong>（<code>HOST_UNSUPPORTED_CTX_METHODS</code>）——比如需要原生 SDK client 的注册项，只能 in-process。</li>
+  <li><strong>agentskills-runtime</strong> L3 用 <strong>JSON-RPC over stdio</strong>（<code>ystyle::cordis_host.PluginManager(stdio)</code>），并注明 UDS 不启用<span class="ev">cordis_host_manager.cj:24,32</span>。</li>
+</ul>
+<div class="note g">
+<strong>hermes 的 <code>HOST_UNSUPPORTED_CTX_METHODS</code> 是本次调研里最有工程价值的一处细节。</strong>
+它诚实地承认"进程隔离不是银弹"：有些能力天然需要活对象（原生 SDK client、event loop 绑定的 adapter、argparse parser），
+跨进程就拿不到。它的做法是<strong>把这些方法显式列成表 + 给出拒绝理由</strong>，而不是假装全部支持。
+同一张表还被静态审计脚本复用（<code>plugin_isolation_audit</code>），保证"审计说安全"和"实际能加载"不会漂移——
+文档里原话："the audit says pool-safe and it loads in the host cannot drift apart"。
+<span class="ev">plugin_isolation.py:14-17</span>
+</div>
+</div>
+
+<h3>D6 · 生命周期与依赖注入</h3>
+<div class="card">
+<p><strong>deepseek-harness 在这一项上是断层领先</strong>，Cordis 的 Fiber 模型提供了四家里最完整的语义：</p>
+<ul>
+  <li><strong>Fiber 状态机</strong>：每个插件实例是一个 fiber，有 uid、state、config、store（依赖实现快照）。</li>
+  <li><strong>声明式依赖</strong>：<code>export const inject = ['timer']</code>，缺 provider 时 fiber 停在 <strong>PENDING</strong> 而非报错——因为 provider 可能稍后才挂载。这是"迟到的依赖"的正确处理。</li>
+  <li><strong>可逆卸载</strong>：<code>ctx.effect()</code> 注册的 disposer 在 fiber 卸载时<strong>逆序执行</strong>，且支持 async（卸载会 await）。这意味着插件真的可以被干净地摘掉。</li>
+  <li><strong>HMR</strong>：<code>fiber.restart()</code> / <code>update()</code>，配合文件监听实现热重载。</li>
+  <li><strong>诊断</strong>：可遍历 <code>ctx.registry</code> 检查每个 fiber 的 state，专门对付"插件什么都不做也不报错"的静默失败。</li>
+</ul>
+<pre><code>// 诊断 PENDING 插件（06-composition-and-hmr.md:67-83）
+for (const runtime of ctx.registry.values())
+  for (const fiber of runtime.fibers)
+    if (fiber.state === FiberState.PENDING)
+      console.log(`${fiber.name} is PENDING — a required service is missing`)</code></pre>
+
+<p><strong>agentskills-runtime</strong> 用"注解声明 + 反射发现 + 生命周期状态机"覆盖了六语义中的五个（Service / inject / effect / Events / 检视），
+事件总线实现 <code>emit</code> / <code>waterfall</code> 两种；<strong>HMR 明确延后</strong>，spec 里原话是"HMR/合流性无定理背书，对外只表述确定性插件生命周期"——
+这个自我标注很诚实，值得肯定。<span class="ev">spec.md §0.2 限制 #6</span></p>
+
+<p><strong>hermes-agent</strong> 有 load/unload 回调、加载超时保护（插件超时后再调 ctx 会被忽略并记日志）<span class="ev">plugins.py:1106</span>。
+<strong>openclaw</strong> 有独立的 activation-context / lifecycle / registry-lifecycle 模块。</p>
+</div>
+
+<h3>D7 · 扩展点覆盖面</h3>
+<div class="card">
+<table>
+  <thead><tr><th>项目</th><th>可扩展的东西</th><th>特点</th></tr></thead>
+  <tbody>
+    <tr><td>deepseek-harness</td><td>工具、服务、UI、CLI 命令、channel、provider……</td><td><strong>无分类</strong>——因为一切都是插件，ctx 就是唯一 API 面</td></tr>
+    <tr><td>openclaw</td><td>channel、model provider、tool、hook、skill、theme、model catalog/pricing、TTS、media…</td><td><strong>清单声明式分类</strong>，<code>categories</code> 字段 + <code>PLUGIN_CATEGORY_SLUGS</code> 白名单校验</td></tr>
+    <tr><td>hermes-agent</td><td>21 个 <code>register_*</code>：tool、hook、middleware、platform、memory provider、context engine、secret source、CLI 命令、locale、system prompt 段…</td><td><strong>方法即扩展点</strong>，ctx 有多少方法就有多少扩展点；清单里用 <code>provides_tools/hooks/middleware</code> 声明</td></tr>
+    <tr><td>agentskills-runtime</td><td>Service、HTTP Route、SKILL.md 技能、MCP server</td><td><strong>plugin 与 skill 三维一体融合</strong>（<code>SkillBridge</code>：插件目录下的 SKILL.md 自动注册为技能）<span class="ev">skill_bridge.cj:43-91</span></td></tr>
+  </tbody>
+</table>
+<div class="note">
+<strong>agentskills-runtime 的独门设计：</strong>"插件 + 技能"融合是本调研中唯一一家把<strong>代码扩展（plugin）</strong>和
+<strong>提示词级能力（SKILL.md）</strong>放在同一目录约定下的（三维一体：<code>plugin.yaml</code> + <code>SKILL.md</code> + <code>scripts/</code>）。
+<code>SkillBridge.registerPluginSkills()</code> 会扫描插件目录根和子目录的 SKILL.md 自动注册，没有 SKILL.md 的插件按纯 Service 处理。
+这让"一个插件既能提供 RPC 服务，又能教 Agent 怎么用"，是区别于另外三家的<strong>真实差异化</strong>，不是包装。
+</div>
+</div>
+
+<h3>D8 · 权限与安全模型</h3>
+<div class="card">
+<p>四家的思路可以分成两派：<strong>"运行时审批派"</strong>（DSH）和<strong>"安装期声明比对派"</strong>（openclaw / hermes）。</p>
+
+<h4>deepseek-harness：运行时审批门</h4>
+<p>每次工具动作需要 <code>danger-full-access</code> 或逐次审批；低 sandbox 模式下 <code>ask</code> 请求批准、<code>never</code> 直接拒绝。
+但它<strong>明确自述</strong>："installed Host code executes in-process outside the workspace sandbox"（宿主插件代码在进程内、<strong>工作区沙箱之外</strong>执行），
+且 SAFETY.md 开头就写 "It has not undergone a security audit and must not be treated as secure or production-ready"。
+<span class="ev">plugin-manager/README.md:31；SAFETY.md:3</span></p>
+
+<h4>openclaw：安装期能力同意（capability consent）</h4>
+<p>清单声明 <code>capabilities</code>，安装时 <code>resolvePluginCapabilityConsent()</code> 拿当前声明面与安装记录比对，
+变化时触发 <code>onCapabilityConsent</code> 让用户用 <code>reviewToken</code> 确认。还有官方插件的 <code>recordOfficialCapabilities</code> 快速通道。
+这是<strong>"用户明确知道这个插件要拿什么"再放行</strong>的模型。<span class="ev">capability-consent.ts:135-160</span></p>
+
+<h4>hermes-agent：能力探针（capability probe）</h4>
+<p>这是四家里<strong>最硬核</strong>的：不信任清单声明，而是<strong>真的 import 一次插件</strong>（在隔离环境中跑 <code>register()</code>），
+把实际注册到的 tools/hooks/middleware 与清单 <code>provides_*</code> 做 diff：</p>
+<pre><code># plugin_validate.py:409-434
+declared = set(_declared_list(manifest, manifest_key))
+actual   = set(recorded.get(kind) or [])
+undeclared   = sorted(actual - declared)   # 偷偷多注册了 → 失败
+unregistered = sorted(declared - actual)   # 声明了却没注册 → 警告</code></pre>
+<p>另外还有内置工具名冲突检测（<code>_check_builtin_collisions</code>）、安全扫描（<code>_check_security_scan</code>）。
+清单声明与实际行为的<strong>一致性由机器验证</strong>，这比"让用户点同意"更可靠——用户其实看不懂能力清单。</p>
+
+<h4>agentskills-runtime：表级白名单</h4>
+<p><code>tableWhitelist</code> 声明插件可访问的 DB 表，缺省空列表=拒绝全部表<span class="ev">plugin_config.cj:106-108</span>。
+方向正确（默认拒绝），但<strong>覆盖面最窄</strong>——只管数据库表，没有覆盖网络、文件、进程等其它能力维度。</p>
+
+<div class="note w">
+<strong>给 agentskills-runtime 的优先级建议：</strong>hermes 的"能力探针"思路对 runtime 的 L2/L3 轨<strong>特别合适</strong>——
+因为插件是二进制，用户更没法审查它干什么。可以在 L3 进程启动后做一次"能力宣告握手"：
+插件上报自己会注册哪些 Service/Route，宿主与 plugin.yaml 声明比对，不符则拒绝挂载。成本低、收益高。
+</div>
+</div>
+
+<h3>D9 · 分发、安装与生态治理</h3>
+<div class="card">
+<p><strong>deepseek-harness 在这一项上是四家里唯一达到"产品级"的</strong>，它的 plugin-manager 处理了大量真实世界的脏活：</p>
+<ul>
+  <li><strong>多 registry 回退</strong>：主 registry → <code>fallbackRegistries</code>（默认 npmmirror）逐个尝试，超时/无此包才换下一个；私有 registry 永不回落到公共源。</li>
+  <li><strong>失败回滚</strong>：pnpm 跑之前快照 <code>package.json</code> + <code>pnpm-lock.yaml</code>，失败即还原（明确注明"用户自己写的 patch 配置、应用数据、日志不动"）。</li>
+  <li><strong>构建脚本审批</strong>：pnpm 11 拦截依赖脚本时，收集 pending builds 让用户逐项批准，批准按包名持久化在该 profile。</li>
+  <li><strong>GitHub 预检</strong>：安装前 <code>git ls-remote</code> 探活（5s 超时），只因网络失败/超时才中止，认证问题交给 pnpm。</li>
+  <li><strong>取消语义</strong>：<code>cancelInstall(requestId)</code> 区分 <code>cancelled</code> / <code>too-late</code> / <code>not-running</code>。</li>
+  <li><strong>请求恢复</strong>：<code>waitForInstall(requestId)</code> 让断线客户端重连回正在进行的安装。</li>
+  <li><strong>幂等与锁</strong>：profile 写锁（120s）、<code>.plugin-manager/run.json</code> 记录运行中的 pnpm 进程防止并发踩踏。</li>
+</ul>
+<div class="note">
+<strong>openclaw</strong> 有 ClawHub catalog 客户端（<code>fetchClawHubPluginCatalog</code> / <code>fetchClawHubSkillCatalog</code>）<span class="ev">catalog-discovery.ts:506-523</span>；
+<strong>hermes</strong> 的 MCP 目录是<strong>PR 评审准入制</strong>，manifest 里第一行就写 "Presence in this directory = approval. Merged via PR review."<span class="ev">optional-mcps/airtable/manifest.yaml:2</span>——
+简单粗暴但有效，适合不敢放开的市场冷启动阶段。
+<strong>agentskills-runtime</strong> 有 plugingen 生成器和三层卸载（运行时层/静态资产层/数据库痕迹层），卸载模型设计得不错，但分发/市场侧还是空的。
+</div>
+</div>
+
+<h3>D10 · 开发体验与可观测性</h3>
+<div class="card">
+<ul>
+  <li><strong>deepseek-harness</strong>：最优。7 章渐进教程 + HMR + PENDING 诊断 + 效果标签（<code>getEffects()</code> 返回带 label 的效果树）。它甚至专门用一章讲"插件永远不加载时怎么查"。</li>
+  <li><strong>openclaw</strong>：靠<strong>契约测试</strong>保障——<code>src/plugins/contracts/</code> 下有大量 <code>*.contract.test.ts</code>（boundary-invariants、config-footprint-guardrails、sdk-subpaths…），用测试锁住 API 面不漂移。这是大团队治理插件生态的正确姿势。</li>
+  <li><strong>hermes-agent</strong>：<code>hermes plugin dev</code> / <code>validate</code> CLI，校验报告逐项列出 pass/warn/fail，包括真实 import 探测。</li>
+  <li><strong>agentskills-runtime</strong>：<span class="pill p-warn">受静态语言拖累</span>。Sync 轨插件改一行要重编宿主（实测整编约 51 分钟），这是<strong>开发体验上最痛的一点</strong>。仓库已用 watcher + 增量编译缓解，但 HMR 级别的体验在静态语言下短期内不可得。</li>
+</ul>
+</div>
+
+<h3>D11 · 开发者支持：从"读文档"到"一条命令"</h3>
+<div class="card">
+<p>这一维度问的是最朴素的问题：<strong>一个第三方开发者想给这个项目写插件，他第一步要做什么？</strong>四家的答案差距极大。</p>
+
+<table>
+  <thead><tr><th style="width:110px">项目</th><th>脚手架</th><th>起步动作</th><th>作者测试支持</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>DSH</strong></td>
+      <td><span class="pill p-bad">无</span></td>
+      <td><code>mkdir tmp/cordis-tutorial</code> → <strong>手抄</strong> <code>docs/cordis-tutorial/</code> 七章代码；或 <code>mkdir scratch-plugin/src</code> 手写 <code>my-plugin.ts</code> + <code>cordis.yml</code></td>
+      <td>无对外 SDK；仓库内有 <code>agent-loop-testkit</code>、<code>loader-smoke</code>，测试政策要求"HMR-safety 契约测试"与真实 Loader 组合测试<span class="ev">docs/testing.md:9,39</span></td>
+    </tr>
+    <tr>
+      <td><strong>OC</strong></td>
+      <td><span class="pill p-ok">有，三种模板</span></td>
+      <td><code>openclaw plugins init &lt;id&gt; --type tool|provider|feature</code> → 生成 <code>package.json</code> / <code>src/index.ts</code> / <code>src/index.test.ts</code> / <code>README.md</code> / <code>openclaw.plugin.json</code> / <code>tsconfig.json</code> / <code>vitest.config.ts</code> 共 7 个文件<span class="ev">plugins-authoring-command.ts:339-423,716-753</span></td>
+      <td><span class="pill p-ok">最完整</span>：15 个 SDK 公开测试子路径（<code>createTestPluginApi</code>、<code>describePluginRegistrationContract</code>、<code>withServer</code>…）+ <code>src/plugins/contracts/*.contract.test.ts</code><span class="ev">docs/plugins/sdk-testing.md:22-44</span></td>
+    </tr>
+    <tr>
+      <td><strong>HM</strong></td>
+      <td><span class="pill p-bad">无</span></td>
+      <td><code>mkdir -p ~/.hermes/plugins/calculator</code> → 手写 <code>plugin.yaml</code> / <code>__init__.py</code> / <code>schemas.py</code> / <code>tools.py</code> 四文件 → <code>hermes plugins doctor . --ci</code><span class="ev">plugins/index.md:273-295</span></td>
+      <td>有 <code>plugins doctor</code>（<strong>走真实发现 + 真实 register + 断网</strong>的验证器，源码自陈"not a plugin test framework"）与 <code>plugins validate</code>；<strong>无对外测试 SDK</strong><span class="ev">plugin_dev.py:31-61,370-432</span></td>
+    </tr>
+    <tr>
+      <td><strong>ASR</strong></td>
+      <td><span class="pill p-ok">有</span></td>
+      <td><code>cjpm run --name magic.plugin.tools.plugingen -- --name &lt;n&gt;</code>，<strong>默认 <code>--mode process</code></strong>（L3 进程隔离轨），生成 <code>SKILL.md</code> / <code>plugin.yaml</code> / <code>cjpm.toml</code> / <code>src/main.cj</code> / <code>{X}Handlers.cj</code> / <code>{X}Effects.cj</code> / <code>README.md</code>；此外提供 <code>loaddbinfo / crudgen / crudweb / pluginuninstall</code> 等确定性代码生成工具链，以及 <code>sdd</code>、<code>long-running-task</code>、<code>uctoo-dev-manual</code> 等 AI 驱动开发 SOP 技能<span class="ev">plugingen.cj:48；PluginGenerator.cj:296-395；src/app/tools；src/plugin/tools</span></td>
+      <td><span class="pill p-bad">最弱</span>：只有宿主侧两个集成验证程序（<code>plugin_system_check.cj</code> / <code>cordis_l3_check.cj</code>）与 <code>DATA_CONTRACT.yaml</code> 骨架；<strong>无插件侧测试脚手架、无 mock 宿主</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>ASR 的 plugingen：默认轨就是 L3，生成的工程能脱离宿主单独编译</h4>
+<pre><code>// src/plugin/tools/plugingen/plugingen.cj:48
+var mode = "process"  // 缺省 L3 process 轨（进程隔离，独立 cjpm executable 工程）；
+                      // 内嵌 sync 轨需显式 --mode sync
+
+// 生成的 skills/&lt;name&gt;/cjpm.toml（PluginGenerator.cj:367-395）
+[package]
+  cjc-version = "1.1.3"
+  compile-option = "--dy-std -Woff all"
+  name = "skill_&lt;name&gt;"
+  output-type = "executable"      # ← 独立可执行文件
+[dependencies]
+  "ystyle::cordis_plugin" = { path = "../../libs/cordis-cj/cordis_plugin" }
+  "ystyle::cordis_core"   = { path = "../../libs/cordis-cj/cordis_core" }</code></pre>
+<p>这是四家里<strong>唯一一个"默认把第三方插件生成为独立进程工程"的脚手架</strong>——把最安全、最可闭源分发、最易做插件市场的那一轨设为默认，避免了开发者因为"默认最简单"而掉进进程内耦合的坑。
+代价是：依赖仍以相对路径指向宿主仓库内 <code>../../libs/*</code>，<strong>拷出仓库就编译不过</strong>（真正的"独立发布"还需要依赖打包方案）。</p>
+
+<p><strong>但 plugingen 只是 ASR 开发者支持的一环。</strong>ASR 真正的差异化是围绕<strong>确定性代码生成工具链</strong>构建的 AI 驱动开发框架：<code>loaddbinfo</code> 把数据库结构注入生成上下文、<code>crudgen / crudweb</code> 确定性产出五层 CRUD 代码、<code>pluginuninstall</code> 做三层卸载；这些工具与 <code>sdd</code>（SDD 规范化开发流程）、<code>long-running-task</code>（长程任务 + LRT 五环节）、<code>uctoo-dev-manual</code>（开发手册）等技能 SOP 组合，使开发者（或与模型协作）能在"确定性可编译"的护栏内演进框架。<strong>这正是 DSH / OC / HM 三家全部缺失的"代码腿"</strong>——它们的脚手架只帮你"写个插件壳"，而 ASR 的脚手架把"演进框架本身"也工具化了。<span class="ev">src/app/tools；src/plugin/tools；skills/sdd；skills/long-running-task；skills/uctoo-dev-manual</span></p>
+
+<div class="note w">
+<strong>公平指出 ASR 的真实短板：</strong>生成器很强，但<strong>测试侧是空白</strong>——<code>templates/</code> 下没有任何 <code>*_test.cj.tpl</code>，<code>skills/*/</code> 下没有 <code>test/</code> 目录。
+OC 的做法（生成时就带 <code>index.test.ts</code> + <code>vitest.config.ts</code>）值得直接抄：让模板自带一个"跑得起来的最小测试"，是降低第三方作者门槛成本最低的一招。
+</div>
+</div>
+
+<h3>D12 · 原生智能与自进化（RSI）：插件系统能不能让模型"长本事"</h3>
+<div class="card">
+<p>业界共识是：智能体要走<strong>递归自我改进（RSI）</strong>，前提是<strong>模型能感知自己有什么能力、并且能扩充它</strong>。
+插件机制恰好是这条链路的物理载体——<strong>能力是插件给的，模型看不见插件，就谈不上自进化</strong>。四家在这件事上的投入差别，比隔离模型还大。</p>
+
+<h4>第一层：能力能不能自动进入模型视野</h4>
+<table>
+  <thead><tr><th style="width:110px">项目</th><th>插件 → 模型的自动通道</th><th>技能声明式机制</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>DSH</strong></td>
+      <td><span class="pill p-ok">全自动</span>：<code>ToolRuntime</code> 构造里一行 <code>ctx.systemPrompt.tools(...)</code> 打通全部工具 → 每 step <code>assemble()</code> → provider <code>tools</code> 字段<span class="ev">tools/src/index.ts:857；agent.ts:272</span></td>
+      <td>17 个内置 <code>SKILL.md</code>；文件系统 + <strong>插件内存注册</strong>（<code>ctx.skills.register</code>）双来源，做成 Cordis provider 模型<span class="ev">skill-filesystem/src/index.ts:730-847</span></td>
+    </tr>
+    <tr>
+      <td><strong>OC</strong></td>
+      <td><span class="pill p-ok">全自动</span>：TypeBox schema 自动归一化到 OpenAI/Anthropic/Gemini/GBNF；<strong>未列入核心表的插件工具自动按字母序追加进 prompt</strong><span class="ev">system-prompt-tool-list.ts:78-84</span></td>
+      <td>126 个 <code>SKILL.md</code>；prompt 只放 <code>&lt;available_skills&gt;</code> 的 name/description/location，按需 <code>read</code> 全文，硬限 <code>Up-front max one</code><span class="ev">skill-contract.ts:98-128；system-prompt-skills.ts:3-37</span></td>
+    </tr>
+    <tr>
+      <td><strong>HM</strong></td>
+      <td><span class="pill p-ok">全自动</span>：<code>register_tool</code> 进 <code>tools.registry</code> → <code>get_tool_definitions()</code> 无差别收编；插件技能经 <code>_plugin_skill_prompt_rows</code> 进 <code>&lt;available_skills&gt;</code><span class="ev">model_tools.py:500-541；prompt_builder.py:1312-1341</span></td>
+      <td>212 个 <code>SKILL.md</code>；三级渐进披露（<code>skills_list</code> → <code>skill_view</code> → <code>skill_view(path)</code>）<span class="ev">skills.md:172-182</span></td>
+    </tr>
+    <tr>
+      <td><strong>ASR</strong></td>
+      <td><span class="pill p-ok">全自动</span>：<strong>插件 ↔ 技能三维一体</strong>——<code>SkillBridge</code> 把插件目录下的 SKILL.md 注册为技能，<code>SkillToToolAdapter</code> 把 frontmatter 的 name/description 直接映射成 Tool；技能完整内容<strong>由框架自动注入上下文</strong>（<code>SkillAutoInjector</code>：初始化注入 always_on 技能 + 用户消息阶段经 <code>TaskMatcher</code> 任务匹配自动注入）<span class="ev">skill_bridge.cj:57-92；skill_to_tool_adapter.cj:28-50；skill_auto_injector.cj:43,126；WebMCPProtocol.cj:2303-2311（webmcp 聊天链路）</span></td>
+      <td><code>templates/SKILL.md.tpl</code> 的 frontmatter 带 <code>plugin:</code> 字段与插件绑定；技能完整内容<strong>已由框架自动注入</strong>（见左列），<code>get_skill_content</code> 工具<strong>降级为向后兼容兜底</strong>——仅当自动注入未覆盖时由模型按需调用，且对已自动注入的技能去重返回缓存<span class="ev">get_skill_content_tool.cj:46,121</span></td>
+    </tr>
+  </tbody>
+</table>
+<p><strong>这一层四家都做到了，且都是"零手工注册"</strong>——说明"插件能力自动进 prompt"已是行业基线，不再是差异化。</p>
+<div class="note g">
+<strong>ASR 技能内容加载已升级（concurrent_skills 工程）</strong>：将技能完整内容加载从"agent 主动调用 <code>get_skill_content</code> 工具"改为"<strong>框架自动注入上下文</strong>"——<code>SkillAutoInjector</code> 在 Agent 初始化时注入 <code>load_policy=always_on</code> 技能（阶段一）、在用户消息阶段经 <code>TaskMatcher</code> 任务匹配自动注入高匹配度技能（阶段二）；<code>get_skill_content</code> 保留为<strong>向后兼容兜底</strong>（已自动注入的技能去重返回缓存）。这把"技能即工具"进一步推进为"技能指令体即上下文"，区别于 DSH/HM 仍依赖模型自行调用工具取全文。详见 <code>.codeartsdoer/specs/concurrent_skills/design.md</code> §更新摘要。
+</div>
+
+<h4>第二层：模型能不能自己扩充能力（这才是 RSI）</h4>
+<ul>
+  <li><strong>DSH — 会安装，不会反思。</strong>有 <code>plugin_manager</code> 工具让模型列/装/启停插件（需 <code>danger-full-access</code> 审批），有 <code>cordis_inspect_*</code> 让模型在写插件前自省宿主 API（数据源是从 JSDoc AST 自动生成的 catalog）。
+  但全仓检索 <code>self-improvement / reflection / memory-learner</code> <strong>零命中</strong>：没有经验写回、没有自动插件生成。最接近的 <code>ralph</code> 循环明确写着"模型只提供数据，不能改写循环本身"，并自认"完成度是 worker 自我声明，无独立验证器"。
+  <strong>定性：赋能（enablement）做得很完整，自主（autonomy）被刻意留白。</strong><span class="ev">plugin-manager/src/tools.ts:84-109；experimental/tool-ralph/README.md:61,161</span></li>
+
+  <li><strong>OC — 四家里最深入。</strong><code>skill_workshop</code> 工具给模型 8 个动作（list/view/create/patch/write_file/remove_file/archive/restore），写操作强制"先 view 再改"，create 时还会提示与既有技能合并去重；
+  更关键的是<strong>后台自动评审</strong>：<code>skills.workshop.autonomous.mode: "auto"</code> 默认开启，累计 10 轮未评审就排队一个后台任务，空闲 30s 后自动跑，评审时 <code>skill_workshop</code> 是唯一能改变状态的工具。
+  再加 <code>plugins</code> 工具的 <code>reloadAndResume</code>——模型改完插件文件、触发重载、<strong>在同一会话里继续原任务</strong>。Custodian skills 还把"Agent 自己改配置"变成 Gather→Mutate→Repair→<strong>Prove</strong>→Report 的可审计 playbook。
+  <span class="ev">skill-workshop-tool.ts:305,281；docs/tools/self-learning.md:12,28-44；plugins-reload-handoff.ts:30-38</span></li>
+
+  <li><strong>HM — 技能层闭环完整，插件层明令禁止。</strong>每轮结束后 <code>background_review</code> fork 一个 AIAgent 回放整段对话，问"有没有该存/该改的 skill 或 memory"，写工具只有 <code>skill_manage</code>（<code>write_file/patch/terminal</code> 一律拒绝）；
+  <code>skill_manage</code> 被官方定性为 <strong>procedural memory</strong>；<code>/learn</code> 让模型从任意素材（仓库/URL/PDF/刚做过的事）现场蒸馏出新技能；<code>curator</code> 在无 cron 守护的前提下做合并/归档/去陈旧。
+  但兼容性契约<strong>明文禁止</strong>运行时改写核心（<code>setattr</code> 到 Hermes 模块、写 <code>sys.modules</code>），Catalog 准入直接拒收；后台分叉也没有任何写插件的能力。
+  <span class="ev">background_review.py:1-6,1088-1128；skill_manager_tool.py:862-928；plugins/index.md:221-228</span></li>
+
+  <li><strong>ASR — 唯一拥有"代码腿"的自进化：三腿闭环（技能 / 代码 / 数据库）。</strong>插件与技能融合不只是"能看到"，<code>SkillToToolAdapter</code> 让技能<strong>本身成为 LLM 可调用工具</strong>，且 <code>src/skill/parallel</code> 支持<strong>多技能并行执行</strong>；
+  自进化的独到之处在于<strong>代码腿由确定性代码生成工具链承载</strong>：<code>loaddbinfo</code> 把数据库结构注入生成上下文、<code>crudgen / crudweb</code> 确定性产出五层 CRUD 代码、<code>plugingen / pluginuninstall</code> 生成与卸载插件——这些工具<strong>产出的代码"必定确定性可用、可编译"</strong>，从而支撑框架自主迭代而不腐坏架构；
+  <code>src/app/services/lrt</code> 的 LRT 五环节（实测 → 根因 → 优化方案 → 防回退 → 约束注入）则把"验证即闸口"做成闭环。
+  <strong>边界不是"禁止改代码"，而是"框架级结构正确性由确定性工具保障"</strong>：LLM 仍在需要的流程与位置生成代码（胶水逻辑、非标准实现），只是不再让其概率性输出单独承担框架级结构——<em>以系统工程的确定性消解 LLM 的不确定性</em>。<span class="ev">skill_bridge.cj:57-92；src/app/tools；src/plugin/tools；src/app/services/lrt；docs/ref/AIDrivenArchitecture.md</span></li>
+</ul>
+
+<h4>第三层：模型能不能自省运行时</h4>
+<table>
+  <thead><tr><th style="width:110px">项目</th><th>面向模型的自省工具</th></tr></thead>
+  <tbody>
+    <tr><td><strong>DSH</strong></td><td><code>cordis_inspect_list</code> / <code>cordis_inspect_query</code>（只读，AST 生成，专供"写插件前先查宿主"）<span class="ev">extensions/tool-cordis/README.md:12,28</span></td></tr>
+    <tr><td><strong>OC</strong></td><td><code>skills_search</code>/<code>skills_read</code>、<code>tool_search</code>/<code>tool_describe</code>/<code>dispatch_action</code>、<code>plugins list/inspect/search</code>、<code>gateway</code>（读宿主 config/schema）四组<span class="ev">installed-skill-tools.ts:34-86；tool-search-types.ts:10-15</span></td></tr>
+    <tr><td><strong>HM</strong></td><td>无统一自省工具；靠 <code>skills_list</code>/<code>skill_view</code> 与 <code>tool_search</code>/<code>tool_describe</code> 间接达成；<code>hermes plugins capabilities</code> 是 CLI 不是模型工具<span class="ev">tools/skills_tool.py:675-743</span></td></tr>
+    <tr><td><strong>ASR</strong></td><td><code>plugin_inspect</code>（含 <code>buildCapabilityCatalog</code> 的 plugin→skills 映射）/ <code>plugin_activate</code> / <code>plugin_deactivate</code> / <code>plugin_refresh</code> + <code>llm_channel_list/test/probe/switch</code> + <code>get_skill_content</code>（向后兼容兜底，早期"按需取全文"主路径现已由框架自动注入取代）<span class="ev">plugin_agent_tools.cj:112-448；skill_bridge.cj:112-125；get_skill_content_tool.cj:46,121</span></td></tr>
+  </tbody>
+</table>
+
+<div class="note g">
+<strong>这一维度最有价值的发现：</strong>在"自进化能不能碰代码"这件事上，四家分成了两派——
+<strong>DSH / OC / HM 三家都把自进化锁死在技能（SKILL.md 文本）层，且契约或权限明令禁止模型改框架 / 插件代码</strong>（OC 的 workshop 只能改技能文本、HM 的后台分叉无写工具权限且契约禁止改核心、DSH 干脆没有这条链路）。
+<strong>ASR 是四家里唯一拥有真正"代码腿"的</strong>：它的自进化不是只产出方案，而是经 <code>loaddbinfo / crudgen / crudweb / plugingen / pluginuninstall</code> 确定性工具链<strong>实际生成可编译的框架代码</strong>，把"代码 + 技能 + 数据库"三腿做成了闭环（数据库腿当前较弱，UMI-ORM 尚待补全）。
+四家的<strong>共同原则</strong>是：框架级结构正确性不交给 LLM 自由生成（实践已证含概率的 AI 直写框架代码必走"编译失败—修复"死路）；<strong>ASR 的不同在于"用确定性工具消解不确定性"，而非"靠权限缺省禁止"</strong>——这是它相对所有 harness 的根本差异，也是其"AI 驱动开发框架"定位的核心。
+</div>
+</div>
+
+<!-- ============ 5 ============ -->
+<h2 id="s5">5. 隔离模型专题：四种哲学</h2>
+
+<div class="card">
+<p>隔离模型是插件机制的<strong>分水岭</strong>——它决定了"敢不敢装第三方插件"。四家选择了四种不同的位置：</p>
+
+<table>
+  <thead><tr><th>项目</th><th>默认档</th><th>可选档</th><th>故障爆炸半径</th><th>哲学</th></tr></thead>
+  <tbody>
+    <tr><td><strong>deepseek-harness</strong></td><td>进程内（in-process）</td><td>动态定义跑 <code>node:vm</code> realm</td><td>插件崩 = 宿主崩</td><td>信任 + 审批 + 组合优雅性优先</td></tr>
+    <tr><td><strong>openclaw</strong></td><td>进程内</td><td>worker-runtime 任务池</td><td>插件崩 = 宿主崩</td><td>契约 + 清单声明 + 安装期同意</td></tr>
+    <tr><td><strong>hermes-agent</strong></td><td><code>in_process</code></td><td><code>host</code>（每 profile 一子进程）</td><td><span class="pill p-ok">host 档下 = 仅插件宿主崩</span></td><td>可切换；诚实标注哪些能力不能跨进程</td></tr>
+    <tr><td><strong>agentskills-runtime</strong></td><td>L3 process（plugingen 新插件默认；存量宿主模块 sync 且冻结）</td><td>Dylib（动态库）/ Sync（内嵌）</td><td><span class="pill p-ok">Process 轨 = 仅插件进程崩</span></td><td>三轨并存；增量扩展一律 L3 插件化，宿主存量冻结只减不增</td></tr>
+  </tbody>
+</table>
+
+<h4>关键原文（避免误读）</h4>
+<pre><code># hermes_cli/plugin_isolation.py:3-12（模块 docstring）
+in_process (default) imports every plugin into the Hermes process, as always.
+host keeps third-party plugin code OUT of it: general plugins load in one
+plugin-host process per profile and talk to Hermes only through ctx ...
+That second half is the property a pooled deployment needs: one Hermes process
+serving many profiles must never share an interpreter with a profile's plugin code.
+The same boundary gives a single-user install crash isolation (a plugin that
+segfaults or hangs takes down its host, not the gateway).</code></pre>
+
+<div class="note g">
+<strong>hermes 这段话说得最透彻：</strong>进程隔离<strong>不只是为了防恶意插件，更是为了部署形态</strong>——
+"一个 Hermes 进程服务多个 profile"时，绝不能和某个 profile 的插件代码共享解释器。
+顺带还白拿了崩溃隔离（插件段错误只崩宿主进程，不崩 gateway）。
+这个"一份设计同时解决多租户和稳定性"的思路，值得 agentskills-runtime 在 L3 轨推广时借鉴。
+</div>
+
+<div class="note">
+<strong>公平地说 DSH：</strong>它选进程内不是不懂隔离，而是<strong>权衡后的选择</strong>——
+Cordis 的全部优雅性（Fiber、inject、effect 逆序清理、HMR）都建立在"插件与宿主共享同一个 Context 对象图"之上，
+一旦跨进程，这些语义全要重写成 RPC。它的补偿手段是<strong>审批门 + 明确告知风险</strong>（SAFETY.md 直言未安全审计、不要作为唯一安全控制）。
+这叫"把风险讲清楚后让你自己承担"，也是一种负责任的做法，只是不适合跑不可信代码。
+</div>
+</div>
+
+<!-- ============ 6 ============ -->
+<h2 id="s6">6. 插件开发者支持实操对照：从零到插件上线</h2>
+
+<div class="card">
+<p>上一节的 D11 给的是"有没有"，这一节给的是<strong>"照着做要敲哪些命令"</strong>。四家各用一套可复制的最小路径描述。</p>
+
+<h4>DSH — 文档驱动，无脚手架</h4>
+<pre><code># 1. 建目录（自己建，没有 init）
+mkdir -p scratch-plugin/src
+# 2. 手写插件 —— 最小 7 行，导出 apply 即插件
+cat > scratch-plugin/src/my-plugin.ts &lt;&lt;'EOF'
+import type { Context } from '@deepseek-ai/cordis'
+export const name = 'hello'
+export function apply(ctx: Context) { console.log('hello') }
+EOF
+# 3. 手写组合清单
+cat > scratch-plugin/cordis.yml &lt;&lt;'EOF'
+- name: '/abs/path/scratch-plugin/src/my-plugin.ts'
+EOF
+# 4. 用 --patch 挂载跑起来（不打包、不安装）
+pnpm dsh web --patch ./scratch-plugin/cordis.yml</code></pre>
+<p class="small">工具 <code>skill_initializer</code> 不存在于 DSH；<code>dsh plugin</code> 子命令里唯一自有的三个是 <code>allow-version / revoke-version / version-exemptions</code>，其余全部转发给 pnpm<span class="ev">apps/cli/src/plugin.ts:19,97</span>。
+<strong>分发时才 npm 化</strong>：<code>package.json</code> 声明 <code>dsh.bundle</code> + <code>cordis.patch.yml</code> → <code>dsh plugin --profile demo add ./hello-plugin</code>。</p>
+
+<h4>OC — 唯一有真正脚手架的一家</h4>
+<pre><code># 1. 一条命令生成整个工程（tool / provider / feature 三种模板）
+openclaw plugins init stock-quotes --name "Stock Quotes" --type tool
+cd stock-quotes
+# 产物：package.json  src/index.ts  src/index.test.ts  README.md
+#       openclaw.plugin.json  tsconfig.json  vitest.config.ts
+# 2. 安装依赖 + 构建清单 + 校验
+npm install
+npm run plugin:build      # 生成/刷新 openclaw.plugin.json
+npm run plugin:validate   # 契约校验
+# 3. 本地开发用软链接，改源码免重装
+openclaw plugins install -l ./stock-quotes
+openclaw plugins reload stock-quotes     # 改源码/manifest 后需显式 reload
+# 4. 发布到 ClawHub
+clawhub package publish your-org/stock-quotes</code></pre>
+<p class="small">生成的首个工具就是可运行的 <code>echo</code> 示例（<code>defineToolPlugin</code> + TypeBox schema）<span class="ev">plugins-authoring-command.ts:367-395</span>；
+<code>openclaw.json</code> 里的配置改动在默认 <code>hybrid</code> 模式下<strong>自动热生效</strong>，只有源码/manifest 改动才需要 <code>reload</code><span class="ev">docs/plugins/manage-plugins.md:284-312</span>。</p>
+
+<h4>HM — 四文件手写 + 真运行时验证器</h4>
+<pre><code># 1. 建目录（自己建）
+mkdir -p ~/.hermes/plugins/calculator
+# 2. 手写四个文件
+#    plugin.yaml（name/version/provides_tools/provides_hooks）
+#    __init__.py（register(ctx)：把 schema 绑到 handler）
+#    schemas.py（LLM 可见的 description + parameters）
+#    tools.py（真正执行的 calculate / unit_convert）
+# 3. 用真实发现路径验证（走真 register(ctx)，临时 HERMES_HOME + 断网）
+hermes plugins doctor . --ci
+# 4. 启用并重启生效（Python 工具与 prompt 段延迟到下一会话）
+hermes plugins enable calculator</code></pre>
+<p class="small">没有 <code>hermes plugin create</code>；<code>plugins</code> 的 16 个子命令（install/search/validate/adopt/pack…）里<strong>没有 create/new/init</strong><span class="ev">hermes_cli/subcommands/plugins.py:10-191</span>。
+隔离档位不是插件作者能选的——由运维侧 <code>config.yaml</code> 的 <code>plugins.isolation</code> 决定，插件只能被静态审计告知"能不能跑在 host"<span class="ev">config_defaults.py:1731-1740；plugin_isolation_audit.py:182-216</span>。</p>
+
+<h4>ASR — plugingen 默认生成 L3 进程隔离轨独立工程</h4>
+<pre><code># 1. 一条命令生成（默认 --mode process，即 L3 进程隔离轨）
+cjpm run --name magic.plugin.tools.plugingen -- --name my_tool --table my_table
+# 可选：--mode sync（编译进宿主） / --mode dylib（L2 动态库）
+# 2. 产物（skills/my_tool/）
+#    SKILL.md   plugin.yaml   cjpm.toml   README.md
+#    src/main.cj   src/MyToolHandlers.cj   src/MyToolEffects.cj
+# 3. 插件工程是独立 cjpm executable，可单独编译
+cd skills/my_tool &amp;&amp; cjpm build &amp;&amp; cd ../..
+#    → skills/my_tool/target/release/bin/skill_my_tool.exe
+# 4. 宿主发现：60s 周期 reconcile 自动加载，或手动
+cjpm run --name ...   # plugin_refresh 工具（LLM 亦可调用）
+#    宿主侧：PLUGIN_RECONCILE_INTERVAL_SECONDS 默认 60s</code></pre>
+<p class="small">三轨对开发者的实际含义：<strong>Sync</strong> 进宿主编译图（改一行要重编宿主，实测整编约 51 分钟）；<strong>Dylib</strong> 编 <code>.so</code> 由 <code>PackageInfo.load</code> 热加载（不重编宿主）；
+<strong>Process</strong> 编独立 exe，只能经 7 个 <code>host.*</code> 代理服务（<code>host.db/log/cache/mcp/event/db_schema_lookup/secret</code>）访问宿主，且受 <code>tableWhitelist</code> 约束、<code>stdout</code> 是协议通道必须 <code>eprintln</code> 打日志<span class="ev">plugin_config.cj:13-38；cordis_host_services.cj:72-80</span>。</p>
+
+<div class="note">
+<strong>四家一句话总结：</strong>
+DSH = <em>文档最厚、工具最少</em>；OC = <em>工具最全、契约最严</em>；HM = <em>验证最真、起步最手工</em>；ASR = <em>生成最狠（直接给你一个可独立编译的工程）、测试最空</em>。
+若只抄一条，就抄 OC 的"脚手架自带最小测试"——这是把第三方作者从"能装"推到"敢改"的最短路径。
+</div>
+</div>
+
+<!-- ============ 7 ============ -->
+<h2 id="s7">7. 成熟度校正评分</h2>
+
+<div class="card">
+<div class="legend">
+  <span><i style="background:var(--dsh)"></i>deepseek-harness</span>
+  <span><i style="background:var(--oc)"></i>openclaw</span>
+  <span><i style="background:var(--hm)"></i>hermes-agent</span>
+  <span><i style="background:var(--asr)"></i>agentskills-runtime（ASR）</span>
+</div>
+
+<h4>7.1 设计完备度（看"想到了没有"，不看工程量）</h4>
+<div id="bars-design"></div>
+
+<h4>7.2 落地成熟度（看"做出来没有 + 生态规模"）</h4>
+<div id="bars-maturity"></div>
+
+<div class="note w">
+<strong>怎么读这两组分数：</strong>
+deepseek-harness 在"设计完备度"上领先，但它是 alpha、自述未审计；openclaw 在"落地成熟度"上领先，因为它的设计是"够用即可 + 大规模铺量"。
+ASR 的<strong>设计完备度不低</strong>（三轨、tableWhitelist、plugin+SKILL 三维一体、状态机、<strong>确定性代码生成工具链（代码腿）</strong>都是真设计），
+但<strong>成熟度受两个硬约束拖累</strong>：仓颉工具链限制（cjpm workspace/package 互斥、LTO 剪除、动态库符号冲突）和项目阶段。
+把这两组分开看，才能避免"用成熟度否定设计"或"用设计掩盖没做完"。
+</div>
+
+<div class="note">
+<strong>新增两维（D11 / D12）的读法：</strong>
+D11 里 ASR 拿到设计 4 / 成熟 2 的<strong>落差分</strong>——plugingen 能一键生成可独立编译的 L3 工程（设计上是四家里唯一敢把"最安全那轨"设为默认的），
+但模板不带测试、没有插件侧校验器、权威文档躺在 <code>.codeartsdoer/specs/</code> 隐藏目录里，第三方作者实际用不起来。
+D12 的分水岭在第二层——OC 让模型自写技能且后台自动评审、HM 有完整技能层闭环但契约禁止动代码、ASR 独辟"代码腿"（确定性工具链实际演进框架代码）、DSH 则完全没有这条链路。
+ASR 在"自进化能不能碰代码"上是四家里唯一突破"技能文本层"的：它把 RSI 做成 code+skill+database 三腿闭环，由确定性代码生成工具承载代码演进（设计 5 / 成熟 4）；其唯一待补的是 DB 腿（UMI-ORM 未完整）与"每 N 轮后台自评"的常驻触发。
+</div>
+</div>
+
+<!-- ============ 8 ============ -->
+<h2 id="s8">8. 根因解读：为什么它们如此不同</h2>
+
+<div class="card">
+<p>看完十二维度会有个疑问：同样是"Agent 框架的插件机制"，为什么能差这么多？答案不在设计品味，在<strong>三个硬约束</strong>：</p>
+
+<h4>约束一：语言与运行时——决定论级别的影响</h4>
+<table>
+  <thead><tr><th>语言特性</th><th>带来的能力</th><th>失去的能力</th></tr></thead>
+  <tbody>
+    <tr><td>TypeScript / Node（DSH、openclaw）</td><td>运行时 import、模块热替换、Proxy 拦截 ctx、动态对象图</td><td>无法做真正的进程隔离（除非显式起子进程/Worker）</td></tr>
+    <tr><td>Python（hermes）</td><td>entry-point 组、运行时 import、丰富的动态能力</td><td>同左；GIL 使"进程内多插件"并发受限，反而推动它做进程隔离</td></tr>
+    <tr><td>仓颉（agentskills-runtime）</td><td>原生二进制、类型安全、跨平台单一产物</td><td><strong>HMR 基本不可能</strong>；LTO 剪除未引用类 → 需反射锚点；动态库需 <code>--dy-std</code>；workspace/package 互斥</td></tr>
+  </tbody>
+</table>
+<p>agentskills-runtime 的 spec 里把这三条写得非常直白（限制 #1/#3/#4/#5），并逐条对比了"与 DSH 的差距"。
+<strong>这种把自家短板写成正式文档的态度，本身就是工程成熟度的体现</strong>——比粉饰报告有价值得多。<span class="ev">spec.md §0.2</span></p>
+
+<h4>约束二：部署形态</h4>
+<ul>
+  <li>DSH 是<strong>开发者本机工具</strong>（CLI + Desktop + Web），所以"审批 + 告知风险"够用，不需要强隔离。</li>
+  <li>hermes 明确要支持<strong>池化部署</strong>（一个进程服务多 profile），所以必须有进程隔离——这直接决定了它的双档设计。</li>
+  <li>openclaw 要接 180 个外部集成（大量是 model provider），稳定性靠"契约 + 清单"而非隔离。</li>
+  <li>agentskills-runtime 定位含<strong>插件市场</strong>（v1.0 基础设施 / v1.1 上线），要跑第三方二进制 → 必须有 L3 进程轨。</li>
+</ul>
+
+<h4>约束三：生态冷启动策略</h4>
+<p>四家对"谁来审核插件"给出了四种答案：DSH = 用户自己批准；openclaw = 安装时能力比对 + 用户确认；
+hermes = 机器探针验证声明一致性 + MCP 走 PR 人工评审；agentskills-runtime = 目前主要靠自带 skills 目录。
+<strong>没有对错，只有阶段适配</strong>——市场为空时 PR 评审最稳，规模上来后必须自动化。</p>
+</div>
+
+<!-- ============ 9 ============ -->
+<h2 id="s9">9. 对 ASR（agentskills-runtime）的启示</h2>
+
+<div class="card">
+<p>基于上面的实证对比，按<strong>性价比排序</strong>给出建议（先做收益最大、成本最低的）：</p>
+
+<table>
+  <thead><tr><th style="width:44px">优先级</th><th>建议</th><th>借鉴自</th><th>理由 / 预期收益</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="ctr"><span class="pill p-bad">P0</span></td>
+      <td><strong>给 Dylib / Process 两轨补版本协商</strong>（pluginApi range + 宿主版本 range，不符拒绝加载）</td>
+      <td>openclaw <code>openclaw.compat.pluginApi</code>；DSH peer 校验</td>
+      <td>ABI 不兼容在原生二进制下是<strong>段错误</strong>而非异常，风险远高于动态语言。这是 L2/L3 启用前的<strong>硬前置</strong>。</td>
+    </tr>
+    <tr>
+      <td class="ctr"><span class="pill p-bad">P0</span></td>
+      <td><strong>L3 进程启动后做"能力宣告握手"</strong>：插件上报将注册的 Service/Route，宿主与 plugin.yaml 声明比对，不符拒绝挂载</td>
+      <td>hermes 能力探针 <code>_check_capabilities</code></td>
+      <td>二进制插件用户无法审查，声明一致性必须由机器验证。成本是一次握手，收益是防住"偷偷多注册"。</td>
+    </tr>
+    <tr>
+      <td class="ctr"><span class="pill p-warn">P1</span></td>
+      <td><strong>把 <code>tableWhitelist</code> 扩成通用能力清单</strong>（网络出口、文件、子进程、环境变量…），缺省全拒</td>
+      <td>openclaw <code>capabilities</code>；hermes 多维校验</td>
+      <td>目前只管 DB 表，是最窄的一家。L3 轨一旦跑第三方代码，覆盖面必须补齐。</td>
+    </tr>
+    <tr>
+      <td class="ctr"><span class="pill p-warn">P1</span></td>
+      <td><strong>公开声明"哪些能力不能跨进程"</strong>（对应 hermes 的 <code>HOST_UNSUPPORTED_CTX_METHODS</code>），并让静态审计复用同一张表</td>
+      <td>hermes <code>plugin_isolation.py</code></td>
+      <td>避免"审计说安全"和"实际能加载"漂移。runtime 已有 cordis-cj 集成，这张表是 L3 推广时的必需品。</td>
+    </tr>
+    <tr>
+      <td class="ctr"><span class="pill p-neu">P2</span></td>
+      <td><strong>用依赖推导替代 <code>order</code> 数字排序</strong>（插件声明所需 Service，由注册表拓扑排序）</td>
+      <td>DSH <code>inject</code> + PENDING</td>
+      <td>51 个 skill 时 <code>order</code> 够用，规模上去了必然维护失控。DSH 已证明这条路可行。</td>
+    </tr>
+    <tr>
+      <td class="ctr"><span class="pill p-neu">P2</span></td>
+      <td><strong>给 L3 轨加崩溃自愈的可观测性</strong>（重启次数、退避策略、崩溃原因上报）</td>
+      <td>DSH install 状态机；hermes generation 代次</td>
+      <td><code>autoRestart: true</code> 已有，但缺"重启风暴"防护——一个启动即崩的插件会无限重启。</td>
+    </tr>
+    <tr>
+      <td class="ctr"><span class="pill p-warn">P1</span></td>
+      <td><strong>plugingen 模板自带一个"跑得起的最小测试"，并补独立 <code>plugin validate</code></strong></td>
+      <td>openclaw <code>plugins init</code> 生成 <code>index.test.ts</code> + <code>vitest.config.ts</code>；hermes <code>plugins doctor</code> 走真运行时验证</td>
+      <td>D11 是四家里 ASR 设计分与成熟分落差最大的一项（4 / 2）。生成器已经很强，缺的恰恰是"让第三方作者敢改"的那一步——一个模板自带的测试 + 一条校验命令，成本极低、收益极高。</td>
+    </tr>
+    <tr>
+      <td class="ctr"><span class="pill p-warn">P1</span></td>
+      <td><strong>把 RSI 三腿闭环从"工具就绪"推进到"常驻自进化循环"：补"每 N 轮后台自评"触发 + 将确定性代码腿接入 LRT 五环节</strong></td>
+      <td>openclaw <code>skills.workshop.autonomous.mode: auto</code>（累计 N 轮后台自评）；hermes <code>background_review</code> 每轮后 fork 自评</td>
+      <td>ASR 的<strong>代码腿工具链（loaddbinfo / crudgen / crudweb / plugingen / pluginuninstall）已就绪且生产可用</strong>，LRT 五环节（实测→根因→优化→防回退→约束注入）也已在 <code>src/app/services/lrt</code> 落地；
+      当前缺口是<strong>把这些确定性能力串成一个"每 N 轮无条件后台自评"的常驻循环</strong>（目前多在长程任务失败时或按需触发）。OC/HM 的做法是"每 N 轮后台自评一次"——把自进化从"出错才修"变成"常态沉淀"，是 D12 里最该补的一档分。</td>
+    </tr>
+    <tr>
+      <td class="ctr"><span class="pill p-ok">保持</span></td>
+      <td><strong>plugin + SKILL.md 三维一体</strong>、<strong>三轨 mode 声明</strong>、<strong>"代码腿"确定性自进化（loaddbinfo / crudgen / crudweb / plugingen / pluginuninstall）</strong>、<strong>spec 里诚实标注限制条款</strong></td>
+      <td>—</td>
+      <td>这四项是 ASR 的<strong>真实差异化优势</strong>，四家里独一份 —— 尤其"以确定性代码生成工具承载框架自进化"这条路线，
+      是 DSH / OC / HM 三家都没有的（它们把自进化锁死在技能文本层）。这是 RSI 议题上最值得对外讲的一点，也是其"AI 驱动开发框架"定位的硬核支撑。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note r">
+<strong>最需要正视的一条：</strong>agentskills-runtime 的 Sync 轨"改一行要重编宿主（约 51 分钟）"，
+这在开发体验上是四家里<strong>最差</strong>的，且短期无法通过设计优化根治（静态语言决定的）。
+<strong>但这一点 ASR 已用工程与规范落地化解，而非停在建议层</strong>：开发者插件生成工具 <code>plugingen</code> 的缺省轨就是 <strong>L3 process</strong>（<code>plugingen.cj:48</code> 写死 <code>var mode = "process"</code>），
+<code>sdd</code> / <code>uctoo-dev-manual</code> 技能与《模块开发规范》SOP 更明文要求"<strong>能做成插件就做插件</strong>"、宿主 <code>src/app/</code> 存量模块"<strong>存量冻结、只减不增</strong>"
+（<code>sdd/SKILL.md:285,397,414</code>；<code>uctoo-dev-manual/SKILL.md:70,353</code>；<code>feasibility.md</code> 附7.9；<code>design.md</code> §1.0；<code>tasks.md</code>(AgenticSoftwareFactoryHackathon):17）。
+亦即<strong>新扩展一律走 L3 插件、Sync 轨仅留给无法解耦宿主的极少数存量能力</strong>——三轨设计的价值不仅没有被默认档抵消，反而因"<strong>默认即最安全那轨 + 宿主冻结</strong>"成为 ASR 的真实差异化（呼应 §D11：四家里唯一敢把最安全轨设为默认）。
+<strong>真正剩下的硬前置</strong>是 L2/L3 正式对外跑第三方二进制前必须补齐的 <strong>ABI / pluginApi 版本协商、L3 能力宣告握手、崩溃自愈可观测性</strong>（见 §风险与对策），而不是"是否该把默认档切到 L3"。
+</div>
+</div>
+
+<!-- ============ 11 ============ -->
+<h2 id="s11">11. 拓展 AgentSkills 标准的定位：拓展 vs 创新</h2>
+
+<div class="card">
+<p>本报告第 3、7、9 章已记录 ASR 在 D7「一切皆技能」维度上的事实——<strong>拓展 AgentSkills 开放标准支持仓颉静态二进制发布</strong>、<strong>plugin + SKILL.md 三维一体</strong>、<strong>三轨 mode 声明</strong>。本节把"这到底算不算对 AgentSkills 标准的拓展与创新"做一个明确的定位判断，供对外叙事（赛事 / 文档 / 论文）引用。</p>
+
+<h3>11.1 结论速览</h3>
+<table>
+  <thead><tr><th style="width:120px">判断项</th><th>结论</th><th>成立条件</th></tr></thead>
+  <tbody>
+    <tr><td><strong>是否"拓展"</strong></td><td><span class="pill p-ok">是，站得住</span></td><td>保留 <code>SKILL.md + scripts/</code> 开放契约不变，在执行底座上<strong>新增一条"静态编译原生二进制"轨道</strong>，这是原生标准没有预见的。</td></tr>
+    <tr><td><strong>是否"创新"</strong></td><td><span class="pill p-warn">是，但需正确表述</span></td><td>创新点是<strong>组合架构</strong>，不是"多支持了一门语言"；单说"支持了仓颉"只是增量，不构成创新。</td></tr>
+  </tbody>
+</table>
+
+<h3>11.2 为什么"拓展"成立</h3>
+<p>原 AgentSkills 标准（deepseek-harness 那条线）的技能脚本是<strong>运行时解释执行</strong>的——JS 走 <code>node:vm</code> eval、Python/TS 走解释器，隐性假设"技能源码是可读、可即时运行的文本"。ASR 做的事是：</p>
+<ul>
+  <li>保留 <code>SKILL.md + scripts/</code> 契约不变；</li>
+  <li>在执行底座上<strong>新增仓颉轨</strong>：先 <code>cjc --output-type=dylib</code> 编译成 <code>.so/.dll/.dylib</code>，再用 <code>PackageInfo.load()</code> 反射加载、运行时实例化（见 <code>cangjie-plugin-system-feasibility.md</code> 第 146、153、805 行）。</li>
+</ul>
+<div class="note">这条轨道是原生标准<strong>没有预见到</strong>的：原标准从没要求宿主具备"编译 + OS 动态链接 + 反射实例化"的能力。所以"拓展"用得对——扩的是<strong>执行 substrate</strong>，不是另起炉灶。</div>
+
+<h3>11.3 "创新"成立靠的是组合拳，不是单点</h3>
+<p>真正算创新、值得写进赛事叙事的有四点（已在本文 D7 维度记录证据）：</p>
+<ul>
+  <li><strong>静态二进制作为一等公民技能</strong>：把静态编译语言做成 AgentSkills 兼容框架里的"技能/插件"，而非"调个外部进程"。</li>
+  <li><strong>三轨隔离 <code>mode</code> 写进清单一等公民</strong>（<code>sync | dylib | process</code>）：四家里唯一把隔离档位写成清单字段的，且是静态语言的刚需——编译进宿主 vs 动态库 vs 子进程，代价差一个数量级；DSH/hermes 是宿主全局开关，ASR 是<strong>逐插件声明</strong>。</li>
+  <li><strong>"三维一体"</strong>：plugin + SKILL.md + scripts 统一。dsh 的"一切皆插件"是代码组织层面的统一；ASR 的"一切皆技能"是 <strong>AI 可理解行为 + 可执行代码 + 可管理插件</strong>的统一，维度高一层。</li>
+  <li><strong>闭源分发</strong>：dylib 二进制可不开源，JS 必须可见（<code>feasibility.md</code> 第 1540 行）。对编译型语言是实打实的能力差。</li>
+</ul>
+<div class="note r"><strong>必须避开的坑：</strong>单说"我们支持了仓颉这门静态语言"<strong>不是创新</strong>，只是"多支持一种语言"——Java SPI/ServiceLoader、OSGi、.NET MEF、原生 dylib 插件都是几十年前的东西。"动态库加载插件"是教科书操作，没人会为这个给一等奖。</div>
+
+<h3>11.4 对外叙事建议（克制、可落地）</h3>
+<p>不要写"颠覆性创新""比 dsh 更原生智能"这类营销断言（本报告刻意未写入，保持客观）。建议定调为：</p>
+<div class="note g">
+<strong>建议表述</strong><br>
+对 AgentSkills 开放标准的<strong>务实拓展</strong>：在保留 <code>SKILL.md</code> 契约的前提下，将静态编译型语言（仓颉）原生二进制纳入技能执行底座，并以"三轨隔离声明 + 框架插件机制与智能体技能机制三维一体融合"的架构，补上了动态脚本标准在<strong>确定性、隔离粒度、闭源分发</strong>上的空白。
+</div>
+<p>真正能撑起"创新"叙事的，是 <strong>RSI 主线</strong>——"以系统工程的确定性消解 LLM 的不确定性"：静态编译 + System-1 决策引擎接管结构化决策，才是这套拓展背后<strong>真正有别于"加一门语言"的原创贡献</strong>。赛事材料里应把"支持仓颉"作为<strong>论据</strong>而非<strong>论点</strong>。</p>
+</div>
+
+<!-- ============ 10 ============ -->
+<h2 id="s10">10. 附录：证据索引</h2>
+
+<div class="card">
+<table>
+  <thead><tr><th style="width:250px">证据位置</th><th>支撑的结论</th></tr></thead>
+  <tbody>
+    <tr><td><code>deepseek-harness/docs/cordis-tutorial/01-first-plugin.md</code></td><td>插件三形态、cordis.yml 组合、并发挂载、顺序由依赖决定</td></tr>
+    <tr><td><code>deepseek-harness/docs/cordis-api/fiber.md</code></td><td>Fiber 状态机、effect 逆序清理、restart/update、EffectMeta 诊断</td></tr>
+    <tr><td><code>deepseek-harness/docs/cordis-api/service.md</code></td><td>Service 注册为 ctx.&lt;name&gt;、Service.init/check/config/invoke 符号键</td></tr>
+    <tr><td><code>deepseek-harness/docs/cordis-tutorial/06-composition-and-hmr.md</code></td><td>id/disabled/isolate、HMR、PENDING 诊断</td></tr>
+    <tr><td><code>deepseek-harness/packages/boot/plugin-manager/README.md</code></td><td>多 registry 回退、失败回滚、peer 校验、版本豁免、build script 审批、in-process 明示</td></tr>
+    <tr><td><code>deepseek-harness/packages/extensions/cordis-host-runner/README.md</code></td><td>动态定义跑在 <code>node:vm</code> realm</td></tr>
+    <tr><td><code>deepseek-harness/SAFETY.md</code></td><td>自述未安全审计、不保证隔离、开发者预览</td></tr>
+    <tr><td><code>openclaw/packages/plugin-package-contract/src/index.ts</code></td><td><code>openclaw.compat.pluginApi</code> / <code>openclaw.build.openclawVersion</code> 必填校验</td></tr>
+    <tr><td><code>openclaw/extensions/a2a/openclaw.plugin.json</code></td><td>扩展清单实样（id/categories/activation/channels/configSchema）</td></tr>
+    <tr><td><code>openclaw/src/plugins/bundle-manifest.ts</code></td><td>多格式清单（agent/codex/claude/cursor）、capabilities 字段、256KB 限制</td></tr>
+    <tr><td><code>openclaw/src/plugins/capability-consent.ts</code></td><td>安装期能力同意（reviewToken、声明面比对、官方快速通道）</td></tr>
+    <tr><td><code>openclaw/src/plugins/activation-planner.ts</code> / <code>catalog-discovery.ts</code></td><td>懒激活规划、ClawHub catalog 客户端</td></tr>
+    <tr><td><code>openclaw/packages/worker-runtime/src/*</code></td><td>任务池 / worker 生命周期（隔离的补充手段）</td></tr>
+    <tr><td><code>hermes-agent/hermes_cli/plugin_isolation.py</code></td><td>双档隔离、HOST_UNSUPPORTED/SKIPPED/OBJECT_BASES 表、审计同源</td></tr>
+    <tr><td><code>hermes-agent/hermes_cli/plugin_host.py</code></td><td>Channel、generation 代次、对象代理（_ObjectSlot/_object_proxy）</td></tr>
+    <tr><td><code>hermes-agent/hermes_cli/plugins.py</code></td><td>PluginManager/PluginContext、21 个 register_*、加载超时保护、后台发现</td></tr>
+    <tr><td><code>hermes-agent/hermes_cli/plugin_validate.py</code></td><td>能力探针 diff、内置工具冲突、依赖探测、安全扫描</td></tr>
+    <tr><td><code>hermes-agent/optional-mcps/airtable/manifest.yaml</code></td><td>MCP 目录 PR 评审准入（"Presence = approval"）</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/plugin_config.cj</code></td><td>三轨 PluginMode、plugin.yaml 字段、tableWhitelist、httpRoutes</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/plugin_registry.cj</code></td><td>register/get/getState/list/unregister/snapshot/restore</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/plugin_dylib_loader.cj</code></td><td>L2 <code>PackageInfo.load</code> 热加载、<code>--dy-std</code> 约束</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/cordis_host_manager.cj</code></td><td>L3 JSON-RPC over stdio（UDS 不启用）</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/skill_bridge.cj</code></td><td>plugin + SKILL.md 三维一体、registerPluginSkills</td></tr>
+    <tr><td><code>agentskills-runtime/.codeartsdoer/specs/plugin-system/spec.md</code> §0.2</td><td>六条限制条款 + 逐条"与 DSH 的差距"（本报告多处引用）</td></tr>
+    <tr style="background:#f7f9ff"><td colspan="2" style="font-weight:640;color:#333844">— D11 开发者支持（本版新增）—</td></tr>
+    <tr><td><code>deepseek-harness/apps/cli/src/plugin.ts:70-107</code></td><td><code>dsh plugin</code> 是 pnpm 转发器，无 create/scaffold/init；仅三个版本豁免子命令</td></tr>
+    <tr><td><code>deepseek-harness/docs/cordis-tutorial/*</code>（7 章）</td><td>DSH 的实际起步方式：手抄代码 + <code>node --import tsx ../../vendor/cordis/bin.js</code></td></tr>
+    <tr><td><code>deepseek-harness/packages/test-support/agent-loop-testkit</code> / <code>loader-smoke</code></td><td>真实栈测试脚手架（非对外 SDK）；<code>docs/testing.md</code> 的 HMR-safety 强制契约</td></tr>
+    <tr><td><code>openclaw/src/cli/plugins-authoring-command.ts:339-423,716-753</code></td><td><code>plugins init</code> 三种模板与 7 个生成文件（含 index.test.ts + vitest.config.ts）</td></tr>
+    <tr><td><code>openclaw/docs/plugins/sdk-testing.md:22-44</code></td><td>15 个 SDK 公开测试子路径；<code>src/plugins/contracts/*.contract.test.ts</code> 契约测试</td></tr>
+    <tr><td><code>hermes-agent/hermes_cli/plugin_dev.py:31-61,370-432</code></td><td><code>plugins doctor</code> 走真实发现 + 真实 register + 临时 HERMES_HOME + 断网；自陈"not a plugin test framework"</td></tr>
+    <tr><td><code>hermes-agent/website/docs/developer-guide/plugins/index.md:273-295</code></td><td>HM 起步方式：手工建目录 + 手写四文件 + doctor + enable（需重启）</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/tools/plugingen/plugingen.cj:48</code></td><td><code>var mode = "process"</code> —— 默认生成 L3 进程隔离轨</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/tools/plugingen/PluginGenerator.cj:296-395</code></td><td>process 轨产物清单与生成的 cjpm.toml（<code>output-type = "executable"</code>，独立工程）</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/cordis_host_services.cj:72-80</code></td><td>Process 轨仅 7 个 <code>host.*</code> 代理服务 + <code>tableWhitelist</code> 约束</td></tr>
+    <tr style="background:#f7f9ff"><td colspan="2" style="font-weight:640;color:#333844">— D12 原生智能 / 自进化（本版新增）—</td></tr>
+    <tr><td><code>deepseek-harness/packages/core/tools/src/index.ts:857</code></td><td><code>ctx.systemPrompt.tools(...)</code> 一行打通全部工具到 prompt（赋能层主证）</td></tr>
+    <tr><td><code>deepseek-harness/packages/boot/plugin-manager/src/tools.ts:84-109</code></td><td><code>plugin_manager</code> 让模型装/启停插件；需 <code>danger-full-access</code> 审批</td></tr>
+    <tr><td><code>deepseek-harness/packages/extensions/tool-cordis/README.md:12,28</code></td><td><code>cordis_inspect_*</code>：模型写插件前自省宿主 API（AST 生成 catalog，只读）</td></tr>
+    <tr><td><code>deepseek-harness/packages/experimental/tool-ralph/README.md:61,161</code></td><td>DSH 最接近 RSI 的形态，但明确拒绝模型改写自身循环、且无独立验证器</td></tr>
+    <tr><td><code>openclaw/src/agents/tools/skill-workshop-tool.ts:281,305</code></td><td><code>skill_workshop</code> 8 动作；写操作强制"先 view 再改"，create 提示合并去重</td></tr>
+    <tr><td><code>openclaw/docs/tools/self-learning.md:12,28-44</code></td><td>后台自动评审默认开启（<code>auto</code>），累计 10 轮排队、空闲 30s 后跑</td></tr>
+    <tr><td><code>openclaw/src/agents/tools/plugins-reload-handoff.ts:30-38</code></td><td><code>reloadAndResume</code>：模型改插件→重载→同一会话续跑</td></tr>
+    <tr><td><code>openclaw/src/skills/loading/skill-contract.ts:98-128</code>；<code>system-prompt-skills.ts:3-37</code></td><td><code>&lt;available_skills&gt;</code> 只放 name/description/location；<code>Up-front max one</code> 硬限</td></tr>
+    <tr><td><code>hermes-agent/agent/background_review.py:1-6,1088-1128</code></td><td>每轮后 fork AIAgent 自评写 memory/skill；写工具只有 <code>skill_manage</code>，write/patch/terminal 全拒</td></tr>
+    <tr><td><code>hermes-agent/tools/skill_manager_tool.py:862-928</code></td><td><code>skill_manage</code> = procedural memory（create/patch/write_file/remove_file/delete）</td></tr>
+    <tr><td><code>hermes-agent/website/docs/developer-guide/plugins/index.md:221-228</code></td><td>兼容性契约明文禁止运行时改写核心，Catalog 准入拒收</td></tr>
+    <tr><td><code>agentskills-runtime/src/skill/skill_to_tool_adapter.cj:28-50</code></td><td>SKILL.md frontmatter → LLM Tool 的 name/description 直映射（一切皆技能）</td></tr>
+    <tr><td><code>agentskills-runtime/src/skill/parallel/*</code></td><td>多技能并行执行基底（预算分配 / 冲突过滤 / 注入决策记录）</td></tr>
+    <tr><td><code>agentskills-runtime/src/app/services/webmcp/WebMCPProtocol.cj:2303-2311</code>（创建并注入 <code>SkillAutoInjector</code>：阶段一 always_on 注入 + 阶段二 <code>injectOnUserMessage</code> 任务匹配自动注入；此即 webmcp/mcp 聊天链路的实际实现）</td><td>技能内容框架自动注入上下文（阶段一 always_on + 阶段二任务匹配），取代早期"仅注入 frontmatter、按需 get_skill_content 取正文"</td></tr>
+    <tr><td><code>agentskills-runtime/src/skill/parallel/skill_auto_injector.cj:43,126</code> + <code>skill_context_injector.cj:47,134</code></td><td><code>SkillAutoInjector</code> 自动注入器调用 <code>SkillContextInjector</code>：<code>injectOnInitialization</code>（always_on 技能）/ <code>injectOnUserMessage</code>（<code>TaskMatcher</code> 任务匹配）自动注入完整 instructions，含依赖闭包 / 互斥过滤 / 预算降级</td></tr>
+    <tr><td><code>agentskills-runtime/src/tool/get_skill_content_tool.cj:46,121</code></td><td><code>get_skill_content</code> 现为<strong>向后兼容兜底</strong>：<code>setAutoInjector</code> / <code>isSkillInjected</code> 去重，已自动注入的技能返回缓存内容</td></tr>
+    <tr><td><code>agentskills-runtime/src/app/tools/{loaddbinfo,crudgen,crudweb}</code></td><td><strong>确定性代码腿</strong>：数据库结构注入 → 五层 CRUD 代码确定性生成（必定可编译）</td></tr>
+    <tr><td><code>agentskills-runtime/src/plugin/tools/{plugingen,pluginuninstall}</code></td><td>插件确定性生成（默认 L3 process 轨独立工程）/ 三层卸载</td></tr>
+    <tr><td><code>agentskills-runtime/src/app/services/lrt/*</code></td><td>LRT 五环节（实测→根因→优化→防回退→约束注入）自进化闭环，"验证即闸口"</td></tr>
+    <tr><td><code>agentskills-runtime/docs/ref/AIDrivenArchitecture.md</code></td><td>"确定性优先，AI 增强"分层协作原则：以系统工程的确定性消解 LLM 的不确定性</td></tr>
+    <tr><td><code>agentskills-runtime/specs/RSI/research.md</code></td><td>RSI 三腿闭环（技能/代码/数据库）研究：确定性代码腿是相对 harness 的根本差异</td></tr>
+  </tbody>
+</table>
+</div>
+
+<footer>
+  <strong>报告说明</strong><br>
+  · 本报告全部结论来自四个仓库的<strong>本地源码实证</strong>（路径与行号见附录），未使用外部资料或记忆推断。<br>
+  · 文档与代码冲突时以代码为准；无法确证处已在正文中显式标注为推断或不适用。<br>
+  · 评分为基于公开源码的相对判断，不代表项目整体优劣——四个项目定位、阶段、部署形态各不相同，横向分数仅用于定位机制差异。<br>
+  · 生成日期：2026-10-17 · 输出路径：<code>docs/ref/plugin-mechanism-comparison.html</code><br>
+  · <strong>本版修订</strong>（v1.1）：① agentskills-runtime 缩写统一为 <strong>ASR</strong>；② 修复第 7 章评分进度条不渲染的问题（<code>.bar .fl</code> 为 inline span，width/height 不生效）；
+  ③ 新增 <strong>D11 开发者支持</strong>维度与第 6 章实操对照；④ 新增 <strong>D12 原生智能 / 自进化（RSI）</strong>维度，含"能力进 prompt / 模型自扩充 / 模型自省"三层评估。
+  · <strong>本版修订</strong>（v1.2）：依据 RSI 专题研究（<code>specs/RSI/research.md</code>）与 <code>docs/ref/AIDrivenArchitecture.md</code> 重新校准——<strong>纠正了 D12 维度对 ASR 的误判</strong>：ASR 不是"只出方案不改源码"，而是四家里唯一拥有真正<strong>代码腿</strong>的自进化（确定性代码生成工具链 <code>loaddbinfo/crudgen/crudweb/plugingen/pluginuninstall</code> 实际演进框架代码）；据此上调 D12 评分（设计 4→5、成熟 3→4），并补全 D7（一切皆技能 + 多技能并行）、D11（确定性工具链 + 开发 SOP 技能）中 ASR 已完成的设施；移除对已不存在文件的引用。
+  · <strong>本版修订</strong>（v1.3）：新增第 11 章「拓展 AgentSkills 标准的定位：拓展 vs 创新」，将"保留 SKILL.md 契约 + 新增静态编译原生二进制轨道"的拓展性质、以及"创新=组合架构（静态二进制一等公民 / 三轨 mode 清单一等公民 / 三维一体 / 闭源分发）而非多支持一门语言"的定位判断与克制版对外叙事建议，汇总结论（对应 D7 维度已记录的"拓展 AgentSkills 开放标准支持仓颉静态二进制发布 / 三维一体 / 三轨 mode 声明"）。
+</footer>
+
+</div>
+
+<script>
+// 评分数据：[维度, dsh, oc, hm, asr]
+var dims = [
+  ["D1 插件形态",      5, 4, 4, 4],
+  ["D2 清单/版本契约",  5, 4, 4, 2],
+  ["D3 发现/加载",     5, 4, 4, 3],
+  ["D4 隔离模型",      2, 2, 5, 5],
+  ["D5 通信/IPC",      2, 3, 5, 4],
+  ["D6 生命周期/DI",   5, 3, 4, 3],
+  ["D7 扩展点覆盖",    5, 5, 4, 4],
+  ["D8 权限/安全",     3, 4, 5, 2],
+  ["D9 分发/治理",     5, 4, 3, 2],
+  ["D10 开发体验",     5, 4, 4, 2],
+  ["D11 开发者支持",   4, 5, 3, 4],
+  ["D12 原生智能/自进化",3, 5, 4, 5]
+];
+var mat = [
+  ["D1 插件形态",      4, 5, 4, 3],
+  ["D2 清单/版本契约",  4, 5, 4, 2],
+  ["D3 发现/加载",     4, 5, 4, 3],
+  ["D4 隔离模型",      3, 2, 4, 2],
+  ["D5 通信/IPC",      2, 3, 4, 2],
+  ["D6 生命周期/DI",   4, 4, 4, 3],
+  ["D7 扩展点覆盖",    3, 5, 4, 3],
+  ["D8 权限/安全",     2, 4, 4, 2],
+  ["D9 分发/治理",     4, 4, 3, 2],
+  ["D10 开发体验",     4, 4, 4, 2],
+  ["D11 开发者支持",   4, 5, 3, 2],
+  ["D12 原生智能/自进化",2, 4, 4, 4]
+];
+var colors = {d:"#4D6BFE", o:"#0ea5a4", h:"#b45309", r:"#7c3aed"};
+var names  = {d:"DSH", o:"OC", h:"HM", r:"ASR"};
+
+function render(elId, data){
+  var host = document.getElementById(elId);
+  var html = "";
+  data.forEach(function(row){
+    html += '<div style="border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin:9px 0;background:#fff">';
+    html += '<div style="font-weight:640;font-size:13.5px;margin-bottom:7px">' + row[0] + '</div>';
+    ["d","o","h","r"].forEach(function(k, i){
+      var v = row[i+1];
+      html += '<div class="bar"><span class="lb">' + names[k] + '</span>';
+      html += '<span class="tr"><span class="fl" style="width:' + (v/5*100) + '%;background:' + colors[k] + '"></span></span>';
+      html += '<span class="vl">' + v + '/5</span></div>';
+    });
+    html += '</div>';
+  });
+  host.innerHTML = html;
+}
+render("bars-design", dims);
+render("bars-maturity", mat);
+</script>
+
+</body>
+</html>

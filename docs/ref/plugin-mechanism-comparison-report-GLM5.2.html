@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent 插件机制横向对比分析报告 — deepseek-harness / openclaw / hermes-agent / agentskills-runtime</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a2028; --panel2:#222b36; --border:#2d3748;
+    --text:#e2e8f0; --muted:#94a3b8; --dim:#64748b;
+    --accent:#3b82f6; --accent2:#8b5cf6; --green:#10b981; --amber:#f59e0b; --red:#ef4444; --cyan:#06b6d4;
+    --dsh:#6366f1; --oc:#10b981; --hermes:#f59e0b; --asr:#06b6d4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif;line-height:1.7;font-size:15px}
+  .wrap{max-width:1280px;margin:0 auto;padding:0 24px}
+  header{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-bottom:1px solid var(--border);padding:48px 0 40px;position:relative;overflow:hidden}
+  header::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 50%,rgba(59,130,246,.08),transparent 40%),radial-gradient(circle at 80% 30%,rgba(139,92,246,.08),transparent 40%)}
+  header h1{font-size:30px;font-weight:700;background:linear-gradient(90deg,#60a5fa,#a78bfa,#f472b6);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;position:relative}
+  header .sub{color:var(--muted);font-size:15px;position:relative;max-width:900px}
+  header .meta{margin-top:20px;display:flex;flex-wrap:wrap;gap:12px;position:relative}
+  header .meta span{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#93c5fd;padding:4px 12px;border-radius:20px;font-size:13px}
+  nav{background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(8px)}
+  nav .wrap{display:flex;gap:4px;overflow-x:auto;padding:10px 24px}
+  nav a{color:var(--muted);text-decoration:none;padding:8px 14px;border-radius:6px;font-size:13px;white-space:nowrap;transition:all .2s}
+  nav a:hover{color:var(--text);background:var(--panel2)}
+  section{padding:48px 0;border-bottom:1px solid var(--border)}
+  section h2{font-size:26px;font-weight:700;margin-bottom:8px;color:var(--text)}
+  section h2 .num{display:inline-block;width:36px;height:36px;line-height:36px;text-align:center;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;color:#fff;font-size:16px;margin-right:12px;vertical-align:middle}
+  section h3{font-size:19px;font-weight:600;margin:28px 0 12px;color:#cbd5e1}
+  section h4{font-size:16px;font-weight:600;margin:20px 0 8px;color:#e2e8f0}
+  section p{color:var(--muted);margin-bottom:12px}
+  section ul{margin:8px 0 16px 20px;color:var(--muted)}
+  section li{margin-bottom:6px}
+  .lead{font-size:17px;color:#cbd5e1;margin-bottom:20px}
+  .proj-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin:24px 0}
+  .proj-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s}
+  .proj-card:hover{transform:translateY(-3px);border-color:var(--accent)}
+  .proj-card .badge{position:absolute;top:0;right:0;padding:4px 14px;font-size:12px;font-weight:600;border-bottom-left-radius:12px}
+  .proj-card.dsh .badge{background:var(--dsh);color:#fff}
+  .proj-card.oc .badge{background:var(--oc);color:#fff}
+  .proj-card.hermes .badge{background:var(--hermes);color:#fff}
+  .proj-card.asr .badge{background:var(--asr);color:#fff}
+  .proj-card h3{margin-top:0}
+  .proj-card .lang{display:inline-block;font-size:12px;padding:2px 8px;border-radius:4px;background:var(--panel2);color:var(--muted);margin:4px 4px 4px 0}
+  .proj-card .desc{font-size:14px;color:var(--muted);margin-top:10px}
+  .proj-card .stats{display:flex;gap:16px;margin-top:14px;font-size:13px;color:var(--dim)}
+  .table-wrap{overflow-x:auto;margin:20px 0;border-radius:10px;border:1px solid var(--border)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{background:var(--panel2);color:#cbd5e1;font-weight:600;text-align:left;padding:14px 16px;border-bottom:2px solid var(--border);white-space:nowrap}
+  td{padding:12px 16px;border-bottom:1px solid var(--border);color:var(--muted);vertical-align:top}
+  tr:hover td{background:rgba(59,130,246,.04)}
+  td.proj{font-weight:600;color:#e2e8f0;white-space:nowrap}
+  td.dsh{border-left:3px solid var(--dsh)}
+  td.oc{border-left:3px solid var(--oc)}
+  td.hermes{border-left:3px solid var(--hermes)}
+  td.asr{border-left:3px solid var(--asr)}
+  .score{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600}
+  .s5{background:rgba(16,185,129,.15);color:#34d399;border:1px solid rgba(16,185,129,.4)}
+  .s4{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.4)}
+  .s3{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.4)}
+  .s2{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.4)}
+  .s1{background:rgba(100,116,139,.15);color:#94a3b8;border:1px solid rgba(100,116,139,.4)}
+  .yes{color:#34d399;font-weight:600}
+  .no{color:#f87171;font-weight:600}
+  .partial{color:#fbbf24;font-weight:600}
+  .matrix-wrap{overflow-x:auto;margin:24px 0}
+  .matrix{width:100%;border-collapse:separate;border-spacing:4px;font-size:13px}
+  .matrix th{background:var(--panel2);padding:10px;border-radius:6px;text-align:center;font-size:12px}
+  .matrix td{text-align:center;padding:0;border:none}
+  .matrix .dim{background:var(--panel2);text-align:left;padding:10px 14px;border-radius:6px;font-weight:600;color:#cbd5e1;font-size:13px}
+  .matrix .cell{padding:8px;border-radius:6px;font-weight:700;font-size:15px}
+  .callout{background:var(--panel);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:16px 20px;margin:20px 0}
+  .callout.warn{border-left-color:var(--amber)}
+  .callout.good{border-left-color:var(--green)}
+  .callout.bad{border-left-color:var(--red)}
+  .callout.rsi{border-left-color:var(--accent2);background:linear-gradient(90deg,rgba(139,92,246,.08),var(--panel) 30%)}
+  .callout strong{color:var(--text)}
+  code{background:var(--panel2);padding:2px 6px;border-radius:4px;font-size:13px;color:#93c5fd;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto;margin:16px 0;font-size:13px;color:#c9d1d9;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.6}
+  .ev{font-size:12px;color:var(--dim);font-style:normal;display:block;margin-top:4px}
+  .ev code{font-size:11px}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin:12px 0;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px}
+  .toc{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin:24px 0}
+  .toc ol{columns:2;column-gap:32px;margin:8px 0}
+  .toc li{margin-bottom:4px}
+  .toc a{color:var(--muted);text-decoration:none;font-size:14px}
+  .toc a:hover{color:var(--accent)}
+  .phase{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0;padding:12px;background:var(--panel);border-radius:8px;border:1px solid var(--border)}
+  .phase .step{display:inline-block;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;background:var(--panel2);color:var(--text)}
+  .phase .arrow{color:var(--accent);font-size:18px}
+  .tri-leg{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0}
+  @media(max-width:768px){.tri-leg{grid-template-columns:1fr}}
+  .leg{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center}
+  .leg .icon{font-size:28px;margin-bottom:8px}
+  .leg h4{color:var(--text);margin-bottom:6px}
+  .leg p{font-size:13px;color:var(--muted);margin:0}
+  .prio{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700;margin-right:8px}
+  .p0{background:rgba(239,68,68,.2);color:#f87171;border:1px solid rgba(239,68,68,.4)}
+  .p1{background:rgba(245,158,11,.2);color:#fbbf24;border:1px solid rgba(245,158,11,.4)}
+  .p2{background:rgba(59,130,246,.2);color:#60a5fa;border:1px solid rgba(59,130,246,.4)}
+  footer{padding:40px 0;text-align:center;color:var(--dim);font-size:13px}
+  footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>AI Agent 插件机制横向对比分析报告</h1>
+    <div class="sub">
+      对 <strong>deepseek-harness（Cordis）</strong>、<strong>openclaw</strong>、<strong>hermes-agent</strong>、<strong>agentskills-runtime</strong>
+      四个同类型开源项目的插件（扩展）机制做源码级对照，输出统一维度下的差异、权衡与可借鉴点。本报告采用<strong>双口径评分</strong>（设计完备度 + 落地成熟度），避免用工程投入量碾压设计理念；并整合 <strong>RSI 自进化工程</strong>文档，新增 D11/D12 两个关键维度。
+    </div>
+    <div class="meta">
+      <span>报告日期：2026-10-18</span>
+      <span>分析方法：源码实证 + RSI 工程文档</span>
+      <span>对比维度：D1–D12 共 12 项</span>
+      <span>评分口径：设计完备度 / 落地成熟度</span>
+      <span>证据粒度：文件 / 行号</span>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <div class="wrap">
+    <a href="#s1">1.评估方法</a>
+    <a href="#s2">2.项目画像</a>
+    <a href="#s3">3.十二维度矩阵</a>
+    <a href="#s4">4.分维度剖析</a>
+    <a href="#s5">5.隔离模型专题</a>
+    <a href="#s6">6.开发者支持</a>
+    <a href="#s7">7.成熟度校正</a>
+    <a href="#s8">8.根因解读</a>
+    <a href="#s9">9.RSI自进化专题</a>
+    <a href="#s10">10.对ASR启示</a>
+    <a href="#s11">11.拓展vs创新</a>
+    <a href="#s12">12.附录</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<!-- ==================== 1. 评估方法 ==================== -->
+<section id="s1">
+  <h2><span class="num">1</span>评估方法与公平性声明</h2>
+
+  <h3>1.1 双口径评分体系</h3>
+  <p class="lead">单一口径评分容易让"工程投入量大"的项目碾压"设计理念先进但尚未铺开"的项目，反之亦然。本报告采用<strong>双口径</strong>分离评分，让设计与工程各自说话：</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>口径</th><th>衡量什么</th><th>5 分</th><th>4 分</th><th>3 分</th><th>2 分</th><th>1 分</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>设计完备度</strong><br>(Design)</td>
+          <td>机制在<strong>设计层面</strong>是否自洽、完整、有理论支撑</td>
+          <td>业界一流，有原创贡献</td>
+          <td>完整可用，无明显设计缺口</td>
+          <td>有方案但有缺口</td>
+          <td>雏形/实验性</td>
+          <td>缺失</td>
+        </tr>
+        <tr>
+          <td><strong>落地成熟度</strong><br>(Maturity)</td>
+          <td>机制在<strong>工程层面</strong>是否已铺开、有测试、有生态</td>
+          <td>大规模验证，生态成熟</td>
+          <td>已上线，有测试有用户</td>
+          <td>能跑通但缺验证/生态</td>
+          <td>能 demo 但未铺开</td>
+          <td>未实现</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <strong>公平性原则：</strong>当某项目在某维度"设计 5 / 成熟 2"时，不代表它比"设计 3 / 成熟 4"的项目差——前者可能是理念领先但尚在早期，后者可能是工程扎实但设计平庸。两个口径分开看，读者自行权衡。
+  </div>
+
+  <h3>1.2 证据等级</h3>
+  <div class="legend">
+    <span><i style="background:#34d399"></i> <strong>A 级</strong>：源码确证（附文件路径 + 行号）</span>
+    <span><i style="background:#60a5fa"></i> <strong>B 级</strong>：官方文档确证（附文档路径）</span>
+    <span><i style="background:#fbbf24"></i> <strong>C 级</strong>：基于源码结构的合理推断</span>
+  </div>
+
+  <h3>1.3 十二维度概览</h3>
+  <p>本报告在常见 10 维度基础上，新增两个关键维度以覆盖"自进化"这一 AI Agent 框架的核心竞争力：</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>维度</th><th>名称</th><th>衡量什么</th></tr></thead>
+      <tbody>
+        <tr><td>D1</td><td>插件模型与抽象</td><td>插件是什么、如何定义、粒度如何</td></tr>
+        <tr><td>D2</td><td>生命周期管理</td><td>加载/激活/停用/卸载的完整性</td></tr>
+        <tr><td>D3</td><td>隔离与安全边界</td><td>插件之间、插件与宿主之间的隔离强度</td></tr>
+        <tr><td>D4</td><td>通信与依赖机制</td><td>插件间通信、依赖声明与注入</td></tr>
+        <tr><td>D5</td><td>配置与清单规范</td><td>manifest 的严格性、schema 校验</td></tr>
+        <tr><td>D6</td><td>热重载与动态性</td><td>运行时增删改插件的能力</td></tr>
+        <tr><td>D7</td><td>能力发现与注册</td><td>插件能力如何被宿主和 LLM 发现</td></tr>
+        <tr><td>D8</td><td>性能与资源治理</td><td>资源限制、超时、预算管控</td></tr>
+        <tr><td>D9</td><td>测试与可观测性</td><td>插件测试框架、日志、指标</td></tr>
+        <tr><td>D10</td><td>版本与兼容性</td><td>版本管理、向后兼容、迁移</td></tr>
+        <tr><td><strong>D11</strong></td><td><strong>开发者支持</strong></td><td>脚手架、校验工具、模板、文档（新增）</td></tr>
+        <tr><td><strong>D12</strong></td><td><strong>原生智能 / 自进化</strong></td><td>框架是否原生支持 AI 自我演进（新增，核心竞争力）</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ==================== 2. 项目画像 ==================== -->
+<section id="s2">
+  <h2><span class="num">2</span>四项目画像速览</h2>
+
+  <div class="proj-grid">
+    <div class="proj-card dsh">
+      <span class="badge">DSH</span>
+      <h3>deepseek-harness</h3>
+      <div>
+        <span class="lang">TypeScript</span>
+        <span class="lang">Cordis</span>
+        <span class="lang">Node.js</span>
+      </div>
+      <p class="desc">基于 Cordis fiber 的响应式 Agent 框架，插件即 fiber ctx.plugin，原生 HMR，六语义完整。</p>
+      <div class="stats">
+        <span>版本 0.2.1-alpha.3</span>
+        <span>~30 内置插件</span>
+      </div>
+    </div>
+    <div class="proj-card oc">
+      <span class="badge">OC</span>
+      <h3>openclaw</h3>
+      <div>
+        <span class="lang">TypeScript</span>
+        <span class="lang">VSCode 扩展</span>
+        <span class="lang">LSP</span>
+      </div>
+      <p class="desc">VSCode 原生扩展体系，14+ capability 注册，四层加载管线，生态最丰富。</p>
+      <div class="stats">
+        <span>版本 2026.10.4</span>
+        <span>180 扩展</span>
+      </div>
+    </div>
+    <div class="proj-card hermes">
+      <span class="badge">HM</span>
+      <h3>hermes-agent</h3>
+      <div>
+        <span class="lang">Python</span>
+        <span class="lang">ABC + hooks</span>
+        <span class="lang">MCP</span>
+      </div>
+      <p class="desc">Python ABC + hook 装饰器插件模型，plugin-catalog 16 条准入规则最严格，in_process/host 双隔离。</p>
+      <div class="stats">
+        <span>版本 1.0.0</span>
+        <span>65 optional-mcps</span>
+      </div>
+    </div>
+    <div class="proj-card asr">
+      <span class="badge">ASR</span>
+      <h3>agentskills-runtime</h3>
+      <div>
+        <span class="lang">Cangjie(仓颉)</span>
+        <span class="lang">注解+反射</span>
+        <span class="lang">三轨隔离</span>
+      </div>
+      <p class="desc">仓颉静态语言注解 + 反射插件模型，三轨并存（内嵌/L2 动态库/L3 进程），六大限制条件透明披露，Service+Skill 双驱动。</p>
+      <div class="stats">
+        <span>版本 v0.0.29</span>
+        <span>确定性代码生成工具链</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <strong>数据校正说明：</strong>本报告据实校正以下数据——openclaw 实际为 <strong>180 扩展</strong>（非此前估算的 200+）；hermes-agent 为 <strong>65 optional-mcps</strong>（非"数百个 catalog YAML"）；版本号以各项目 package.json / manifest 实测为准。
+  </div>
+</section>
+
+<!-- ==================== 3. 十二维度矩阵 ==================== -->
+<section id="s3">
+  <h2><span class="num">3</span>十二维度对比总矩阵（D1–D12）</h2>
+  <p class="lead">下表为双口径评分总矩阵。<strong>D</strong> = 设计完备度，<strong>M</strong> = 落地成熟度。每格格式为 <code>D/M</code>。</p>
+
+  <div class="matrix-wrap">
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th style="color:#818cf8">DSH<br><small>设计/成熟</small></th>
+          <th style="color:#34d399">OC<br><small>设计/成熟</small></th>
+          <th style="color:#fbbf24">HM<br><small>设计/成熟</small></th>
+          <th style="color:#22d3ee">ASR<br><small>设计/成熟</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="dim">D1 插件模型与抽象</td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s5">5</span>/<span class="s5">5</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s4">4</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="dim">D2 生命周期管理</td><td class="cell"><span class="s5">5</span>/<span class="s4">4</span></td><td class="cell"><span class="s4">4</span>/<span class="s5">5</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="dim">D3 隔离与安全边界</td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="dim">D4 通信与依赖机制</td><td class="cell"><span class="s5">5</span>/<span class="s4">4</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td><td class="cell"><span class="s4">4</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="dim">D5 配置与清单规范</td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s5">5</span>/<span class="s5">5</span></td><td class="cell"><span class="s5">5</span>/<span class="s4">4</span></td><td class="cell"><span class="s4">4</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="dim">D6 热重载与动态性</td><td class="cell"><span class="s5">5</span>/<span class="s5">5</span></td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="dim">D7 能力发现与注册</td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s5">5</span>/<span class="s5">5</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="dim">D8 性能与资源治理</td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td><td class="cell"><span class="s4">4</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="dim">D9 测试与可观测性</td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s4">4</span>/<span class="s5">5</span></td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td><td class="cell"><span class="s3">3</span>/<span class="s2">2</span></td></tr>
+        <tr><td class="dim">D10 版本与兼容性</td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td><td class="cell"><span class="s5">5</span>/<span class="s5">5</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s3">3</span>/<span class="s2">2</span></td></tr>
+        <tr><td class="dim">D11 开发者支持</td><td class="cell"><span class="s3">3</span>/<span class="s3">3</span></td><td class="cell"><span class="s5">5</span>/<span class="s5">5</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s3">3</span>/<span class="s2">2</span></td></tr>
+        <tr><td class="dim">D12 原生智能/自进化</td><td class="cell"><span class="s3">3</span>/<span class="s2">2</span></td><td class="cell"><span class="s5">5</span>/<span class="s4">4</span></td><td class="cell"><span class="s4">4</span>/<span class="s4">4</span></td><td class="cell"><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:rgba(16,185,129,.3);border:1px solid #34d399"></i> 5 = 业界一流/原创贡献</span>
+    <span><i style="background:rgba(59,130,246,.3);border:1px solid #60a5fa"></i> 4 = 完整可用</span>
+    <span><i style="background:rgba(245,158,11,.3);border:1px solid #fbbf24"></i> 3 = 有方案有缺口</span>
+    <span><i style="background:rgba(239,68,68,.3);border:1px solid #f87171"></i> 2 = 雏形</span>
+    <span><i style="background:rgba(100,116,139,.3);border:1px solid #94a3b8"></i> 1 = 缺失</span>
+  </div>
+
+  <div class="callout rsi">
+    <strong>D12 是本报告的核心新增维度。</strong>四家不约而同把自进化限制在"技能文本层"——openclaw 的 <code>skill_workshop</code> + 后台自动评审最强，hermes 每轮 <code>background_review</code> 自评但契约禁止改框架代码，DSH 的 ralph 明确拒改自身循环。<strong>ASR 是唯一突破此边界的项目</strong>：拥有确定性代码生成工具链（loaddbinfo/crudgen/crudweb/plugingen），把自进化从"技能文本层"推进到"确定性工具驱动的源码层"。
+  </div>
+</section>
+
+<!-- ==================== 4. 分维度深度剖析 ==================== -->
+<section id="s4">
+  <h2><span class="num">4</span>分维度深度剖析（D1–D12）</h2>
+
+  <h3>D1 · 插件模型与抽象</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>插件是什么</th><th>定义方式</th><th>粒度</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>Cordis fiber ctx.plugin</td><td>TS 函数 + plugin.define()</td><td>中（按功能域）</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj oc">OC</td><td>VSCode Extension</td><td>openclaw.plugin.json + activate()</td><td>粗（独立扩展包）</td><td><span class="s5">5</span>/<span class="s5">5</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td>Python ABC 子类</td><td>class Plugin(BasePlugin) + @hook</td><td>中（按 hook 点）</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td>仓颉注解类 + SKILL.md</td><td>@Plugin/@Skill 注解 + plugin.yaml</td><td>细（Skill 为一等公民）</td><td><span class="s4">4</span>/<span class="s3">3</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>关键差异：</strong>DSH 把插件绑在 fiber ctx 上，天然响应式；OC 复用 VSCode 成熟扩展模型，生态最大；HM 用 Python ABC + 装饰器，最 Pythonic；ASR 用仓颉静态注解 + 反射，类型安全最强但生态最年轻。
+  <span class="ev">证据 A：<code>deepseek-harness/packages/core/src/plugin.ts</code> · <code>openclaw/docs/plugins/manifest.md</code> · <code>hermes-agent/plugins/plugin_loader.py</code> · <code>agentskills-runtime/src/plugin/</code></span></p>
+
+  <h3>D2 · 生命周期管理</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>加载</th><th>激活</th><th>停用</th><th>卸载</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td class="yes">✓ fiber 启动</td><td class="yes">✓ ctx 注入</td><td class="yes">✓ dispose</td><td class="yes">✓ HMR 替换</td><td><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj oc">OC</td><td class="yes">✓ 四层管线</td><td class="yes">✓ activate()</td><td class="yes">✓ deactivate()</td><td class="yes">✓ VSCode 原生</td><td><span class="s4">4</span>/<span class="s5">5</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td class="yes">✓ 动态 import</td><td class="yes">✓ register_hooks</td><td class="yes">✓ unregister</td><td class="partial">~ GC 回收</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td class="yes">✓ 三轨加载</td><td class="yes">✓ pluginActivate</td><td class="yes">✓ pluginDeactivate</td><td class="partial">~ L3 进程 kill</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>DSH 六语义（install/activate/deactivate/uninstall/start/stop）最完整；OC 借力 VSCode 原生生命周期最成熟；ASR 的 L3 进程轨卸载靠进程终止，L2 动态库卸载在仓颉运行时中尚不完善。
+  <span class="ev">证据 A：<code>deepseek-harness/packages/boot/plugin-manager/README.md</code> · <code>openclaw/docs/plugins/architecture.md</code></span></p>
+
+  <h3>D3 · 隔离与安全边界</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>隔离机制</th><th>安全边界</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>fiber ctx 隔离（同进程）</td><td>ctx 作用域隔离，无沙箱</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="proj oc">OC</td><td>VSCode Extension Host 进程</td><td>独立进程 + API 白名单</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td>in_process / host 双模式</td><td>子进程隔离 + 超时</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td>三轨：内嵌/L2 动态库/L3 进程</td><td>进程级最强 + WASM 沙箱规划</td><td><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>ASR 的三轨隔离是设计上最强的：L3 进程轨提供进程级隔离，L2 动态库轨提供同进程但独立符号表的隔离，内嵌轨为零开销。设计 5 分；成熟度 4 分因 L2 卸载尚不完善。
+  <span class="ev">证据 A：<code>agentskills-runtime/.codeartsdoer/specs/plugin-system/design.md</code> 三轨设计</span></p>
+
+  <h3>D4 · 通信与依赖机制</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>插件间通信</th><th>依赖声明</th><th>注入方式</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>ctx 事件总线 + 服务注入</td><td>inject.deps 声明</td><td>IoC 容器自动注入</td><td><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj oc">OC</td><td>VSCode API + LSP</td><td>extensionDependencies</td><td>VSCode 原生</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td>hook 调用链</td><td>无显式依赖声明</td><td>全局 hook 注册表</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td>Service 总线 + Skill 组合</td><td>plugin.yaml depends</td><td>注解反射注入</td><td><span class="s4">4</span>/<span class="s3">3</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>DSH 的 Cordis IoC 容器在通信与依赖维度最强；HM 缺显式依赖声明是设计缺口；ASR 的 Service+Skill 双驱动融合是独特设计，但依赖解析在 L3 跨进程场景下尚需完善。
+
+  <h3>D5 · 配置与清单规范</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>manifest 格式</th><th>schema 校验</th><th>严格性</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>profile + bundle + entry 三层</td><td class="yes">✓ TS 类型</td><td>中</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj oc">OC</td><td>openclaw.plugin.json</td><td class="yes">✓ JSON Schema 严格</td><td>最严格</td><td><span class="s5">5</span>/<span class="s5">5</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td>plugin-catalog YAML</td><td class="yes">✓ 16 条准入规则</td><td>最严格</td><td><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td>plugin.yaml + SKILL.md</td><td class="yes">✓ 仓颉注解编译期</td><td>中</td><td><span class="s4">4</span>/<span class="s3">3</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>OC 的 openclaw.plugin.json 有完整 JSON Schema 校验，配合 14+ capability 注册，是最严格的清单规范；HM 的 plugin-catalog 16 条准入规则（含安全/性能/兼容性检查）同样严格。ASR 的仓颉注解在编译期做类型校验是独特优势，但 plugin.yaml 的运行期 schema 校验尚不完善。
+  <span class="ev">证据 A：<code>openclaw/docs/plugins/manifest.md</code> · <code>hermes-agent/plugin-catalog/README.md</code></span></p>
+
+  <h3>D6 · 热重载与动态性</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>热重载</th><th>运行时增删</th><th>机制</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td class="yes">✓ 原生 HMR</td><td class="yes">✓ fiber 替换</td><td>Cordis fiber HMR</td><td><span class="s5">5</span>/<span class="s5">5</span></td></tr>
+        <tr><td class="proj oc">OC</td><td class="no">✗ 需重载窗口</td><td class="partial">~ 可装/卸扩展</td><td>VSCode 扩展机制</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td class="no">✗ 需重启</td><td class="partial">~ 可动态 import</td><td>Python importlib</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td class="no">✗ 内嵌轨需重编</td><td class="yes">✓ L3 进程可热增</td><td>L3 进程热增 / L2 动态库</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>DSH 的 Cordis fiber 原生 HMR 是四家中唯一真正的热重载——fiber 可在运行时被替换而不丢失 ctx 状态。ASR 的 L3 进程轨可热增（新插件以独立进程启动），但内嵌轨和 L2 轨需重编。
+  <span class="ev">证据 A：<code>deepseek-harness/packages/boot/plugin-manager/README.md</code> HMR 章节</span></p>
+
+  <div class="callout warn">
+    <strong>ASR Sync 轨开发体验警示：</strong>Sync 轨（内嵌轨）改一行代码需重编宿主，实测约 <strong>51 分钟</strong>编译时间——这是 ASR 开发体验最差的点。但 ASR 已用<strong>"默认 L3 process 轨 + 宿主冻结"</strong>策略化解：<code>plugingen.cj:48</code> 写死 <code>var mode = "process"</code>，新生成插件默认走 L3 进程轨，避免动宿主。设计上以"牺牲内嵌轨热重载"换取"L3 进程隔离 + 不动宿主"。
+    <span class="ev">证据 A：<code>agentskills-runtime/src/plugin/tools/plugingen.cj:48</code></span>
+  </div>
+
+  <h3>D7 · 能力发现与注册</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>发现机制</th><th>LLM 可见</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>ctx.inject 服务注册</td><td class="partial">~ 经 adapter</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj oc">OC</td><td>14+ capability 注册</td><td class="yes">✓ ToolProvider</td><td><span class="s5">5</span>/<span class="s5">5</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td>hook 注册表 + MCP</td><td class="yes">✓ MCP server</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td>"一切皆技能" + SkillToToolAdapter</td><td class="yes">✓ 自动映射</td><td><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>ASR 的"一切皆技能"机制是设计亮点：每个能力以 <code>SKILL.md</code> + <code>plugin.yaml</code> 声明，被 <code>SkillToToolAdapter</code> 自动映射为 LLM 可见 Tool，无需人工重新注册——这是 RSI 自进化的原生智能感知基础。OC 的 14+ capability 注册生态最成熟。
+
+  <h3>D8 · 性能与资源治理</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>资源限制</th><th>超时/预算</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>fiber 调度器</td><td class="yes">✓ fiber 超时</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj oc">OC</td><td>Extension Host 进程</td><td class="yes">✓ CPU/内存监控</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td class="partial">~ 基本超时</td><td class="partial">~ 无预算管控</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td>L3 进程资源隔离</td><td class="yes">✓ budget_manager + conflict_filter</td><td><span class="s4">4</span>/<span class="s3">3</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>ASR 的 <code>src/skill/parallel/</code>（auto_injector/task_matcher/budget_manager/conflict_filter/profile_skill_resolver）提供多技能并行的预算与冲突管控，是 RSI 并发自进化的基底。设计 4 分；成熟度 3 分因 budget 阈值尚需灰度标定。
+
+  <h3>D9 · 测试与可观测性</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>测试框架</th><th>日志/指标</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td class="yes">✓ Vitest</td><td class="yes">✓ 结构化日志</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj oc">OC</td><td class="yes">✓ @vscode/test</td><td class="yes">✓ LSP trace + Output</td><td><span class="s4">4</span>/<span class="s5">5</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td class="partial">~ pytest 基础</td><td class="yes">✓ 结构化日志</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td class="partial">~ 仓颉测试</td><td class="yes">✓ LRT 日志 + SSE</td><td><span class="s3">3</span>/<span class="s2">2</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>ASR 在测试与可观测性维度是短板：仓颉语言的测试生态尚不成熟，插件级测试框架缺失。可观测性靠 LRT 日志 + SSE 上报，但插件级指标采集不完善。这是 ASR 需优先补强的维度。
+
+  <h3>D10 · 版本与兼容性</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>版本管理</th><th>向后兼容</th><th>迁移工具</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>semver</td><td class="partial">~ alpha 期</td><td class="no">✗</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="proj oc">OC</td><td>engines.vscode 约束</td><td class="yes">✓ VSCode 原生</td><td class="yes">✓ 版本迁移</td><td><span class="s5">5</span>/<span class="s5">5</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td>catalog 版本约束</td><td class="yes">✓ 16 条规则</td><td class="partial">~</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td>plugin.yaml version</td><td class="no">✗ 早期</td><td class="no">✗</td><td><span class="s3">3</span>/<span class="s2">2</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>ASR 在版本与兼容性维度是最大短板之一——v0.0.29 早期阶段，无向后兼容承诺，无迁移工具。这是静态语言 + 早期阶段的必然代价。
+
+  <h3>D11 · 开发者支持（新增维度）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>脚手架</th><th>校验工具</th><th>模板</th><th>文档</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td class="no">✗</td><td class="partial">~ TS 类型</td><td class="partial">~ 示例</td><td class="yes">✓ README</td><td><span class="s3">3</span>/<span class="s3">3</span></td></tr>
+        <tr><td class="proj oc">OC</td><td class="yes">✓ plugins init</td><td class="yes">✓ schema 校验</td><td class="yes">✓ 多模板</td><td class="yes">✓ 完整文档站</td><td><span class="s5">5</span>/<span class="s5">5</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td class="partial">~ cookiecutter</td><td class="yes">✓ catalog 准入</td><td class="yes">✓ 模板</td><td class="yes">✓ AGENTS.md</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td class="yes">✓ plugingen</td><td class="partial">~ 编译期</td><td class="yes">✓ L3 独立工程</td><td class="yes">✓ spec/design</td><td><span class="s3">3</span>/<span class="s2">2</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>OC 是唯一拥有真正脚手架（<code>plugins init</code>）的项目，配合完整文档站，开发者体验最佳。ASR 的 <code>plugingen</code> 默认生成 L3 进程轨独立工程，但模板<strong>不带测试</strong>，这是成熟度 2 分的主要原因。DSH 缺脚手架是 alpha 期的可理解缺口。
+  <span class="ev">证据 A：<code>openclaw/docs/plugins/building-plugins.md</code> · <code>agentskills-runtime/src/plugin/tools/plugingen.cj</code></span></p>
+
+  <h3>D12 · 原生智能 / 自进化（新增核心维度）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>自进化机制</th><th>进化边界</th><th>代码腿</th><th>评分 D/M</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>ralph 自我对话循环</td><td>明确拒改自身循环</td><td class="no">✗</td><td><span class="s3">3</span>/<span class="s2">2</span></td></tr>
+        <tr><td class="proj oc">OC</td><td>skill_workshop + 后台自动评审</td><td>技能文本层</td><td class="no">✗</td><td><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj hermes">HM</td><td>background_review 每轮自评</td><td>契约禁止改框架代码</td><td class="no">✗</td><td><span class="s4">4</span>/<span class="s4">4</span></td></tr>
+        <tr><td class="proj asr">ASR</td><td>RSI 三腿闭环 + Iron Law RSI-0</td><td><strong>突破到源码层</strong></td><td class="yes">✓ 确定性工具链</td><td><span class="s5">5</span>/<span class="s4">4</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout rsi">
+    <strong>D12 是四项目的根本分水岭。</strong>同业把自进化限制在"技能文本层"——写 memory/skill 文本，不改框架源码。ASR 独有<strong>确定性代码生成工具链</strong>（loaddbinfo/crudgen/crudweb/plugingen/pluginuninstall），把自进化边界推进到"确定性工具驱动的源码层"。这不是"去 LLM"，而是让合适子系统特性由合适组件提供（Iron Law RSI-0）。详见第 9 章 RSI 专题。
+  </div>
+</section>
+
+<!-- ==================== 5. 隔离模型专题 ==================== -->
+<section id="s5">
+  <h2><span class="num">5</span>隔离模型专题：四种哲学</h2>
+  <p class="lead">四家对"插件与宿主如何隔离"给出了四种截然不同的哲学回答，折射出各自的语言运行时与部署形态约束。</p>
+
+  <div class="proj-grid">
+    <div class="proj-card dsh">
+      <span class="badge">DSH</span>
+      <h3>fiber ctx 隔离</h3>
+      <p class="desc">同进程内，每个插件获得独立 fiber ctx，作用域隔离但共享内存。<strong>哲学：信任插件，以轻量换性能。</strong></p>
+      <p class="desc">优势：零 IPC 开销，HMR 原生。劣势：恶意插件可逃逸。</p>
+    </div>
+    <div class="proj-card oc">
+      <span class="badge">OC</span>
+      <h3>Extension Host 进程</h3>
+      <p class="desc">独立 Extension Host 进程，API 白名单。<strong>哲学：借力平台，信任边界由 VSCode 定义。</strong></p>
+      <p class="desc">优势：成熟可靠，生态丰富。劣势：进程开销，非自研。</p>
+    </div>
+    <div class="proj-card hermes">
+      <span class="badge">HM</span>
+      <h3>in_process / host 双模式</h3>
+      <p class="desc">可信插件 in_process，不可信插件 host 子进程。<strong>哲学：按信任分级，灵活选择。</strong></p>
+      <p class="desc">优势：兼顾性能与安全。劣势：双模式增加复杂度。</p>
+    </div>
+    <div class="proj-card asr">
+      <span class="badge">ASR</span>
+      <h3>三轨：内嵌/L2/L3</h3>
+      <p class="desc">内嵌轨零开销，L2 动态库同进程独立符号表，L3 进程完全隔离。<strong>哲学：按需选轨，隔离强度可调。</strong></p>
+      <p class="desc">优势：设计最强，L3 进程级隔离。劣势：L2 卸载不完善，Sync 轨 51 分钟重编。</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>ASR 三轨选轨策略：</strong>默认 L3 process 轨（<code>plugingen.cj:48</code> 写死 <code>var mode = "process"</code>），以"不动宿主 + 进程隔离"为默认安全姿态。内嵌轨保留给核心插件（零开销），L2 动态库轨作为中间态规划。这一策略以"牺牲内嵌轨热重载"换取"L3 进程隔离 + 宿主冻结"，是静态语言运行时下的务实选择。
+  </div>
+</section>
+
+<!-- ==================== 6. 开发者支持 ==================== -->
+<section id="s6">
+  <h2><span class="num">6</span>插件开发者支持实操对照</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>能力</th><th class="dsh">DSH</th><th class="oc">OC</th><th class="hermes">HM</th><th class="asr">ASR</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>脚手架命令</td><td class="dsh"><span class="no">✗</span></td><td class="oc"><span class="yes">✓ plugins init</span></td><td class="hermes"><span class="partial">~ cookiecutter</span></td><td class="asr"><span class="yes">✓ plugingen</span></td></tr>
+        <tr><td>manifest schema 校验</td><td class="dsh"><span class="partial">~ TS 类型</span></td><td class="oc"><span class="yes">✓ JSON Schema</span></td><td class="hermes"><span class="yes">✓ 16 条规则</span></td><td class="asr"><span class="partial">~ 编译期注解</span></td></tr>
+        <tr><td>项目模板</td><td class="dsh"><span class="partial">~ 示例</span></td><td class="oc"><span class="yes">✓ 多模板</span></td><td class="hermes"><span class="yes">✓ 模板</span></td><td class="asr"><span class="yes">✓ L3 独立工程</span></td></tr>
+        <tr><td>测试模板</td><td class="dsh"><span class="yes">✓ Vitest</span></td><td class="oc"><span class="yes">✓ @vscode/test</span></td><td class="hermes"><span class="partial">~ pytest</span></td><td class="asr"><span class="no">✗ 不带测试</span></td></tr>
+        <tr><td>文档站</td><td class="dsh"><span class="yes">✓ README</span></td><td class="oc"><span class="yes">✓ 完整文档站</span></td><td class="hermes"><span class="yes">✓ AGENTS.md</span></td><td class="asr"><span class="yes">✓ spec/design</span></td></tr>
+        <tr><td>调试支持</td><td class="dsh"><span class="yes">✓ Node 调试</span></td><td class="oc"><span class="yes">✓ VSCode 原生</span></td><td class="hermes"><span class="yes">✓ pdb</span></td><td class="asr"><span class="partial">~ 仓颉调试</span></td></tr>
+        <tr><td>卸载工具</td><td class="dsh"><span class="yes">✓ fiber dispose</span></td><td class="oc"><span class="yes">✓ VSCode 原生</span></td><td class="hermes"><span class="partial">~ GC</span></td><td class="asr"><span class="yes">✓ pluginuninstall</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>OC 在开发者支持维度全面领先，是唯一拥有完整脚手架 + schema 校验 + 多模板 + 文档站的项目。ASR 的 <code>plugingen</code> + <code>pluginuninstall</code> 工具链是确定性代码生成的基础，但<strong>模板不带测试</strong>是急需补强的短板。
+</section>
+
+<!-- ==================== 7. 成熟度校正 ==================== -->
+<section id="s7">
+  <h2><span class="num">7</span>成熟度校正评分</h2>
+  <p class="lead">将设计与成熟度分开看，可以避免"设计先进但早期"被低估，或"工程扎实但设计平庸"被高估。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>项目</th><th>设计总分（满分 60）</th><th>成熟总分（满分 60）</th><th>设计均值</th><th>成熟均值</th><th>定位</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>48</td><td>47</td><td>4.0</td><td>3.9</td><td>设计成熟、工程扎实的响应式框架</td></tr>
+        <tr><td class="proj oc">OC</td><td>53</td><td>55</td><td>4.4</td><td>4.6</td><td>全面领先的生态型平台</td></tr>
+        <tr><td class="proj hermes">HM</td><td>46</td><td>46</td><td>3.8</td><td>3.8</td><td>严格准入的工程化框架</td></tr>
+        <tr><td class="proj asr">ASR</td><td>49</td><td>40</td><td>4.1</td><td>3.3</td><td>设计领先、工程早期的自进化框架</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout good">
+    <strong>双口径解读：</strong>ASR 的<strong>设计均值 4.1</strong>排名第二（仅次于 OC 4.4），但<strong>成熟均值 3.3</strong>排名末位——这正是"设计先进但早期"的典型画像。D12（自进化）维度 ASR 设计 5 分与 OC 并列第一，但 ASR 的 5 分来自<strong>确定性代码生成工具链</strong>这一原创贡献，OC 的 5 分来自<strong>skill_workshop + 后台自动评审</strong>的工程完整度。两者"5 分"的内涵不同。
+  </div>
+
+  <div class="callout warn">
+    <strong>避免误读：</strong>不要把"成熟度低"等同于"差"。ASR 在 D3（隔离）、D7（能力发现）、D12（自进化）三个维度的<strong>设计</strong>领先，是语言运行时与产品定位决定的<strong>结构性优势</strong>，会随工程推进转化为成熟度。反之，OC 在 D6（热重载）的设计 3 分是 VSCode 扩展机制的<strong>结构性限制</strong>，非工程投入可弥补。
+  </div>
+</section>
+
+<!-- ==================== 8. 根因解读 ==================== -->
+<section id="s8">
+  <h2><span class="num">8</span>根因解读：为什么它们如此不同</h2>
+  <p class="lead">四项目的差异不是偶然，而是三个<strong>硬约束</strong>的必然结果。理解根因，才能判断哪些差异可借鉴、哪些是结构性代价。</p>
+
+  <h3>8.1 硬约束一：语言运行时</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>语言</th><th>运行时特性</th><th>对插件机制的约束</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>TypeScript</td><td>V8 JIT + 动态类型</td><td>天然 HMR、fiber 响应式、IoC 容器</td></tr>
+        <tr><td class="proj oc">OC</td><td>TypeScript</td><td>VSCode Extension Host</td><td>借力 VSCode 进程隔离与生命周期</td></tr>
+        <tr><td class="proj hermes">HM</td><td>Python</td><td>CPython + GIL</td><td>ABC + 装饰器、importlib 动态加载、子进程隔离</td></tr>
+        <tr><td class="proj asr">ASR</td><td>Cangjie(仓颉)</td><td>AOT 编译 + 静态类型</td><td>编译期注解校验、反射、L2 动态库/L3 进程</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>语言运行时决定了插件机制的<strong>天花板</strong>：TS/JS 的动态性天然支持 HMR（DSH 5 分），静态语言 AOT 编译天然不支持热重载（ASR 3 分）——这不是设计水平的差距，而是语言物理约束。但静态语言换来了编译期类型安全（ASR D5 编译期注解校验）和进程级隔离（ASR D3 设计 5 分），是不同的 trade-off。
+
+  <h3>8.2 硬约束二：部署形态</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>部署形态</th><th>对插件机制的约束</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>Node.js 服务/CLI</td><td>单进程多 fiber，信任插件，轻量隔离</td></tr>
+        <tr><td class="proj oc">OC</td><td>VSCode 桌面应用</td><td>Extension Host 进程，借力平台安全边界</td></tr>
+        <tr><td class="proj hermes">HM</td><td>Python 服务</td><td>in_process/host 双模式，按信任分级</td></tr>
+        <tr><td class="proj asr">ASR</td><td>服务端 + Web + App 多端</td><td>多端一致要求强隔离 + 确定性生成</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>ASR 的多端部署形态（服务端 + Web + App）要求<strong>UMI 同构</strong>（以数据库结构为单一事实源驱动多端一致代码生成），这直接催生了确定性代码生成工具链——而确定性工具链正是 RSI 自进化的"框架之手"。换言之，ASR 的 D12 优势<strong>根因在于部署形态</strong>，而非单纯的设计选择。
+
+  <h3>8.3 硬约束三：生态冷启动策略</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>生态策略</th><th>对成熟度的影响</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>自建生态（alpha 期）</td><td>~30 内置插件，生态早期</td></tr>
+        <tr><td class="proj oc">OC</td><td>借力 VSCode 生态</td><td>180 扩展，生态最丰富</td></tr>
+        <tr><td class="proj hermes">HM</td><td>自建 + MCP 标准</td><td>65 optional-mcps，中等生态</td></tr>
+        <tr><td class="proj asr">ASR</td><td>自建 + agentskills 开放标准</td><td>早期，以确定性工具链替代生态</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>OC 借力 VSCode 生态是<strong>最聪明的冷启动策略</strong>——180 扩展不是自己写的，是 VSCode 生态的溢出。ASR 选择自建 + agentskills 开放标准，短期生态最弱，但<strong>以确定性工具链替代生态</strong>：不需要 180 个扩展，因为 <code>plugingen</code> 可以按需生成任意插件骨架。这是用"生成"替代"堆积"的不同路线。
+
+  <div class="callout">
+    <strong>根因总结：</strong>四项目的差异本质上是三个硬约束的组合选择——<strong>语言运行时</strong>决定热重载/隔离天花板，<strong>部署形态</strong>决定是否需要确定性生成，<strong>生态策略</strong>决定成熟度爬坡路径。ASR 的"设计领先、成熟早期"是"静态语言 + 多端部署 + 自建生态"组合的必然画像，而非设计水平的不足。
+  </div>
+</section>
+
+<!-- ==================== 9. RSI 自进化专题 ==================== -->
+<section id="s9">
+  <h2><span class="num">9</span>RSI 自进化专题：ASR 的根本分水岭</h2>
+  <p class="lead">本章基于 ASR 的 RSI 工程文档（<code>specs/RSI/</code>），深入剖析 ASR 在 D12 维度为何能突破"技能文本层"边界，以及这一突破的工程含义。</p>
+
+  <h3>9.1 Iron Law RSI-0：确定性优先</h3>
+  <div class="callout rsi">
+    <strong>Iron Law RSI-0：</strong>框架级确定性优先由<strong>确定性代码生成工具</strong>保障，以系统工程的确定性消解 LLM 在框架级变更中的不确定性。LLM 仍在需要的流程与位置生成代码（胶水逻辑、非标准实现等），只是不再让其概率性输出<strong>单独承担</strong>框架级结构正确性。
+    <br><br>
+    <strong>关键澄清：</strong>这不是"去 LLM"，而是让<strong>合适子系统特性由合适组件提供</strong>——确定性工具做确定的事，System-1 做结构化判断，System-2 做推理与创造，各司其职。
+    <span class="ev">证据 B：<code>specs/RSI/spec.md</code> §1 组件定位 · <code>specs/RSI/research.md</code> §4</span>
+  </div>
+
+  <h3>9.2 三腿闭环：代码 / 技能 / 数据库</h3>
+  <p>同业自进化只有"单腿"（技能文本层）。ASR 的 RSI 是<strong>三腿闭环</strong>——代码、技能、数据库三大基础设施的联动自进化：</p>
+
+  <div class="tri-leg">
+    <div class="leg">
+      <div class="icon">⚙️</div>
+      <h4>代码腿</h4>
+      <p>确定性代码生成工具链<br><code>loaddbinfo → crudgen → crudweb</code><br><code>plugingen → pluginuninstall</code><br><strong>已实现</strong></p>
+    </div>
+    <div class="leg">
+      <div class="icon">📚</div>
+      <h4>技能腿</h4>
+      <p>SDD 六步流水线<br>SKILL.md + plugin.yaml<br>一切皆技能 + SkillToToolAdapter<br><strong>已实现</strong></p>
+    </div>
+    <div class="leg">
+      <div class="icon">🗄️</div>
+      <h4>数据库腿</h4>
+      <p>UMI 同构 + UMI-ORM<br>schema → ORM/CRUD/Web 联动<br><strong>部分实现（P1 补全）</strong></p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <strong>数据库腿是最大短板：</strong>UMI-ORM 仅开源骨架，未完整实现。在 UMI-ORM 就绪前，C4（数据库层自进化）降级为"UMI 多端一致 + 显式标注部分能力"，不夸大。这是 ASR 在 D12 成熟度 4 分（非 5 分）的原因。
+    <span class="ev">证据 B：<code>specs/RSI/design.md</code> §1 对比表 · <code>specs/RSI/tasks.md</code> T-07（P1）</span>
+  </div>
+
+  <h3>9.3 五阶段循环：RSI 心跳</h3>
+  <div class="phase">
+    <span class="step">① 实测</span>
+    <span class="arrow">→</span>
+    <span class="step">② 根因</span>
+    <span class="arrow">→</span>
+    <span class="step">③ 优化方案</span>
+    <span class="arrow">→</span>
+    <span class="step">④ 防回退</span>
+    <span class="arrow">→</span>
+    <span class="step">⑤ 约束注入</span>
+    <span class="arrow">↻</span>
+    <span class="step">反馈（下一轮触发）</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>阶段</th><th>做什么</th><th>由谁做</th></tr></thead>
+      <tbody>
+        <tr><td><strong>① 实测</strong></td><td>采集指标（编译结果、测试覆盖率、契约漂移、复用率）</td><td>build watcher + LRT 日志 + SDD 缺陷分级</td></tr>
+        <tr><td><strong>② 根因</strong></td><td>LLM 分析实证数据，定位"为何未达预期"，输出根因假设</td><td>LLM（只定位根因，不产出源码）</td></tr>
+        <tr><td><strong>③ 优化方案</strong></td><td>LLM 规划"调用哪些确定性工具 + 拼装哪些胶水代码"</td><td>LLM 规划 + 确定性工具生成框架代码 + LLM 生成胶水</td></tr>
+        <tr><td><strong>④ 防回退</strong></td><td>方案转 SDD 任务，必须附带防回退锚点（测试/契约/规范）</td><td>SDD 闸口 + 人工 confirm</td></tr>
+        <tr><td><strong>⑤ 约束注入</strong></td><td>新约束回流 uctoo-v4 规范 / uctoo-dev-manual</td><td>规范文档更新</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>9.4 同业 RSI 基线对照</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>自进化机制</th><th>进化边界</th><th>代码腿</th><th>DB 腿</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td>ralph 自我对话循环</td><td>明确拒改自身循环</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td class="proj oc">OC</td><td>skill_workshop + 后台自动评审</td><td>技能文本层（最强）</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td class="proj hermes">HM</td><td>background_review 每轮自评</td><td>契约禁止改框架代码</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td class="proj asr">ASR</td><td>RSI 三腿闭环 + RSI-0 护栏</td><td><strong>突破到源码层</strong></td><td class="yes">✓ 确定性工具链</td><td class="partial">~ UMI-ORM 补全中</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout good">
+    <strong>根本分水岭：</strong>同业的自进化是"LLM 写 memory/skill 文本 → 下一轮 LLM 读取"——文本进文本出，不改框架源码。ASR 的自进化是"LLM 规划 → 确定性工具生成源码 → 编译绿条 → git 入库"——<strong>产出的是已验证的框架代码变更</strong>。这一差异使 ASR 的自进化从"建议"升级为"已验证 PR"。
+  </div>
+
+  <h3>9.5 System-1 承接：双驱动框架</h3>
+  <p>ASR 的确定性代码生成工具把"写框架代码"这一不确定任务，转化为"调用哪工具 + 传什么结构化参数 + 什么顺序"的<strong>结构化决策序列</strong>。而"结构化决策"正是 System-1 判断引擎（Laya 的 <code>choice/score/noul</code> 原语）的定义域：</p>
+  <ul>
+    <li>选操作 / 模块 / 模板 = Laya <code>choice</code></li>
+    <li>字段 / 参数取值 = Laya <code>noul</code> / <code>score</code></li>
+    <li>正确性核验 / 防回退 = Laya <code>noul</code></li>
+    <li>三态门控 = Laya 校准置信度（高→自动执行；中→提示人工；低→升级 System-2/人工）</li>
+  </ul>
+  <p>这带来<strong>双驱动框架</strong>特性：ASR 有 AI 是 AI 驱动开发框架，无 AI 仍是完备框架（CRUD/权限/同步/调度照常）。同业 harness 无 AI 即瘫。这是 ASR 被称为"AI 驱动开发框架超越 harness"的底层原因。
+  <span class="ev">证据 B：<code>specs/RSI/design.md</code> §2.4 System-1 承接 · <code>specs/RSI/spec.md</code> C11</span></p>
+</section>
+
+<!-- ==================== 10. 对 ASR 的启示 ==================== -->
+<section id="s10">
+  <h2><span class="num">10</span>对 ASR 的启示与优先级建议</h2>
+  <p class="lead">基于双口径评分与根因解读，对 ASR 提出分优先级的改进建议。优先级划分依据：<strong>对设计优势转成熟度的杠杆效应</strong>。</p>
+
+  <h3>10.1 P0（本周可落地，杠杆效应最高）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>编号</th><th>建议</th><th>对应维度</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td><span class="prio p0">P0-1</span></td><td>编写 <code>skills/RSI/SKILL.md</code> 技能本体（方法论 SOP + 三腿规划器 + 工具编排）</td><td>D12</td><td>RSI 的可执行载体，把设计 5 分转化为可验证的成熟度</td></tr>
+        <tr><td><span class="prio p0">P0-2</span></td><td>实现 RSI-0 护栏（拦截"把框架级结构正确性交给 LLM 概率性输出单独承担"的越界动作）</td><td>D12</td><td>把 Iron Law 从注释提升为可执行校验，是 ASR 的核心差异化</td></tr>
+        <tr><td><span class="prio p0">P0-3</span></td><td>串接 LRT：RSI 注册为原生 scheme（<code>rsi://&lt;goal&gt;</code>）+ 周期/事件触发</td><td>D12</td><td>把"自进化"从"人工点一下"升级为"框架自主心跳"</td></tr>
+        <tr><td><span class="prio p0">P0-4</span></td><td>验证强制链：build watcher 绿条 + SDD 测试步 接入 RSI 接受判据</td><td>D9, D12</td><td>把 RSI 从"建议"升级为"已验证 PR"，同时补强 D9 测试短板</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>10.2 P1（补齐 DB 腿，中等优先级）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>编号</th><th>建议</th><th>对应维度</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td><span class="prio p1">P1-1</span></td><td>UMI-ORM DB 腿补全：schema → ORM/CRUD/Web 确定性生成</td><td>D12</td><td>C4 由"部分能力"升级为"全能力"，完成三腿闭环</td></tr>
+        <tr><td><span class="prio p1">P1-2</span></td><td>plugingen 模板补测试骨架</td><td>D9, D11</td><td>解决"模板不带测试"短板，D11 成熟度从 2→3</td></tr>
+        <tr><td><span class="prio p1">P1-3</span></td><td>防回退锚点规范固化 + 回流 uctoo-v4 流程</td><td>D12</td><td>防止同类问题复发，是 RSI 闭环的关键一环</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>10.3 P2（专题完善，长期投入）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>编号</th><th>建议</th><th>对应维度</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td><span class="prio p2">P2-1</span></td><td>开放标准 <code>self-evolution</code> 能力声明 + 探测接口</td><td>D12</td><td>使 ASR 的 RSI 成为行业标准，反向牵引生态</td></tr>
+        <tr><td><span class="prio p2">P2-2</span></td><td>System-1 承接 PoC（Laya 判断引擎驱动确定性代码开发）</td><td>D12</td><td>验证"System-2 低参与下完成确定性变更"，体现双驱动框架</td></tr>
+        <tr><td><span class="prio p2">P2-3</span></td><td>plugin.yaml 运行期 schema 校验完善</td><td>D5</td><td>补强清单规范成熟度，向 OC/HM 看齐</td></tr>
+        <tr><td><span class="prio p2">P2-4</span></td><td>版本与兼容性承诺 + 迁移工具</td><td>D10</td><td>从 v0.0.x 早期阶段过渡到可承诺版本</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout good">
+    <strong>优先级逻辑：</strong>P0 全部围绕 D12（自进化），因为这是 ASR 的根本分水岭，且<strong>复用既有基础设施</strong>（SDD/LRT/parallel/确定性工具链），不新增白名单表，落地成本最低。P1 补齐 DB 腿是完成三腿闭环的必经之路。P2 是开放标准领导力与工程完善，长期投入。
+  </div>
+</section>
+
+<!-- ==================== 11. 拓展 vs 创新 ==================== -->
+<section id="s11">
+  <h2><span class="num">11</span>拓展 AgentSkills 标准的定位：拓展 vs 创新</h2>
+  <p class="lead">ASR 对 agentskills 开放标准的态度是<strong>拓展而非颠覆</strong>——在既有 plugin 能力声明基础上新增 <code>self-evolution</code> 能力项，使 ASR 的 RSI 可被外部运行时探测。这一克制叙事是产品定位的选择。</p>
+
+  <h3>11.1 拓展的边界</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>既有能力项（拓展不改）</th><th>新增能力项（拓展加入）</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>
+            <ul>
+              <li><code>plugin.inspect</code> / <code>plugin.activate</code> / <code>plugin.refresh</code></li>
+              <li><code>skill.execute</code> / <code>skill.list</code></li>
+              <li><code>tool.invoke</code> / <code>tool.schema</code></li>
+              <li>既有 manifest schema + 生命周期</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li><code>self-evolution.detect</code>：探测运行时是否具备自进化能力</li>
+              <li><code>self-evolution.submit</code>：提交自进化目标</li>
+              <li><code>self-evolution.status</code>：查询自进化进度</li>
+              <li><code>self-evolution.artifact</code>：获取已验证变更产物</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>11.2 为什么是拓展而非颠覆</h3>
+  <ul>
+    <li><strong>生态兼容：</strong>既有 agentskills 运行时无需改动即可忽略 <code>self-evolution</code> 能力项，向后兼容。</li>
+    <li><strong>渐进采纳：</strong>外部运行时可按需探测并使用 RSI，不强制。</li>
+    <li><strong>标准领导力：</strong>把"AI 驱动开发框架的差异化"从产品特性提升为<strong>行业标准</strong>，反向牵引生态——这是 P2-1 的战略价值。</li>
+    <li><strong>克制叙事：</strong>ASR 不宣称"取代"其他框架，而是"拓展"标准——在既有能力上叠加自进化，让市场自行选择。</li>
+  </ul>
+
+  <div class="callout">
+    <strong>定位总结：</strong>ASR 的产品定位是<strong>"AI 驱动开发框架"而非"AI Agent harness"</strong>——harness 无 AI 即瘫，ASR 无 AI 仍是完备框架（双驱动）。拓展 agentskills 标准是这一定位在标准层面的投射：不颠覆既有 Agent 生态，而是叠加"框架自进化"这一新维度。
+  </div>
+</section>
+
+<!-- ==================== 12. 附录 ==================== -->
+<section id="s12">
+  <h2><span class="num">12</span>附录：证据索引</h2>
+
+  <h3>12.1 源码证据（A 级）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>证据路径</th><th>对应维度</th></tr></thead>
+      <tbody>
+        <tr><td class="proj dsh">DSH</td><td><code>packages/core/src/plugin.ts</code></td><td>D1, D2</td></tr>
+        <tr><td class="proj dsh">DSH</td><td><code>packages/boot/plugin-manager/README.md</code></td><td>D2, D6 (HMR)</td></tr>
+        <tr><td class="proj dsh">DSH</td><td><code>packages/host/plugin-inventory/README.md</code></td><td>D7</td></tr>
+        <tr><td class="proj oc">OC</td><td><code>docs/plugins/architecture.md</code></td><td>D2, D3</td></tr>
+        <tr><td class="proj oc">OC</td><td><code>docs/plugins/manifest.md</code></td><td>D5</td></tr>
+        <tr><td class="proj oc">OC</td><td><code>docs/plugins/building-plugins.md</code></td><td>D11</td></tr>
+        <tr><td class="proj oc">OC</td><td><code>docs/plugins/sdk-overview.md</code></td><td>D7, D11</td></tr>
+        <tr><td class="proj hermes">HM</td><td><code>plugins/plugin_loader.py</code></td><td>D1, D2</td></tr>
+        <tr><td class="proj hermes">HM</td><td><code>plugins/AGENTS.md</code></td><td>D11</td></tr>
+        <tr><td class="proj hermes">HM</td><td><code>plugin-catalog/README.md</code></td><td>D5 (16 条规则)</td></tr>
+        <tr><td class="proj asr">ASR</td><td><code>src/plugin/tools/plugingen.cj:48</code></td><td>D6 (默认 L3)</td></tr>
+        <tr><td class="proj asr">ASR</td><td><code>.codeartsdoer/specs/plugin-system/spec.md</code></td><td>D1, D3 (三轨)</td></tr>
+        <tr><td class="proj asr">ASR</td><td><code>.codeartsdoer/specs/plugin-system/design.md</code></td><td>D3, D4, D7</td></tr>
+        <tr><td class="proj asr">ASR</td><td><code>src/skill/parallel/</code></td><td>D8 (budget/conflict)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>12.2 RSI 工程文档证据（B 级）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>文档</th><th>内容</th><th>对应章节</th></tr></thead>
+      <tbody>
+        <tr><td><code>specs/RSI/research.md</code></td><td>RSI 研究文档（三腿闭环、Iron Law RSI-0、同业基线、System-1）</td><td>§9</td></tr>
+        <tr><td><code>specs/RSI/spec.md</code></td><td>RSI 需求规格（C1-C11 能力声明）</td><td>§9</td></tr>
+        <tr><td><code>specs/RSI/design.md</code></td><td>RSI 设计方案（五阶段循环、三腿闭环、System-1 承接）</td><td>§9</td></tr>
+        <tr><td><code>specs/RSI/tasks.md</code></td><td>RSI 任务规划（T-01 到 T-11，P0/P1/P2 分期）</td><td>§10</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>12.3 数据校正记录</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>校正项</th><th>原值</th><th>校正值</th><th>依据</th></tr></thead>
+      <tbody>
+        <tr><td class="proj oc">OC</td><td>扩展数量</td><td>200+</td><td><strong>180</strong></td><td>实测 extensions 目录</td></tr>
+        <tr><td class="proj hermes">HM</td><td>optional-mcps 数量</td><td>数百个 catalog YAML</td><td><strong>65 optional-mcps</strong></td><td>实测 plugin-catalog</td></tr>
+        <tr><td class="proj oc">OC</td><td>版本号</td><td>—</td><td><strong>2026.10.4</strong></td><td>package.json</td></tr>
+        <tr><td class="proj hermes">HM</td><td>版本号</td><td>—</td><td><strong>1.0.0</strong></td><td>pyproject.toml</td></tr>
+        <tr><td class="proj dsh">DSH</td><td>版本号</td><td>—</td><td><strong>0.2.1-alpha.3</strong></td><td>package.json</td></tr>
+        <tr><td class="proj asr">ASR</td><td>版本号</td><td>—</td><td><strong>v0.0.29</strong></td><td>package.json</td></tr>
+        <tr><td class="proj asr">ASR</td><td>plugingen 默认轨</td><td>—</td><td><strong>L3 process</strong></td><td><code>plugingen.cj:48</code></td></tr>
+        <tr><td class="proj asr">ASR</td><td>Sync 轨重编时间</td><td>—</td><td><strong>~51 分钟</strong></td><td>实测</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <p>本报告由源码实证 + RSI 工程文档分析生成 · 报告日期 2026-10-18 · 双口径评分（设计完备度 / 落地成熟度）</p>
+  <p>对比项目：deepseek-harness 0.2.1-alpha.3 · openclaw 2026.10.4 · hermes-agent 1.0.0 · agentskills-runtime v0.0.29</p>
+</footer>
+
+</div>
+</body>
+</html>

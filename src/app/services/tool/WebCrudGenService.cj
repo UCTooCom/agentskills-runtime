@@ -6,10 +6,9 @@ package magic.app.services.tool
 import magic.app.core.response.APIResult
 import magic.app.services.uctoo.DbInfoService
 import magic.log.LogUtils
-import magic.utils.{newProcess, getEnv}
+import magic.utils.{newProcess, getEnv, resolveRuntimeRoot}
 import std.collection.{ArrayList, HashMap}
 import std.convert.*
-import std.env.getWorkingDirectory
 import std.process.{ProcessRedirect, SubProcess}
 import std.time.DateTime
 import std.core.Duration
@@ -84,13 +83,9 @@ public class WebCrudGenService {
     }
 
     private func getCrudwebPath(): String {
-        let workDir = getWorkingDirectory()
-        let workDirStr = workDir.toString()
-        let basePath = if (workDirStr.contains(":")) {
-            workDirStr
-        } else {
-            "D:/UCT/projects/miniapp/qintong/Delivery/uctoo-admin/apps/agentskills-runtime"
-        }
+        // runtime 根目录动态解析（AGENTSKILLS_RUNTIME_HOME 优先，其次进程工作目录），
+        // 不再写死开发机绝对路径。见 magic.utils.resolveRuntimeRoot。
+        let basePath = resolveRuntimeRoot()
         // 先尝试 debug 版本，再尝试 release 版本
         let debugPath = "${basePath}/target/debug/bin/magic.app.tools.crudweb.exe"
         let releasePath = "${basePath}/target/release/bin/magic.app.tools.crudweb.exe"

@@ -637,6 +637,12 @@ public class AgentsController {
                 entity.permissions = Some<String>(s)
             }
         }
+        if (let Some(profileSkills) <- map.get("profile_skills")) {
+            let profileSkillsStr = profileSkills as String
+            if (let Some(s) <- profileSkillsStr) {
+                entity.profileSkills = Some<String>(s)
+            }
+        }
         if (let Some(sourcePath) <- map.get("source_path")) {
             let sourcePathStr = sourcePath as String
             if (let Some(s) <- sourcePathStr) {
@@ -772,7 +778,7 @@ public class AgentsController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,name,agent_type,description,status,config,system_prompt,tools,model,parent_id,user_id,color,background,memory_scope,isolation_mode,max_turns,initial_prompt,creator,created_at,updated_at,deleted_at,version,author,permissions,source_path,sync_status,last_sync_at\n")
+            sb.append("id,name,agent_type,description,status,config,system_prompt,tools,model,parent_id,user_id,color,background,memory_scope,isolation_mode,max_turns,initial_prompt,creator,created_at,updated_at,deleted_at,version,author,permissions,profile_skills,source_path,sync_status,last_sync_at\n")
 
             // 写入数据行
             for (entity in entities) {
@@ -800,6 +806,7 @@ public class AgentsController {
                 sb.append(if (let Some(v) <- entity.version) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.author) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.permissions) { "\"" + v + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.profileSkills) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.sourcePath) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.syncStatus) { "\"" + v + "\"," } else { "" })
                 sb.append(if (let Some(v) <- entity.lastSyncAt) { "\"" + v.toString() + "\"," } else { "" })

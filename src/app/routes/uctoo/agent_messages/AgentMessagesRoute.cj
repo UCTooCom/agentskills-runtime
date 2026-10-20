@@ -50,6 +50,8 @@ public class AgentMessagesRoute {
      * 在此方法中添加定制开发的路由
      */
     public func registerCustomRoutes(): Router {
+        // T-AP：附件解析元数据查询（须在 :id 等动态路由之前注册，静态前缀优先）
+        router.get("/api/v1/uctoo/agent_messages/attachments/:messageId", controller.getAttachments)
 
         return router
     }

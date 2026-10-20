@@ -1,7 +1,7 @@
 # AgentSkills Runtime ：AI驱动开发框架
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.29-blue.svg)](https://github.com/UCTooCom/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.30-blue.svg)](https://github.com/UCTooCom/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## 项目简介
@@ -85,7 +85,7 @@ AgentSkills Runtime 是一个全面的框架，用于构建和执行 AI 智能�
 - 赛事：ArcBench Agentic Software Factory Hackathon（智能体软件工厂黑客松）
 - 参赛队伍：UCTooCom
 - 作品名称：基于 AgentSkills-runtime 的智能体软件工厂（Agentic Software Factory）
-- 作品描述：以全栈自研的 AgentSkills-runtime（仓颉语言 + Fountain ORM + PostgreSQL）为后端、`apps/web-admin/web`（Vue 3 + Vite + pinia-orm + OpenTiny）为前端，构建智能体软件工厂系统，将大型需求编译为两个可靠的业务应用：GitHub 风格的软件工程协作平台（`skills/github` 插件，10 张表：repository/branch/commit/repository_file/issue_comment/milestone/label/pull_request/pr_review/branch_protection）和 Google Sheets 风格的在线电子表格工作台（`skills/sheets` 插件，5 张表：workbook/worksheet/cell/validation_rule/pivot_table），实现需求拆解、模块委派、全流程可验证的核心价值。两个业务模块均遵循 SDD 铁律「二次开发底座优先」，通过 `loaddbinfo → plugingen（L3 进程隔离轨插件）→ crudweb` 确定性工具链生成，插件能力以 Service + Skill + Route 三维一体提供，并配套 web-admin 数据库管理界面。
+- 作品描述：以全栈自研的 AgentSkills-runtime（仓颉语言 + Fountain ORM + PostgreSQL）为后端、`apps/web-admin`（Vue 3 + Vite + pinia-orm + OpenTiny）为前端，构建智能体软件工厂系统，将大型需求编译为两个可靠的业务应用：GitHub 风格的软件工程协作平台（`skills/github` 插件，10 张表：repository/branch/commit/repository_file/issue_comment/milestone/label/pull_request/pr_review/branch_protection）和 Google Sheets 风格的在线电子表格工作台（`skills/sheets` 插件，5 张表：workbook/worksheet/cell/validation_rule/pivot_table），实现需求拆解、模块委派、全流程可验证的核心价值。两个业务模块均遵循 SDD 铁律「二次开发底座优先」，通过 `loaddbinfo → plugingen（L3 进程隔离轨插件）→ crudweb` 确定性工具链生成，插件能力以 Service + Skill + Route 三维一体提供，并配套 web-admin 数据库管理界面。
 - 项目图片：`apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon/asfh1.png`、`asfh2.png`
 - 代码仓库（设置 Topic 为 `#agentic-software-factory`）：
   1. 智能体运行时框架 https://atomgit.com/UCToo/agentskills-runtime
@@ -437,7 +437,7 @@ AgentSkills Runtime 内置了高性能HTTP/HTTPS应用服务器,提供企业级�
 
 ```ini
 # .env 配置
-PORT=443
+PORT=8080
 HOST=0.0.0.0
 SSL_CERT=./ssl/server.crt
 SSL_KEY=./ssl/server.key
@@ -578,10 +578,10 @@ cjpm build
 
 ### 运行 API 服务
 ```bash
-# 在默认端口 8080 上运行 API 服务
+# 在默认端口上运行 API 服务（端口由 .env 的 PORT 决定，默认 8080）。
 cjpm run --skip-build --name magic.app
-# 或在指定端口上运行
-cjpm run --skip-build --name magic.app 8081
+# 也可在命令后追加端口参数覆盖 .env 的 PORT：
+cjpm run --skip-build --name magic.app 8080
 ```
 
 有关运行 API 服务的详细说明，请参见 [API 服务运行指南](docs/api-service-run.md)。
@@ -640,7 +640,7 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --ta
 cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--help"
 ```
 
-**生成内容**（输出到 `WEB_CRUD_OUTPUT_DIR` 配置的目录，追加 `/web/src/` 路径）：
+**生成内容**（输出到 `WEB_CRUD_OUTPUT_DIR` 配置的目录，追加 `/src/` 路径）：
 - 页面入口：`views/database/<db_name>/<table_name>/index.vue`
 - 新增组件：`views/database/<db_name>/<table_name>/components/add-<table_name>.vue`
 - 数据表格：`views/database/<db_name>/<table_name>/components/<table_name>-table.vue`
@@ -650,7 +650,7 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--help"
 
 **环境变量配置**（在 `.env` 文件中）：
 ```ini
-# Web CRUD 代码输出根目录（crudweb 会自动追加 /web/src/ 子目录）
+# Web CRUD 代码输出根目录（crudweb 会自动追加 /src/ 子目录）
 WEB_CRUD_OUTPUT_DIR=D:\path\to\web-admin
 ```
 

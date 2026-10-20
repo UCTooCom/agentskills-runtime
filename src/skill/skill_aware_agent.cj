@@ -12,6 +12,7 @@ import magic.interaction.EventHandlerManager
 import magic.jsonable.TypeSchema
 import magic.tool.{SimpleToolManager, BuiltinToolsRegistry, GetSkillContentTool}
 import magic.core.skill.SkillManager
+
 import magic.log.LogUtils
 import stdx.encoding.json.JsonObject
 
@@ -75,6 +76,12 @@ public class SkillAwareAgent <: BaseAgent {
         
         for (skill in skills) {
             try {
+                // T086：profile 类技能不注册为工具，改由框架注入独立的 <profile_context> 层
+                let st = skill.metadata.get("skill_type")
+                if (st.isSome() && st.getOrThrow() == "profile") {
+                    LogUtils.info("Skipping profile skill '${skill.name}' from tool registration (routed to <profile_context> layer)")
+                    continue
+                }
                 if (skill.name == LONG_RUNNING_TASK_TOOL_NAME) {
                     // 长程任务是独立 LRT 提交通道：若注入了工厂，用专用工具接活；
                     // 否则退回 SkillToToolAdapter（其 BaseSkill.execute 是占位空实现，不会真正触发 LRT，

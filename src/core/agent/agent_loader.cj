@@ -267,6 +267,11 @@ public class AgentLoader {
         if (let Some(skillName) <- yaml.get("skill_name")) {
             builder.setSkillName(skillName)
         }
+
+        // 解析 profile 技能引用列表（YAML 数组，仅存技能名引用，对应 agents.profile_skills / AgentDefinition.profiles）
+        if (let Some(profilesStr) <- yaml.get("profiles")) {
+            builder.setProfiles(ArrayList<String>(parseYamlArray(profilesStr)))
+        }
         
         if (let Some(discoverableStr) <- yaml.get("discoverable")) {
             builder.setDiscoverable(discoverableStr.toAsciiLower() == "true")

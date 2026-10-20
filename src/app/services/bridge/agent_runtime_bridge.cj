@@ -5,6 +5,8 @@ package magic.app.services.bridge
 
 import magic.agent.base.BaseAgent
 import magic.skill.{SkillAwareAgent, CompositeSkillToolManager}
+import magic.skill.application.ProgressiveSkillLoader
+import magic.skill.domain.models.{SecurityPolicy, ResourceLimits}
 import magic.agent_executor.react.ReactExecutor
 import magic.core.AgentSessionContext
 import magic.agent.memory.tiered.TieredMemory
@@ -21,6 +23,7 @@ import f_util.UUID
 import std.collection.{HashMap, ArrayList, concurrent.ConcurrentHashMap}
 import std.time.DateTime
 import std.fs.Path
+import std.env.{getWorkingDirectory, getVariable}
 
 public class AgentRuntimeBridge {
     private static var instance_: Option<AgentRuntimeBridge> = None<AgentRuntimeBridge>
@@ -181,8 +184,39 @@ public class AgentRuntimeBridge {
         // （WebMCPProtocol）用 SkillAwareAgent + ReactExecutor + 工具 + 记忆。
         let sessionContext = AgentSessionContext(userId: userId, sessionId: agentId, agentId: agentId)
         let memory = TieredMemory(agentId: agentId)
+
+        // 修复空技能管理器：尝试通过 ProgressiveSkillLoader 加载技能目录
+        let skillManager = CompositeSkillToolManager()
+        let currentDir = getWorkingDirectory().toString()
+        let skillInstallPath = if (let Some(configuredPath) <- getVariable("SKILL_INSTALL_PATH")) {
+            if (!configuredPath.isEmpty()) {
+                configuredPath
+            } else {
+                "${currentDir}/skills"
+            }
+        } else {
+            "${currentDir}/skills"
+        }
+        let skillDirs = [skillInstallPath, "${currentDir}/src/examples"]
+        let loader = ProgressiveSkillLoader(
+            skillBaseDirectories: skillDirs,
+            defaultSecurityPolicy: SecurityPolicy.default(),
+            defaultResourceLimits: ResourceLimits.default()
+        )
+        try {
+            let loadedSkills = loader.loadSkillsToManager(skillManager)
+            LogUtils.info("buildAgentFromDefinition: loaded ${loadedSkills.size.toString()} skills")
+        } catch (ex: Exception) {
+            LogUtils.warn("buildAgentFromDefinition: failed to load skills: ${ex.message}")
+        }
+
+        // 检测技能管理器是否为空
+        if (skillManager.availableSkills.isEmpty()) {
+            LogUtils.warn("Agent 创建时技能管理器为空，自动渐进式加载未生效")
+        }
+
         SkillAwareAgent(
-            skillManager: CompositeSkillToolManager(),
+            skillManager: skillManager,
             sessionContext: sessionContext,
             model: chatModel,
             executor: ReactExecutor(),

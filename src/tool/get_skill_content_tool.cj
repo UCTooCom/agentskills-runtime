@@ -3,7 +3,7 @@
  */
 package magic.tool
 
-import magic.core.skill.{Skill, SkillManager}
+import magic.core.skill.{Skill, SkillManager, SkillInjectionChecker}
 import magic.core.tool.{ToolParameter, ToolResponse}
 import magic.jsonable.TypeSchema
 import magic.log.LogUtils
@@ -32,6 +32,7 @@ public class GetSkillContentTool <: AbsTool {
     """
 
     private static var _skillManager: Option<SkillManager> = None<SkillManager>
+    private static var _autoInjector: Option<SkillInjectionChecker> = None<SkillInjectionChecker>
 
     public static func setSkillManager(sm: SkillManager): Unit {
         _skillManager = Some(sm)
@@ -40,6 +41,11 @@ public class GetSkillContentTool <: AbsTool {
 
     public static func getSkillManager(): Option<SkillManager> {
         _skillManager
+    }
+
+    public static func setAutoInjector(injector: SkillInjectionChecker): Unit {
+        _autoInjector = Some(injector)
+        LogUtils.info("[GetSkillContentTool] SkillInjectionChecker injected for dedup")
     }
 
     public init() {
@@ -106,6 +112,20 @@ public class GetSkillContentTool <: AbsTool {
         }
 
         let sm = _skillManager.getOrThrow()
+
+        // 漂移修复去重：已自动注入的技能返回缓存内容（即从 SkillManager 获取相同内容，记录 debug 日志）
+        // dedupOnReinject=false 时跳过去重检查；去重检查失败时降级为原行为（不报错）
+        if (_autoInjector.isSome()) {
+            try {
+                let injector = _autoInjector.getOrThrow()
+                if (injector.isSkillInjected(skillName)) {
+                    LogUtils.info("[GetSkillContentTool] Skill '${skillName}' already auto-injected, returning cached content")
+                }
+            } catch (_: Exception) {
+                // 去重检查失败，降级为原行为
+            }
+        }
+
         match (sm.getSkill(skillName)) {
             case Some(skill) =>
                 let result = _buildSkillContentJson(skill, section)

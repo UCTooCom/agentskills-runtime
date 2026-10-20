@@ -15,6 +15,7 @@ import std.convert.*
  *   - main.cj: PluginRuntime.run 显式入口
  *   - handlers.cj: 完整 CRUD handler 框架（dispatch 路由 + host.db 调用）
  *   - effects.cj: ctx.effect 可逆效果注册框架
+ *   - SKILL.md: 技能定义（SkillBridge 扫描 skills/{name}/SKILL.md 自动注册）
  *
  * 与 crudgen 的确定性代码生成方式对齐：
  *   crudgen 从数据库结构生成宿主 CRUD 模块到 src/app，
@@ -66,10 +67,16 @@ public class CrudPluginGenerator {
         // 5. effects.cj（ctx.effect 可逆效果注册框架）
         this.writeEffects(name, className, pkgName, cjDir)
 
-        // 6. README.md（第三方开发者手册）
+        // 6. SKILL.md（技能定义 —— 三维一体的 Skill 通道）
+        //    2026-10-06 补齐：此前本生成器不产出 SKILL.md，插件目录里没有技能说明，
+        //    SkillBridge 扫不到，宿主只能靠 plugin.yaml 的 routes 清单发现能力。
+        //    缺口记录见 .codeartsdoer/specs/plugin-system/pluggen-skill-md-missing.md
+        this.writeSkillMd(name, dbName, tables, pluginDir)
+
+        // 7. README.md（第三方开发者手册）
         this.writeReadme(name, tables, pluginDir)
 
-        // 7. 生成 permissions 菜单节点 + i18 多语言数据（幂等，与 sync 轨同口径）
+        // 8. 生成 permissions 菜单节点 + i18 多语言数据（幂等，与 sync 轨同口径）
         //    ⚠️ 遍历**累积后**的全量表清单而非仅本次请求表：process 轨早期版本没有这一步，
         //    历史插件普遍存在「有页面、无菜单节点」的表，重跑一次即自动补齐。
         //    缺节点的后果：前端侧边栏看不到入口（PermissionsService.getUserMenuTree 的
@@ -314,6 +321,117 @@ public class CrudPluginGenerator {
         sb.append("// 自定义可逆效果写在此处（另起 class，用 ctx.effect 注册），再接进 main.cj 的注册链。\n")
         templateEngine.updateFile("${cjDir}/effects.cj", sb.toString())
         println("已生成: ${cjDir}/effects.cj")
+    }
+
+    /// 写入 SKILL.md（技能定义 —— 三维一体的 Skill 通道）
+    ///
+    /// 2026-10-06 补齐：process 轨 **CRUD** 插件此前不产出 SKILL.md（空白骨架走的
+    /// `PluginGenerator.generateProcessPlugin` 才有），于是 `skills/{name}/` 下没有技能
+    /// 说明文件，宿主只能靠 plugin.yaml 的 routes 清单发现能力，SkillBridge 的技能轨
+    /// 注册数为 0（skill_bridge.cj：「无 SKILL.md 的插件按纯 Service 插件处理」）。
+    /// 缺口记录见 .codeartsdoer/specs/plugin-system/pluggen-skill-md-missing.md。
+    ///
+    /// 内容与口径：
+    ///   - frontmatter 必须落在文件**最开头**（`skill_validator` 要求 SKILL.md 以 `---`
+    ///     起始），故保护区只能圈它之后的小节，frontmatter 本身不进保护区；
+    ///     description 因此不写死表名，只写库名 + 表数，避免随表清单累积而过期。
+    ///   - 覆盖表 / V4 API 端点两节随表清单变化 → 圈进保护区，重生成刷新。
+    ///   - 运行模型 / 使用方式（三通道 + crudweb 管理界面）/ 约束是固定文案 →
+    ///     留在保护区外，重生成不会冲掉二开补充的说明（同 writeReadme 的划分）。
+    ///
+    /// ⚠️ 存量手工文件保护：已存在且**不含**保护区标记的 SKILL.md（如手工补齐的
+    /// skills/github/SKILL.md、skills/sheets/SKILL.md）跳过覆盖并告警 —— 这类文件含
+    /// 生成器无法推导的业务语义（各表字段约定），覆盖等于不可逆丢失。
+    private func writeSkillMd(
+        name: String,
+        dbName: String,
+        tables: Array<String>,
+        pluginDir: String
+    ): Unit {
+        let targetPath = "${pluginDir}/SKILL.md"
+        if (templateEngine.fileExists(targetPath)) {
+            let existing = templateEngine.readText(targetPath)
+            // 保护区标记缺失 = 非本生成器产出（手工编写），保留而非覆盖
+            if (existing.split(TemplateEngine.MD_REGION_START).size <= 1) {
+                println("警告: ${targetPath} 已存在且无 AutoCreateCode 保护区标记（疑为手工编写），跳过生成以保留内容")
+                println("      手工版含各表业务语义（生成器无法推导）；如需改用生成版，先备份再删除该文件重跑 plugingen")
+                return
+            }
+        }
+
+        let sb = StringBuilder()
+        // ── frontmatter（必须在文件最开头，不进保护区）──
+        sb.append("---\n")
+        sb.append("name: ${name}\n")
+        sb.append("description: >\n")
+        sb.append("  L3 进程隔离轨 CRUD 插件 ${name}（plugingen 生成），覆盖 ${dbName} 库 ${tables.size} 张表的\n")
+        sb.append("  标准 CRUD 能力：新增、编辑、软删/硬删、恢复、分页列表（Prisma 风格 filter/sort）。\n")
+        sb.append("  触发场景：${dbName} 库相关表的数据管理请求、${name} 插件能力发现。\n")
+        sb.append("license: MIT\n")
+        sb.append("version: 1.0.0\n")
+        sb.append("plugin: ${name}\n")
+        sb.append("---\n\n")
+
+        sb.append("# ${name} 插件（L3 进程隔离轨 CRUD）\n\n")
+        sb.append("本插件是**独立 cjpm executable 工程**，由 plugingen 生成，运行在与宿主分离的\n")
+        sb.append("进程里，通过 stdio JSON-RPC（cordis NewlineFraming）与宿主通信，三维一体提供\n")
+        sb.append("**服务 + 技能 + 路由**：经 `host.db` 服务代理访问 `${dbName}` 库数据，不直连数据库。\n\n")
+
+        sb.append("## 运行模型\n\n")
+        sb.append("- 宿主启动扫描 `plugin.yaml`，`mode: process` 条目由 `CordisHostManager` 拉起；\n")
+        sb.append("- 插件不进入宿主编译图：改代码只需本目录 `cjpm build`，**不必重编宿主**；\n")
+        sb.append("- 插件**不继承**宿主环境变量，需要凭证时经 `ctx.invoke(\"host.secret\", \"get\", { ref: \"env:NAME\" })` 向宿主代取。\n\n")
+
+        // ── 保护区：随表清单变化的两节 ──
+        sb.append(TemplateEngine.MD_REGION_START + "\n")
+        sb.append("## 覆盖表（${tables.size} 张）\n\n")
+        for (t in tables) {
+            sb.append("- `${t}`\n")
+        }
+        sb.append("\n分多次 `--tables` 生成时表清单自动累积合并，本节随表清单刷新。\n\n")
+
+        sb.append("## V4 API 端点\n\n")
+        sb.append("每张表 6 条路由，basePath 为 `/api/v1/uctoo/{表名}`：\n\n")
+        sb.append("| 方法 | 路径 | 说明 |\n")
+        sb.append("|---|---|---|\n")
+        for (t in tables) {
+            sb.append("| GET | /api/v1/uctoo/${t}/:limit/:page | ${t} 分页列表 |\n")
+            sb.append("| GET | /api/v1/uctoo/${t}/:id | ${t} 单条查询 |\n")
+            sb.append("| POST | /api/v1/uctoo/${t}/add | ${t} 创建 |\n")
+            sb.append("| POST | /api/v1/uctoo/${t}/edit | ${t} 更新（含批量/恢复） |\n")
+            sb.append("| POST | /api/v1/uctoo/${t}/del | ${t} 删除（含批量/硬删） |\n")
+            sb.append("| POST | /api/v1/uctoo/${t}/empty-recycle-bin | ${t} 清空回收站 |\n")
+        }
+        sb.append("\n## 使用方式（三通道）\n\n")
+        sb.append("1. **服务轨（确定性通道）**：宿主/其他插件经 `client.call(\"invoke\", { service: \"${name}\", method, args })`\n")
+        sb.append("   调用 `handlers.cj` 注册的方法（`service` 为插件名）。\n")
+        sb.append("2. **HTTP 路由轨**：路由在 `plugin.yaml` 声明，宿主经 `ExternalPluginRouteGateway`\n")
+        sb.append("   注册，按上表路径调用。\n")
+        sb.append("3. **技能轨（AI 行为通道）**：本文件即技能定义，宿主启动时经 `SkillBridge` 扫描\n")
+        sb.append("   `skills/${name}/SKILL.md` 自动注册，智能体按 description 触发。\n\n")
+        sb.append("### 管理界面\n\n")
+        sb.append("配套管理页面由 `crudweb` 生成到 `apps/web-admin`（`src/views/uctoo/<表名>/`），\n")
+        sb.append("登录后从侧边栏进入即可可视化增删改查；菜单入口依赖 permissions 表节点，\n")
+        sb.append("由 plugingen 生成时自动写入（缺失时重跑一次 plugingen 即补齐）。\n\n")
+        sb.append("## 约束\n\n")
+        sb.append("- **stdout 是协议通道**：日志/诊断只能写 `stderr`（`eprintln`），`print`/`println` 会破坏帧解析。\n")
+        sb.append("- 数据访问一律经 `host.db`，且表必须在 `plugin.yaml` 的 `tableWhitelist` 内，否则宿主直接拒绝。\n")
+        sb.append("- 失败返回结构化结果（如 `{ errno, errmsg }`），不要抛 JSON-RPC error（异常会被包成字符串、丢失结构）。\n")
+        sb.append("- 遵循 uctoo-v4 API 规范：成功直接返回数据对象，错误返回 `{ errno, errmsg }`。\n")
+        sb.append(TemplateEngine.MD_REGION_END + "\n\n")
+
+        // ── 二次开发区（保护区外，重生成保留）──
+        sb.append("## 二次开发区\n\n")
+        sb.append("本文件由 plugingen 生成：上方 AutoCreateCode 区块会在重新生成时覆盖。\n")
+        sb.append("各表的业务语义、字段约定等生成器无法推导的说明请写在本区，重新生成会保留。\n")
+
+        templateEngine.updateFileWithMarkers(
+            targetPath,
+            sb.toString(),
+            TemplateEngine.MD_REGION_START,
+            TemplateEngine.MD_REGION_END
+        )
+        println("已生成: ${targetPath}")
     }
 
     /// 写入 README.md（第三方开发者手册）

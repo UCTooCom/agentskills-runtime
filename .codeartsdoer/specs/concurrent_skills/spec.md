@@ -1,10 +1,13 @@
 # 技能并行机制需求规格
 
 > **工程目录**: `.codeartsdoer/specs/concurrent_skills/`
-> **研究报告**: `research.md`（已完成）
+> **版本**: v2（2026-10-13 修订；v1 为 2026-10-05）
+> **研究报告**: `research.md`（v2，已同步）
 > **生成日期**: 2026-10-05
+> **修订日期**: 2026-10-13
 > **架构师观点来源**: `docs/ref/ConcurrentSkills.md`
 > **补充需求日期**: 2026-10-05（新增第 5.6 节"技能内容自动渐进式加载"，修复渐进式加载设计漂移）
+> **v2 修订要点**：① 新增 §5.7–§5.10（profile 技能类型、分发元数据、agents 引用、聚合注入与单一真源）；② 新增 §6.5 分发生命周期数据约束；③ 修正 §5.6 任务匹配需求——**必须支持中文分词，且 semantic 策略不得为桩实现**；④ 明确"缺上下文级驻留"表述（不再用"只串行"）；⑤ 明确 `always_on` 为**运行时扩展**非标准要求。
 
 ---
 
@@ -461,6 +464,102 @@ Backup --> LLM : 返回技能完整内容
 
 ---
 
+# **5.7–5.11（v2 新增核心能力，置于 §6 数据约束之前）**
+
+> **编排说明（v2）**：以下 §5.7–§5.11 为 2026-10-13 新增需求，承接 §5 核心能力序列，置于 §6 数据约束之前。
+
+## **5.7 profile 类型技能（v2 新增）**
+
+> 需求来源：架构师第二轮澄清 + 标准原文证据（`research.md` §11.2）。把散落的 SOUL/IDENTITY/USER/MEMORY 提示词归集为技能，目的是复用已有的**分发与持久化通道**；但必须显式判别其类型，避免与"可执行能力技能"混淆。
+
+### **5.7.1 业务规则**
+
+1. **`skill_type` 判别式**：SKILL.md frontmatter 必须支持 `skill_type`，取值 `profile` / `capability`，默认 `capability`
+   a. 验收条件：[SKILL.md 声明 `skill_type: profile`] → [解析结果为 profile 类型]
+2. **profile 类差异化绑定**：`skill_type=profile` 的技能必须注入 **profile 专属上下文层**，且**不注册为工具**
+   a. 验收条件：[profile 技能加载] → [出现在 `<profile_context>` 中，且工具注册列表中无该技能]
+3. **profile 层预算独立**：profile 层占用**独立预算**，不挤占 capability 技能预算；profile 层内按 `priority` 淘汰但受层上限约束
+   a. 验收条件：[profile 层满载] → [仅淘汰 profile 层内低优先级技能，capability 预算不受影响]
+4. **非 profile 技能行为不变**：`skill_type` 缺省或为 `capability` 时，行为与 v1 一致
+   a. 验收条件：[存量 49 个未声明 `skill_type` 的技能] → [按 capability 处理，行为不变]
+
+### **5.7.2 异常场景**
+
+1. **`skill_type` 取值非法**
+   a. 触发条件：声明了 `skill_type` 但取值不在 {profile, capability}
+   b. 系统行为：记录告警，回退 `capability`
+   c. 用户感知：告警日志"技能 X 的 skill_type 取值非法，回退为 capability"
+
+## **5.8 分发元数据与同步语义（v2 新增）**
+
+> 需求来源：`research.md` §11.4。原设计**完全缺失**跨节点分发的变更性与归属语义，盲目复制 MEMORY 必然产生多写冲突。
+
+### **5.8.1 业务规则**
+
+1. **分发元数据声明**：SKILL.md frontmatter 必须支持以下字段（均为可选，缺失按默认值）
+   - `sync_scope`：`agent_owned` / `user_owned` / `node_local`，默认 `node_local`
+   - `authoritative`：权威节点/主体标识，默认空（本机为权威）
+   - `conflict_policy`：`last_write_wins` / `merge` / `manual`，默认 `last_write_wins`
+   - `version`：语义化版本号
+   - `etag`：内容哈希，用于判定脏否、避免无谓传输
+   a. 验收条件：[声明后解析] → [各字段可被同步层读取]
+2. **复制范围约束**：跨节点复制**仅对** `sync_scope` 为 `agent_owned` / `user_owned` 的技能生效；`node_local` 不参与跨节点传输
+   a. 验收条件：[`sync_scope=node_local` 的技能] → [跨节点同步时不被传输]
+3. **MEMORY 默认不复制**：记忆类技能（`MEMORY.md` / 日常记忆）默认 `sync_scope=node_local`
+   a. 验收条件：[记忆类 profile 技能] → [默认 node_local，不随智能体跨节点复制]
+4. **冲突策略生效**：多写冲突时按 `conflict_policy` 处置，`manual` 时需产生待裁决记录
+   a. 验收条件：[两节点同时改同一 `agent_owned` 技能且 policy=manual] → [生成待裁决记录，不静默覆盖]
+5. **脏判定**：`etag` 相同则跳过传输
+   a. 验收条件：[目标节点 etag 与源一致] → [不传输]
+
+### **5.8.2 异常场景**
+
+1. **MEMORY 被要求跨端漫游**
+   a. 触发条件：产品要求记忆跨节点同步
+   b. 系统行为：**不在本需求范围内处理**——单列 CRDT / 事件溯源合并子课题（P2 研究项），禁止以 `last_write_wins` 静默覆盖记忆
+   c. 用户感知：需求外，需立项
+
+## **5.9 agents → profile 技能引用（v2 新增）**
+
+> 需求来源：架构师指出"归集为 agents 数据范畴错位更严重"。解法不是二选一，而是**引用**。
+
+### **5.9.1 业务规则**
+
+1. **`agents` 表只存引用**：智能体实体记录持有**指向其 profile 技能的引用**（关联关系），**不存储提示词正文**
+   a. 验收条件：[agent A 关联 profile 技能 P] → [agents 表中仅存引用关系，正文在 profile 技能中]
+2. **整体可打包**：导出/传输一个智能体时，须能沿引用一次性取出其全部 profile 技能
+   a. 验收条件：[导出 agent A] → [同时导出其引用的全部 profile 技能]
+
+## **5.10 profile 聚合注入与单一真源（v2 新增）**
+
+### **5.10.1 业务规则**
+
+1. **聚合注入**：多个 profile 技能（SOUL/IDENTITY/USER）在注入时须**组装为单一 `<profile_context>` 块**，而非各自独立注入
+   a. 验收条件：[存在 3 个 profile 技能] → [上下文中出现 1 个 `<profile_context>` 块，内含三段内容]
+2. **单一真源**：一旦 profile 技能存在，它就是**唯一真源**；`AgentWorkspace.getCombinedMemory()` 须改为从 profile 技能读取或在启用时关闭，**禁止双份注入**
+   a. 验收条件：[启用 profile 技能] → [上下文中个性化内容不重复出现]
+3. **存量迁移**：须提供一次性迁移，为存量 SOUL/IDENTITY/USER/MEMORY **自动生成带 frontmatter 的 SKILL.md**
+   a. 验收条件：[执行迁移] → [存量文件生成对应 SKILL.md，含 `skill_type: profile` 与分发元数据]
+4. **向后兼容**：无 profile 技能时回退读取旧工作空间文件
+   a. 验收条件：[未迁移] → [行为与迁移前一致]
+
+## **5.11 既有需求订正（v2，针对已实现代码暴露的缺陷）**
+
+> 本节依据 2026-10-13 对 `src/skill/parallel/` 已实现代码的复核结果订立（详见 `review.md` 附录 B）。
+
+1. **任务匹配必须支持中文分词**：`tokenize` **不得仅按空格切分**；中文文本无空格，仅按空格切分将导致整句成为单一 token，Jaccard 恒为 0，自动注入对中文**永不触发**
+   a. 验收条件：[中文任务描述 vs 中文技能描述，语义明显匹配] → [`matchScore` 达到阈值并被自动注入]
+2. **semantic 策略不得为桩实现**：`matchBySemantic` 必须真实实现（embedding 或等价语义匹配），**禁止返回常量 0.0**
+   a. 验收条件：[`task_match_strategy=semantic`] → [返回真实语义相似度，非固定值]
+3. **上下文预算上限应由模型上下文窗口派生**：`total_budget_tokens` 不得为固定魔法数，须按模型窗口比例（建议 15%–20%）计算
+   a. 验收条件：[切换不同上下文窗口的模型] → [预算上限随窗口变化]
+4. **注入所有权明确**：系统提示**只承载常驻层（profile + always_on）**且仅构建一次；每轮用户消息**只承载任务匹配层**，并对常驻层去重、不重复注入
+   a. 验收条件：[多轮会话] → [常驻层内容不随轮次重复累积注入]
+5. **`always_on` 标注为运行时扩展**：`load_policy: always_on` 是对 agentskills 标准的**扩展**（标准原文为 "load on demand"）
+   a. 验收条件：[对外文档/论文/大赛材料] → [明确标注为扩展，不表述为标准要求]
+
+---
+
 # **6. 数据约束**
 
 ## **6.1 技能并行声明（SKILL.md 扩展字段）**
@@ -492,8 +591,18 @@ Backup --> LLM : 返回技能完整内容
 5. **fallback_tool_retained**：是否保留 `get_skill_content` 后备工具，默认 `true`；向后兼容
 6. **dedup_on_reinject**：重复注入是否去重，默认 `true`；agent 主动调用获取已自动注入的技能时返回缓存而非重复注入
 
+## **6.5 技能类型与分发生命周期（v2 新增）**
+
+1. **skill_type**：技能类型，取值 `profile` / `capability`，默认 `capability`
+2. **sync_scope**：同步范围，取值 `agent_owned` / `user_owned` / `node_local`，默认 `node_local`
+3. **authoritative**：权威主体标识，默认空（本机为权威）
+4. **conflict_policy**：冲突策略，取值 `last_write_wins` / `merge` / `manual`，默认 `last_write_wins`
+5. **version**：技能版本号（语义化）
+6. **etag**：内容哈希，用于脏判定；相同则跳过传输
+7. **profile_ref**：`agents` 记录指向 profile 技能的引用（关联关系，**非正文**）
+
 ---
 
-**文档状态**: spec.md 已更新（含补充需求第 5.6 节"技能内容自动渐进式加载"），等待用户确认
+**文档状态**: spec.md **v2**（2026-10-13 修订，新增 §5.7–§5.11 与 §6.5，对齐架构师第二轮澄清；已与 research.md v2 / design.md v2 / tasks.md v2 同步）
 **补充需求摘要**: 修复渐进式加载设计漂移——将技能完整内容加载从"agent 主动调用 `get_skill_content` 工具"恢复为"框架自动注入到上下文"，保留工具作为后备
-**下一步**: 用户确认后，可进入 SDD design 步生成设计方案 design.md（需同步更新 design.md 增加自动渐进式加载的设计方案）
+**下一步**: design.md v2 需补充 profile 模块（M/N）与 TaskMatcher 中文分词修正；tasks.md v2 需新增 TG21–TG26

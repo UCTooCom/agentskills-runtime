@@ -568,6 +568,12 @@ public class MessagesController {
         if (let Some(deletedAt) <- map.get("deleted_at")) {
             // DateTime类型, 由数据库处理
         }
+        if (let Some(attachments) <- map.get("attachments")) {
+            let attachmentsStr = attachments as String
+            if (let Some(s) <- attachmentsStr) {
+                entity.attachments = Some<String>(s)
+            }
+        }
         return entity
     }
 
@@ -688,7 +694,7 @@ public class MessagesController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,user_id,sender_id,message_type,title,content,msg_related_type,related_id,is_read,read_at,creator,created_at,updated_at,deleted_at\n")
+            sb.append("id,user_id,sender_id,message_type,title,content,msg_related_type,related_id,is_read,read_at,creator,created_at,updated_at,deleted_at,attachments\n")
 
             // 写入数据行
             for (entity in entities) {
@@ -707,6 +713,7 @@ public class MessagesController {
                 sb.append("\"" + "${entity.createdAt.toString()}" + ",")
                 sb.append("\"" + "${entity.updatedAt.toString()}" + ",")
                 sb.append(if (let Some(v) <- entity.deletedAt) { "\"" + v.toString() + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.attachments) { "\"" + v + "\"," } else { "" })
                 sb.append("\n")
             }
 

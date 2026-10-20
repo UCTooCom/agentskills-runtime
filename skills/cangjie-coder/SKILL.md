@@ -18,6 +18,8 @@ scripts:
   - cangjie_compile.py       # Python 降级备选
   - cangjie_test_runner.py   # Python 降级备选
   - cangjie_fix_suggest.py   # Python 降级备选
+  - pkggraph.ts             # 包级循环依赖检测（TypeScript，推荐）
+  - pkggraph.py             # 包级循环依赖检测（Python 降级备选）
 ---
 
 ## 脚本运行说明
@@ -30,6 +32,76 @@ scripts:
 - **Python 版本（降级备选）**：`scripts/*.py`
   - 运行方式：`python scripts/<script>.py [参数]`
   - 仅在 TypeScript 版本运行出错时降级使用
+
+## 包依赖循环检测（pkggraph.ts / pkggraph.py）
+
+仓颉**跨包反向 import 会直接触发 `cyclic dependency` 拒绝构建**。本工具解析工程内每个
+`.cj` 的 `package` / `import` 声明，构建包级依赖图，用 Tarjan 强连通分量（SCC）算法检测
+循环依赖——在以下场景**改动后立即跑一遍再编译**：
+
+- 新增/调整 `package` 边界（新建文件写错包名、把工具类下沉到公共包）
+- 改跨包 import（尤其引入新的 `magic.*` 反向依赖，例如 `bridge→tools→plugin→lrt→bridge` 环）
+- 插件进程拆包、把模块从宿主抽到 `skills/<plugin>/src`
+
+**两个版本功能完全一致**：`pkggraph.ts`（TypeScript，**推荐**）与 `pkggraph.py`（Python 降级备选）。
+按技能通用约定**优先用 TypeScript 版本**以减少对 Python 运行环境的依赖；仅当 `node` 不可用
+或 TS 版本运行异常时降级到 Python 版本。
+
+### 运行方式（推荐：TypeScript）
+
+```bash
+# 进入工程根目录（含 src/），扫描 src/
+node --experimental-strip-types skills/cangjie-coder/scripts/pkggraph.ts
+
+# 指定源码根（相对当前目录或绝对路径）
+node --experimental-strip-types skills/cangjie-coder/scripts/pkggraph.ts --root src
+node --experimental-strip-types skills/cangjie-coder/scripts/pkggraph.ts --root apps/foo/src
+
+# 输出 JSON（便于脚本化判断是否有环）
+node --experimental-strip-types skills/cangjie-coder/scripts/pkggraph.ts --json
+```
+
+> 依赖：Node.js ≥ 22.6（推荐 v23.10+）。`--root` 相对**当前工作目录**解析，故务必在
+> 「能看见 src/ 的那一层」执行，否则打印 `源码根目录不存在` 并以退出码 1 退出（误报）。
+
+### 运行方式（降级：Python）
+
+```bash
+python skills/cangjie-coder/scripts/pkggraph.py
+python skills/cangjie-coder/scripts/pkggraph.py --root src
+python skills/cangjie-coder/scripts/pkggraph.py --json
+```
+
+### 输出与判定（两版本一致）
+
+- 文本模式（默认）：
+
+  ```
+  === cyclic dependency (SCC size > 1) ===
+  NONE                       # 无环，安全
+  # 或
+  * magic.x <-> magic.y     # 存在循环依赖的包集合（逐个列出）
+  随后打印 packages=N edges=M cycles=K 汇总
+  ```
+
+- JSON 模式（`--json`）：`{"cyclic": [...], "packages": N, "edges": M, "cycles": K}`
+
+- 退出码：`0` = 无环；`2` = 存在循环依赖；`1` = 参数/IO 错误。
+
+### 依赖忽略规则（与仓颉构建一致）
+
+只统计 `magic.*` 开头的 import（跨包边界）；`std*` / `ystyle` / `f_` / `jsonvalue`
+等外部或同包引用一律忽略。`magic.a.b::{c}` 或 `magic.a.b::{c, d}` 取 `magic.a.b`；
+其余 `magic.a.b.c` 逐级向上归并到已知包（SCC 只看包粒度，不看子目录文件）。
+
+### 工程内既有用法
+
+此前该工具位于 `apps/agentskills-runtime/.workbuddy/pkggraph.py`，现已纳入本技能并补齐
+TypeScript 版本。典型调用（结束判据 grep `cyclic` / `NONE`）：
+
+```bash
+node --experimental-strip-types skills/cangjie-coder/scripts/pkggraph.ts 2>&1 | grep -i "cyclic\|NONE\|error"
+```
 
 # Cangjie Coder 技能（编排器模式）
 
@@ -96,6 +168,12 @@ scripts:
 - ⚠️ **工作流程**: 查阅(Consult) → 检索(Retrieval) → 编辑(Editing) → 验证(Verification)
 - ⚠️ **适用所有场景**: 新建、修改、重构、优化、修复等所有涉及仓颉代码的操作都必须使用此技能
 - ⚠️ **验证闭环**: 代码写入后必须通过code-verifier验证，验证失败时自动修复
+- ⚠️ **编译报错必须一轮排净**: 修复编译错误时**不许只改日志里报出来的那几行**。cjpm 按包编译，
+  未出错的包本轮根本没被检查，同类错误会在下一次编译时集中爆发。交还人工编译前必须执行
+  《编译报错「一轮排净」规程》：跑 `scripts/cangjie_precompile_scan.{ts,py}` + 做同族全域 grep，
+  自查口径是 **「扫描 ERROR = 0」** 而非「日志里那几行改完了」
+- ⚠️ **检查规则须先验误报率**: 新增任何静态检查/自造规则前，必须先在大库上跑一遍确认误报率。
+  也不要凭直觉给代码补 `import`（本仓 `ArrayList`/`HashMap` 均属 prelude，无需 import，详见 §「反例教训」）
 
 ---
 
@@ -472,6 +550,298 @@ project/
 
 ---
 
+## 仓颉 JSON 编码易错点（compile-error 高发区）
+
+> 凡涉及 `stdx.encoding.json` 的类型判别 / 取值，一律走 `magic.jsonable.JsonUtils` 的安全转换（返回 `Option<T>`），**不要用 `as` 强转 + `let Some(...) <-` 绑定模式**——编译器会报 `unclosed delimiter: '('`（误把 `as` 表达式塞进绑定模式）。
+
+- ❌ `if (let Some(arr) <- v as JsonArray) { ... }` → 解析错误 `unclosed delimiter: '('`。
+- ✅ `if (let Some(arr) <- JsonUtils.asJsonArray(v)) { ... }`（`asJsonArray` / `asJsonObject` 返回 `Option<JsonArray>` / `Option<JsonObject>`）。
+- 取 JSON 字符串值用 `JsonUtils.toString(j): Option<String>`（**没有** `asJsonString`）；取数值用 `JsonUtils.toFloat` / `toInt`。
+- `JsonArray` 不支持 `for-in` 迭代器，必须 `for (item in arr.getItems())`（已有先例 `checkpoint_manager.cj:63`）。
+- 类型判断用 `v is JsonArray` / `v is JsonString`；需要取值时**先 `is` 判断再 `asString()/asInt()/asBool()` + `.getValue()`**（同范式见 `LlmRouteRuleController.cj` `jsonValueToAny`），不要把 `as` 塞进绑定模式。
+
+### 附：`None<T>()` 与 `ArrayList` 元素赋值（本仓高频编译错）
+
+- **`None<T>()` 是错的**（`no matching function for operator '()' function call`）：`None<T>` **不带括号**才是合法写法，错在尾部多了 `()` 把枚举变体当函数调用。
+  - ✅ `return None<ModelRouteRulePO>`、`po.deletedAt = None<DateTime>`、`var best: Option<T> = None<T>`
+  - ❌ `return None<ModelRouteRulePO>()`、`var best: Option<T> = None<T>()`
+  - 形参/返回值类型已标注时也可直接写 bare `None`。
+- **`ArrayList` 没有 `.set(i, v)`**（`'set' is not a member of class 'ArrayList<T>'`）：本版本用**下标赋值**改元素。
+  - ✅ `order[i] = x; order[j] = tmp`（先例 `RouteRegistry.cj:43-44` 冒泡交换、`faiss_database.cj:74`、`mcp_call_cli.cj:113`）
+  - ❌ `order.set(i, x)`
+  - 读取仍是 `arr.get(i)`（返回 `Option<T>`，配 `.getOrThrow()` / `if (let Some(v) <- arr.get(i))`）。
+
+> **自查命令**（改完 JSON/Option/ArrayList 相关代码后跑一次，零命中才算干净）：
+> ```bash
+> grep -rn "None<[^>]*>()\|\.set(\|<- .* as Json" src/
+> ```
+
+---
+
+## 编译报错「一轮排净」规程（compile-round 强制要求）
+
+> **核心要求：修复编译报错时，不许只改日志里报出来的那几行。必须在一轮之内把「同类
+> 错误」在整个工程里排干净，避免让人工反复执行 `cjpm build`。**
+
+### 为什么必须一轮排净
+
+cjpm/cjc 是**按包**编译的：某个包编译失败时，该包的检查立即中止，而**尚未轮到的包
+根本不会被检查**。所以一轮日志通常只暴露「第一个出错包的前几条错误」。
+
+**实测案例**（installer 子工程首轮 `cjpm build`）：日志只报了 `log.cj` 的 2 个错，
+但同一工程里还潜伏着 `args.cj` 的 6 处同类错、`redact.cj` 的 2 处、`main.cj` 的 1 处
+——它们分属 `uc_installer.cli` 包和根包，**本轮完全没被检查**。若只改那 2 行，
+人工就得连跑四五轮编译。
+
+### 规程（修完日志里的报错后、交还人工编译前必做）
+
+1. **跑静态扫描**（推荐：一次扫完形态固定的已知错误）：
+   ```bash
+   # 推荐 TypeScript 版（与目录内其他脚本用法一致）
+   node --experimental-strip-types \
+     <skill-root>/scripts/cangjie_precompile_scan.ts --src <源码根目录>
+
+   # 或 Python 版
+   python <skill-root>/scripts/cangjie_precompile_scan.py --src <源码根目录>
+   ```
+   退出码 `0` = 无 ERROR，可提交编译；`1` = 仍有 ERROR；`--json` 输出结构化结果。
+   规则集见脚本头注释：**E1** 后置 `?` 类型、**E2** match 臂多语句块、
+   **E4** `Array<T>` 调增删方法、**E5** 控制流缺花括号、**E6** main 返回类型被推断为 bottom type、
+   **W1** `let` 重赋值（WARN 级）。
+
+2. **做「同族全域 grep」**：编译器报的每一类错，都要假设它在别处也存在。通读**所有**
+   本次新增/修改过的 `.cj` 文件（不只报错那一个），按下面的清单逐个对照。
+
+3. **修的是根因类别，不是报错的那一行**：看到一个 `match` 臂块错，就把所有 `match`
+   臂块都改掉；看到一个类型注解错，就把所有类型注解都核对一遍。
+
+### 六类实测编译错误（原文报错 → 根因 → 修法）
+
+| 规则 | 原文报错 | 错误写法 | 根因 | 正确写法 |
+|------|---------|---------|------|---------|
+| **E1** | `expected ';' or '<NL>', found '?'` | `var logger: Logger? = None` | **Rust 语法误用**。仓颉可选类型是**前置** `?T` | `Option<Logger> = None<Logger>` 或 `?Logger` |
+| **E2** | `expected '=>' in lambda expression, found keyword 'let'` | `case None => {`<br>`    let l = ...`<br>`}` | `=>` 后的 `{` 被解析为 **lambda 起始**，块内首条 `let` 被当成缺 `=>` 的 lambda 参数 | 逻辑外提成函数，臂只留单表达式；或改 `if/else` 分支表达式 |
+| **E4** | `'add' is not a member of class 'Array<T>'` | `command: Array<String>` 却调用 `command.add(x)` | `Array<T>` 是**定长数组**，没有 `add/append/remove` | 改用 `ArrayList<T>`，或改用 `arr[i] = v` |
+| **E5** | `expected '{', found 'STATUS_MANUAL'` | `it.status = if (c) A else B` | **仓颉 `if` 的花括号是语法的一部分**，分支体必须是代码块 `{...}`，不能只写一个表达式 | `it.status = if (c) { A } else { B }` |
+| **E6** | `return type of 'main' is not 'Integer' or 'Unit'` | `main(args: Array<String>) {` …末句 `exit(code)` | **省略返回类型时按函数体最后一个表达式推断**；`std.env.exit(code: Int64): Nothing` 是 bottom type ⇒ 推断出 `Nothing`，而 main 的返回类型只允许 `Unit` 或整数类型 | `main(args: Array<String>): Unit {`，或改成整数返回类型后用 `return code` 退出 |
+| **W1** | `cannot assign to immutable value` | `let cur = StringBuilder()` … 后文 `cur = StringBuilder()` | `let` 声明的变量不可重新赋值 | 改 `var`，或改为不可变量重新绑定 |
+
+### E5 的规范依据与「正则 vs 配平」教训
+
+**语法依据**（`language.basic_concepts.3-表达式.3-2-if-条件判断`）：
+
+> 语法：`if (cond) { exprs1 } else { exprs2 }`，`cond` 是 `Bool` 类型表达式
+
+即 **`if` / `while` / `for` 的分支体一律写花括号**，`while (cond) { exprs }`、`for (x in c) { exprs }` 同理。
+这条与另一件常被混淆的事无关但容易并提：仓颉**不允许独立的 `{exprs}` 块作为表达式**
+（`let r = { let x = 2; x ** 3 }` 不合法）——代码块只能依附于 if/while/for-in/match/函数。
+顺便：`if` 用作值时，**有 `else`** 才取「所执行分支最后一个表达式的值」，**无 `else` 时类型恒为 `Unit`**。
+
+**两条必须内置的例外/注意**：
+
+1. **`do { exprs } while (cond)` 的尾部 `while` 本就无块**，不能报。判据：该行去空白后以 `}` 开头。
+   实证：本仓唯一的 2 条潜在误报就是 `src/dsl/parser.cj:34/46` 的 do-while。
+2. **扫这类问题必须用「括号配平」，不能用正则 `\)\s*[^ {]`**。
+   后者会把 `if (hasValue(args, idx)) {` 里 `hasValue(...)` 的**第一个** `)` 当成条件结束
+   （紧随的第二个 `)` 正好命中「非空格非 `{`」），在 `installer/src` 上一次性炸出 **20 条假阳性**。
+   正确做法：从 `(` 起计数配平到对应的 `)`，再取其后第一个非空白 token 判是否为 `{`。
+
+> E5 规则上线前的验证记录：含缺陷样本命中 3 处真缺陷（含用作值的单行 if-else），
+> 而在 1140 个已编译通过的宿主文件上**零误报**；Py / TS 双版本结果逐条一致。
+
+### E6 的规范依据与「bottom type 污染返回类型推断」
+
+**语法依据**（`language.package.3-程序入口.3-1-main-函数` / `3-2-main-函数示例`）：
+
+> - 返回类型：`Unit` 或整数类型
+> - 示例：`main(): Int64 { return 0 }`、`main(args: Array<String>): Unit { ... }`
+> - ❌ 返回类型不能是 `String`；❌ 参数类型只能是 `Array<String>`
+
+**根因机制**：仓颉**省略返回类型标注时，按函数体最后一个表达式推断**。
+而 `std.env.exit(code: Int64): Nothing` 返回 **`Nothing`**（bottom type）。
+于是「末句是 `exit(...)` 的 main」被推断为返回 `Nothing` —— 它既不是 `Unit` 也不是整数，
+直接报 `return type of 'main' is not 'Integer' or 'Unit'`。
+
+**这一族最容易误判的地方**：本仓明明有大量 `main(args: Array<String>) {` 的无标注写法
+（`crudgen.cj:30` / `crudweb.cj:31` / `loaddbinfo.cj:32` / `plugingen.cj:40`）且都能编译通过
+——所以**「没写返回类型」本身不是错**，真正的触发条件是「末句返回 bottom type」。
+据此写了只命中组合条件的 E6 规则；在这批文件上（末句均为 `println` 等 Unit 调用）**零误报**。
+
+**修法二选一**（本轮选了前者，因改动最小且不触碰已验证可用的 `exit` 终止语义）：
+
+```cangjie
+// ✅ 方案 A：显式标注 Unit，保留 exit 设退出码
+main(args: Array<String>): Unit {
+    ...
+    exit(report.exitCode)
+}
+
+// ✅ 方案 B：改用整数返回类型，用 return 退出（文档示例形态）
+main(args: Array<String>): Int64 {
+    ...
+    return report.exitCode
+}
+```
+
+> **规则实现上的两个坑**（写静态检查时务必注意）：
+> ① 判定 body 边界**必须做花括号配平且剔除字符串字面量** —— 否则 `sb.append("{")`
+> 里的花括号会让函数「提前收尾」，末句判定失准。本项目用「body 内嵌字符串花括号 +
+> 末句为 exit」的变异样本验证过：剔除正确时才命中。
+> ② 只对 **`main`** 报 ERROR。普通函数推断出 `Nothing` 未必错，别扩大适用范围。
+
+> E6 规则上线前验证：正例样本命中；天然负例为修复后的 `installer/src/main.cj`
+> （已标注 `: Unit`、末句同样是 `exit`，零命中）；全库 1140+ 文件零误报；Py / TS 双版本结果一致。
+
+另有一类不报编译错但会导致流程挂死的做法，一并规避：
+
+- **`let x: T` 先声明、再在多个分支里赋值**（如 `if` / `else if` 链各分支给 `report` 赋值）。
+  虽然仓颉有定赋值推断，但这种写法容易同时踩「不可变赋值」与「推断失败」两个坑。
+  **改法：把分支逻辑抽成返回值的函数**（如 `dispatch(parsed): Report`），在声明处直接
+  `let report = dispatch(parsed)` 完成确定赋值。注意此时常需要补回被移除的 `import`。
+
+### E2 的裁定依据（别判过头）
+
+`case X => {` **并非一律非法**，本仓存在差异：
+
+- ✅ **合法**：`{` 的下一行去空白后紧跟**裸 `=>`**（零参 lambda 写法）——先例
+  `src/app/middlewares/auth/JWTAuthMiddleware.cj`。该形态能通过编译，因为它确实是个 lambda。
+- ⚠️ **不可作先例**：`src/test/**` **不在主构建图内**（`cjpm build` 不编译），其中的写法
+  即使有问题也不会报错。`agent_loader_test.cj:20/35` 目前扫描仍命中 E2，属
+  **潜在未暴露的编译错误**，只在 `cjpm test` 时才会现形。
+
+> 判断有歧义时一律**回避该形态**（改 if/else 或外提函数），尤其在分支内要改写外层变量时。
+
+### ⚠️ 反例教训：勿凭「这个类型该不在 prelude」的直觉去补 import
+
+本次一度按直觉给文件补了 `import std.collection.ArrayList`，并据此写了一条 E3 检查规则。
+**大库实证证伪**（本仓 `src/`，均能通过编译）：
+
+- 512 个文件使用 `ArrayList`，其中 **248 个从未 import**；
+- 430 个文件使用 `HashMap`，其中 **314 个从未 import**。
+
+即二者均在 prelude 内，**不需要 import**（补了通常无害，但属冗余改动）。
+
+同一族故障的第三例（2026-10-08 installer 第二轮编译）：`eprintln` 写了 console 包的 import
+→ 报「符号在该包不可访问」。它实际属 **`std.core`**（`std.core.func.eprintln`），默认可见。
+**本仓 src/ 里有 8 个文件直接调用 `eprintln`，全部没有任何 console 包 / io 包的 import。**
+至此这张 prelude 表已有三例：**`ArrayList` / `HashMap` / `eprintln`（及既有的 `StringBuilder` / `Duration`）**。
+
+> ⚠️ 顺带记一条**自伤**：写完这条修复后，我把错误的 import 原文写进了代码注释，
+> 导致日后 `grep -rn "import.*console"` 命中注释产生**假阳性**。
+> **注释里不要写错误写法的原文**，要说就写成「console 包 / io 包」这类描述性文字。
+
+**结论：检查规则上线前必须先在大库上验证误报率。** 误报率高的规则比没有规则更糟：
+本轮 W1 规则首版在 1140 个文件上炸出 **564 条误报**，根因是用了「全文件的 let 名字集合」
+而未划作用域；改成「以函数签名为边界、取作用域内最后一次声明的 kind」后降为 **0 条**，
+同时对真实的同作用域重赋值仍准确命中。
+
+> 不确定某个类型是否属于 prelude 时，用这条命令实证（看有多少在用却未 import 的文件）：
+> ```bash
+> for f in $(grep -rl "ArrayList<" --include=*.cj src/); do
+>   grep -q "import std.collection.ArrayList\|import std.collection.\*" "$f" || echo "无import却能用: $f"
+> done | wc -l
+> ```
+
+---
+
+## 子进程 / 网络 / 环境变量：std API 实测契约（installer Phase 1 沉淀）
+
+来源：2026-10-08 `installer/src/platform/`（T006 子进程超时强杀、T007 进程表、
+T008 环境变量、T009 端口探测）四份实现逐条核对的结果。**每一条都有文档叶子或工程实证。**
+
+### 同 package 跨文件不需要 import
+
+**这一条直接决定「要不要补 import」，错了就是 `undeclared identifier`。**
+
+仓颉的 package 是**编译单元而非文件单元**：同一个 package 下所有文件的顶层符号互相直接可见，
+**不需要 import**，import 只用于跨包。
+
+**实证（建模：全 `src/` 扫描）**：同 package 跨文件引用符号且未 import 本包的文件数 = **328**。
+典型如 `magic.agent.base` 包的 `base_agent.cj` 直接引用同包 `abs_agent.cj` 的 `AbsAgent`；
+`magic.agent_executor` 包的 `dag_scheduler.cj` 直接用 `dag_config.cj` 的 `StepConfig`。
+
+验证命令（换包名即可自查）：
+
+```bash
+grep -rhoE "^package .+" src/<dir>/*.cj | sort -u
+# 看该包下的文件是否 import 了本包 —— 大量「没有」就是免 import 的实证
+```
+
+⚠️ 反过来别被害：**跨包**（哪怕名字很像）仍然必须 import。
+`report.cj` 写 `import uc_installer.util.{jstr, jint}` 是因为它身在 `uc_installer.cli`。
+
+### `SubProcess.wait(timeout!:)` 超时是抛异常，不是返回哨兵值
+
+```cangjie
+let outcome = try {
+    p.wait(timeout: cap)          // wait(timeout!: ?Duration = None): Int64
+} catch (_: TimeoutException) {   // ← TimeoutException <: Exception，package = std.core（默认可见）
+    WAIT_TIMEOUT_SENTINEL         // 哨兵值要自己约定；真实退出码不会是负数
+}
+```
+
+契约原文（`references/api/std/process/classes/subprocess/wait.md`）：
+「阻塞等待子进程执行返回或**等待超时后抛出超时异常**」＋「异常：`TimeoutException`」。
+
+⚠️ **不要按设计文档的示意去写 `if (code != TIMEOUT_SENTINEL)`** —— 那是假定返回值的写法，
+按它写就完全 catch 不到超时。installer 的 design.md §4.3.2 原有这个错，已在 2026-10-08 订正。
+
+### Pipe 模式必须先排空管道，否则 `wait` 的超时也救不回来
+
+契约原文警告：「对于需要操作标准流的场景（Pipe 模式），使用者需要优先处理标准流，
+**避免子进程标准流缓冲区满后调用本函数产生死锁**」。
+
+机制：子进程写满管道缓冲区后阻塞 → 它永远不退出 → `wait` 再设 timeout 也只会等到超时、
+拿不到任何输出。**正确做法是在 wait 之前把两个管道交给独立线程**：
+
+```cangjie
+let outPipe = p.stdOutPipe          // stdOutPipe: InputStream
+let errPipe = p.stdErrPipe
+let outFut: Future<Array<Byte>> = spawn { drainToArray(outPipe) }
+let errFut: Future<Array<Byte>> = spawn { drainToArray(errPipe) }
+let outcome = try { p.wait(timeout: cap) } catch (_: TimeoutException) { SENTINEL }
+let stdoutBytes = awaitDrainedBytes(outFut)   // 用有上限的 get(cap) 收敛，别用无参 get()
+```
+
+`InputStream` 只有 `read(buffer: Array<Byte>): Int64`（返回本次读到的字节数），
+**没有 `readToEnd`** —— 那个是 `StringReader` 的成员，别混用。
+
+### `Future.get(timeout:)` 是位置参数，调用时不能带标签
+
+| 调用 | 形参签名 | 性质 | 正确写法 |
+|---|---|---|---|
+| `Future.get(...)` | `get(timeout: Duration): T` | **位置参数**（无 `!`） | `fut.get(cap)` |
+| `SubProcess.wait(...)` | `wait(timeout!: ?Duration = None)` | 命名参数（有 `!`） | `p.wait(timeout: cap)` |
+| `Process.terminate(...)` | `terminate(force!: Bool = false)` | 命名参数（有 `!`） | `p.terminate(force: true)` |
+
+写成 `fut.get(timeout: cap)` 会报 `invalid named arguments prefix 'timeout:'`。
+**有没有感叹号是唯一判据** —— 别按「看起来像配置项」来猜。
+
+### 其它逐条核对过的点
+
+| 事项 | 结论 | 依据 |
+|---|---|---|
+| `String.fromUtf8Unchecked` | **必须用 `unsafe { }` 包裹** | 宿主 5 处实证：`ScriptExecutor.cj:96`、`lrt_host_executor.cj:911`、`CrudGenService.cj:213` 等 |
+| `HashMap(getVariables())` | 一律**不带泛型实参**，泛型由左侧类型标注或返回值位置给出 | 宿主 3 处同款：`ScriptExecutor.cj:76`、`utils/os.cj:62`、`:92` |
+| `Path` | 属 **`std.fs`**（不在 prelude，必须 import） | `import std.fs.{File, OpenMode, Path, exists, Directory}` |
+| `environment!` 形参 | 实际类型是 `?Map<String,String>`，传 `HashMap` 会被自动装箱 | `ScriptExecutor.cj:34` 传 HashMap 实证 |
+| `TcpSocket(host, port)` | port 是 **`UInt16`**，需 `UInt16(port)` 转换 | `HTTPServer.cj:284` `listenAndServeTls(host, UInt16(port))` |
+| `SocketTimeoutException` | 属 **`std.net`**，需显式 import | `references/api/std/net/classes/sockettimeoutexception` |
+| `TimeoutException` | 属 **`std.core`**，默认可见，无需 import | `std.core.class.timeoutexception` |
+| `StringBuilder.size` | 存在（`size: Int64`） | `std.core.class.stringbuilder.prop-size` |
+| `Array<T>.isEmpty()` | 存在 | `std.core.struct.array.isempty` |
+| 字符串里的反斜杠 | `\\` 表示单个反斜杠，**合法** | 宿主实证 `SyncController.cj:34` 的 `"\\\\"` |
+| Rune 转义字面量 | `r'\n'` / `r'\t'` 合法（前缀 `r` 不可省） | `decision_point.cj:51/53`、`adapter_http.cj:213` |
+| enum 限定值访问 | `EnvScope.USER` 这种 `EnumName.CASE` 合法 | `Logger.cj:123` 的 `LogLevel.INFO` |
+
+**Windows 环境变量写入的坑（`setx` 与 `setVariable` 必须成对）**：
+`setx` 只改注册表（持久化），**不改变当前进程已加载的环境块**；
+常驻进程 spawn 的子进程默认继承父进程环境，所以**只调 setx 的话，紧接着起来的子进程看不到新变量**。
+正确做法是写完 setx 再 `setVariable` 同步当前进程 —— 配套地，子进程环境要**每次重新**
+`HashMap(getVariables())` 构造（而非启动时缓存），`runCapped` 就是这样做的。
+
+---
+
 ## 完整使用示例
 
 ### 示例 1: 生成 HTTP 服务器代码
@@ -803,6 +1173,17 @@ public class User {
 5. 验证修复后的代码
 6. 写入修复后的文件
 
+**若第 2~6 步处理的是「编译报错」，必须额外执行下面两步**，否则会让人工反复执行 `cjpm build`：
+
+7. **一轮排净**：按《编译报错「一轮排净」规程》跑 `scripts/cangjie_precompile_scan.{ts,py}`，
+   并做同族全域 grep——把日志里那几类错误在**整个工程**里一次性改干净
+   （详见上文该章节，含 E1/E2/E4/W1 四类实测错误的原文报错与修法）
+8. **跨文件连锁检查**：本次改动引入的新符号/新类型，要回头检查涉及文件的 `import`
+   是否齐备、形参类型是否同步更新（典型：`joinCommand(tokens: ArrayList<String>)`
+   改了形参却忘了 `import std.collection.ArrayList` 之类）
+
+> 交还人工编译前，自查口径是「扫描 ERROR = 0」，而不是「日志里那几行改完了」。
+
 ### 场景 6: 添加新功能
 
 **触发条件**: 用户请求在现有代码中添加新功能
@@ -857,6 +1238,94 @@ public class User {
 ---
 
 ## 更新日志
+
+### v2.5.0 (2026-10-08)
+
+installer **Phase 1 平台层（T006~T009）** 落地时的 API 核对沉淀。**本轮没有编译错误，
+全部结论来自「写之前先查文档/查实证」**，四条 before-the-fact 的发现值得单列：
+
+- ✨ 新增专节 **《子进程 / 网络 / 环境变量：std API 实测契约》**，含
+  - **同 package 跨文件不需要 import**（仓颉 package 是编译单元不是文件单元）。
+    实证：全 `src/` 扫描出 **328 个**同包跨文件引用且不 import 本包的文件。
+    反向提醒：跨包仍需 import
+  - **`SubProcess.wait(timeout!:)` 超时是抛 `TimeoutException`（`std.core`，默认可见）**，
+    不是返回哨兵值；附契约原文。**这条直接推翻了 installer design.md §4.3.2 的示意写法**
+    （已在该文档内就地订正，避免后续实现者照抄）
+  - **Pipe 模式必须在 `wait` 之前用 `spawn` 排空管道**，否则子进程写满缓冲区后阻塞、
+    永远不退出，`wait` 的 timeout 救不回来；附完整代码骨架与「`InputStream` 没有 readToEnd」
+  - **`Future.get(timeout:)` 是位置参数（无 `!`）**，三种调用的性质对照表，
+    强调「**有没有感叹号是唯一判据**」
+  - 另附 10 项逐条核对表（`fromUtf8Unchecked` 需 `unsafe {}`、`HashMap(getVariables())`
+    不带泛型、`Path` ∈ `std.fs`、`UInt16(port)`、`SocketTimeoutException` ∈ `std.net`、
+    `TimeoutException` ∈ `std.core` 等）
+- ✨ 记一条 Windows 专属坑：**`setx` 与 `setVariable` 必须成对使用** ——
+  `setx` 只改注册表、不改当前进程环境块，常驻进程 spawn 的子进程看不到新变量；
+  配套地子进程环境要每次重取 `getVariables()` 而非启动时缓存
+
+### v2.4.0 (2026-10-08)
+
+installer 第四轮编译（1 error）。**新一族：函数的返回类型被 bottom type 污染。**
+
+- ✨ 「N 类实测编译错误」表扩充为**六类**，新增 **E6** 行：
+  `return type of 'main' is not 'Integer' or 'Unit'`。
+  根因是**省略返回类型时按函数体最后一个表达式推断**，而 `std.env.exit(code: Int64): Nothing`
+  返回 bottom type ⇒ 推断出 `Nothing`。
+- ✨ 新增专节 **「E6 的规范依据与「bottom type 污染返回类型推断」」**：给 main 允许的
+  返回类型（Unit / 整数）文档依据、两种修法对照、`std.env.exit` 的 Nothing 签名，
+  并点明**最容易误判之处**——本仓 `crudgen.cj:30` 等四处 `main(args: Array<String>)` 无标注
+  却都能编译通过，所以「没写返回类型」不是错，**真正的触发条件是「末句返回 bottom type」**，
+  E6 规则因此只对组合条件报 ERROR
+- ✨ `cangjie_precompile_scan.{py,ts}` 同步加入 E6（含 `findBodyLastStmt` 辅助：
+  花括号配平 + 剔除字符串字面量/多行字符串/注释）。配套的记录两条实现坑：
+  ① body 边界判定不剔字符串会被 `sb.append("{")` 带偏；② 只对 main 报，
+  普通函数推断出 Nothing 未必错
+- 📌 上线前双检全过：变异正例命中（body 内嵌字符串花括号仍正确识别末句）、
+  天然负例 `installer/src/main.cj` 零命中、全库零误报、Py/TS 结果一致
+
+### v2.3.0 (2026-10-08)
+
+**新增**:
+- ✨ 预编译扫描脚本新增 **E5 规则：`if` / `while` / `for` 的分支体必须写花括号**。
+  报错形态 `expected '{', found 'XXX'`；规范依据 `language.basic_concepts.3-表达式.3-2-if-条件判断`
+  的 `if (cond) { exprs1 } else { exprs2 }` —— **花括号是语法的一部分，不可省**，
+  分支体也不能只写单个表达式（含「用作值」的单行 `if-else` 也要加）。
+  Py / TS 双版本同步实现
+- 📚 新增《E5 的规范依据与「正则 vs 配平」教训》小节，固化两个必须内置的例外：
+  ① `do { } while (cond)` 的尾 while 合法无块（判据：该行去空白以 `}` 开头，
+  本仓仅 `src/dsl/parser.cj:34/46` 两处）；② **扫这类问题必须用括号配平而非
+  `\)\s*[^ {]` 正则**——后者会把 `if (hasValue(args, idx)) {` 里内层调用的**第一个** `)`
+  当成条件结束，在 installer/src 上炸出 **20 条假阳性**
+- 📌 顺记两个连带知识点：仓颉**不允许独立 `{exprs}` 块作为表达式**（只能依附
+  if/while/for-in/match/函数）；`if` 用作值时**无 `else` 则类型恒为 `Unit`**
+
+**验证记录**（E5 上线前双检，符合 v2.2.0 定下的「先验误报率」红线）:
+- 🐛 首版 do-while 例外只加在「条件后同行走»分支，漏了「条件在行尾」分支，
+  导致 `} while (true)` 误报；「分支体同行」与「条件在行尾」两个分支都要排除，已修
+- ✅ 含缺陷样本命中 3 处真缺陷；1140 个已编译宿主文件上 **E5 零误报**；
+  Py / TS 结果逐条一致
+
+**来源**: installer Phase 0 第四轮编译，`cli/report.cj:137`
+`it.status = if (code == EXIT_MANUAL) STATUS_MANUAL else STATUS_FAIL`
+
+### v2.2.0 (2026-10-08)
+
+**重大更新**:
+- ✨ 新增《编译报错「一轮排净」规程》章节:明确 cjpm 按包编译导致
+  "一轮日志只暴露首个出错包"的机制,固化「同一类错误必须一轮排净」的强制要求
+- ✨ 新增 `scripts/cangjie_precompile_scan.{py,ts}` 静态扫描脚本:
+  覆盖 E1 后置 `?` 类型 / E2 match 臂多语句块 / E4 `Array<T>` 调增删方法 /
+  W1 `let` 重赋值(WARN),支持 `--json` / `--quiet`,ERROR 是否为 0 决定退出码
+- ✨ 关键约束新增两条:编译报错必须一轮排净、检查规则须先验误报率
+- ✨ 「场景 5 修复仓颉代码错误」补充第 7/8 步:一轮排净 + 跨文件连锁检查
+
+**改进**:
+- 📚 记录四类实测编译错误的**原文报错 → 根因 → 修法**对照表(E1/E2/E4/W1)
+- 📚 澄清 E2 裁定依据:`JWTAuthMiddleware.cj` 的零参 lambda 形态合法,
+  而 `src/test/**` 不在主构建图内、其写法不可作先例
+- 🐛 修正反例教训:经大库实证 `ArrayList`/`HashMap` 属 prelude(512 个文件用
+  ArrayList 其中 248 个未 import 仍能编译),据此废止误报的 E3「缺 import」规则
+- 🐛 W1 规则由「全文件 let 名字集合」改为「按函数签名划作用域、取最后一次声明 kind」,
+  误报由 564 条降为 0 条,同时保留对真实重赋值的准确命中
 
 ### v2.1.0 (2026-03-13)
 

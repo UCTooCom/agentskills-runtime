@@ -196,7 +196,8 @@ public class AgentExecutionInfo <: AgentExecution {
         }
         // Add messages in the following order:
         // 1. Add the user question as the first user message
-        this.addMessage(Message.user(newQuestion, image: request.image))
+        // 多模态（SDD R3 / T-MC-006）：单图 → 多图（含旧 image 字段的兼容合并）。
+        this.addMessage(Message.user(newQuestion, images: request.allImages()))
         // 2. Add imported files as user messages
         // Note that the imported file are separated from the user question
         // This is to avoid imported files being put to next chat rounds

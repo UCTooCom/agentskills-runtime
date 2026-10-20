@@ -5,7 +5,7 @@ package magic.app.services.tool
 
 import magic.app.core.response.APIResult
 import magic.log.LogUtils
-import magic.utils.{newProcess, getEnv}
+import magic.utils.{newProcess, getEnv, resolveRuntimeRoot}
 import std.collection.ArrayList
 import std.convert.*
 import std.env.getWorkingDirectory
@@ -246,13 +246,9 @@ public class PluginGenService {
      * 两者都不存在时仍返回 release 路径，让子进程报错信息暴露真实缺失位置。
      */
     private func getPlugingenPath(): String {
-        let workDir = getWorkingDirectory()
-        let workDirStr = workDir.toString()
-        let basePath = if (workDirStr.contains(":")) {
-            workDirStr
-        } else {
-            "D:/UCT/projects/miniapp/qintong/Delivery/uctoo-admin/apps/agentskills-runtime"
-        }
+        // runtime 根目录动态解析（AGENTSKILLS_RUNTIME_HOME 优先，其次进程工作目录），
+        // 不再写死开发机绝对路径。见 magic.utils.resolveRuntimeRoot。
+        let basePath = resolveRuntimeRoot()
         let releasePath = "${basePath}/target/release/bin/magic.plugin.tools.plugingen.exe"
         let debugPath = "${basePath}/target/debug/bin/magic.plugin.tools.plugingen.exe"
 

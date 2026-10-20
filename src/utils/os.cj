@@ -14,7 +14,7 @@ import std.os.process.{Process, ProcessRedirect, SubProcess}
 @When[cjc_version >= "1.0.0"]
 import std.process.{launch, ProcessRedirect, SubProcess}
 
-import std.env.{getVariable, setVariable, getVariables}
+import std.env.{getVariable, setVariable, getVariables, getWorkingDirectory}
 //======================================================
 
 @When[cjc_version < "1.0.0"]
@@ -41,6 +41,32 @@ protected func setEnv(envVarName: String, value: String): Unit {
 @When[cjc_version >= "1.0.0"]
 protected func setEnv(envVarName: String, value: String): Unit {
     setVariable(envVarName, value)
+}
+
+/**
+ * 解析 runtime 根目录，替代历史上写死的开发机绝对路径。
+ *
+ * 解析优先级：
+ *   1. 环境变量 AGENTSKILLS_RUNTIME_HOME（显式部署配置，可指向任意安装位置）
+ *   2. 进程工作目录 getWorkingDirectory()（cjpm run / 从项目根启动时的默认值）
+ *
+ * 约定与 CrudGenService.getCodeGenBasePath 的 CODE_GEN_BASE_PATH 一致：
+ * 都是「环境变量优先，缺省用工作目录」，因此不再需要在源码里固化任何机器路径。
+ *
+ * 返回空串表示两者都不可用，由调用方自行降级。
+ */
+public func resolveRuntimeRoot(): String {
+    if (let Some(p) <- getEnv("AGENTSKILLS_RUNTIME_HOME")) {
+        let trimmed = p.trimAscii()
+        if (!trimmed.isEmpty()) {
+            return trimmed
+        }
+    }
+    try {
+        getWorkingDirectory().toString()
+    } catch (_: Exception) {
+        ""
+    }
 }
 
 /**

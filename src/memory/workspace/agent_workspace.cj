@@ -56,7 +56,10 @@ public class AgentWorkspace {
     public let memoryFile: Option<WorkspaceFile>
     public let heartbeatFile: Option<WorkspaceFile>
     public let dailyMemoryFiles: ArrayList<WorkspaceFile>
-    
+
+    /** 由 profile 技能收敛而来的上下文（真源收敛：非空时 getCombinedMemory 优先使用并关闭旧 SOUL/IDENTITY/USER/MEMORY 路径，T106/T107） */
+    public var profileContext: Option<String> = None
+
     public init(
         workspacePath: String,
         agentsFile: Option<WorkspaceFile>,
@@ -66,7 +69,8 @@ public class AgentWorkspace {
         userFile: Option<WorkspaceFile>,
         memoryFile: Option<WorkspaceFile>,
         heartbeatFile: Option<WorkspaceFile>,
-        dailyMemoryFiles: ArrayList<WorkspaceFile>
+        dailyMemoryFiles: ArrayList<WorkspaceFile>,
+        profileContext!: Option<String> = None
     ) {
         this.workspacePath = workspacePath
         this.agentsFile = agentsFile
@@ -77,10 +81,21 @@ public class AgentWorkspace {
         this.memoryFile = memoryFile
         this.heartbeatFile = heartbeatFile
         this.dailyMemoryFiles = dailyMemoryFiles
+        this.profileContext = profileContext
     }
     
     public static func createEmpty(workspacePath: String): AgentWorkspace {
         return AgentWorkspace(workspacePath, None, None, None, None, None, None, None, ArrayList())
+    }
+
+    /**
+     * 注入由 profile 技能收敛而来的上下文（真源收敛入口，T106/T107）。
+     * 高层（magic.skill.parallel 装配器）把 profile 技能渲染结果写入此处，
+     * 随后 getCombinedMemory 优先使用它并关闭旧文件路径，避免双份注入。
+     */
+    public func withProfileContext(profileContext: String): AgentWorkspace {
+        this.profileContext = Some(profileContext)
+        return this
     }
     
     public func getFile(fileType: WorkspaceFileType): Option<WorkspaceFile> {
@@ -113,8 +128,29 @@ public class AgentWorkspace {
     }
     
     public func getCombinedMemory(): String {
+        // 真源收敛：若已注入 profile 技能上下文，则以其为准，关闭旧 SOUL/IDENTITY/USER/MEMORY 路径（T107 禁止双份注入）
+        if (this.profileContext.isSome()) {
+            var combined = StringBuilder()
+            combined.append(this.profileContext.getOrThrow())
+            combined.append("\n\n")
+            // 仅保留非 profile 来源（工具 / 智能体 / 心跳）
+            let keep = ArrayList<Option<WorkspaceFile>>()
+            keep.add(this.toolsFile)
+            keep.add(this.agentsFile)
+            keep.add(this.heartbeatFile)
+            for (part in keep) {
+                if (part.isSome()) {
+                    let file = part.getOrThrow()
+                    if (file.content.isSome()) {
+                        combined.append(file.content.getOrThrow())
+                        combined.append("\n\n")
+                    }
+                }
+            }
+            return combined.toString()
+        }
+        // 向后兼容：未迁移环境行为不变（T108）
         var combined = StringBuilder()
-        
         let parts = ArrayList<Option<WorkspaceFile>>()
         parts.add(this.soulFile)
         parts.add(this.identityFile)
@@ -123,7 +159,6 @@ public class AgentWorkspace {
         parts.add(this.heartbeatFile)
         parts.add(this.toolsFile)
         parts.add(this.agentsFile)
-        
         for (part in parts) {
             if (part.isSome()) {
                 let file = part.getOrThrow()
@@ -134,7 +169,6 @@ public class AgentWorkspace {
                 }
             }
         }
-        
         return combined.toString()
     }
 }

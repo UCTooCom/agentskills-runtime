@@ -117,6 +117,9 @@ public class AgentDefinition {
     
     /** 所属技能名（子 agent 必填，主 agent 为空）；对应 agents.skill_name 列 */
     public let skillName: Option<String>
+
+    /** 引用的 profile 技能名列表（仅存引用，不存提示词正文）；对应 agents.profile_skills 关联（TG25 T099） */
+    public let profiles: ArrayList<String>
     
     /** Agent 类型 */
     public let agentType: AgentType
@@ -216,7 +219,8 @@ public class AgentDefinition {
         systemPrompt: String,
         sourcePath: Path,
         baseDir: Path,
-        skillName: Option<String>
+        skillName: Option<String>,
+        profiles!: ArrayList<String> = ArrayList<String>()
     ) {
         this.name = name
         this.agentType = agentType
@@ -244,6 +248,7 @@ public class AgentDefinition {
         this.sourcePath = sourcePath
         this.baseDir = baseDir
         this.skillName = skillName
+        this.profiles = profiles
     }
     
     /**
@@ -321,7 +326,11 @@ public class AgentDefinition {
         if (let Some(langCtxVal) <- languageContext) {
             items.add(("language_context", JsonString(langCtxVal)))
         }
-        
+
+        if (profiles.size > 0) {
+            items.add(("profiles", JsonUtils.buildJsonArray(profiles.toArray())))
+        }
+
         return JsonUtils.buildJsonObject(items.toArray())
     }
 }
@@ -354,6 +363,7 @@ public class AgentDefinitionBuilder {
     private var languageContext: Option<String> = None<String>
     private var skillName: Option<String> = None<String>
     private var systemPrompt: Option<String> = None
+    private var profiles: ArrayList<String> = ArrayList<String>()
     private var sourcePath: Option<Path> = None
     private var baseDir: Option<Path> = None
     
@@ -481,6 +491,11 @@ public class AgentDefinitionBuilder {
         this.skillName = Some(skillName)
         return this
     }
+
+    public func setProfiles(profiles: ArrayList<String>): AgentDefinitionBuilder {
+        this.profiles = profiles
+        return this
+    }
     
     public func setSystemPrompt(systemPrompt: String): AgentDefinitionBuilder {
         this.systemPrompt = Some(systemPrompt)
@@ -528,7 +543,8 @@ public class AgentDefinitionBuilder {
             systemPrompt.getOrThrow(),
             sourcePath.getOrThrow(),
             baseDir.getOrThrow(),
-            skillName
+            skillName,
+            profiles: profiles
         ))
     }
     

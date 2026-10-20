@@ -2,11 +2,11 @@
 
 ## 概述
 
-`plugingen` 是 agentskills-runtime 的插件生成器，与 `crudgen` 同构的确定性插件生成工具，从 `db_info` 读表结构，生成插件到 `skills/{name}/`。
+`plugingen` 是 agentskills-runtime 的插件生成器，与 `crudgen` 同构的确定性插件生成工具，生成插件到 `skills/{name}/`。**默认生成 L3 进程隔离轨（process）插件**（独立 cjpm executable 工程）；需退回宿主内嵌 sync 轨时显式加 `--mode sync`。sync 内嵌轨从 `db_info` 读表结构，process 轨则以表名作为运行时参数（不读 db_info 列结构，以 TODO 占位）。
 
-**本次新增能力（sync 内嵌轨）**：支持「一次生成多张表」「同名插件分多次累积追加新表」「同名同表只覆盖 `AutoCreateCode` 保护区（保留二次开发）」三项特性，行为特性与 `crudgen` 的「保护区 / 多表 / 幂等追加」保持一致。
+**多表与累积能力（sync 内嵌轨 + L3 进程隔离轨均已支持）**：支持「一次生成多张表」「同名插件分多次累积追加新表」「同名同表只覆盖 `AutoCreateCode` 保护区（保留二次开发）」三项特性，行为特性与 `crudgen` 的「保护区 / 多表 / 幂等追加」保持一致。两条轨的多表实现范式一致（表名作为运行时参数），但产物结构不同。
 
-**源码位置**：`src/plugin/tools/plugingen/plugingen.cj`、`src/plugin/tools/plugingen/PluginGenerator.cj`、`src/plugin/tools/plugingen/CrudPluginGenerator.cj`
+**源码位置**：`src/plugin/tools/plugingen/plugingen.cj`、`src/plugin/tools/plugingen/PluginGenerator.cj`（sync 轨）、`src/plugin/tools/plugingen/CrudPluginGenerator.cj`（L3 process 轨）
 
 ## 用法
 
@@ -30,11 +30,12 @@ cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <�
 # 空白骨架：仅生成 SKILL.md + plugin.yaml + 包占位 + 插件入口
 cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --blank"
 
-# L3 进程隔离轨（单表，不支持多表累积，见下文说明）
+# L3 进程隔离轨（空白骨架，不带表）
 cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --mode process"
 
-# L3 进程隔离轨 + 表驱动：生成完整 CRUD 进程插件（对标 codelabs，单表）
+# L3 进程隔离轨 + 表驱动：生成完整 CRUD 进程插件（支持多表；对标 codelabs / long-running-task）
 cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --db <数据库名> --table <表名> --mode process"
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --db <数据库名> --tables <表1>,<表2> --mode process"
 ```
 
 ## 选项
@@ -44,19 +45,23 @@ cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <�
 | `--name <插件名>` | 插件唯一名（小写字母/数字/下划线；连字符自动转下划线） |
 | `--db <数据库名>` | 表驱动模式：数据库名（读 db_info 表结构） |
 | `--table <表名>` | 表驱动模式：单张表名（与 `--tables` 二选一，优先级低于 `--tables`） |
-| `--tables <表名列表>` | 表驱动模式：逗号分隔的多张表名（多表生成与累积；与 `--table` 二者至少其一，优先级高于 `--table`） |
-| `--mode <轨>` | 加载轨：sync（缺省）/ dylib / process |
+| `--tables <表名列表>` | 表驱动模式：逗号分隔的多张表名（多表生成与累积；sync 与 process 两轨均支持；与 `--table` 二者至少其一，优先级高于 `--table`） |
+| `--mode <轨>` | 加载轨：process（缺省）/ sync / dylib |
 | `--blank` | 生成空白插件骨架（跳过表结构） |
-| `--contract` / `--contract-only` | 数据契约骨架（§14.1）；同样接受 `--table` / `--tables` 多表 |
+| `--contract` / `--contract-only` | 数据契约骨架（§14.1）；同样接受 `--table` / `--tables` 多表（仅 sync 轨） |
 | `--help, -h` | 显示帮助信息 |
 
 > 参数解析：`resolveTableList(tableName, tablesRaw)` 在同时给定 `--tables` 与 `--table` 时以 `--tables` 为准；仅给定 `--table` 时退化为单表列表。表驱动模式要求 `--db` 与「`--table` 或 `--tables`」同时具备，否则报错引导使用 `--blank`。
+> **L3 process 轨**：同时支持 `--table` 与 `--tables`（多表累积）。若只给 `--db` 而未给表名，会显式报错提示补充，不再静默生成空白插件。
 
 ## 示例
 
 ```bash
-# 生成 sync 轨插件（默认，单表）
+# 生成 L3 进程隔离轨插件（默认，单表；需 --mode sync 退回内嵌轨）
 cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name entity --db uctoo --table entity"
+
+# 生成内嵌 sync 轨插件（显式 --mode sync）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name entity --db uctoo --table entity --mode sync"
 
 # 一次生成多表（同一插件聚合多张表）
 cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name github --db uctoo --tables repository,branch,commit,repository_file"
@@ -72,6 +77,9 @@ cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name myt
 
 # 生成完整 CRUD 进程插件（对标 codelabs，单表）
 cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name codelabs --db uctoo --table codelabs --mode process"
+
+# L3 进程轨多表：一次生成多张表的 CRUD 进程插件（表名运行时参数共用一个 handlers.cj）
+cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name lrtdemo --db uctoo --tables alpha,beta --mode process"
 ```
 
 ## 三轨架构
@@ -80,28 +88,33 @@ cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name cod
 |------|------|------------|----------|----------|
 | 内嵌轨 | sync | 宿主 magic 包 | build-sync 同步到 `src/plugins/{name}/` | 开发期增量编译（**支持多表累积**） |
 | L2 动态库轨 | dylib | 独立 cjpm 包（动态库） | `PackageInfo.load` 热加载 | 预编译动态库 |
-| L3 进程隔离轨 | process | 不进宿主编译图（独立 cjpm executable 工程） | `CordisHostManager` stdio 拉起 | 故障隔离、第三方发布（**单表**） |
+| L3 进程隔离轨 | process | 不进宿主编译图（独立 cjpm executable 工程） | `CordisHostManager` stdio 拉起 | 故障隔离、第三方发布（**支持多表累积**） |
 
-> **范围说明**：本次新增的「多表一次生成 / 同名追加 / 同名同表保护区覆盖」三项能力**仅作用于 sync 内嵌轨**。`--mode process`（经 `CrudPluginGenerator`）仍按单表生成，不累积；多表需求请走 sync 轨。
+> **多表能力适用范围**：sync 内嵌轨与 L3 process 轨**均已支持**「多表一次生成 / 同名追加 / 同名同表保护区覆盖」三项能力。`--mode dylib` 未做多表累积（走单表生成路径）。两轨的多表实现范式一致（表名作为运行时参数），产物结构不同——详见下文「多表生成与累积能力」。
 
-## 多表生成与累积能力（新增核心）
+## 多表生成与累积能力
 
-### 三个行为特性
+### 三个行为特性（sync 与 L3 process 两轨均适用）
 
-1. **一次生成多表**：`--tables a,b,c` 一次生成 a/b/c 三张表的五层 CRUD 产物；公共产物（聚合入口/路由、`plugin.yaml`、`SKILL.md`、`cjpm.toml`、workspace member、`plugins.yaml` 条目、权限节点）正确生成并衔接。
+1. **一次生成多表**：`--tables a,b,c` 一次生成 a/b/c 三张表的 CRUD 产物；公共产物（入口/路由、`plugin.yaml`、`SKILL.md`/`README.md`、`cjpm.toml`、workspace member、`plugins.yaml` 条目、权限节点）正确生成并衔接。
 2. **同名 + 不同表追加**：再次生成传入相同插件名、不同表名时，新表 CRUD 产物正常生成；公共产物基于「历史表清单 + 本次请求表」去重保序合并后整体重渲——旧表信息与二开保留、新表加入、表名不重复。
-3. **同名 + 相同表只覆盖保护区**：再次生成传入相同插件名、相同表名时，只覆盖该表各层（`PO/DAO/Service/Controller/Route`）`//#region AutoCreateCode ... //#endregion AutoCreateCode` 区间内的自动生成内容，区间外的二次开发保留；公共产物中的表清单不变（不含重复项）。
+3. **同名 + 相同表只覆盖保护区**：再次生成传入相同插件名、相同表名时，只覆盖各层（sync 的 `PO/DAO/Service/Controller/Route`；process 的 `handlers.cj`）`//#region AutoCreateCode ... //#endregion AutoCreateCode` 区间内的自动生成内容，区间外的二次开发保留；公共产物中的表清单不变（不含重复项）。
 
 ### 实现机制
 
-- **表清单还原**：`PluginGenerator.readExistingTables` 解析聚合路由文件 `src/{PascalName}Route.cj` 中以 `// table: <表名>` 标记的注释行，还原该插件已生成的全部历史表清单（避免对表名做逆 PascalCase 推导带来的歧义）。
+- **表清单还原**：两轨均从生成物中解析以 `// table: <表名>` 标记的注释行，还原该插件已生成的全部历史表清单（避免对表名做逆 PascalCase 推导带来的歧义）。sync 轨解析聚合路由 `src/{PascalName}Route.cj`，process 轨解析 `src/{ClassName}Handlers.cj` 的 `TABLES` 常量区。
 - **去重保序合并**：`mergeTableList(existing, requested)` 保持历史表顺序在前、本次新表追加在后，整体去重。
-- **保护区机制**：`writeRendered` → `TemplateEngine.updateFile` 仅替换 `AutoCreateCode` 区间内容，文件头尾（含手动接线代码）原样保留；每张 per-table 模板与聚合模板均带该保护区。
-- **聚合入口 / 路由**：宿主 `PluginHostManager.loadSingle` 每插件条目仅反射实例化单一 `entry.className`、仅登记单一 `routeClass`（`PluginRouteScanner.scanAndRegister` 只遍历 `routeClassNames()`）。因此同名多表插件**必须**产出「聚合入口 Plugin + 聚合路由 Route」（name-based，循环装配/注册所有表的 PO/Service/Controller/Route）。公共产物 `plugins.yaml` 条目在重名时整体替换为聚合类（保留原 `order`），不会新增重复条目。
+- **保护区机制**：均走 `TemplateEngine.updateFile` 仅替换 `AutoCreateCode` 区间内容，区间外（含文件头尾与二次开发）原样保留。
+- **sync 轨的聚合入口 / 路由**：宿主 `PluginHostManager.loadSingle` 每插件条目仅反射实例化单一 `entry.className`、仅登记单一 `routeClass`（`PluginRouteScanner.scanAndRegister` 只遍历 `routeClassNames()`）。因此同名多表插件**必须**产出「聚合入口 Plugin + 聚合路由 Route」（name-based，循环装配/注册所有表的 PO/Service/Controller/Route）。公共产物 `plugins.yaml` 条目在重名时整体替换为聚合类（保留原 `order`），不会新增重复条目。
+- **L3 process 轨的运行时参数化**（对齐已验证的 `long-running-task` 插件）：多表共用一个 `handlers.cj`——
+  - `TABLES: Array<String>` 常量列出全部表，每行带 `// table:` 标记；
+  - `getWritableColumns(table)` 按表返回可写列白名单；
+  - 各 handler 接收 `table: String` **运行时参数**，不把表名写死；
+  - `plugin.yaml` 的 `tableWhitelist` 列出全部表，`routes` 按表逐组 6 条，**basePath 用表名**（`/api/v1/uctoo/{表名}/...`）——插件名唯一，多表必须靠表名区分路径段。
 
 ### 与 crudgen 的一致性
 
-本次改造对齐 `src/app/tools/crudgen` 已有的「保护区 + 多表 + 幂等追加」行为：公共产物（如 `AutoRouteConfig.cj`、权限节点）逐表幂等追加；各层二次开发通过 `AutoCreateCode` 区域隔离，重新生成不丢失。plugingen 的 `plugin.yaml` / `SKILL.md` / 聚合入口 / 聚合路由等价于 crudgen 的聚合注册器角色。
+本次改造对齐 `src/app/tools/crudgen` 已有的「保护区 + 多表 + 幂等追加」行为：公共产物逐表幂等追加；各层二次开发通过 `AutoCreateCode` 区域隔离，重新生成不丢失。
 
 ## 生成产物（sync 内嵌轨，支持多表）
 
@@ -124,33 +137,39 @@ cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name cod
 > 命名约定：`{PascalName}` 为插件名 Pascal 化（如 `github` → `Github`）；`{TableName}` 为表名 Pascal 化（如 `repository_file` → `RepositoryFile`）。
 > 权限节点：`generatePermissionNodes` 按表幂等生成 `database → database.{dbName} → database.{dbName}.{tableName}` 三级菜单节点与 i18 数据，已存在节点跳过。
 
-## 生成产物（L3 进程隔离轨）
+## 生成产物（L3 进程隔离轨，支持多表）
+
+生成目录：`skills/{name}/`（独立 cjpm executable 工程）
 
 | 文件 | 职责 |
 |------|------|
-| `plugin.yaml` | V4 API 路由（6 条路由：add/edit/del/empty-recycle-bin/:id/:limit/:page） |
+| `plugin.yaml` | V4 API 路由 + `tableWhitelist`（全部表）；按表逐组 6 条路由，basePath `/api/v1/uctoo/{表名}` |
 | `cjpm.toml` | 独立 executable 工程配置（`--dy-std -Woff all`） |
-| `main.cj` | `PluginRuntime.run` 显式入口 |
-| `handlers.cj` | 完整 CRUD handler 框架（dispatch 路由 + host.db 调用） |
-| `effects.cj` | `ctx.effect` 可逆效果注册框架 |
-| `README.md` | 第三方开发者手册 |
+| `src/main.cj` | `PluginRuntime.run` 显式入口 |
+| `src/{ClassName}Handlers.cj` | 完整 CRUD handler 框架（多表共用；`TABLES` 常量 + `getWritableColumns(table)` + handler 收 `table: String` 运行时参数；带 AutoCreateCode 保护区） |
+| `src/effects.cj` | `ctx.effect` 可逆效果注册框架 |
+| `README.md` | 第三方开发者手册（列出全部表与各表端点） |
 
-## CrudPluginGenerator（表驱动 CRUD 进程插件生成器）
-
-`CrudPluginGenerator` 是 plugingen 的增强组件，可从数据库结构生成完整 CRUD 进程插件：
-
-- 输入：数据库名 + 单张表名
-- 输出：完整插件目录（plugin.yaml + cjpm.toml + main.cj + handlers.cj + effects.cj + README.md）
-- 对标：已验证通过的 codelabs 插件参考实现
-- **限制**：仅支持单表，不支持 `--tables` 多表累积（进程插件经 `host.db` 服务代理访问数据，设计上按单表契约生成）
-
-生成的插件包含完整 V4 CRUD 接口：
-- `GET /:limit/:page`：分页列表，返回 `{name}s`（表名+s 复数）
+每张表 6 条 V4 CRUD 路由：
+- `GET /:limit/:page`：分页列表，返回 `{表名}s`（表名+s 复数，运行时插值）
 - `GET /:id`：单条查询
 - `POST /add`：创建
 - `POST /edit`：更新（含批量/恢复）
 - `POST /del`：删除（含批量/硬删）
 - `POST /empty-recycle-bin`：清空回收站
+
+> ⚠️ `getWritableColumns(table)` 默认只含 `["creator", "deleted_at"]`（进程轨不连 DB，无法自动读 `db_info`），**需按各表实际字段补全**，否则 insert/update 会写不进业务字段。
+> ⚠️ 多表下 `handlers.cj` 走 AutoCreateCode 保护区：重新生成只覆盖该区间，二次开发请写在 `//#endregion AutoCreateCode` 之后。
+
+## CrudPluginGenerator（表驱动 CRUD 进程插件生成器，L3 process 轨）
+
+`CrudPluginGenerator` 是 plugingen 的 L3 进程轨生成器组件，可从数据库结构生成完整 CRUD 进程插件：
+
+- 输入：数据库名 + 表名清单（`Array<String>`，支持多张）
+- 输出：完整插件目录（`plugin.yaml` + `cjpm.toml` + `main.cj` + `handlers.cj` + `effects.cj` + `README.md`）
+- 多表范式：对标已验证的 `long-running-task` L3 插件（表名作为运行时参数、多表共用一个 `handlers.cj`）
+- 对标：已验证通过的 `codelabs`（单表）、`long-running-task`（2 表 + 自定义路由）插件参考实现
+- **多表累积**：支持。`--mode process --db <库> --tables a,b` 一次生成多表；同名插件分多次生成会累积合并表清单（`tableWhitelist` / `routes` / `TABLES` 均自动扩展且不重复）；同名同表重生成只覆盖 `handlers.cj` 的 AutoCreateCode 保护区
 
 ## 前置条件
 

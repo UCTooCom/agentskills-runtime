@@ -120,6 +120,13 @@ public class AgentPersistenceEventHandler {
                 let userMsgResult = DbSerialLock.withLock({ => messagesService.create(userMsg, agentName) })
                 if (userMsgResult.success) {
                     LogUtils.info("AgentPersistenceEventHandler: saved user message for agent ${agentName}")
+                    // T-AP：把附件解析元数据落库（非阻塞，失败仅告警，不影响主流程）
+                    if (let Some(summary) <- event.agentRequest.attachmentSummary) {
+                        if (!summary.attachmentsJson.isEmpty() && !userMsg.id.isEmpty()) {
+                            DbSerialLock.withLock({ => messagesService.updateAttachments(userMsg.id, summary.attachmentsJson) })
+                            LogUtils.info("AgentPersistenceEventHandler: persisted ${summary.attachmentCount} attachment metadata for message ${userMsg.id}")
+                        }
+                    }
                 } else {
                     LogUtils.error("AgentPersistenceEventHandler: save user message FAILED for agent ${agentName}, reason: ${reasonStr(userMsgResult.reason)}")
                 }

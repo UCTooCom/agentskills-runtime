@@ -64,6 +64,9 @@ public class MessagesPO {
         @ORMField['deleted_at']
     public var deletedAt: Option<DateTime> = None<DateTime>
 
+        @ORMField['attachments']
+    public var attachments: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -80,7 +83,8 @@ public class MessagesPO {
                 creator: Option<String>,
                 createdAt: DateTime,
                 updatedAt: DateTime,
-                deletedAt: Option<DateTime>
+                deletedAt: Option<DateTime>,
+                attachments: Option<String>
     ) {
                 this.id = id
                 this.userId = userId
@@ -96,6 +100,7 @@ public class MessagesPO {
                 this.createdAt = createdAt
                 this.updatedAt = updatedAt
                 this.deletedAt = deletedAt
+                this.attachments = attachments
     }
 
     /// 序列化为 JsonValue
@@ -115,6 +120,7 @@ public class MessagesPO {
         map.add("created_at", this.createdAt.toJsonValue())
         map.add("updated_at", this.updatedAt.toJsonValue())
         map.add("deleted_at", optionToJsonValue(this.deletedAt))
+        map.add("attachments", optionToJsonValue(this.attachments))
         return JsonObject(map)
     }
 

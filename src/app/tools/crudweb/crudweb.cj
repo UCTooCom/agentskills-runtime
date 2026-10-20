@@ -26,7 +26,7 @@ import pgsql.PostgresDriver
  *   crudweb --db uctoo --all
  *   
  *   # 指定输出目录
- *   crudweb --db uctoo --table entity --output ./web-admin/web/src/views/database
+ *   crudweb --db uctoo --table entity --output ./web-admin
  */
 main(args: Array<String>) {
     println("Web CRUD Generator starting...")
@@ -131,7 +131,7 @@ main(args: Array<String>) {
             outputDir = outputDirOpt.getOrThrow()
             println("=== Using output directory from environment: ${outputDir} ===")
         } else {
-            outputDir = "./web-admin/web/src/views/database"
+            outputDir = "./web-admin"
             println("=== Using default output directory: ${outputDir} ===")
         }
     }
@@ -178,7 +178,7 @@ func printHelp(): Unit {
     print("  --db <数据库名>    指定数据库名")
     print("  --table <表名>    指定表名")
     print("  --all             生成所有表的Web CRUD代码")
-    print("  --output <目录>   指定输出目录，默认：./web-admin/web/src/views/database")
+    print("  --output <目录>   指定输出目录，默认：./web-admin")
     print("  --help, -h        显示帮助信息")
     print("")
     print("示例：")
@@ -189,7 +189,7 @@ func printHelp(): Unit {
     print("  crudweb --db uctoo --all")
     print("")
     print("  # 指定输出目录")
-    print("  crudweb --db uctoo --table entity --output ./web-admin/web/src/views/database")
+    print("  crudweb --db uctoo --table entity --output ./web-admin")
 }
 
 /**

@@ -401,7 +401,7 @@ res.status(200).json("{\"currentPage\":${currentPage},\"totalCount\":${total},\"
 前端使用 `dataKey` 配置自动映射数据：
 
 ```typescript
-// web-admin/web/src/store/models/uctoo/entity.ts
+// web-admin/src/store/models/uctoo/entity.ts
 getEntityList(page: number, pageSize: number, searchParams?: any) {
   return useAxiosRepo(entity).api().get(`/api/v1/uctoo/entity/${pageSize}/${page}`, {
     params: searchParams,

@@ -1,5 +1,5 @@
 
-我在D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\deepseek-harness 目录git clone了一个deepseek新发布的agent项目源码，以及有这篇分析文章请参考。之前已经在D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime\docs\ref\cangjie-plugin-system-feasibility.md 和D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime\docs\ref\deepseek-harness-VSAIinfra.md 文档进行过了与D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime 项目的对比研究。在D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime\.codeartsdoer\specs\plugin-system 目录撰写了相关的SDD文档。请综合以上信息，说明deepseek-harness的插件机制是傻瓜式插件还是智能式插件，请详细说明大模型如何知道怎样使用deepseek-harness的插件，它的插件如何彼此协作串联成工作流，如何被技能机制编排和使用？
+我在D:\UCT\projects\uctoo\apps\deepseek-harness 目录git clone了一个deepseek新发布的agent项目源码，以及有这篇分析文章请参考。之前已经在D:\UCT\projects\uctoo\apps\agentskills-runtime\docs\ref\cangjie-plugin-system-feasibility.md 和D:\UCT\projects\uctoo\apps\agentskills-runtime\docs\ref\deepseek-harness-VSAIinfra.md 文档进行过了与D:\UCT\projects\uctoo\apps\agentskills-runtime 项目的对比研究。在D:\UCT\projects\uctoo\apps\agentskills-runtime\.codeartsdoer\specs\plugin-system 目录撰写了相关的SDD文档。请综合以上信息，说明deepseek-harness的插件机制是傻瓜式插件还是智能式插件，请详细说明大模型如何知道怎样使用deepseek-harness的插件，它的插件如何彼此协作串联成工作流，如何被技能机制编排和使用？
 
 现在我已经完整阅读了 deepseek-harness 源码、两篇对比分析文档和 SDD 文档。下面综合分析你的问题。
 
@@ -537,7 +537,7 @@ DSH 的安全保障**不是"一定安全"**，而是**"尽可能安全 + 出错�
 
 而 agentskills-runtime 的 SDD 设计中，Plugin + Skills 融合 + RBAC 入口控制 + `PluginSyncBridge` 单向同步的组合，在吸收 DSH 灵活性的同时，通过确定性机制（注解驱动、事件总线、状态机）增加了安全保证的下限。这可能是更适合生产环境的架构选择。
 
-补充一些agentskills-runtime架构师的设计考量，在内置工具中也设计了有生成代码片段的工具，只是资源有限，目前还没有很完备的实现和测试这些可以让大模型自由度更高的行动方式，已有的权限系统和行级数据权限的设计也可以让大模型自行申请权限，只是这些行为都可以通过人在回路进行人工复核和审批。另外，也请从编程语言的选型对agent安全性可控性方面进行一个全面的分析，可以参考已安装的两个cangjie技能，D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\.codeartsdoer\skills\cangjie-full-docs 和D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\.codeartsdoer\skills\cangjie-language-guide 目录中有相同的仓颉相关文档可以参考。
+补充一些agentskills-runtime架构师的设计考量，在内置工具中也设计了有生成代码片段的工具，只是资源有限，目前还没有很完备的实现和测试这些可以让大模型自由度更高的行动方式，已有的权限系统和行级数据权限的设计也可以让大模型自行申请权限，只是这些行为都可以通过人在回路进行人工复核和审批。另外，也请从编程语言的选型对agent安全性可控性方面进行一个全面的分析，可以参考已安装的两个cangjie技能，D:\UCT\projects\uctoo\.codeartsdoer\skills\cangjie-full-docs 和D:\UCT\projects\uctoo\.codeartsdoer\skills\cangjie-language-guide 目录中有相同的仓颉相关文档可以参考。
 
 
 已完成工作 用时3分38秒

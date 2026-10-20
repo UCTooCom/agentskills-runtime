@@ -2,7 +2,7 @@
 # 保护区外为二开区：compile-option / output-type / src-dir 等请改这里，重新生成不会被覆盖。
 [package]
   cjc-version = "1.1.3"
-  compile-option = "--dy-std -Woff all"
+  compile-option = "-O2 --dy-std -Woff all"
   link-option = ""
   name = "skill_github"
   output-type = "executable"

@@ -3,8 +3,8 @@
  */
 package magic.model.channel
 
-import magic.app.models.uctoo.{ModelChannelPO, ModelChannelModelPO, ModelChannelHealthPO}
-import magic.app.dao.uctoo.{ModelChannelModelDAO, ModelChannelHealthDAO}
+import magic.app.models.uctoo.{LlmChannelPO, LlmChannelModelPO, LlmChannelHealthPO}
+import magic.app.dao.uctoo.{LlmChannelModelDAO, LlmChannelHealthDAO}
 import magic.utils.http.HttpUtils
 import f_orm.*
 import std.collection.{HashMap, ArrayList}
@@ -64,7 +64,7 @@ public class ChannelProbe {
         }
     }
 
-    private func parseAndUpsertModels(ch: ModelChannelPO, json: String): (Int64, String) {
+    private func parseAndUpsertModels(ch: LlmChannelPO, json: String): (Int64, String) {
         try {
             let root = JsonValue.fromStr(json)
             if (!(root is JsonObject)) {
@@ -101,14 +101,14 @@ public class ChannelProbe {
         }
     }
 
-    private func tryInsertModel(ch: ModelChannelPO, modelId: String): Bool {
+    private func tryInsertModel(ch: LlmChannelPO, modelId: String): Bool {
         try {
-            let daoOpt = ORM.executor() as ModelChannelModelDAO
+            let daoOpt = ORM.executor() as LlmChannelModelDAO
             if (let Some(dao) <- daoOpt) {
                 if (dao.findModelChannelModelByChannelAndModel(ch.id, modelId).isSome()) {
                     return false
                 }
-                let po = ModelChannelModelPO(
+                let po = LlmChannelModelPO(
                     "",
                     ch.id,
                     modelId,
@@ -219,7 +219,7 @@ public class ChannelProbe {
      *
      * 插件不可用 / RPC 失败时返回 ok=false + 原始错误，不抛异常（探测失败不是宿主崩溃）。
      */
-    private func probeViaPlugin(ch: ModelChannelPO, modelId: String): JsonObject {
+    private func probeViaPlugin(ch: LlmChannelPO, modelId: String): JsonObject {
         let result = JsonObject()
         let pluginName = PluginAdapterBridge.pluginNameOf(ch.protocol)
         try {
@@ -424,9 +424,9 @@ public class ChannelProbe {
 
     // ==================== 写回辅助 ====================
 
-    private func writeModelCapabilities(ch: ModelChannelPO, modelId: String, capStr: String, ok: Bool): Unit {
+    private func writeModelCapabilities(ch: LlmChannelPO, modelId: String, capStr: String, ok: Bool): Unit {
         try {
-            let daoOpt = ORM.executor() as ModelChannelModelDAO
+            let daoOpt = ORM.executor() as LlmChannelModelDAO
             if (let Some(dao) <- daoOpt) {
                 let existing = dao.findModelChannelModelByChannelAndModel(ch.id, modelId)
                 if (let Some(po) <- existing) {
@@ -444,11 +444,11 @@ public class ChannelProbe {
         }
     }
 
-    private func writeHealth(ch: ModelChannelPO, modelId: String, ok: Bool, detail: String): Unit {
+    private func writeHealth(ch: LlmChannelPO, modelId: String, ok: Bool, detail: String): Unit {
         try {
-            let daoOpt = ORM.executor() as ModelChannelHealthDAO
+            let daoOpt = ORM.executor() as LlmChannelHealthDAO
             if (let Some(dao) <- daoOpt) {
-                let po = ModelChannelHealthPO(
+                let po = LlmChannelHealthPO(
                     "",
                     ch.id,
                     Some(modelId),

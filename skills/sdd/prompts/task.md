@@ -20,7 +20,7 @@
 - **开发规范必须置顶**：骨架来源、语言与工具绑定、复用原则、命名/注释约定、各类红线，一次性说清。
 - **二次开发底座优先（置顶必写）**：任务落到 runtime / uctoo 内的，"开发规范"段必须一次性写清
   ① 规范源 = `uctoo-dev-manual`（`skills/uctoo-dev-manual/`）+ `docs/uctoo-v4/*.md`；
-  ② 脚手架优先 `loaddbinfo` → `plugingen` / `crudgen` / `crudweb` 确定性工具链生成，禁止手撸五层骨架；
+  ② 脚手架优先 `loaddbinfo` → `plugingen` / `crudgen` / `crudweb` 确定性工具链生成（手动补亦可，但须参照生成逻辑补全五层所有位置）；
   ③ 生成后补 RBAC 登记与 `sql/incremental/` 增量脚本。对应编码步 `prompts/code.md「二次开发底座优先」`。
 - **工具链任务显式成条**：凡新增表、新增 CRUD 模块、新增管理界面、新增插件，各拆一条自带
   「跑哪个工具、跑完再改哪些文件」的任务，不许揉进一条笼统的"实现 XX 功能"。

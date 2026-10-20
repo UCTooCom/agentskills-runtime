@@ -68,6 +68,10 @@ public class ConfigSyncHandler {
                             detail.syncAction = "update"
                             let resolvedValue = resolveConflict(key, value, detail.dbValue)
                             entity.value = Some(resolvedValue)
+                            entity.isSensitive = Some(isSensitiveKey(key))
+                            if (isSensitiveKey(key)) {
+                                entity.configType = Some("password")
+                            }
                             entity.lastSyncedAt = Some(DateTime.now())
                             executor.updateConfig(entity)
                             println("[STARTUP-DIAG][ConfigSync] [${diagIdx}] updateConfig done envKey=${key}")
@@ -80,10 +84,10 @@ public class ConfigSyncHandler {
                             newEntity.name = key
                             newEntity.key = key
                             newEntity.envKey = Some(key)
-                            newEntity.value = Some(value)
+                            newEntity.value = Some(if (isSensitiveKey(key)) { "***" } else { value })
                             newEntity.configGroup = Some("other")
-                            newEntity.configType = Some("string")
-                            newEntity.isSensitive = Some(false)
+                            newEntity.configType = Some(if (isSensitiveKey(key)) { "password" } else { "string" })
+                            newEntity.isSensitive = Some(isSensitiveKey(key))
                             newEntity.editable = Some(true)
                             newEntity.displayOrder = Some(Int32(0))
                             newEntity.status = 1
@@ -132,7 +136,11 @@ public class ConfigSyncHandler {
             match (existing) {
                 case Some(entity) =>
                     detail.dbValue = entity.value.getOrThrow()
-                    entity.value = Some(value)
+                    entity.value = Some(if (isSensitiveKey(envKey)) { "***" } else { value })
+                    entity.isSensitive = Some(isSensitiveKey(envKey))
+                    if (isSensitiveKey(envKey)) {
+                        entity.configType = Some("password")
+                    }
                     entity.lastSyncedAt = Some(DateTime.now())
                     executor.updateConfig(entity)
                 case None =>
@@ -140,10 +148,10 @@ public class ConfigSyncHandler {
                     newEntity.name = envKey
                     newEntity.key = envKey
                     newEntity.envKey = Some(envKey)
-                    newEntity.value = Some(value)
+                    newEntity.value = Some(if (isSensitiveKey(envKey)) { "***" } else { value })
                     newEntity.configGroup = Some("other")
-                    newEntity.configType = Some("string")
-                    newEntity.isSensitive = Some(false)
+                    newEntity.configType = Some(if (isSensitiveKey(envKey)) { "password" } else { "string" })
+                    newEntity.isSensitive = Some(isSensitiveKey(envKey))
                     newEntity.editable = Some(true)
                     newEntity.displayOrder = Some(Int32(0))
                     newEntity.status = 1
@@ -197,24 +205,28 @@ public class ConfigSyncHandler {
                         let resolvedValue = resolveConflict(key, envValue, dbValue)
                         let existing = executor.findConfigByEnvKey(key)
                         match (existing) {
-                            case Some(entity) =>
-                                entity.value = Some(resolvedValue)
-                                entity.lastSyncedAt = Some(DateTime.now())
-                                executor.updateConfig(entity)
-                            case None =>
-                                let newEntity = ConfigPO()
-                                newEntity.name = key
-                                newEntity.key = key
-                                newEntity.envKey = Some(key)
-                                newEntity.value = Some(resolvedValue)
-                                newEntity.configGroup = Some("other")
-                                newEntity.configType = Some("string")
-                                newEntity.isSensitive = Some(false)
-                                newEntity.editable = Some(true)
-                                newEntity.displayOrder = Some(Int32(0))
-                                newEntity.status = 1
-                                newEntity.lastSyncedAt = Some(DateTime.now())
-                                executor.insertConfig(newEntity)
+                        case Some(entity) =>
+                            entity.value = Some(resolvedValue)
+                            entity.isSensitive = Some(isSensitiveKey(key))
+                            if (isSensitiveKey(key)) {
+                                entity.configType = Some("password")
+                            }
+                            entity.lastSyncedAt = Some(DateTime.now())
+                            executor.updateConfig(entity)
+                        case None =>
+                            let newEntity = ConfigPO()
+                            newEntity.name = key
+                            newEntity.key = key
+                            newEntity.envKey = Some(key)
+                            newEntity.value = Some(resolvedValue)
+                            newEntity.configGroup = Some("other")
+                            newEntity.configType = Some(if (isSensitiveKey(key)) { "password" } else { "string" })
+                            newEntity.isSensitive = Some(isSensitiveKey(key))
+                            newEntity.editable = Some(true)
+                            newEntity.displayOrder = Some(Int32(0))
+                            newEntity.status = 1
+                            newEntity.lastSyncedAt = Some(DateTime.now())
+                            executor.insertConfig(newEntity)
                         }
                         detail.success = true
                         result.successCount++
@@ -240,6 +252,23 @@ public class ConfigSyncHandler {
     }
 
     public func resolveConflict(envKey: String, envValue: String, dbValue: String): String {
+        // 敏感密钥绝不落明文进 config 表（统一真相源是大模型通道的 llm_channel 表 / 进程环境变量）
+        if (isSensitiveKey(envKey)) {
+            return "***"
+        }
         envValue
+    }
+
+    /**
+     * 判断是否敏感 key（API key / secret / token / password / 含密钥的 URL 等）。
+     * 命中则同步进 config 表时一律掩码为 "***" 且标记 is_sensitive=true，
+     * 从源头杜绝「.env 明文 → config 表明文」的泄漏（见 2026-10-14 复盘）。
+     */
+    private func isSensitiveKey(key: String): Bool {
+        let k = key.toAsciiUpper()
+        return k.contains("API_KEY") || k.contains("SECRET") || k.contains("PASSWORD") ||
+               k.contains("PASSWD") || k.contains("TOKEN") || k.contains("PRIVATE_KEY") ||
+               k.contains("ACCESS_KEY") || k.contains("AUTH_CORE") || k.contains("ENCRYPTION_KEY") ||
+               k.contains("ENC_KEY") || k.contains("DATABASE_URL") || k.contains("CONNECTION_URL")
     }
 }

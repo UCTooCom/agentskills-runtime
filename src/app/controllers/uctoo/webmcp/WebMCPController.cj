@@ -7,10 +7,12 @@ import magic.app.services.webmcp.WebMCPProtocol
 import magic.app.services.webmcp.MenuDataProvider
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.core.skill.SkillManager
+import magic.skill.parallel.SkillAutoInjector
 import magic.core.model.ChatModel
 import magic.core.agent.{AgentDefinition, AgentLoadManager}
 import magic.log.LogUtils
 import magic.tool.webmcp.{SSEConnectionManager, PendingToolCallManager, FrontendToolRegistry, WebMCPToolContext}
+import magic.tool.GetSkillContentTool
 import magic.app.services.bridge.{LrtEventBridge, SddEventBridge}
 import http_lib.server.{WebSocketConn, ConnectionController, WebSocketOpcode}
 import http_lib.message.{HttpRequest as LibHttpRequest, HttpResponse as LibHttpResponse}
@@ -48,6 +50,8 @@ public class WebMCPController {
     private let _chatModel: ChatModel
     private let _agentLoadManager: AgentLoadManager
     private var _sessions = HashMap<String, WebMCPProtocol>()
+    // 自动注入器：随控制器创建一次，注入到每个 WebMCPProtocol 实例（漂移修复激活点）
+    private var _skillAutoInjector: ?SkillAutoInjector = None
 
     // WebMCP 工具链路基础设施（单例，所有会话共享）
     private let _sseConnectionManager = SSEConnectionManager()
@@ -59,6 +63,10 @@ public class WebMCPController {
         this._skillManager = skillManager
         this._chatModel = chatModel
         this._agentLoadManager = agentLoadManager
+        let autoInjector = SkillAutoInjector.create(_skillManager)
+        this._skillAutoInjector = Some(autoInjector)
+        // 漂移修复：注册到 GetSkillContentTool，使其 get_skill_content 去重（T097）生效
+        GetSkillContentTool.setAutoInjector(autoInjector)
 
         // 启动超时清理定时任务
         startCleanupTask()
@@ -98,6 +106,10 @@ public class WebMCPController {
         // 注入基础设施到 Protocol
         protocol.setInfrastructure(_sseConnectionManager, _pendingToolCallManager, _frontendToolRegistry)
         protocol.setMenuDataProvider(_menuDataProvider)
+        // 漂移修复：将自动注入器交给 Protocol，使其 buildAgentSystemPrompt 能注入常驻技能完整内容
+        if (let Some(inj) <- _skillAutoInjector) {
+            protocol.setSkillAutoInjector(inj)
+        }
         protocol.setSessionInfo(sessionId, "", userId)
 
         // 设置 WebMCPToolContext 全局单例的会话上下文

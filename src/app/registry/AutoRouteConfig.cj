@@ -78,8 +78,8 @@ import magic.app.routes.uctoo.model_pricing.ModelPricingRoute
 import magic.app.controllers.uctoo.model_pricing.ModelPricingController
 import magic.app.routes.uctoo.llm_channel.LlmChannelRoute
 import magic.app.controllers.uctoo.llm_channel.LlmChannelController
-import magic.app.routes.uctoo.llm_channel.LlmRouteRuleRoute
-import magic.app.controllers.uctoo.llm_channel.LlmRouteRuleController
+import magic.app.routes.uctoo.llm_route_rule.LlmRouteRuleRoute
+import magic.app.controllers.uctoo.llm_route_rule.LlmRouteRuleController
 import magic.app.routes.uctoo.agent_groups.AgentGroupsRoute
 import magic.app.controllers.uctoo.agent_groups.AgentGroupsController
 import magic.app.routes.uctoo.agent_executors.AgentExecutorsRoute
@@ -179,6 +179,12 @@ import magic.app.controllers.uctoo.sub_agent_invocations.SubAgentInvocationsCont
 // SDD 编排薄路由（T-09）：语义入口，非通用 CRUD，单独注册
 import magic.app.routes.uctoo.sdd.SddOrchestrationRoute
 import magic.app.controllers.uctoo.sdd.SddOrchestrationController
+import magic.app.routes.uctoo.llm_channel_audit.LlmChannelAuditRoute
+import magic.app.controllers.uctoo.llm_channel_audit.LlmChannelAuditController
+import magic.app.routes.uctoo.llm_channel_health.LlmChannelHealthRoute
+import magic.app.controllers.uctoo.llm_channel_health.LlmChannelHealthController
+import magic.app.routes.uctoo.llm_channel_model.LlmChannelModelRoute
+import magic.app.controllers.uctoo.llm_channel_model.LlmChannelModelController
 import magic.app.services.uctoo.{
     EntityService,
     UctooUserService,
@@ -256,7 +262,12 @@ import magic.app.services.uctoo.{
     LongRunningTaskEvolutionService,
     LrtVerifyJobService,
     SddProjectsService,
-    SubAgentInvocationsService,}
+    SubAgentInvocationsService,
+    LlmChannelAuditService,
+    LlmChannelHealthService,
+    LlmChannelModelService,
+    LlmChannelService,
+    LlmRouteRuleService,}
 import magic.app.services.crontab.SchedulerService
 
 
@@ -617,6 +628,51 @@ public class AutoRouteConfig {
         ))
         
         // ==================== CRUD 路由配置 ====================
+        // LlmChannelModel 路由
+        registry.add(RouteEntry(
+            "llm_channel_model",
+            "/api/v1/uctoo/llm_channel_model",
+            10,
+            true,
+            { router: Router =>
+                let service = LlmChannelModelService()
+                let controller = LlmChannelModelController(service)
+                let route = LlmChannelModelRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // LlmChannelHealth 路由
+        registry.add(RouteEntry(
+            "llm_channel_health",
+            "/api/v1/uctoo/llm_channel_health",
+            10,
+            true,
+            { router: Router =>
+                let service = LlmChannelHealthService()
+                let controller = LlmChannelHealthController(service)
+                let route = LlmChannelHealthRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
+        // LlmChannelAudit 路由
+        registry.add(RouteEntry(
+            "llm_channel_audit",
+            "/api/v1/uctoo/llm_channel_audit",
+            10,
+            true,
+            { router: Router =>
+                let service = LlmChannelAuditService()
+                let controller = LlmChannelAuditController(service)
+                let route = LlmChannelAuditRoute(router, controller)
+                route.register()
+                route.registerCustomRoutes()
+            }
+        ))
+
         // SubAgentInvocations 路由（恢复 crudgen 自动生成状态，2026-09-30）
         registry.add(RouteEntry(
             "sub_agent_invocations",
@@ -1262,7 +1318,7 @@ public class AutoRouteConfig {
             10,
             true,
             { router: Router =>
-                let controller = LlmChannelController()
+                let controller = LlmChannelController(LlmChannelService())
                 let route = LlmChannelRoute(router, controller)
                 route.register()
             }
@@ -1275,7 +1331,7 @@ public class AutoRouteConfig {
             10,
             true,
             { router: Router =>
-                let controller = LlmRouteRuleController()
+                let controller = LlmRouteRuleController(LlmRouteRuleService())
                 let route = LlmRouteRuleRoute(router, controller)
                 route.register()
             }

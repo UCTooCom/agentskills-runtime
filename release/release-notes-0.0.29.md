@@ -2,7 +2,7 @@
 
 **发布日期**: 2026-10-03
 **版本**: 0.0.29
-**代号**: Sub-Agent Orchestration（子 Agent 编排 · 启动与登录稳态）
+**代号**: Sub-Agent Orchestration（规范驱动开发 · 子 Agent 编排）
 **平台**: Windows x64, Linux x64, macOS x64/ARM64
 
 ---

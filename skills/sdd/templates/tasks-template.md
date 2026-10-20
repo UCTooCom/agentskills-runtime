@@ -16,14 +16,14 @@
      （接口→`uctoo-v4-api-specification`；表/字段→`uctoo-database-design-specification`；
      CRUD→`uctoo-v4-module-development` + `uctoo-v4-orm-specification`；中间件→`uctoo-v4-middleware-guide`；
      权限→`user-permission-system` / `row-level-permission-system`）。
-  2. **脚手架优先确定性代码生成工具**，禁止手撸：
+  2. **脚手架优先确定性代码生成工具**（手动补亦可，但须参照生成逻辑补全所有位置）：
      `loaddbinfo`（灌表结构到 `db_info`）→ `plugingen`（**功能拓展优先做成插件**，默认 L3 进程隔离轨 process，
      需退回内嵌 sync 轨显式加 `--mode sync`）／`crudgen`（**仅**往宿主 `src/app/` 补公共基础设施）／
      `crudweb`（管理界面）；下线插件用对称的 `pluginuninstall`，不要手动删 `skills/{name}` 目录。
      命令一律 `cjpm run --skip-build --name <包名> --run-args "<参数>"`。
   3. **工具链坑位**：`loaddbinfo` 命令行模式有未修问题（见 `skills/uctoo-dev-manual/tools/loaddbinfo.md` 顶部 TODO），
      退到 Web 端「数据库管理 → 加载数据库信息」；crudgen 生成后编译报 `@DAO` 一堆错，看 `docs/uctoo-v4/crud-generator-v2.md`。
-  4. **生成后必补**：新增表的 DDL 放 `sql/incremental/`（涨幅受 SDD 铁律 9 白名单额度约束）；
+    4. **生成后必补**：新增表/列的 DDL 放 `sql/incremental/`（新增须先论证复用不成立，见铁律 9 复用优先）；
      新增宿主路由必做 `permissions` + `role_has_permission` 登记，否则 403。
   5. **只在生成物上做最小适配**，不要另起炉灶重写一遍生成出来的五层结构。
 - **大工程拆分态（铁律 15，本工程是多子系统 SDD 工程之一时强制）**：

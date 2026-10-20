@@ -119,7 +119,7 @@
 #### 2.2.1 web-admin前端模块
 **已初始化项目结构**：
 ```
-web-admin/uctoo-admin/web/
+web-admin/uctoo-admin/
 ├── src/
 │   ├── api/              # API接口层（已就绪）
 │   ├── components/       # 公共组件（已就绪）
@@ -606,7 +606,7 @@ export class uctoo_uctoo_user extends Model {
 }
 ```
 
-**v4 文件**（`web-admin/uctoo-admin/web/src/store/modules/uctoo/uctoo_uctoo_user.ts`）：
+**v4 文件**（`web-admin/uctoo-admin/src/store/modules/uctoo/uctoo_uctoo_user.ts`）：
 ```typescript
 import { Model } from 'pinia-orm';
 import { Attr, Str, Uid, Num } from 'pinia-orm/decorators';

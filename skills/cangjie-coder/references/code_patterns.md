@@ -242,3 +242,128 @@ mutex.unlock()
 let counter = AtomicInt64(0)
 counter.fetchAdd(1)
 ```
+
+## 易错形态规避模式（编译报错高发，写码时直接按"正确写法"走）
+
+> 完整背景与"一轮排净"规程见 SKILL.md《编译报错「一轮排净」规程》。
+> 下面只给**对照写法**，便于编写阶段就避开，而不是等编译报错再改。
+
+### 可选类型：`?` 前置，不是后置
+
+```cangjie
+// ❌ Rust 风格 → error: expected ';' or '<NL>', found '?'
+private static var logger: Logger? = None
+
+// ✅ 仓颉：? 前置
+private static var logger: ?Logger = None
+// ✅ 或写全（推荐，与宿主 PO 字段风格一致）
+private static var logger: Option<Logger> = None<Logger>
+```
+
+> 注意 `None<T>` **不带括号**；形参/返回类型已标注时可直接写裸 `None`。
+
+### match 臂：不要写多语句块
+
+```cangjie
+// ❌ `=>` 后的 `{` 会被解析成 lambda 起始
+//    error: expected '=>' in lambda expression, found keyword 'let'
+match (Log.logger) {
+    case Some(l) => l
+    case None => {
+        let l = Logger(defaultLogPath())
+        Log.logger = Some(l)
+        l
+    }
+}
+
+// ✅ 把逻辑外提成函数，match 臂只留单表达式
+match (Log.logger) {
+    case Some(l) => l
+    case None => defaultLogger()
+}
+
+func defaultLogger(): Logger {
+    let l = Logger(defaultLogPath())
+    Log.logger = Some(l)
+    return l
+}
+
+// ✅ 或者干脆用 if 提前返回（更简单，推荐）
+if (let Some(l) <- Log.logger) {
+    return l
+}
+return defaultLogger()
+```
+
+> 合法例外：`{` 的下一行紧跟**裸 `=>`**（零参 lambda），见
+> `src/app/middlewares/auth/JWTAuthMiddleware.cj`。但
+> `src/test/**` 不在主构建图内，其写法不可作先例。
+
+### 定长 Array 无增删方法
+
+```cangjie
+// ❌ Array<T> 是定长数组，没有 add
+var command: Array<String> = Array<String>(0, {_ => ""})
+command.add("install")     // error: 'add' is not a member of class 'Array<T>'
+
+// ✅ 需要动态增删用 ArrayList（属 prelude，无需 import）
+var command = ArrayList<String>()
+command.add("install")
+
+// ✅ 或保持 Array 用下标赋值
+var command: Array<String> = Array<String>(1, {_ => ""})
+command[0] = "install"
+```
+
+### `let` 不可重新赋值
+
+```cangjie
+// ❌ error: cannot assign to immutable value
+let cur = StringBuilder()
+for (r in runes) {
+    if (cond) {
+        cur = StringBuilder()   // 重新赋值 let 变量
+    }
+    cur.append(r)
+}
+
+// ✅ 需要重建就声明为 var
+var cur = StringBuilder()
+// ✅ 或改为不可变拼接后重新绑定另一个名字
+let rebuilt = StringBuilder()
+```
+
+### 避免在多个分支里给同一个 `let` 赋值
+
+```cangjie
+// ❌ 易同时踩"不可变赋值"与"推断失败"两个坑
+let report: Report
+if (a) { report = f1() } else { report = f2() }
+
+// ✅ 抽出返回值的函数，声明处确定赋值
+let report = dispatch(parsed)
+
+func dispatch(parsed: CliArgs): Report {
+    if (a) { return f1() }
+    return f2()
+}
+```
+
+> 抽函数时常引入新类型引用，记得回头检查该文件的 `import` 是否齐备。
+
+### prelude 类型（无需 import）
+
+经大库实证，**以下类型在 prelude 内，不要凭直觉补 import**：
+
+| 类型 | 实证数据（本仓 src/，均能编译） |
+|------|------------------------------|
+| `ArrayList` | 512 个文件使用，248 个从未 import |
+| `HashMap` | 430 个文件使用，314 个从未 import |
+
+不确定时用这条命令实证（看有多少在用却未 import 的文件）：
+
+```bash
+for f in $(grep -rl "ArrayList<" --include=*.cj src/); do
+  grep -q "import std.collection.ArrayList\|import std.collection.\*" "$f" || echo "无import却能用: $f"
+done | wc -l
+```

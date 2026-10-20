@@ -1,7 +1,7 @@
 # AgentSkills Runtime
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.29-blue.svg)](https://github.com/uctoo/agentskills-runtime)
+[![Version](https://img.shields.io/badge/version-0.0.30-blue.svg)](https://github.com/uctoo/agentskills-runtime)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie-orange.svg)](https://cangjie-lang.cn/)
 
 ## Project Introduction
@@ -85,7 +85,7 @@ Build a domestically developed and controllable AI agent skill runtime, promote 
 - Competition: ArcBench Agentic Software Factory Hackathon
 - Team: UCTooCom
 - Work Name: Agentic Software Factory based on AgentSkills-runtime
-- Work Description: With the fully self-developed AgentSkills-runtime (Cangjie language + Fountain ORM + PostgreSQL) as the backend and `apps/web-admin/web` (Vue 3 + Vite + pinia-orm + OpenTiny) as the frontend, we built an agentic software factory system that compiles large requirements into two reliable business applications: a GitHub-style software engineering collaboration platform (the `skills/github` plugin, 10 tables: repository/branch/commit/repository_file/issue_comment/milestone/label/pull_request/pr_review/branch_protection) and a Google Sheets-style online spreadsheet workbench (the `skills/sheets` plugin, 5 tables: workbook/worksheet/cell/validation_rule/pivot_table), delivering the core value of requirement decomposition, module delegation, and end-to-end verifiability. Both business modules follow the SDD iron rule "prefer the existing foundation" and were generated through the deterministic toolchain `loaddbinfo → plugingen (L3 process-isolated plugin) → crudweb`; plugin capabilities are provided three-in-one as Service + Skill + Route, with matching web-admin database management UIs.
+- Work Description: With the fully self-developed AgentSkills-runtime (Cangjie language + Fountain ORM + PostgreSQL) as the backend and `apps/web-admin` (Vue 3 + Vite + pinia-orm + OpenTiny) as the frontend, we built an agentic software factory system that compiles large requirements into two reliable business applications: a GitHub-style software engineering collaboration platform (the `skills/github` plugin, 10 tables: repository/branch/commit/repository_file/issue_comment/milestone/label/pull_request/pr_review/branch_protection) and a Google Sheets-style online spreadsheet workbench (the `skills/sheets` plugin, 5 tables: workbook/worksheet/cell/validation_rule/pivot_table), delivering the core value of requirement decomposition, module delegation, and end-to-end verifiability. Both business modules follow the SDD iron rule "prefer the existing foundation" and were generated through the deterministic toolchain `loaddbinfo → plugingen (L3 process-isolated plugin) → crudweb`; plugin capabilities are provided three-in-one as Service + Skill + Route, with matching web-admin database management UIs.
 - Project Images: `apps/agentskills-runtime/.codeartsdoer/specs/AgenticSoftwareFactoryHackathon/asfh1.png`, `asfh2.png`
 - Code Repositories (set Topic to `#agentic-software-factory`):
   1. Agent Runtime Framework: https://atomgit.com/UCToo/agentskills-runtime
@@ -608,7 +608,7 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--db uctoo --ta
 cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--help"
 ```
 
-**Generated files** (output to directory configured by `WEB_CRUD_OUTPUT_DIR`, with `/web/src/` path appended):
+**Generated files** (output to directory configured by `WEB_CRUD_OUTPUT_DIR`, with `/src/` path appended):
 - Page entry: `views/database/<db_name>/<table_name>/index.vue`
 - Add component: `views/database/<db_name>/<table_name>/components/add-<table_name>.vue`
 - Data table: `views/database/<db_name>/<table_name>/components/<table_name>-table.vue`
@@ -618,7 +618,7 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args="--help"
 
 **Environment variable configuration** (in `.env` file):
 ```ini
-# Web CRUD code output root directory (crudweb automatically appends /web/src/ subdirectory)
+# Web CRUD code output root directory (crudweb automatically appends /src/ subdirectory)
 WEB_CRUD_OUTPUT_DIR=D:\path\to\web-admin
 ```
 

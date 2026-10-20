@@ -46,6 +46,9 @@ public class DataMapper {
         if (definition.permissions.size > 0) {
             po.permissions = Some(permissionArrayToJsonArray(definition.permissions))
         }
+        if (definition.profiles.size > 0) {
+            po.profileSkills = Some(stringArrayToJsonArray(definition.profiles.toArray()))
+        }
         return po
     }
 
@@ -109,6 +112,9 @@ public class DataMapper {
             }
             if (let Some(permJson) <- po.permissions) {
                 builder.setPermissions(stringArrayToPermissionArray(jsonArrayToStringArray(permJson)))
+            }
+            if (let Some(profilesJson) <- po.profileSkills) {
+                builder.setProfiles(ArrayList<String>(jsonArrayToStringArray(profilesJson)))
             }
             return builder.build()
         } catch (_: Exception) {

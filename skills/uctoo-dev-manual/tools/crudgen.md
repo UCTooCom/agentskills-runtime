@@ -25,8 +25,10 @@ cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db <数据库
 ## 示例
 
 ```bash
-# 生成指定表的 CRUD 代码cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --table entity"
-# 生成数据库中所有表的 CRUD 代码cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --all"```
+# 生成指定表的 CRUD 代码
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --table entity"
+# 生成数据库中所有表的 CRUD 代码
+cjpm run --skip-build --name magic.app.tools.crudgen --run-args "--db uctoo --all"```
 
 ## 生成产物
 

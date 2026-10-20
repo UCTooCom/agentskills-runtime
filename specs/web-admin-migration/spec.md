@@ -22,7 +22,7 @@ uctoo v3的web端管理后台（uctoo-app-client-pc）基于老旧技术栈开�
 ### 1.2 项目范围
 
 **包含内容**：
-1. **状态管理库迁移**：从uctoo-app-client-pc迁移符合UMI架构的pinia-orm特性到新版web/src/store
+1. **状态管理库迁移**：从uctoo-app-client-pc迁移符合UMI架构的pinia-orm特性到新版src/store
 2. **后端服务融合**：将nestJs的功能、API和数据库结构融合到agentskills-runtime v0.0.20
 3. **数据库迁移**：MySQL到PostgreSQL的数据结构和数据迁移方案
 4. **CRUD生成器开发**：基于entity表示例开发标准CRUD模块和crud-web-generator技能
@@ -59,7 +59,7 @@ uctoo v3的web端管理后台（uctoo-app-client-pc）基于老旧技术栈开�
 - [ ] 迁移Model基类定义和装饰器
 - [ ] 迁移UMI自动保存机制
 - [ ] 迁移本地数据优先策略
-- [ ] 保持与新版web/src/store的兼容性
+- [ ] 保持与新版src/store的兼容性
 - [ ] 不迁移qintong和qintongdev定制化内容
 
 **优先级**: P0

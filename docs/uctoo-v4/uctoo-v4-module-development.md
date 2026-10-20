@@ -1105,7 +1105,7 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --ta
 cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --all"
 
 # 指定输出目录
-cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table entity --output ./web-admin/web/src/views/database"
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table entity --output ./web-admin/src/views/database"
 ```
 
 **命令行参数**：

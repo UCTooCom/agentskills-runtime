@@ -37,6 +37,9 @@ public class AgentsPO {
         @ORMField['skill_name']
     public var skillName: Option<String> = None<String>
 
+        @ORMField['profile_skills']
+    public var profileSkills: Option<String> = None<String>
+
         @ORMField['status']
     public var status: Option<Int32> = None<Int32>
 
@@ -135,6 +138,7 @@ public class AgentsPO {
                 agentType: String,
                 description: Option<String>,
                 skillName: Option<String>,
+                profileSkills: Option<String>,
                 status: Option<Int32>,
                 config: Option<String>,
                 systemPrompt: Option<String>,
@@ -171,6 +175,7 @@ public class AgentsPO {
                 this.agentType = agentType
                 this.description = description
                 this.skillName = skillName
+                this.profileSkills = profileSkills
                 this.status = status
                 this.config = config
                 this.systemPrompt = systemPrompt
@@ -211,6 +216,7 @@ public class AgentsPO {
         map.add("agent_type", this.agentType.toJsonValue())
         map.add("description", optionToJsonValue(this.description))
         map.add("skill_name", optionToJsonValue(this.skillName))
+        map.add("profile_skills", optionToJsonValue(this.profileSkills))
         map.add("status", optionToJsonValue(this.status))
         map.add("config", optionToJsonValue(this.config))
         map.add("system_prompt", optionToJsonValue(this.systemPrompt))

@@ -1,0 +1,43 @@
+[package]
+  cjc-version = "1.1.3"
+  # -O2：bcrypt 等热路径依赖需优化；--dy-std 动态链接 std 标准库（与出包 DLL 同目录策略一致）
+  compile-option = "-O2 --dy-std -Woff all -Woff unused"
+  description = "UCToo AgentSkills Runtime 仓颉原生安装器（独立 executable）"
+  link-option = "--allow-multiple-definition"
+  name = "uc_installer"
+  output-type = "executable"
+  src-dir = "src"
+  target-dir = "target"
+  version = "0.1.0"
+  package-configuration = {}
+  scripts = {}
+
+[dependencies]
+  # 日志（T005）
+  logcj = { path = "../libs/logcj", compile-option = "-Woff unused -O2" }
+  # JSON 序列化（T004 手搓报告用 stdx.encoding.json；json4cj 供后续 phase 复用）
+  json4cj = { path = "../libs/json4cj" }
+  # 直连 PostgreSQL（T027）
+  pgsql = { path = "../libs/pgsql-driver", compile-option = "-Woff unused -O2" }
+  # bcrypt（T028，$2a$ 归一；必须 -O2 --int-overflow=wrapping）
+  blowfish = { path = "../libs/blowfish-cj", compile-option = "-O2 --int-overflow=wrapping" }
+  # HTTP 服务基座（T015）；http_lib 会传递拉入 kaca_json/jinguissl/jinguissl_core/kaca_cookies/compress4cj/quic_cj
+  http_lib = { path = "../libs/http_lib", output-type = "static" }
+  kaca_json = { path = "../libs/kaca_json", output-type = "static" }
+  kaca_cookies = { path = "../libs/kaca_cookies", output-type = "static" }
+  jinguissl = { path = "../libs/jinguissl", output-type = "static" }
+  jinguissl_core = { path = "../libs/jinguissl_core", output-type = "static" }
+  compress4cj = { path = "../libs/compress4cj", output-type = "static", compile-option = "-Woff unused -O2" }
+  quic_cj = { path = "../libs/quic_cj", output-type = "static" }
+
+[profile.build]
+  incremental = true
+
+# 仅保留本机（Windows / mingw32）目标——libs 下只存在 cangjie-stdx-windows-x64-1.1.3.1，
+# 不声明其它平台的 bin-dependencies，避免编译期报"找不到 stdx 路径"。
+[target.x86_64-w64-mingw32]
+  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std -O2"
+
+[target.x86_64-w64-mingw32.bin-dependencies]
+  # stdx DLL 运行时定位：缺这段编译能过，但运行时找不到 libcrypto-3-x64.dll 等 DLL 而起不来。
+  path-option = ["../libs/cangjie-stdx-windows-x64-1.1.3.1/windows_x86_64_cjnative/dynamic/stdx"]

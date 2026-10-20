@@ -336,26 +336,41 @@ public class OpenAIChatModel <: ChatModel {
             }
             LogUtils.debug("Message role: ${msg.role.toString()}, Provider: ${_provider}, Converted role: ${roleStr}")
             
-            let msgJson = if (let Some(image) <- msg.image) {
+            // 多模态（工程 specs/multimodal-native-chat，SDD R6 / T-MC-008）：
+            // 由「单图」扩展为「多图 + 文档抽取块」。`allImages()` 合并旧的 image 字段与新的
+            // images 列表，老调用方只需继续填 image 就能享受到多模态序列化，无需改动。
+            let imgs = msg.allImages()
+            let msgJson = if (imgs.size > 0 || msg.fileParts.size > 0) {
                 // Schema: { role: string,
                 //           content: [
                 //             { type: "text", text: string },
-                //             { type: "image_url", image_url: {url: string} }
+                //             { type: "text", text: "[来源] 抽取文本" },   // 文档 ingestion
+                //             { type: "image_url", image_url: {url: string} }  // 每个图片一块
                 //           ]
                 // }
+                let parts = ArrayList<JsonValue>()
+                parts.add(JsonUtils.buildJsonObject([
+                    ("type", "text"),
+                    ("text", msg.content)
+                ]))
+                for (fp in msg.fileParts) {
+                    if (!fp.text.isEmpty()) {
+                        parts.add(JsonUtils.buildJsonObject([
+                            ("type", JsonString("text")),
+                            ("text", JsonString("[${fp.source}]\n${fp.text}"))
+                        ]))
+                    }
+                    for (pageImg in fp.images) {
+                        parts.add(imageUrlBlock(pageImg))
+                    }
+                }
+                for (url in imgs) {
+                    parts.add(imageUrlBlock(url))
+                }
                 JsonUtils.buildJsonObject(
                     ("role", JsonString(roleStr)),
-                    ("content", JsonArray([
-                        JsonUtils.buildJsonObject([
-                            ("type", "text"),
-                            ("text", msg.content)
-                        ]),
-                        JsonUtils.buildJsonObject(
-                            ("type", JsonString("image_url")),
-                            ("image_url", JsonUtils.buildJsonObject("url", image))
-                        )
-                    ])
-                ))
+                    ("content", JsonArray(parts.toArray()))
+                )
             } else {
                 // Schema: { role: string, content: string }
                 JsonUtils.buildJsonObject(
@@ -366,6 +381,14 @@ public class OpenAIChatModel <: ChatModel {
             ja.add(msgJson)
         }
         return ja
+    }
+
+    /** 单个图片内容块：{ type:"image_url", image_url:{ url } }（OpenAI 官方形状，AC6）。 */
+    private func imageUrlBlock(url: String): JsonValue {
+        JsonUtils.buildJsonObject(
+            ("type", JsonString("image_url")),
+            ("image_url", JsonUtils.buildJsonObject("url", url))
+        )
     }
 
     private func tools2Json(tools: Array<Tool>): JsonArray {

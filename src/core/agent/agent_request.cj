@@ -27,6 +27,21 @@ public class AgentRequest {
     public let image: Option<String>
 
     /**
+     * 随消息上传的多张图片（dataURL 或 http URL）。
+     *
+     * 工程 `specs/multimodal-native-chat`（SDD R2 / T-MC-005）：`image` 只表达「单图」，
+     * 撑不住原生多模态（一次上传多张）。新增 `images` 承载多图；`image` 保留以兼容
+     * 既有调用方，消费方统一读 `allImages()`（两者并集）。
+     */
+    public let images: ArrayList<String>
+
+    /**
+     * 随消息上传的文档附件（PDF/PPT/DOC 等，内联 base64）。
+     * 由后端 ingestion 抽取成文本后再喂给模型 —— 多数网关不接受文件块（SDD §5 策略 B）。
+     */
+    public let files: ArrayList<Attachment>
+
+    /**
      * Conversation between the user and agent
      */
     public let conversation: Option<Conversation>
@@ -52,18 +67,50 @@ public class AgentRequest {
      */
     public let lrtTaskId: Option<String>
 
+    /**
+     * 本轮附件的解析摘要（工程 `specs/multimodal-native-chat`，host-attach-core）。
+     * 由 WebMCPProtocol 在调度完附件解析后填充，随请求透传给持久化层，
+     * 用于把附件元数据写入 `agent_messages.attachments` 列。无附件时为 None。
+     */
+    public let attachmentSummary: Option<AttachmentSummary>
+
     public init(question: String,
                 image!: Option<String> = None,
                 conversation!: Option<Conversation> = None,
                 verbose!: Bool = false,
                 maxTool!: Int64 = 10,
-                lrtTaskId!: Option<String> = None) {
+                lrtTaskId!: Option<String> = None,
+                images!: ArrayList<String> = ArrayList<String>(),
+                files!: ArrayList<Attachment> = ArrayList<Attachment>(),
+                attachmentSummary!: Option<AttachmentSummary> = None<AttachmentSummary>) {
         this.question = question
         this.image = image
         this.conversation = conversation
         this.verbose = verbose
         this.maxTool = maxTool
         this.lrtTaskId = lrtTaskId
+        this.images = images
+        this.files = files
+        this.attachmentSummary = attachmentSummary
+    }
+
+    /**
+     * 全部图片（旧单图字段 + 新多图列表，去重保序）。
+     * 消费方统一读这里，老调用方填 `image` 也能正确走到多模态序列化。
+     */
+    public func allImages(): ArrayList<String> {
+        let out = ArrayList<String>()
+        if (let Some(img) <- this.image) {
+            if (!img.isEmpty()) {
+                out.add(img)
+            }
+        }
+        for (img in this.images) {
+            if (!img.isEmpty() && !out.contains(img)) {
+                out.add(img)
+            }
+        }
+        out
     }
 
     //-----------------------------------------------------------------
@@ -109,7 +156,10 @@ public class AgentRequest {
                          conversation!: Option<Conversation> = None,
                          verbose!: Option<Bool> = None,
                          maxTool!: Option<Int64> = None,
-                         lrtTaskId!: Option<String> = None): AgentRequest {
+                         lrtTaskId!: Option<String> = None,
+                         images!: Option<ArrayList<String>> = None,
+                         files!: Option<ArrayList<Attachment>> = None,
+                         attachmentSummary!: Option<AttachmentSummary> = None): AgentRequest {
         let req = AgentRequest(
             question ?? this.question,
             image: image ?? this.image,
@@ -117,6 +167,9 @@ public class AgentRequest {
             verbose: verbose ?? this.verbose,
             maxTool: maxTool ?? this.maxTool,
             lrtTaskId: lrtTaskId ?? this.lrtTaskId,
+            images: images ?? this.images,
+            files: files ?? this.files,
+            attachmentSummary: attachmentSummary ?? this.attachmentSummary
         )
 
         req.parentContext = this.parentContext

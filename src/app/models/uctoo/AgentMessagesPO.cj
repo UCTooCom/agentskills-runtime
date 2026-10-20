@@ -67,6 +67,9 @@ public class AgentMessagesPO {
         @ORMField['data_items']
     public var dataItems: Option<String> = None<String>
 
+        @ORMField['attachments']
+    public var attachments: Option<String> = None<String>
+
     public init() {}
 
     public init(
@@ -84,7 +87,8 @@ public class AgentMessagesPO {
                 aipSessionId: Option<String>,
                 aipMessageId: Option<String>,
                 senderRole: Option<String>,
-                dataItems: Option<String>
+                dataItems: Option<String>,
+                attachments: Option<String>
     ) {
                 this.id = id
                 this.fromAgentId = fromAgentId
@@ -101,6 +105,7 @@ public class AgentMessagesPO {
                 this.aipMessageId = aipMessageId
                 this.senderRole = senderRole
                 this.dataItems = dataItems
+                this.attachments = attachments
     }
     public func toJsonValue(): JsonValue {
         var map = HashMap<String, JsonValue>()
@@ -119,6 +124,7 @@ public class AgentMessagesPO {
         map.add("aip_message_id", optionToJsonValue(this.aipMessageId))
         map.add("sender_role", optionToJsonValue(this.senderRole))
         map.add("data_items", optionToJsonValue(this.dataItems))
+        map.add("attachments", optionToJsonValue(this.attachments))
         return JsonObject(map)
     }
 

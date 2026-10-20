@@ -6,12 +6,20 @@ package magic.app.services.webmcp
 import magic.log.LogUtils
 import magic.config.Config
 import magic.core.skill.{Skill, SkillManager}
+import magic.skill.parallel.SkillAutoInjector
 import magic.core.model.{ChatModel, ChatRequest}
 import magic.model.ModelManager
+// 图片投递策略需要读通道申报的能力位（llm_channel.capabilities），真相在注册表而非前端。
+import magic.model.channel.ChannelRegistry
 import magic.core.message.{Message, MessageRole, Conversation}
 import magic.skill.SkillAwareAgent
 import magic.agent_executor.react.ReactExecutor
-import magic.core.agent.{AgentRequest, AgentResponse, AgentCancelException}
+import magic.core.agent.{AgentRequest, AgentResponse, AgentCancelException, Attachment, AttachmentSummary}
+import magic.plugin.multimodal.ParseDispatcher
+import magic.plugin.multimodal.ParserRegistry
+import magic.plugin.multimodal.AttachmentMeta
+import magic.plugin.multimodal.{AttachmentParsed, AttachmentParsedEventBus}
+import magic.plugin.multimodal.builtin.registerAllBuiltinParsers
 import magic.core.agent.AgentDefinition
 import magic.agent.memory.tiered.TieredMemory
 import magic.interaction.EventHandlerManager
@@ -23,6 +31,7 @@ import magic.core.tool.{Tool, ToolParameter}
 import magic.jsonable.TypeSchema
 import f_util.UUID
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonInt, JsonFloat, JsonBool, JsonNull}
+import std.core.StringBuilder
 import std.collection.{HashMap, ArrayList}
 
 import std.sync.AtomicBool
@@ -77,6 +86,10 @@ public class WebMCPProtocol {
     // 会话上下文（共享实例）：构造 agent 时注入同一引用，setSessionInfo 更新其字段，
     // 使长程任务等工具在每次请求都能拿到真实 userId / sessionId / agentId。
     private var _sessionContext: AgentSessionContext = AgentSessionContext(userId: "", sessionId: "", agentId: "")
+    private var _skillAutoInjector: ?SkillAutoInjector = None
+
+    /** 内置参考解析器仅注册一次（注册表自身幂等，这里仅为避免每条消息重复打日志）。 */
+    private static var _parsersReady: Bool = false
 
     /**
      * 构造函数，接受可空类型的 SkillManager 和 ChatModel
@@ -220,6 +233,11 @@ public class WebMCPProtocol {
         // 同步刷新共享会话上下文：构造 agent 时 userId 尚为空，此处才是最新的真实用户信息。
         // agent 与长程任务工具持有同一引用，更新后双方都能看到正确 userId / sessionId / agentId。
         this._sessionContext.update(userId: _userId, sessionId: _sessionId, agentId: this._agentId)
+    }
+
+    public func setSkillAutoInjector(injector: SkillAutoInjector): Unit {
+        this._skillAutoInjector = Some(injector)
+        LogUtils.info("[WebMCPProtocol] SkillAutoInjector injected")
     }
 
     /// 返回当前会话已解析的 agent id（构造期已从 agents 表解析并写入 _agentId）。
@@ -1233,6 +1251,253 @@ public class WebMCPProtocol {
         }
     }
 
+    /**
+     * 图片投递策略：通道申报了原生视觉就直传，没申报就转交附件解析链（2026-10-16）。
+     *
+     * 【为什么必须分流，而不是"要么直传要么丢弃"】
+     * 聊天框的上传入口已恒显（见前端 useMultimodal 的裁决），即"用户能不能传图"不由模型
+     * 原生能力决定；但**怎么把图交给模型**必须尊重能力位 —— 把 image_url 硬塞给不支持视觉
+     * 的网关，换来的不是"看不懂"，而是整个请求 400。另一头同样不能接受的是历史上那种
+     * 「静默丢弃」：用户以为传了，模型其实没收到，还一本正经地胡编。
+     *
+     * 因此两条路径：
+     *  - 申报了视觉（`capabilities` 含 `vision`，历史 seed 别名 `image`）→ 进 `AgentRequest.images`，
+     *    以 OpenAI `image_url` 块直传，与既有行为完全一致；
+     *  - 未申报 → 把每张图包成 `Attachment`，走既有 `<uploaded_files>` 解析链
+     *    （ParserRegistry 可挂第三方图片理解技能/插件），并在消息里显式告诉智能体这条路该怎么走。
+     *
+     * 真相源是数据库 `llm_channel.capabilities`（advisory），不在前端副本、也不在代码常量里。
+     */
+    private func demoteImagesWhenNoNativeVision(
+        channelSpec: String,
+        message: String,
+        images: ArrayList<String>,
+        files: ArrayList<Attachment>
+    ): (String, ArrayList<String>, ArrayList<Attachment>) {
+        if (images.size == 0) {
+            return (message, images, files)
+        }
+        let channelCode = this.requestChannelCode(channelSpec)
+        if (this.channelDeclaresVision(channelCode)) {
+            return (message, images, files)
+        }
+
+        let merged = ArrayList<Attachment>()
+        for (f in files) {
+            merged.add(f)
+        }
+        var seq: Int64 = 0
+        for (url in images) {
+            seq = seq + 1
+            merged.add(Attachment(imageAttachmentName(url, seq), mimeOfDataUrl(url), url))
+        }
+
+        let sb = StringBuilder()
+        sb.append(message)
+        sb.append(buildVisionFallbackNotice(channelCode, Int64(images.size)))
+        LogUtils.info("WebMCP multimodal: 通道「${channelCode}」未申报原生视觉能力，" +
+            "${images.size} 张图片转交附件解析链（可由第三方图片理解技能/插件处理）")
+        (sb.toString(), ArrayList<String>(), merged)
+    }
+
+    /**
+     * 从请求级 "<channel>:<modelId>" 里取通道编码；未指定（空串 / 无冒号）时退回 DB 默认通道。
+     * 语义与 `resolveRequestChatModel` 保持一致：前端不写 `channel:model` 就走默认通道。
+     */
+    private func requestChannelCode(spec: String): String {
+        var code = ""
+        if (spec.contains(":")) {
+            match (spec.indexOf(":")) {
+                case Some(i) => code = spec[0..i]
+                case None => ()
+            }
+        }
+        if (code.isEmpty()) {
+            code = ChannelRegistry.shared().getDefaultCode()
+        }
+        code
+    }
+
+    /**
+     * 通道是否申报了原生视觉能力。
+     *
+     * 能力位是 advisory 值：为空视为「未申报 ⇒ 不承诺」（保守，走插件链这一侧）；
+     * 查不到该通道（未 reload / 已被删）时保持历史行为按原生处理，避免一次刷新窗口
+     * 把所有人的图片都降级。
+     */
+    private func channelDeclaresVision(code: String): Bool {
+        if (code.isEmpty()) {
+            LogUtils.warn("WebMCP multimodal: 未能确定请求通道，按原生视觉处理（不降级）")
+            return true
+        }
+        match (ChannelRegistry.shared().getChannel(code)) {
+            case Some(s) =>
+                if (s.capabilities.isEmpty()) {
+                    return false
+                }
+                // 'vision' 是规范键（runtime_capability_collector 也按它判定）；
+                // 'image' 是 20261006 种子实际写进库的历史别名，两者同义。
+                s.capabilities.contains("vision") || s.capabilities.contains("image")
+            case None =>
+                LogUtils.warn("WebMCP multimodal: 通道「${code}」不在注册表，按原生视觉处理（不降级）")
+                true
+        }
+    }
+
+    /** dataURL → MIME（"data:image/png;base64,..." → "image/png"）；非 dataURL 返回空串。 */
+    private func mimeOfDataUrl(url: String): String {
+        if (!url.startsWith("data:")) {
+            return ""
+        }
+        match (url.indexOf(";")) {
+            // "data:" 占 0..4，MIME 从下标 5 起
+            case Some(i) => url[5..i]
+            case None => ""
+        }
+    }
+
+    /** 内联图片的合成文件名（content 块不含 filename，这里按序号 + 真实格式后缀命名）。 */
+    private func imageAttachmentName(url: String, seq: Int64): String {
+        var ext = "bin"
+        if (url.startsWith("data:image/png")) {
+            ext = "png"
+        } else if (url.startsWith("data:image/jpeg")) {
+            ext = "jpg"
+        } else if (url.startsWith("data:image/gif")) {
+            ext = "gif"
+        } else if (url.startsWith("data:image/webp")) {
+            ext = "webp"
+        }
+        "inline-image-${seq}.${ext}"
+    }
+
+    /**
+     * 未申报原生视觉时的告知块。
+     *
+     * 关键约束在最后一句：不允许智能体凭空描述图片内容 —— 这正是"假装看懂了"的根源。
+     */
+    private func buildVisionFallbackNotice(channelCode: String, imageCount: Int64): String {
+        let sb = StringBuilder()
+        sb.append("\n\n<vision_notice>\n")
+        sb.append("当前通道「")
+        sb.append(channelCode)
+        sb.append("」未申报原生视觉能力，这 ")
+        sb.append(imageCount.toString())
+        sb.append(" 张图片没有以 image_url 方式直接送入模型，而是作为附件交给了解析链处理。\n")
+        sb.append("请这样处理：\n")
+        sb.append("1. 若解析链已产出图片内容（见上方 <uploaded_files>），直接基于它作答；\n")
+        sb.append("2. 若没有可用的图片理解解析器，使用已安装的图片理解相关技能/插件处理这些附件；\n")
+        sb.append("3. 若确实都没有，如实告知用户「当前通道不支持原生看图，需要安装图片理解插件或切换到支持视觉的通道」，绝不凭空描述图片内容。\n")
+        sb.append("</vision_notice>")
+        sb.toString()
+    }
+
+    /**
+     * 把上传附件经宿主解析调度后并入用户消息（工程 `specs/multimodal-native-chat`，host-attach-core）。
+     *
+     * 解析本身委托给 `ParserRegistry` 中的解析器（内置参考解析器 + 未来的 doc-parser-plugins），
+     * 本方法只负责：调度 → 拼 `<uploaded_files>` → 生成解析摘要 → 发布 `AttachmentParsed` 事件。
+     * 调度永不抛异常，失败也会产出「内容无法解析」的告知块，因此这里无需 try。
+     *
+     * 返回 (合并后的消息文本, 本轮附件解析摘要)；摘要随 `AgentRequest` 透传给持久化层落库。
+     */
+    private func mergeIngestedFiles(userMessage: String, files: ArrayList<Attachment>): (String, AttachmentSummary) {
+        this.ensureBuiltinParsers()
+        if (files.size == 0) {
+            return (userMessage, AttachmentSummary.empty())
+        }
+        let sb = StringBuilder()
+        sb.append(userMessage)
+        sb.append("\n\n<uploaded_files>\n")
+        let metas = ArrayList<AttachmentMeta>()
+        for (f in files) {
+            let outcome = ParseDispatcher.dispatchWithMeta(f)
+            for (p in outcome.parts) {
+                sb.append("--- ")
+                sb.append(p.source)
+                sb.append(" ---\n")
+                sb.append(p.text)
+                sb.append("\n")
+            }
+            metas.add(outcome.meta)
+        }
+        sb.append("</uploaded_files>")
+
+        // 附件元数据 JSON（供落库 + 事件消费）
+        let arr = JsonArray()
+        for (m in metas) {
+            arr.add(m.toJsonValue())
+        }
+        let attachmentsJson = arr.toJsonString()
+
+        let messageId = UUID.random().toString()
+        let summary = AttachmentSummary(
+            messageId,
+            this._sessionId,
+            Int64(metas.size),
+            buildParseSummary(metas),
+            attachmentsJson
+        )
+        // 发布 AttachmentParsed 事件（供 attachment-persistence / web-multimodal 消费）
+        // 注意：AttachmentParsed.init 的形参均为位置参数（无 `!`），须按位置传值，不能用 `name = value`。
+        AttachmentParsedEventBus.shared().publish(AttachmentParsed(
+            this._sessionId,
+            messageId,
+            Int64(metas.size),
+            summary.parseSummary,
+            metas
+        ))
+        LogUtils.info("WebMCP multimodal: merged ${files.size} file(s) into user message, messageId=${messageId}")
+        (sb.toString(), summary)
+    }
+
+    private func buildParseSummary(metas: ArrayList<AttachmentMeta>): String {
+        if (metas.size == 0) {
+            return "无附件"
+        }
+        let sb = StringBuilder()
+        for (m in metas) {
+            sb.append("[${m.filename}] status=${m.status}")
+            if (!m.notice.isEmpty()) {
+                sb.append(" note=${m.notice}")
+            }
+            sb.append("; ")
+        }
+        sb.toString()
+    }
+
+    /**
+     * 只有附件、没有文字时的占位说明文本。
+     *
+     * 作用有二：① 让「本轮有没有内容」的判据成立（否则纯图片消息被当空消息丢掉）；
+     * ② 让模型知道这一轮用户到底给了什么，而不是收到一张没有上下文的孤图。
+     * 文案保持中性陈述，不替用户编造意图。
+     */
+    private func buildMediaOnlyPlaceholder(imageCount: Int64, fileCount: Int64): String {
+        let sb = StringBuilder()
+        sb.append("（用户本轮只上传了附件，未附加文字说明：")
+        if (imageCount > 0) {
+            sb.append(imageCount.toString())
+            sb.append(" 张图片")
+        }
+        if (fileCount > 0) {
+            if (imageCount > 0) {
+                sb.append("、")
+            }
+            sb.append(fileCount.toString())
+            sb.append(" 个文件")
+        }
+        sb.append("。请基于附件内容理解用户意图并回应。）")
+        sb.toString()
+    }
+
+    private func ensureBuiltinParsers(): Unit {
+        if (!WebMCPProtocol._parsersReady) {
+            WebMCPProtocol._parsersReady = true
+            registerAllBuiltinParsers(ParserRegistry.shared())
+        }
+    }
+
     private func handleCompletionComplete(obj: JsonObject): String {
         let requestId = obj.get("id")
 
@@ -1244,6 +1509,10 @@ public class WebMCPProtocol {
         var systemMessage = ""  // 新增：存储 system 角色的消息内容
         var isStream = true  // 默认流式响应
         var requestModelSpec = ""  // T036：请求级通道指定（"<channel>:<modelId>"）
+        // 多模态（specs/multimodal-native-chat，SDD R4 / T-MC-007）：
+        // 随本轮 user 消息上行的图片与附件。此处是旧链路唯一的「content 拍平」断点修复点。
+        var requestImages = ArrayList<String>()
+        var requestFiles = ArrayList<Attachment>()
 
         if (params.isSome()) {
             let paramsVal = params.getOrThrow()
@@ -1288,14 +1557,20 @@ public class WebMCPProtocol {
                                         let roleStr = role.getOrThrow().toString().replace("\"", "")
                                         let contentVal = content.getOrThrow()
                                         var contentStr = ""
-                                        if (contentVal is JsonString) {
-                                            contentStr = contentVal.asString().getValue()
-                                        } else {
-                                            contentStr = contentVal.toString().replace("\"", "")
-                                        }
+                                        // 多模态解析：content 既可能是字符串，也可能是
+                                        // text / image_url / file 块数组（SDD §4 契约）。
+                                        // 纯字符串时行为与历史完全一致（向后兼容）。
+                                        let parsed = MultimodalContentParser.parse(contentVal)
+                                        contentStr = parsed.text
 
                                         if (roleStr == "user") {
-                                            userMessage = contentStr
+                                            // 被丢弃（超量 / 超大）的附件必须留痕并入消息，
+                                            // 否则会退化成「用户以为传了、模型其实没收到」。
+                                            userMessage = contentStr + parsed.renderNotices()
+                                            // 逐条覆盖 ⇒ 最终保留的是**最后一条** user 消息的附件，
+                                            // 避免多轮对话把历史图片重复注入当前轮。
+                                            requestImages = parsed.images
+                                            requestFiles = parsed.files
                                         } else if (roleStr == "system") {
                                             // 提取 system 角色的消息内容作为系统提示词
                                             systemMessage = contentStr
@@ -1310,6 +1585,26 @@ public class WebMCPProtocol {
                 }
             }
         }
+
+        // 只有附件、没有文字时补一段占位说明。
+        //
+        // 【为什么必须有】两个原因，缺一个整条图片链路就是断的：
+        // ① 下面的 `userMessage.isEmpty()` 是「本轮有没有内容要处理」的唯一判据，
+        //    纯图片消息（用户不打字、只拖一张图）会让它成立，直接返回默认文本，
+        //    图片被完全丢弃 —— 用户看到的是「发了一张图，AI 回一句无关的套话」。
+        // ② 下游组装 content 块时，只要有图就会无条件产出 text 块（内容即这里的文本），
+        //    空串 text 块在部分严格的 OpenAI 兼容网关上会 400，模型也无从判断这一轮输入是什么。
+        if (userMessage.isEmpty() && (requestImages.size > 0 || requestFiles.size > 0)) {
+            userMessage = buildMediaOnlyPlaceholder(Int64(requestImages.size), Int64(requestFiles.size))
+        }
+
+        // 图片投递策略分流：只有"模型原生看得见图"才走 image_url 直传，
+        // 否则交给附件解析链（可被第三方图片理解技能/插件接管）—— 绝不静默丢弃。
+        let (messageAfterVision, imagesAfterVision, filesAfterVision) =
+            this.demoteImagesWhenNoNativeVision(requestModelSpec, userMessage, requestImages, requestFiles)
+        userMessage = messageAfterVision
+        requestImages = imagesAfterVision
+        requestFiles = filesAfterVision
 
         LogUtils.debug("WebMCP completion/complete user message: ${userMessage}")
 
@@ -1328,7 +1623,7 @@ public class WebMCPProtocol {
                     LogUtils.info("WebMCPProtocol: agent name=${agent.name}, systemPrompt length=${agent.systemPrompt.size.toString()}")
 
                     // 合并系统提示词：前端 system 消息 + 后端技能知识库（含完整 instructions）
-                    let backendSkillPrompt = buildAgentSystemPrompt()
+                    let backendSkillPrompt = buildAgentSystemPrompt(userMessage)
                     if (!systemMessage.isEmpty()) {
                         LogUtils.info("WebMCPProtocol: using system message from frontend, length=${systemMessage.size.toString()}, appending backend skill info")
                         agent.systemPrompt = systemMessage + "\n\n" + backendSkillPrompt
@@ -1363,7 +1658,11 @@ public class WebMCPProtocol {
                     }
 
                     // 创建 Agent 请求并处理
-                    let agentRequest = AgentRequest(userMessage, conversation: conversation)
+                    // 多模态：文档附件先经 host-attach-core 调度解析成文本并入消息，
+                    // 图片以 dataURL 列表随请求下行，由 ChatModel 序列化为 image_url 块。
+                    let (mergedMessage, attachmentSummary) = mergeIngestedFiles(userMessage, requestFiles)
+                    let agentRequest = AgentRequest(mergedMessage, conversation: conversation,
+                        images: requestImages, files: requestFiles, attachmentSummary: attachmentSummary)
 
                     // v13修复：启动progress定时器，定期发送SSE progress通知，防止前端超时
                     // 根因：agent.chat同步执行ReAct循环可能耗时15分钟，前端resetTimeoutOnProgress需要progress通知才生效
@@ -1496,6 +1795,9 @@ public class WebMCPProtocol {
         var systemMessage = ""
         var isStream = true
         var requestModelSpec = ""  // T036：请求级通道指定（"<channel>:<modelId>"）
+        // 多模态：与同步分支保持一致的解析结果容器（SDD R4，流式分支不能漏）
+        var requestImages = ArrayList<String>()
+        var requestFiles = ArrayList<Attachment>()
 
         if (params.isSome()) {
             let paramsVal = params.getOrThrow()
@@ -1538,15 +1840,14 @@ public class WebMCPProtocol {
                                     if (role.isSome() && content.isSome()) {
                                         let roleStr = role.getOrThrow().toString().replace("\"", "")
                                         let contentVal = content.getOrThrow()
-                                        var contentStr = ""
-                                        if (contentVal is JsonString) {
-                                            contentStr = contentVal.asString().getValue()
-                                        } else {
-                                            contentStr = contentVal.toString().replace("\"", "")
-                                        }
+                                    // 多模态解析（与同步分支同一契约，见 SDD §4）
+                                    let parsed = MultimodalContentParser.parse(contentVal)
+                                    var contentStr = parsed.text
 
                                         if (roleStr == "user") {
-                                            userMessage = contentStr
+                                            userMessage = contentStr + parsed.renderNotices()
+                                            requestImages = parsed.images
+                                            requestFiles = parsed.files
                                         } else if (roleStr == "system") {
                                             systemMessage = contentStr
                                             LogUtils.info("WebMCP completion/complete stream received system message, length=${contentStr.size.toString()}")
@@ -1560,6 +1861,19 @@ public class WebMCPProtocol {
                 }
             }
         }
+
+        // 与同步分支同因同解：纯附件消息若不带文字，会被下面的空消息判据直接拦掉，
+        // 附件等于白传。补占位说明后既过了判据，也让下游 text 块非空。
+        if (userMessage.isEmpty() && (requestImages.size > 0 || requestFiles.size > 0)) {
+            userMessage = buildMediaOnlyPlaceholder(Int64(requestImages.size), Int64(requestFiles.size))
+        }
+
+        // 图片投递策略分流（与同步分支同一套逻辑，见 demoteImagesWhenNoNativeVision 说明）
+        let (messageAfterVision, imagesAfterVision, filesAfterVision) =
+            this.demoteImagesWhenNoNativeVision(requestModelSpec, userMessage, requestImages, requestFiles)
+        userMessage = messageAfterVision
+        requestImages = imagesAfterVision
+        requestFiles = filesAfterVision
 
         LogUtils.debug("WebMCP completion/complete stream user message: ${userMessage}")
 
@@ -1591,7 +1905,7 @@ public class WebMCPProtocol {
         }
 
         // 合并系统提示词：前端 system 消息 + 后端技能知识库
-        let backendSkillPrompt = buildAgentSystemPrompt()
+        let backendSkillPrompt = buildAgentSystemPrompt(userMessage)
         if (!systemMessage.isEmpty()) {
             LogUtils.info("WebMCPProtocol stream: using system message from frontend, length=${systemMessage.size.toString()}")
             agent.systemPrompt = systemMessage + "\n\n" + backendSkillPrompt
@@ -1622,8 +1936,10 @@ public class WebMCPProtocol {
             }
         }
 
-        // 创建 Agent 请求
-        let agentRequest = AgentRequest(userMessage, conversation: conversation)
+        // 创建 Agent 请求（流式分支同样携带多模态，避免两条路径行为不一致）
+        let (mergedMessage, attachmentSummary) = mergeIngestedFiles(userMessage, requestFiles)
+        let agentRequest = AgentRequest(mergedMessage, conversation: conversation,
+            images: requestImages, files: requestFiles, attachmentSummary: attachmentSummary)
 
         // 本轮开始：清掉上一轮残留的取消标志。
         // 取消标志（cancelFlags）是会话级的，不随某一轮执行结束而自动清除；
@@ -1956,7 +2272,7 @@ public class WebMCPProtocol {
      * 3. 前端注册的工具列表（来自 FrontendToolRegistry）
      * 4. 页面导航信息（来自 MenuDataProvider，基于当前用户 ID 查询的菜单树）
      */
-    private func buildAgentSystemPrompt(): String {
+    private func buildAgentSystemPrompt(userMessage: String): String {
         let skillInfoBuilder = StringBuilder()
         // v17: basePromptSection 已由 AGENTS.md 的 systemPrompt 提供，此处不再注入避免重复
 
@@ -1979,6 +2295,39 @@ public class WebMCPProtocol {
                 skillInfoBuilder.append("\n")
 
                 // v17: skillGuideSection 已迁至 AGENTS.md，此处不再注入
+            }
+        }
+
+        // 漂移修复：自动注入驻留型技能完整 instructions（替代第3段"agent 主动调用工具获取"）
+        // autoInjectEnabled=false 时不调用，退回原三段渐进式加载逻辑
+        if (let Some(injector) <- _skillAutoInjector) {
+            // 第1步：初始化阶段注入 always-on 技能（沿用既有自动注入策略）
+            let initResult = injector.injectOnInitialization(_sessionId)
+            if (!initResult.injectedContext.isEmpty()) {
+                skillInfoBuilder.append(initResult.injectedContext)
+                skillInfoBuilder.append("\n\n")
+            }
+
+            // 第2步：每轮用户消息阶段自动注入技能完整 instructions（沿用既有自动注入策略）
+            // 支持 "/skillName" 显式指令与按任务描述自动匹配两种模式
+            let userInjectResult = if (userMessage.startsWith("/")) {
+                let parts = userMessage.split(" ")
+                if (parts.size > 0) {
+                    let skillName = parts[0][1..parts[0].size]
+                    if (!skillName.isEmpty()) {
+                        injector.injectExplicit(skillName, _sessionId)
+                    } else {
+                        injector.injectOnUserMessage(userMessage, _sessionId)
+                    }
+                } else {
+                    injector.injectOnUserMessage(userMessage, _sessionId)
+                }
+            } else {
+                injector.injectOnUserMessage(userMessage, _sessionId)
+            }
+            if (!userInjectResult.injectedContext.isEmpty()) {
+                skillInfoBuilder.append(userInjectResult.injectedContext)
+                skillInfoBuilder.append("\n\n")
             }
         }
 

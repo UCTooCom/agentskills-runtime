@@ -1,6 +1,8 @@
 import std.process.*
 import std.fs.*
+import std.io.{StringReader}
 import std.collection.*
+import std.env.getVariable
 
 func getOsInfo() {
     @When[os == "Linux"]
@@ -434,14 +436,153 @@ func stagePluginBuildSync(): Int64 {
     return 0
 }
 
-func stagePostBuild(): Int64 {
-    println("post-build: running package_release script...")
-    let proc = launch("cjpm", ["run", "--skip-build", "--name", "magic.scripts.package_release"])
+// ===== post-build 递归红线（2026-10-11 事故复盘，勿回退）=====
+//
+// 旧实现这一句是：
+//     let proc = launch("cjpm", ["run", "--name", "magic.scripts.package_release"])
+//
+// 致命点在于 cjpm 的 run 语义是「先构建、再运行」，而构建会再次触发本构建脚本的
+// 钩子（pre-build 重写 src/plugins/.sync-manifest，post-build 再拉起一次 cjpm run），
+// 于是形成无限递归：cjpm 到 build，再到 post-build，再到 cjpm run，周而复始。
+// 实测症状：12 小时内拉起 12 层嵌套 cjpm 进程，每层都要跑一遍完整构建
+// （约 50 到 80 分钟），同一批 target/release/bin 产物被反复重链接、修改时间不断刷新；
+// 又因为每层都在阻塞等待子进程，打包步骤从未真正跑起来
+// （release 目录下的 tar.gz 一直停在本次构建开始之前的时间戳）。
+//
+// 铁律：本工程的构建钩子内禁止再拉起任何会触发构建的 cjpm 子命令。
+// 打包只允许直接执行已构建好的产物可执行文件。
+//
+// 开关（同时支持 OS 环境变量 与 工程根目录 .env 中的同名键，OS 环境变量优先）：
+// 日常 cjpm build 若不需要跟随打包（拷贝数百 MB 的 DLL 并生成数百 MB 的
+// 归档，开销可观），在 .env 设 AGENTSKILLS_SKIP_POST_BUILD_PACKAGE=1 即可跳过；
+// 需要打包时设为 0 或删去该行，再手工跑 cjpm run --name magic.scripts.package_release。
+let POST_BUILD_SKIP_ENV = "AGENTSKILLS_SKIP_POST_BUILD_PACKAGE"
+
+/// 打包产物的可执行文件路径（随平台带或不带 .exe 后缀）
+func packageReleaseExe(): String {
+    let info = getOsInfo()
+    let os = info[0]
+    return if (os == "windows") {
+        "./target/release/bin/magic.scripts.package_release.exe"
+    } else {
+        "./target/release/bin/magic.scripts.package_release"
+    }
+}
+
+let INSTALLER_DIR = "./installer"
+let INSTALLER_SKIP_ENV = "AGENTSKILLS_SKIP_INSTALLER_BUILD"
+
+// ---- 构建开关读取：OS 环境变量优先，回退到工程根目录 .env ----
+// 历史实现只认 OS 环境变量，发现性极差；现允许在 .env 中配置同名键，
+// 与运行时配置统一管理。取值为真（1/true/yes/on，大小写不敏感）即视为开启。
+func readEnvFileValue(key: String): Option<String> {
+    if (!exists(".env")) {
+        return None
+    }
+    let file = File(".env", OpenMode.Read)
+    let reader = StringReader(file)
+    let content = reader.readToEnd()
+    file.close()
+    for (line in content.split("\n")) {
+        let trimmed = line.trimAscii()
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+            continue
+        }
+        if (let Some(eqIdx) <- trimmed.indexOf("=")) {
+            let k = trimmed[0..eqIdx].trimAscii()
+            if (k == key) {
+                var v = trimmed[(eqIdx + 1)..trimmed.size].trimAscii()
+                // 去除值两端的双引号（.env 中常见写法）
+                if (v.startsWith("\"") && v.endsWith("\"") && v.size >= 2) {
+                    v = v[1..(v.size - 1)]
+                }
+                return Some(v)
+            }
+        }
+    }
+    return None
+}
+
+func isTruthy(v: String): Bool {
+    let t = v.trimAscii()
+    return t == "1" || t == "true" || t == "TRUE" || t == "yes" || t == "YES" || t == "on" || t == "ON"
+}
+
+// 读取构建开关：OS 环境变量优先，未设置时回退 .env 同名键
+func skipSwitch(envName: String): Bool {
+    if (let Some(v) <- getVariable(envName)) {
+        return isTruthy(v)
+    }
+    if (let Some(v) <- readEnvFileValue(envName)) {
+        return isTruthy(v)
+    }
+    return false
+}
+
+/// 构建 installer 独立子工程（T013 / REQ-PCI-005 的前置步骤）
+///
+/// 为什么必须在这里补：installer 是**独立 cjpm 子工程**（自有 installer/cjpm.toml，
+/// 不写在根 cjpm.toml 的 [dependencies] 里），所以根工程 `cjpm build` 永远不会构建它。
+/// 而 package_release 只是「发现 installer/target/release/bin/main.exe 不存在就打 WARN
+/// 并跳过」，于是 ucInstaller.exe 长期缺席（2026-10-10 排查结论）。
+///
+/// 递归安全性：**installer 目录下没有 build.cj**，因此这里拉起 `cjpm build` 不会再次
+/// 触发本文件的钩子，不存在 438 行所述的递归风险。
+/// [!] 若日后给 installer 增加 build.cj，本函数必须改为直接复用已构建产物，否则红线复燃。
+///
+/// 返回：true = installer 产物已就绪，可供 package_release 打包
+func stageBuildInstaller(): Bool {
+    if (skipSwitch(INSTALLER_SKIP_ENV)) {
+        println("post-build: ${INSTALLER_SKIP_ENV} is set (env or .env), skip installer build")
+        return false
+    }
+    if (!exists("${INSTALLER_DIR}/cjpm.toml")) {
+        println("post-build: ${INSTALLER_DIR}/cjpm.toml not found, skip installer build")
+        return false
+    }
+
+    println("post-build: building installer sub-project (${INSTALLER_DIR}) ...")
+    let args: Array<String> = ["build"]
+    let proc = launch("cjpm", args, workingDirectory: Some(Path(INSTALLER_DIR)))
     let result = proc.wait()
     if (result != 0) {
-        println("post-build: package_release script failed with exit code ${result}")
+        println("post-build: [WARN] installer build failed with exit code ${result}")
+        println("         release/bin/ucInstaller.exe will be absent (REQ-PCI-005 unmet)")
+        return false
+    }
+
+    let installerExe = "${INSTALLER_DIR}/target/release/bin/main.exe"
+    if (!exists(installerExe)) {
+        println("post-build: [WARN] installer built but ${installerExe} not found")
+        return false
+    }
+    println("post-build: installer built -> ${installerExe}")
+    return true
+}
+
+func stagePostBuild(): Int64 {
+    if (skipSwitch(POST_BUILD_SKIP_ENV)) {
+        println("post-build: ${POST_BUILD_SKIP_ENV} is set (env or .env), skip packaging")
+        return 0
+    }
+
+    // 先构建 installer，让随后的 package_release 能取到 main.exe 并改名为 ucInstaller.exe
+    stageBuildInstaller()
+
+    let exe = packageReleaseExe()
+    if (!exists(exe)) {
+        println("post-build: ${exe} not found, skip packaging (build must succeed first)")
+        return 0
+    }
+
+    println("post-build: running ${exe} ...")
+    let noArgs: Array<String> = Array<String>()
+    let proc = launch(exe, noArgs)
+    let result = proc.wait()
+    if (result != 0) {
+        println("post-build: package_release failed with exit code ${result}")
     } else {
-        println("post-build: package_release script completed successfully")
+        println("post-build: package_release completed successfully")
     }
     return result
 }

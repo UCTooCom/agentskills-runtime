@@ -6,7 +6,7 @@ import sys
 import io
 
 # 将 markitdown 源码目录加入路径
-MARKITDOWN_SRC = r"D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\markitdown\packages\markitdown\src"
+MARKITDOWN_SRC = r"D:\UCT\projects\uctoo\apps\markitdown\packages\markitdown\src"
 sys.path.insert(0, MARKITDOWN_SRC)
 
 # 直接导入 PDF 转换器相关模块

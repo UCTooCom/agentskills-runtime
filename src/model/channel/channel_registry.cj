@@ -3,8 +3,9 @@
  */
 package magic.model.channel
 
-import magic.app.models.uctoo.ModelChannelPO
+import magic.app.models.uctoo.LlmChannelPO
 import std.env.getVariable
+import magic.utils.SecretCrypto
 import std.collection.{HashMap, ArrayList}
 import std.time.DateTime
 import magic.log.LogUtils
@@ -17,21 +18,25 @@ public struct ChannelSnapshot {
     public let protocol: String
     public let baseUrl: String
     public let secretRef: String
+    public let apiKey: String            // llm_channel.api_key 的密文（解密后才可用）
     public let displayName: String
     public let capabilities: String
     public let status: String
     public let isDefault: Bool
+    public let defaultModel: String
     public let revision: Int64
 
-    public init(code: String, protocol: String, baseUrl: String, secretRef: String, displayName: String, capabilities: String, status: String, isDefault: Bool, revision: Int64) {
+    public init(code: String, protocol: String, baseUrl: String, secretRef: String, apiKey: String, displayName: String, capabilities: String, status: String, isDefault: Bool, defaultModel: String, revision: Int64) {
         this.code = code
         this.protocol = protocol
         this.baseUrl = baseUrl
         this.secretRef = secretRef
+        this.apiKey = apiKey
         this.displayName = displayName
         this.capabilities = capabilities
         this.status = status
         this.isDefault = isDefault
+        this.defaultModel = defaultModel
         this.revision = revision
     }
 }
@@ -95,7 +100,7 @@ public class ChannelRegistry {
         return load()
     }
 
-    private func rebuild(channels: ArrayList<ModelChannelPO>): Unit {
+    private func rebuild(channels: ArrayList<LlmChannelPO>): Unit {
         let map = HashMap<String, ChannelSnapshot>()
         var def = ""
         var maxRev: Int64 = 0
@@ -105,10 +110,12 @@ public class ChannelRegistry {
                 po.protocol,
                 str(po.baseUrl),
                 str(po.secretRef),
+                str(po.apiKey),
                 str(po.displayName),
                 po.capabilities,
                 po.status,
                 po.isDefault,
+                str(po.defaultModel),
                 po.revision
             )
             map.add(po.code, snap)
@@ -176,17 +183,29 @@ public class ChannelRegistry {
     }
 
     /**
-     * 解析通道密钥：secretRef 形如 `env:VAR` → 读进程环境变量（getEnv）；
-     * `db:<id>` / `vault:<path>` 留给 Phase 2 的 host.secret 服务（MVP 返回空）。
+     * 解析通道密钥（真相源：llm_channel 表，加密存储）。
+     * 优先级：① DB 内加密 api_key（SecretCrypto 解密出明文）→ ② secret_ref=env:VAR（读进程环境变量，
+     *   兼容旧数据 / 逃生舱）→ ③ 均为空则返回空（通道未配置密钥）。
+     * 所有消费者（AdapterFactory / cordis_host_services / channel_probe）统一经此入口，改一处即全局生效。
      */
     public func resolveSecret(code: String): String {
         if (let Some(snap) <- snapshot.get(code)) {
+            // ① 优先：DB 内加密存储的 api_key（解密后即为明文）
+            if (!snap.apiKey.isEmpty()) {
+                let plain = SecretCrypto.decrypt(snap.apiKey)
+                if (!plain.isEmpty()) {
+                    return plain
+                }
+                LogUtils.warn("ChannelRegistry.resolveSecret(${code})", "api_key 解密失败（密钥错误或主密钥不匹配），回退 secret_ref")
+            }
+            // ② 兼容旧数据：secret_ref = env:VAR
             let ref = snap.secretRef
             if (ref.startsWith("env:")) {
                 let parts = ref.split(":")
                 let varName = if (parts.size == 2) { parts[1] } else { "" }
                 return getVariable(varName) ?? ""
             }
+            // ③ 未配置
             return ""
         }
         return ""

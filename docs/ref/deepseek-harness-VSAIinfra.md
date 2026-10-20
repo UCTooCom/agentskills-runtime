@@ -505,7 +505,7 @@ DSH的Footprint Ladder（足迹阶梯）——新能力的决策优先级（扩�
 
 ### 4.6 WebMCP实证：插件与Skills融合的可实现性验证（架构师补充）
 
-架构师补充了一个重要实证：2026年3月W3C发布了WebMCP协议体验版。agentskills-runtime配套的web项目（`apps/web-admin/web`）中已实现**WebMCP + WebAgent + WebSkills**机制，将Web应用声明成技能（Skill），使Agent可以直接操作Web应用。
+架构师补充了一个重要实证：2026年3月W3C发布了WebMCP协议体验版。agentskills-runtime配套的web项目（`apps/web-admin`）中已实现**WebMCP + WebAgent + WebSkills**机制，将Web应用声明成技能（Skill），使Agent可以直接操作Web应用。
 
 这个实证具有双重印证意义：
 
@@ -922,7 +922,7 @@ DSH在"让AI自己进化软件架构"这条路上走得更远、更激进；agen
 
 
 架构师补充：
-1）关于插件和skills融合的插件机制可实现性，我们在3月份正好看到W3C发布了WebMCP协议的体验版，在我们配套的web项目D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\web-admin\web 中也实现了WebMCP+WebAgent+WebSkills的机制，将Web应用声明成技能，使得agent可以直接操作Web应用，这正好印证了架构师关于插件和skills融合的插件机制的规划，因此我评估这是可实现的。而且WebMCP也正是采用了大模型/agent与人类使用行为对齐的方式在使用Web应用，印证了我对在行为入口处控制权限和安全的理念。也许后续在实现agentskills-runtime的插件机制时，可以吸纳一些deepseek-harness插件机制的已验证成果。这条补充信息可以更新添加到第二轮分析的合适位置。
+1）关于插件和skills融合的插件机制可实现性，我们在3月份正好看到W3C发布了WebMCP协议的体验版，在我们配套的web项目D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\web-admin 中也实现了WebMCP+WebAgent+WebSkills的机制，将Web应用声明成技能，使得agent可以直接操作Web应用，这正好印证了架构师关于插件和skills融合的插件机制的规划，因此我评估这是可实现的。而且WebMCP也正是采用了大模型/agent与人类使用行为对齐的方式在使用Web应用，印证了我对在行为入口处控制权限和安全的理念。也许后续在实现agentskills-runtime的插件机制时，可以吸纳一些deepseek-harness插件机制的已验证成果。这条补充信息可以更新添加到第二轮分析的合适位置。
 2）我原本下一次对话就是想让你分析为什么我第一个问题是让你检索Agentic Profile框架论文，它和我们后面进行的agentskills-runtime和deepseek-harness对比报告有什么关联，看到你已经在第二轮分析中捕捉到了这个信号并进行了分析，做的很好。但是，可能背景信息还是不够充分，我再补充更多的信息，让你有一个更加全面的理解。（1）Agentic Profile框架论文超越"是否为Agent"的二元分类，这和我们agentskills-runtime的AI驱动开发框架理念以及deepseek-harness的一切皆插件的理念有共识。还有在合规方面，其实不能说agentskills-runtime实现了智能体互联国标就更合规，我们也是分层进行的实现，agent只在本地运行那么就不涉及智能体互联国标，如果要互联对接就应遵循国标。这应该分层监管，这和Agentic Profile框架论文的治理理念相关。（2）在上个月刚结束的世界人工智能大会2026，主题就是AI全球治理。在开幕式的主席主旨发言中提出了4点意见:第一，坚持开放共赢，驱动创新发展。第二，强化风险意识，确保安全可控。第三，鼓励包容并蓄，促进文明互鉴。第四，倡导和衷共济，完善全球治理。我们agentskills-runtime开源项目正好符合这些意见，我们也试图在AIAgent领域用国产技术定义新时代技术话语权，就像芯片制造领域的“韬定律”以“时间缩微”替代传统的“几何缩微”打破以制程定义什么是先进芯片的话语权。而Agentic Profile框架论文发表在nature,具有很强的学术影响力，看起来像是在抢夺AI治理话语权。而我们也应该有相对应的可量化、可落地的分层级的AI治理体系，从而确立中国在AI全球治理的话语权。之前我在3月7日发表了文章《AgentSkills最佳实践》https://mp.weixin.qq.com/s/i8fLma9i6UB5oxtYzmmg2w 文中呼吁监管层封禁不安全的OpenClaw，当时看起来和很多热捧openclaw的整体氛围格格不入，但是非常巧合3.8日人民日报和工信部等主管部门发文提示OpenClaw安全风险，印证了我们就是在落实安全可控的发展AI理念。而现在我们又看到了一些洞察，我们应该在AI治理的理论以及形成完善监管体系方面有所作为。
 3）我们要参加一个agent大赛，赛事官网请参考https://www.goaihz.com/ ,参赛作品就是我们D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime 项目,我们的目标是在此agent大赛中获得第一名。有4个赛道，之前我们选择的是新智基座赛道的方向三：软件研发全流程协同，赛道详细信息请参考D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime\.codeartsdoer\specs\goai2026\Agent Infra.pdf文档，为此我们开发了D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime\.codeartsdoer\specs\goai2026 工程目录中的特性，以符合赛题要求和评审维度以获得高分。但是发现新智基座赛道要求必须使用AgentTeams框架，这和我们自研的agentskills-runtime的AI驱动开发框架有冲突，我们全链路国产自主可控的框架也是真正的新智基座。因此，现在我们准备更换赛道为前沿探索的题目类型二：开放探索赛题，详细信息参考D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime\.codeartsdoer\specs\goai2026\AI for Research.pdf文档。
 我们在这个赛道已经进行了大量的工作，就是第二轮分析前，我提供的那些技术文章和演讲PPT。之前你已经在信息不充分的时候，撰写了初始提交文档D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime\.codeartsdoer\specs\goai2026\AI for reserach开放探索赛初赛模板 2 - 4.docx ，请阅读参考。现在已经有了更加完备的信息，那么请综合以上信息，再次撰写初始提交文档 D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills-runtime\.codeartsdoer\specs\goai2026\AI for reserach开放探索赛初赛模板 2 - v2.docx 。

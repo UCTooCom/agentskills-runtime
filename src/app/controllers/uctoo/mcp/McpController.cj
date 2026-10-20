@@ -147,9 +147,9 @@ public class McpController {
         <h2>Available Endpoints</h2>
 
         <div class="endpoint">
-            <h3>WebSocket Chat</h3>
-            <p><code>WS /api/v1/uctoo/ws/chat</code></p>
-            <p>Real-time chat interface with skill-aware AI assistant.</p>
+            <h3>WebSocket Chat (WebMCP)</h3>
+            <p><code>WS /api/v1/uctoo/webmcp/mcp</code></p>
+            <p>Real-time chat interface with skill-aware AI assistant (webmcp-sdk / MCP streamable HTTP).</p>
         </div>
 
         <div class="endpoint">

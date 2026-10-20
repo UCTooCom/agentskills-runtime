@@ -8,7 +8,7 @@ description: >
   "继续 SDD"、"接着 SDD 走"、"直接开始编码阶段"、"从任务分解继续"、"SDD 先跳过研究步"、
   "拆分成多个子系统"、"多子系统 SDD"、"子系统目录"、"SPECS_INDEX"、"大工程拆分"。
 license: MIT
-version: "1.2.0"  # 2026-10-03：新增铁律 15「大工程拆分」（多子系统 SDD 工程 / 集成契约 / 主工程目录）
+version: "1.2.1"  # 2026-10-15：新增铁律 16「git 版本管理 SOP」（编译通过即提交 / 确认测试通过即纳入版本管理）
 compatibility: >
   需要 runtime 宿主侧能力：L3 进程隔离轨插件宿主（CordisHostManager + host.db 服务代理）、
   子 agent 派生链路（ChangeDetector 同步 skills/*/agents/ + SkillManagementService bundledAgents + SubAgentTool 真派生）、
@@ -372,7 +372,7 @@ loaddbinfo  →  plugingen（优先，插件）
 | 依赖成环 | §4 DAG 无回边；新依赖要改契约的依赖方向字段，不许实现里偷偷 import |
 | 子系统互相直连私有表/私有目录 | 一律禁止，对外只准走 §1 契约接口 |
 | 闸口被代决策 | 子系统闸口由子系统的闸口决策人确认，主工程不得代签 |
-| 额度超支 | 铁律 9 表/列白名单额度按子系统独立计，超了升级人工闸口，禁止绕 |
+| 复用论证缺失 | 新增表/列必须在 spec/design 写明复用不成立的理由，否则打回（铁律 9） |
 | 主工程重复实现 | 主工程只做组合与端到端，不重复子系统内部设计细节 |
 
 ---
@@ -391,7 +391,12 @@ loaddbinfo  →  plugingen（优先，插件）
 6. **上下文按次隔离**：一律 `SubAgentMode.Isolated` + 显式上下文包；`agent_contexts` 必带 `task_id`；超窗口降级为路径引用时**必须**在 `mode` 字段标 `path_ref`，不得无声切换。
 7. **状态不倒退**：`revise` 递增 `round`，`current_stage` 不回到更早阶段。
 8. **编码前必须取得确定依据**（工程内既有 import 先例 / 同类实现 / 官方文档技能），查不到须标注缺口请人工确认，**禁止凭印象猜 API**；产物未过 `code-gen-verifier` 不得标记完成。
-9. **禁止新建库表或列**：只能使用白名单七张表；新增表≤2、既有表新增列≤2 的额度已用满（`spec.md §6.7`）。
+9. **表/列管理：复用优先，确有必要时允许新建表/列**：默认优先复用既有表与列（含 `payload` / `config` 等 JSON 字段收纳扩展信息），不轻易新增；当且仅当复用明显不成立（语义不可直接复用 / 既有表承载不了新维度 / 跨域或隔离需要独立表）时，才允许新表或新列，并**必须在 spec/design 写明复用不成立的理由**。旧版"白名单额度封顶、禁止新建"约束作废。
+   **DB 结构变更后两种方式二选一（2026-10-14 修订）**：① 走确定性代码生成工具（`loaddbinfo` → `crudgen`/`plugingen` → `crudweb`，详见下面 ①~④）；② **手动补**——但须严格参照生成逻辑把 PO/DAO/Service/Controller/前端**所有位置补全**，不得只改一半（即以生成器会产出的字段覆盖范围为基准逐项核对）：
+   ① `loaddbinfo` 先把新结构灌进 `db_info`（后续生成工具都从它读）；
+   ② 按"要更新的既有代码是宿主模块还是插件"选工具——宿主 `src/app/` 公共基础设施走 `crudgen`，插件走 `plugingen`（默认 process 轨，需内嵌 sync 轨显式 `--mode sync`）；
+   ③ 管理界面走 `crudweb`；
+   ④ 生成后补 `sql/incremental/` 增量 DDL + 新增宿主路由的 `permissions` / `role_has_permission` 授权（否则 403）。
 10. **插件自完备**：五个子 agent 声明（code 步无子 agent）+ 六份 prompt + **九份模板**（原有七份 +
     2026-10-03 新增 `specs-index-template.md` / `subsystem-contract-template.md`）全部随插件打包，
     禁止依赖插件目录之外的路径。
@@ -408,9 +413,9 @@ loaddbinfo  →  plugingen（优先，插件）
     **① 规范以 `uctoo-dev-manual` + `docs/uctoo-v4/*.md` 为准**（不在本技能内复述条款）；
     **② 脚手架优先跑内置确定性工具** `loaddbinfo` → `plugingen`（优先做成插件，默认 L3 进程隔离轨 process，
     需退回宿主内嵌 sync 轨显式加 `--mode sync`）／`crudgen`（仅宿主公共基础设施）／`crudweb`（管理界面），
-    **禁止手撸五层骨架**；下线走对称的 `pluginuninstall`，禁止手删 `skills/{name}/` 目录（会留库痕迹）；
+    **脚手架优先跑确定性工具，手动补亦可但须严格参照生成逻辑补全五层所有位置**；下线走对称的 `pluginuninstall`，禁止手删 `skills/{name}/` 目录（会留库痕迹）；
     **③ 生成物当骨架做最小适配**，不推倒重写；
-    **    ④ 生成后必补** `sql/incremental/` 增量 DDL（涨幅受铁律 9 白名单额度约束）+ 新增宿主路由的
+    **    ④ 生成后必补** `sql/incremental/` 增量 DDL（新增须先论证复用不成立，见铁律 9 复用优先）+ 新增宿主路由的
     `permissions` / `role_has_permission` 登记（否则 403）。
     规矩落点：`prompts/code.md` 新章、`prompts/task.md` 硬约束、`templates/tasks-template.md` 开发规范段。
 15. **大工程拆分为多子系统 SDD 工程（2026-10-03 补充）**：工程量巨大时按"**交付面 → 数据/领域 → 技术栈 → 人回路**"
@@ -423,3 +428,44 @@ loaddbinfo  →  plugingen（优先，插件）
     子系统登记表 + 全局接口表 + 依赖 DAG + 组合集成验收基线 + 变更影响面，闸门回执后 ≤1 个闸口周期同步。
     规矩落点：`SKILL.md「大工程拆分（多子系统 SDD 工程）」`、`prompts/task.md` 硬约束、
     `prompts/code.md` 硬约束、`templates/tasks-template.md` 开发规范段。
+
+16. **git 版本管理（2026-10-15 补充）**：若用户开发环境 git 可用，把"编译通过"和"测试确认通过"作为提交闸口——
+    **① runtime 每次 `cjpm build` 正确通过后立即提交**；**② 用户确认测试通过的代码及时纳入版本管理**（不拖延、不攒批）。
+    提交只在"构建绿 / 测试已过闸口"前提下进行，失败构建与未经确认的中间态不入库；
+    提交信息须绑定 SDD 工程 `feature_name` 与当前阶段（research/spec/design/task/code/test），便于按闸口回放。
+    规矩落点：`SKILL.md「代码版本管理 SOP（git）」`。
+
+---
+
+## 代码版本管理 SOP（git）
+
+SDD 是"每步落盘 + 每步闸口"的流水线，版本管理应与之同频：**闸口确认即提交，不让已确认产物游离在版本库之外**。
+
+### 前置判定（git 是否可用）
+
+只在用户开发环境 git 可用时执行本 SOP；判定失败则跳过并提示，不要自行 `git init` 或伪造提交。
+
+```bash
+git --version && git rev-parse --is-inside-work-tree 2>/dev/null
+```
+
+### 两条硬规则
+
+1. **runtime 编译通过即提交**：宿主 `cd apps/agentskills-runtime && cjpm build` 正确通过（无 error、return code 0）后，立即把本轮改动提交；
+2. **测试确认通过即纳入版本管理**：用户在某步闸口 `confirm`（尤其 `gate-code` 或测试步验收通过）后，及时把对应代码 `git add` + `commit`，不等、不攒。
+
+### 推荐提交节奏（与闸口对齐）
+
+| 时机 | 提交内容 | 提交信息示例 |
+|---|---|---|
+| research/spec/design/task 任一步 `confirm` | 该步阶段文档 | `docs(sdd): confirm {feature_name} {stage} (#round)` |
+| `gate-code` 确认（编译已过） | 本轮 code 产出 | `feat({feature_name}): implement {stage} (#round)` |
+| 测试步验收通过 | 含测试补强的最终代码 | `test({feature_name}): verify {stage} (#round)` |
+| 修复编译/测试阻断后重新绿 | 修复 diff | `fix({feature_name}): resolve build/test blocker` |
+
+### 禁区
+
+- **失败的 `cjpm build` 不提交**（编译未过 = 产物不可信）；
+- **用户尚未确认的中间态不强行入库**（revise 中的草稿、未过闸口的 code 不要 commit）；
+- **不替用户做 `git push` / `git reset --hard` / 强制推送**等改变远端或历史的高风险操作；push 须用户显式授权；
+- 不提交构建产物（`target/`、`*.exe`、日志 `*.log`）——这类应在 `.gitignore` 排除，提交时显式 `git add` 源码与文档，避免 `git add -A` 误吞。

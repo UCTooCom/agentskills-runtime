@@ -202,9 +202,9 @@ public class WebCrudGenerator {
      * 确保目录结构存在
      */
     private func ensureDirectoryStructure(tableInfo: TableInfo): Unit {
-        let basePath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}"
+        let basePath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}"
         let componentsPath = "${basePath}/components"
-        let storeDir = "${outputDir}/web/src/store/models/${tableInfo.dbName}"
+        let storeDir = "${outputDir}/src/store/models/${tableInfo.dbName}"
         
         if (!dirExists(basePath)) {
             Directory.create(basePath, recursive: true)
@@ -256,7 +256,7 @@ public class WebCrudGenerator {
         if (template.size == 0) {
             println("模板文件不存在，使用内置代码生成")
             let code = buildIndexVueCode(tableInfo)
-            let outputPath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/index.vue"
+            let outputPath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/index.vue"
             writeFile(outputPath, code)
             return
         }
@@ -269,7 +269,7 @@ public class WebCrudGenerator {
         vars.add("db_name", tableInfo.dbName)
         
         let code = replaceVars(template, vars)
-        let outputPath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/index.vue"
+        let outputPath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/index.vue"
         writeFile(outputPath, code)
     }
     
@@ -282,7 +282,7 @@ public class WebCrudGenerator {
         if (template.size == 0) {
             println("add模板文件不存在，使用内置代码生成")
             let code = buildAddVueCode(tableInfo)
-            let outputPath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/add-${kebabName}.vue"
+            let outputPath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/add-${kebabName}.vue"
             writeFile(outputPath, code)
             return
         }
@@ -429,7 +429,7 @@ public class WebCrudGenerator {
         vars.add("form_rows", formRowsSb.toString())
         
         let code = replaceVars(template, vars)
-        let outputPath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/add-${kebabName}.vue"
+        let outputPath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/add-${kebabName}.vue"
         writeFile(outputPath, code)
     }
     
@@ -442,7 +442,7 @@ public class WebCrudGenerator {
         if (template.size == 0) {
             println("table模板文件不存在，使用内置代码生成")
             let code = buildTableVueCode(tableInfo)
-            let outputPath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/${kebabName}-table.vue"
+            let outputPath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/${kebabName}-table.vue"
             writeFile(outputPath, code)
             return
         }
@@ -578,7 +578,7 @@ public class WebCrudGenerator {
         vars.add("editable_fields", editableFieldsSb.toString())
         
         let code = replaceVars(template, vars)
-        let outputPath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/${kebabName}-table.vue"
+        let outputPath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/${kebabName}-table.vue"
         writeFile(outputPath, code)
     }
     
@@ -590,7 +590,7 @@ public class WebCrudGenerator {
         if (template.size == 0) {
             println("edit-form模板文件不存在，使用内置代码生成")
             let code = buildEditFormVueCode(tableInfo)
-            let outputPath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/edit-form.vue"
+            let outputPath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/edit-form.vue"
             writeFile(outputPath, code)
             return
         }
@@ -749,7 +749,7 @@ public class WebCrudGenerator {
         vars.add("form_rows", formRowsSb.toString())
         
         let code = replaceVars(template, vars)
-        let outputPath = "${outputDir}/web/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/edit-form.vue"
+        let outputPath = "${outputDir}/src/views/database/${tableInfo.dbName}/${tableInfo.tableName}/components/edit-form.vue"
         writeFile(outputPath, code)
     }
     
@@ -761,7 +761,7 @@ public class WebCrudGenerator {
         if (template.size == 0) {
             println("store model模板文件不存在，使用内置代码生成")
             let code = buildStoreModelCode(tableInfo)
-            let storePath = "${outputDir}/web/src/store/models/${tableInfo.dbName}/${tableInfo.tableName}.ts"
+            let storePath = "${outputDir}/src/store/models/${tableInfo.dbName}/${tableInfo.tableName}.ts"
             writeFile(storePath, code)
             updateStoreIndex(tableInfo.dbName, tableInfo.tableName)
             return
@@ -782,7 +782,7 @@ public class WebCrudGenerator {
         vars.add("fields", fieldsSb.toString())
         
         let code = replaceVars(template, vars)
-        let storePath = "${outputDir}/web/src/store/models/${tableInfo.dbName}/${tableInfo.tableName}.ts"
+        let storePath = "${outputDir}/src/store/models/${tableInfo.dbName}/${tableInfo.tableName}.ts"
         writeFile(storePath, code)
         
         updateStoreIndex(tableInfo.dbName, tableInfo.tableName)
@@ -792,7 +792,7 @@ public class WebCrudGenerator {
      * 更新 store index.ts 导出
      */
     private func updateStoreIndex(dbName: String, tableName: String): Unit {
-        let indexPath = "${outputDir}/web/src/store/models/${dbName}/index.ts"
+        let indexPath = "${outputDir}/src/store/models/${dbName}/index.ts"
         
         println("=== updateStoreIndex: dbName=${dbName}, tableName=${tableName}, indexPath=${indexPath} ===")
         

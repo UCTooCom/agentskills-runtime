@@ -13,6 +13,7 @@ import magic.utils.http.*
 import magic.log.LogUtils
 
 import std.time.DateTime
+import std.core.StringBuilder
 import std.collection.{ArrayList, HashMap, map, collectArray}
 import stdx.encoding.json.*
 
@@ -187,20 +188,45 @@ public class OllamaChatModel <: ChatModel {
             let jo = JsonObject()
             jo.put("role", JsonString(m.role.toString()))
             jo.put("content", JsonString(m.content))
-            if (let Some(image) <- m.image) {
-                if (image.startsWith("data:image/")) {
-                    let base64 = ";base64,"
-                    if (let Some(pos) <- image.indexOf(base64)) {
-                        let start = pos + base64.size
-                        jo.put("images", JsonArray([JsonString(image[start..])]))
-                    }
-                } else {
-                    jo.put("images", JsonArray([JsonString(image)]))
+            // 多模态（SDD R6 / T-MC-008）：ollama 用**独立的 images 数组**（不是 content 块），
+            // 且只接受裸 base64、不接受 `data:` 前缀 —— 故与 openai 的 image_url 形状不同。
+            // 由单图扩展为多图；`allImages()` 兼容旧的 image 字段。
+            let imgs = m.allImages()
+            if (imgs.size > 0) {
+                let arr = ArrayList<JsonValue>()
+                for (u in imgs) {
+                    arr.add(JsonString(stripDataUrlPrefix(u)))
                 }
+                jo.put("images", JsonArray(arr.toArray()))
+            }
+            // ollama 无「文件块」概念，文档抽取结果直接并入正文
+            if (m.fileParts.size > 0) {
+                let sb = StringBuilder()
+                sb.append(m.content)
+                for (fp in m.fileParts) {
+                    if (!fp.text.isEmpty()) {
+                        sb.append("\n[")
+                        sb.append(fp.source)
+                        sb.append("]\n")
+                        sb.append(fp.text)
+                    }
+                }
+                jo.put("content", JsonString(sb.toString()))
             }
             ja.add(jo)
         }
         return ja
+    }
+
+    /** 去掉 `data:image/...;base64,` 前缀，取裸 base64（ollama 的 images 数组要求）。 */
+    private func stripDataUrlPrefix(url: String): String {
+        let marker = ";base64,"
+        match (url.indexOf(marker)) {
+            case Some(pos) =>
+                let start = pos + marker.size
+                url[start..url.size]
+            case None => url
+        }
     }
 
     private func tools2Json(tools: Array<Tool>): JsonArray {

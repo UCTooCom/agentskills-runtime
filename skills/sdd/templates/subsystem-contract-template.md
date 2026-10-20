@@ -42,8 +42,8 @@
 - 行级权限口径：沿用 `user-permission-system.md` / `row-level-permission-system.md`；
   `creator` / `owner_user_id` 判定归本子系统，**下游不得自行解释**。
 - 软删：所有对外查询必须显式带 `deleted_at IS NULL` 语义，下游不得自己拼删除过滤。
-- 约束红线（**铁律 9**）：本子系统可用的新表 ≤2、既有表新增列 ≤2 额度独立计；
-  额度不够就升级人工闸口，禁止绕。
+- 约束红线（**铁律 9**）：复用优先，新增表/列须论证复用不成立的理由；
+  复用优先于新建，确有必要才建，禁止为图省事新开表/列；DB 结构变更后须走 `loaddbinfo` → `crudgen`/`plugingen` → `crudweb` 确定性生成。
 
 ## 3. 依赖方向
 

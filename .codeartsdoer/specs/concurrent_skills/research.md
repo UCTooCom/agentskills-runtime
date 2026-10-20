@@ -1,9 +1,12 @@
 # 技能并行机制研究报告
 
 > **工程目录**: `.codeartsdoer/specs/concurrent_skills/`
+> **版本**: v2（2026-10-13 修订，纳入架构师第二轮澄清；v1 为 2026-10-05）
 > **研究日期**: 2026-10-05
+> **修订日期**: 2026-10-13
 > **研究范围**: agentskills-runtime 现有机制、deepseek-harness、OpenClaw、Hermes 等同类产品技能并行机制
 > **架构师观点来源**: `docs/ref/ConcurrentSkills.md`
+> **v2 修订要点**：① 明确"技能并行"需求的一阶驱动是**跨节点分发与智能体一致性**（非仅哲学完整性）；② 补充 agentskills 标准原文证据与 `agent_skills` 表 / `skill-sync-system` 基础设施核验；③ 新增 personalization 归集为技能的分发语义分析（含 MEMORY 变更性）；④ 新增 §11 第二轮研究补充；⑤ 修正"只支持串行"表述为"缺上下文级驻留"。
 
 ---
 
@@ -11,7 +14,8 @@
 
 本报告基于架构师在 `ConcurrentSkills.md` 中补充的观点，对 agentskills-runtime 已有的 agentskills 机制、deepseek-harness 的技能系统，以及 OpenClaw、Hermes 等同类产品的技能并行机制进行了系统研究。核心结论：
 
-1. **agentskills-runtime 当前仅有"串行编排"能力**：`StepType.Parallel` 枚举值虽已存在，但 `CompositionExecutor` 实际执行链路是拓扑排序后的 for 循环串行执行，没有真正的"多技能同时注入上下文"机制。
+1. **agentskills-runtime 当前缺乏"上下文级技能驻留/并行"能力**：`StepType.Parallel` 枚举值虽已存在，但 `CompositionExecutor` 实际执行链路是拓扑排序后的 for 循环串行执行（已核验 `composition_executor.cj` L140-177，`Parallel` 仅置 `isConditionalStep=false`，等价 `Sequential`）；更重要的是**技能完整指令体平时不在上下文中**，需 agent 显式调用 `get_skill_content` 才能获取（见 spec §5.6 漂移分析）。
+   > **表述订正（v2）**：v1 沿用了架构师"是否只支持串行使用"的提法。严格而言工具级并行**已存在**（技能已注册为工具，模型一轮可多次调用），缺失的是**上下文级指令驻留**。本文档后续统一采用"缺上下文级并行"表述，不再使用"只支持串行"。
 2. **deepseek-harness 已具备"上下文并行"的雏形**：通过 `agent/pre-step` 事件钩子注入技能目录（`<available_skills>`），模型可按需加载多个技能的 `<skill_content>` 到同一上下文，这是架构师所说的"提示词工程化并行"的典型实现。
 3. **agentskills-runtime 已有个性化文件机制**：`AgentWorkspace` 支持 SOUL.md / IDENTITY.md / USER.md / MEMORY.md 等 8 类工作空间文件，但尚未将其抽象为 personalization 技能插件。
 4. **技能并行本质是"多技能同时有效作用于大模型输入"**，不是程序并发；依赖技能应同载，互斥技能应避载。
@@ -697,6 +701,93 @@ metadata:
 - `.codeartsdoer/specs/context-optimization/spec.md` — 上下文优化
 - `.codeartsdoer/specs/memory-provider/spec.md` — 记忆提供者
 - `.codeartsdoer/specs/language-skills-orchestration/` — 语言技能编排
+- `.codeartsdoer/specs/skill-sync-system/spec.md` — **技能双向同步**（v2 新增，本方案依赖的基础设施）
+- `.codeartsdoer/specs/profile/` — **空目录**（v2 新增核验，profile 关联模型可落此处）
+- `.codeartsdoer/specs/filesystem-database-sync/`、`filesystem-database-sync-mvp/` — 文件系统与数据库同步（v2 新增）
+
+---
+
+## 11. 第二轮研究补充（2026-10-13，架构师澄清后）
+
+> 本节为 v2 新增。起因：架构师就 v1 报告"personalization 作为技能存在范畴错位"的判断提出反驳，指出真正的一阶驱动是**跨节点分发与智能体行为一致性**。经核验，该判断成立，v1 相关结论予以修订。
+
+### 11.1 需求的一阶驱动：跨节点分发，而非仅哲学完整性
+
+架构师澄清（2026-10-13）：真正诉求不是"把配置塞进技能"，而是——
+
+> 智能体互联、组网协作是未来趋势，runtime 已支持智能体互联国标，且已实现文件系统与数据库的双向同步。将未工程化的提示词通过 skills 子系统同步到 `agent_skills` 表，即可通过开放 API 在**异构分布式智能体互联网**中传输这些提示词/技能。
+
+**典型场景**：① 跨端流转——同一智能体在不同设备间迁移；② 多节点协同开发——大型工程拆分到智能体网络的多个互联节点协同。
+
+除 `agents` 表的实体定义数据需网络传输外，**影响智能体工作表现的 SOUL/IDENTITY/USER 等配置提示词也必须同步传输**，否则同一智能体在不同节点表现完全不同，用户无法接受。
+
+**结论**：personalization 归集为技能，本质是把"技能"当作**已具备成熟传输与持久化机制的分发单元**来复用。这是工程上正当的取舍。
+
+### 11.2 标准原文证据：把"用户上下文"做成技能是标准已声明的意图
+
+核验 `apps/agentskills/README.md`（标准仓库，路径 `D:\UCT\projects\miniapp\qintong\Delivery\uctoo-admin\apps\agentskills`）：
+
+> "Skills solve this by packaging procedural knowledge and **company-, team-, and user-specific context** into **portable, version-controlled folders** that agents load on demand."
+> "**Cross-product reuse**: Build a skill once and use it across any skills-compatible agent."
+
+即：把 **user-specific context** 打包成**可移植、版本化**的技能目录，正是标准的既定目标之一。因此 v1 §3.2 关于"personalization 归集为技能存在范畴错位"的批评**言之过重，予以撤回**；准确表述应为"**语义判别不足**"（缺 `skill_type` 判别式），而非"放错了容器"。
+
+### 11.3 基础设施核验（本方案可落地的前提，均已确认存在）
+
+| 核验项 | 结果 | 依据 |
+|---|---|---|
+| `agent_skills` 表 | ✅ 存在且元数据完备 | `sql/uctooDB.sql:512+`（`source`/`source_url`/`branch`/`tag`/`commit`/`version`/`author`/`homepage`/`license`/`keywords`/`install_path`/`status`/`runtime_status`） |
+| 文件系统 ↔ 数据库**双向同步** | ✅ 已设计 | `skill-sync-system/spec.md` §1.1 双存储机制；§1.2 含"文件变更监听→库更新""库变更→文件更新""**冲突检测与解决策略**""同步状态监控""手动触发接口" |
+| 尚无既有 profile 建模冲突 | ✅ 空目录 | `.codeartsdoer/specs/profile/` 为空 |
+
+> **重要边界**：`skill-sync-system` 解决的是**单节点内 fs↔db 双向冲突**；架构师设想的是**跨节点多写者复制**。二者量级不同，**不可简单复用**（见 11.4）。
+
+### 11.4 四类个性化文件的变更性与归属分析（v2 新增，原设计完全缺失）
+
+这是本轮**最重要的新增发现**：四类文件变更特征差异巨大，盲目全量复制必然出问题。
+
+| 文件 | 变更频率 | 归属 | 建议复制策略 | 风险 |
+|---|---|---|---|---|
+| `SOUL.md` | 极低（人格设定） | 智能体固有 | **自由复制**，主节点权威、多节点只读 | 低 |
+| `IDENTITY.md` | 低（身份信息） | 智能体固有 | **自由复制**，同上 | 低 |
+| `USER.md` | 中（用户画像） | 用户级、跨智能体共享 | 复制，**以用户为权威** | 中（多智能体共享写） |
+| `MEMORY.md` / 日常记忆 | **每会话、每节点持续写入** | 节点局部 | **不应盲目复制** | **高**：多节点并发写 → 回写冲突/抖动 |
+
+**建议在 SKILL.md frontmatter 增加分发元数据**（这正是"补上缺失的 frontmatter、实现工程化管理"的直接兑现）：
+
+```yaml
+sync_scope: agent_owned | user_owned | node_local
+authoritative: <node/agent/user id>
+conflict_policy: last_write_wins | merge | manual
+version: 1.2.0
+etag: <hash>          # 判定脏否，避免无谓传输
+```
+
+> **架构师尚未想清楚的部分**：架构师原文只提 SOUL/IDENTITY/USER 三件，**未提 MEMORY**——正是因为 MEMORY 高频变更难以工程化。本节处置建议：**MEMORY 先定为 `node_local` 不参与复制**；若产品确需记忆跨端漫游，则单列 **CRDT / 事件溯源合并**子课题，不进 P0 主链路。
+
+### 11.5 折中方案的正当性与边界（修订结论）
+
+- **正当**：以技能为分发单元，复用 `agent_skills` 表 + 双向同步 + 开放 API，一次性兑现补 frontmatter、纳版本、可依赖/互斥、可审计、可传输、跨产品复用。
+- **边界（必须同时做到，否则仍有隐患）**：
+  1. 加 `skill_type: profile` 判别式，运行时差异化绑定（profile 专属上下文层、不注册为工具、层内预算约束）；
+  2. `agents` 表只存**指向 profile 技能的引用**，不存提示词正文（避免"把 prompt 塞进 agents 表"的错位）；
+  3. 注入时**聚合成单一 `<profile_context>` 块**，避免 4+ 常驻技能冲击预算；
+  4. profile skill 为**唯一真源**，收敛 `AgentWorkspace.getCombinedMemory()`，杜绝双份注入。
+
+### 11.6 必须标注的事实：`always_on` 是运行时扩展，非标准要求
+
+标准原文明确技能由 **"agents load on demand"**（按需加载）消费。因此 `load_policy: always_on` 的常驻加载**是 agentskills-runtime 对标准的扩展**，不是标准要求。
+
+> **合规/叙事提醒**：在论文、大赛材料、标准符合性论述中，应明确标注其为**建设性扩展/补充提案**，不得表述为"agentskills 标准支持常驻技能"，否则将成为可被质疑的硬伤。
+
+### 11.7 对 v1 结论的修订汇总
+
+| v1 结论 | v2 修订 |
+|---|---|
+| personalization 作为技能"范畴错位"，应改 ContextProvider | **撤回**。标准明文支持 user-specific context 入技能；改用 `skill_type: profile` 判别式解决语义问题 |
+| 需求驱动 = 哲学完整性 | **修订**。一阶驱动 = 跨节点分发与行为一致性；哲学完整性为二阶 |
+| 未讨论分发语义 | **新增** §11.4 变更性/归属/冲突策略（含 MEMORY 处置） |
+| 未核验分发基础设施 | **新增** §11.3（`agent_skills` 表、`skill-sync-system`、空 `profile/`） |
 
 ---
 
@@ -719,8 +810,14 @@ metadata:
 
 > 补充一些架构师观点，这里所说的技能并行机制，并不是指程序并发的意思，正如开头所说的agentskills本质是提示词工程化因此技能的并行，其实就是将多个技能可以同时添加到上下文中，使得多个技能同时对于大模型的输入都是有效的。这样大模型就可以表现出同时使用了多个技能的输出行为。而技能之间也就存在了依赖或者互斥的关系，依赖的技能应该同时加载，而互斥的技能就应避免同时加载。请参考这个技能并行的机制进行研究。当然作为一名优秀的技术合伙人你也可以发散思维头脑风暴，提出你对技能并行机制的一些超越业界最佳实践的理解。
 
+### 第二轮对话
+对于你的agentskills-runtime\.codeartsdoer\specs\concurrent_skills\review.md ，架构师反馈了如下的观点：其实，架构师想到这个技能并行的需求，在观点原文的第一句话就说明了，agentskills开放标准本质就是提示词的工程化方案，可以参考标准原文 uctoo-admin\apps\agentskills ，而我认为SOUL/IDENTITY/USER本质也是一种类型的提示词，但目前这些提示词在很多智能体框架中还是散落在各个配置文件中，它们诞生于agentskills标准发布之前，目前还没有随新的技术发展迭代演进，它们缺少frontmatter，并没有被工程化的管理起来。那么既然现状是这样，还不如用agentskills开放标准的机制把这些还未工程化管理的提示词抽象成技能，进而工程化的管理起来。业界已经形成了如下共识，智能体的互联、组网协作是未来的发展趋势，我们也已经在agentskills-runtime中支持了智能体互联国标。我们也已经实现了文件系统和数据库的双向数据同步，进而可以将以前未工程化的提示词，通过skills子系统同步到agent_skills数据库表中，进而也就可以更容易的通过开放api实现异构分布式智能体互联网中传输这些提示词或者叫做技能。想象如下的一些场景，如果用户有工作需要实现智能体在不同设备间的跨端流转，或者一个大型工程拆分成多个子系统在智能体网络的多个互联节点间协同开发，那么除了将agents表的智能体实体定义数据通过网络分布传输之外，影响智能体工作表现的SOUL/IDENTITY/USER等配置文件也需要同步传输，否则智能体在不同网络节点间的工作表现就完全不同了，那用户应该是无法接受的。因此，架构师就想出了一个折中方案将这些散落的提示词归集为skills，利用已有的skills机制进行工程化管理，我也承认将personalization 作为"技能"可能是有一些范畴错位，但这些配置文件提示词如果归集为agents数据的一部分范畴错位可能更严重。那么对此你有什么更好的建议或者方案吗？
+### 第三轮对话
+其实，在上一轮对话中，我原本是输入了架构师考虑将personalization 作为一种特定类型的"技能"进行落地实现，但是发出消息前又删除了这句话，因为担心会有过于明显的方案倾向性引导。但你竟然敏锐的发现了这一点，给出了skill_type: profile  的方案建议。另外，架构师只提及了SOUL/IDENTITY/USER三个未工程化的文件，但是没有提及MEMORY，因为架构师自己也没有想清楚怎么解决MEMORY这个高频变更文件的工程化，而你给出了较为完整的方案以及新发现的待研究项。这样看来，你的智能水平大概是在架构师之上啊。采纳你的review建议，请完整更新一遍concurrent_skills 工程目录中的全部sdd文档，确保文档的一致性和与最新理解同步。然后，原本的concurrent_skills 工程已经在之前开发生成了一轮一部分P0的任务代码，也请复核已开发的代码与最新sdd文档没有冲突，目标一致。
+
 ---
 
 **报告完成时间**: 2026-10-05
 **报告作者**: spec-requirement-agent
-**下一步**: 等待用户确认后，可进入 SDD spec 步生成需求规格 spec.md
+**v2 修订**: 2026-10-13（纳入架构师第二轮澄清，新增 §11，撤回"范畴错位"批评，新增分发语义与基础设施核验）
+**下一步**: spec.md / design.md / tasks.md 已同步至 v2；并发起代码复核（见 review.md 附录 B）

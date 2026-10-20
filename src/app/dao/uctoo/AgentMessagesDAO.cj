@@ -54,9 +54,10 @@ public interface AgentMessagesDAO <: RootDAO {
                 aip_session_id,
                 aip_message_id,
                 sender_role,
-                data_items
+                data_items,
+                attachments
             ) values(
-${arg(entity.fromAgentId)},
+                ${arg(entity.fromAgentId)},
                 ${arg(entity.toAgentId)},
                 ${arg(entity.taskId)},
                 ${arg(entity.messageType)},
@@ -69,7 +70,8 @@ ${arg(entity.fromAgentId)},
                 ${arg(entity.aipSessionId)},
                 ${arg(entity.aipMessageId)},
                 ${arg(entity.senderRole)},
-                ${arg(entity.dataItems)}
+                ${arg(entity.dataItems)},
+                ${arg(entity.attachments)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -110,6 +112,7 @@ ${arg(entity.fromAgentId)},
                 aip_message_id = ${arg(entity.aipMessageId)},
                 sender_role = ${arg(entity.senderRole)},
                 data_items = ${arg(entity.dataItems)},
+                attachments = ${arg(entity.attachments)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -160,7 +163,7 @@ ${arg(entity.fromAgentId)},
      */
     func findAllAgentMessagesPage(page: Int64, size: Int64): Pagination<AgentMessagesPO> {
         executor.page<AgentMessagesPO>('''
-            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at from agent_messages order by created_at desc
+            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at, attachments from agent_messages order by created_at desc
         ''', size, page: page)
     }
 
@@ -173,7 +176,7 @@ ${arg(entity.fromAgentId)},
      */
     func findAgentMessagesByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<AgentMessagesPO> {
         executor.page<AgentMessagesPO>('''
-            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at from agent_messages where creator = ${arg(creator)} order by created_at desc
+            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at, attachments from agent_messages where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -183,7 +186,7 @@ ${arg(entity.fromAgentId)},
      */
     func listAllAgentMessages(): ArrayList<AgentMessagesPO> {
         executor.setSql('''
-            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at from agent_messages order by created_at desc
+            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at, attachments from agent_messages order by created_at desc
         ''').list<AgentMessagesPO>()
     }
 
@@ -197,7 +200,7 @@ ${arg(entity.fromAgentId)},
             return ArrayList<AgentMessagesPO>()
         }
         executor.setSql('''
-            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at from agent_messages where id ${IN(ids)}
+            select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at, attachments from agent_messages where id ${IN(ids)}
         ''').list<AgentMessagesPO>()
     }
 
@@ -236,7 +239,7 @@ ${arg(entity.fromAgentId)},
      */
     func findAgentMessagesByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<AgentMessagesPO> {
         let sql = StringBuilder()
-        sql.append("select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at from agent_messages where 1=1")
+        sql.append("select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at, attachments from agent_messages where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -309,7 +312,7 @@ ${arg(entity.fromAgentId)},
      */
     func findAgentMessagesByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<AgentMessagesPO> {
         let sql = StringBuilder()
-        sql.append("select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at from agent_messages")
+        sql.append("select id, from_agent_id, to_agent_id, task_id, message_type, content, status, creator, created_at, updated_at, deleted_at, attachments from agent_messages")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

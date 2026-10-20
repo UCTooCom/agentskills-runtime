@@ -315,26 +315,39 @@ public class StepFunChatModel <: ChatModel {
     private func messageList2Json(messageList: MessageList): JsonArray {
         let ja = JsonArray()
         for (msg in messageList) {
-            let msgJson = if (let Some(image) <- msg.image) {
+            // 多模态（SDD R6 / T-MC-008）：单图 → 多图 + 文档抽取块，与 openai 同构。
+            let imgs = msg.allImages()
+            let msgJson = if (imgs.size > 0 || msg.fileParts.size > 0) {
                 // Schema: { role: string,
                 //           content: [
                 //             { type: "text", text: string },
+                //             { type: "text", text: "[来源] 抽取文本" },
                 //             { type: "image_url", image_url: {url: string} }
                 //           ]
                 // }
+                let parts = ArrayList<JsonValue>()
+                parts.add(JsonUtils.buildJsonObject([
+                    ("type", "text"),
+                    ("text", msg.content)
+                ]))
+                for (fp in msg.fileParts) {
+                    if (!fp.text.isEmpty()) {
+                        parts.add(JsonUtils.buildJsonObject([
+                            ("type", JsonString("text")),
+                            ("text", JsonString("[${fp.source}]\n${fp.text}"))
+                        ]))
+                    }
+                    for (pageImg in fp.images) {
+                        parts.add(imageUrlBlock(pageImg))
+                    }
+                }
+                for (url in imgs) {
+                    parts.add(imageUrlBlock(url))
+                }
                 JsonUtils.buildJsonObject(
                     ("role", JsonString(msg.role.toString())),
-                    ("content", JsonArray([
-                        JsonUtils.buildJsonObject([
-                            ("type", "text"),
-                            ("text", msg.content)
-                        ]),
-                        JsonUtils.buildJsonObject(
-                            ("type", JsonString("image_url")),
-                            ("image_url", JsonUtils.buildJsonObject("url", image))
-                        )
-                    ])
-                ))
+                    ("content", JsonArray(parts.toArray()))
+                )
             } else {
                 // Schema: { role: string, content: string }
                 JsonUtils.buildJsonObject(
@@ -345,6 +358,14 @@ public class StepFunChatModel <: ChatModel {
             ja.add(msgJson)
         }
         return ja
+    }
+
+    /** 单个图片内容块：{ type:"image_url", image_url:{ url } }（OpenAI 官方形状）。 */
+    private func imageUrlBlock(url: String): JsonValue {
+        JsonUtils.buildJsonObject(
+            ("type", JsonString("image_url")),
+            ("image_url", JsonUtils.buildJsonObject("url", url))
+        )
     }
 
     private func tools2Json(tools: Array<Tool>): JsonArray {

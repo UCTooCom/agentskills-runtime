@@ -936,4 +936,33 @@ public class AgentMessagesService {
 
 //#endregion AutoCreateCode
 // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    /**
+     * 写入附件解析元数据（T-AP-08）。
+     *
+     * 在消息创建后由 attachment-persistence 调用，将 `attachments` JSON 列落库。
+     * 非阻塞：失败仅记录日志，不影响主流程（消息正文已落库）。
+     *
+     * @param messageId agent_messages 主键
+     * @param json attachments 元数据的 JSON 字符串（可为空）
+     */
+    public func updateAttachments(messageId: String, json: String): Unit {
+        // T-AP-08：附件元数据本身应很小（不含原文 base64），但仍设硬上限，
+        // 防止异常拼装出超大 JSON 撑爆列 / 拖慢查询。超限仅告警跳过，不影响主流程。
+        let MAX_ATTACHMENTS_JSON_BYTES = 65536
+        if (json.size > MAX_ATTACHMENTS_JSON_BYTES) {
+            LogUtils.warn("AgentMessagesService.updateAttachments skipped for ${messageId}: attachments JSON too large (${json.size} > ${MAX_ATTACHMENTS_JSON_BYTES})")
+            return
+        }
+        try {
+            let executor = getExecutor()
+            executor.add(json)
+            executor.add(messageId)
+            executor.setSql('''
+                update agent_messages set attachments = ? where id = ?
+            ''').update
+        } catch (e: Exception) {
+            LogUtils.error("AgentMessagesService.updateAttachments failed for ${messageId}: ${e.message}")
+        }
+    }
 }

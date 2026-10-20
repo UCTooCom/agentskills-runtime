@@ -1,11 +1,14 @@
 # 技能并行机制编码任务分解
 
 > **工程目录**: `.codeartsdoer/specs/concurrent_skills/`
+> **版本**: v2（2026-10-13 修订；v1 为 2026-10-05）
 > **生成日期**: 2026-10-05
-> **更新日期**: 2026-10-05（纳入 spec.md 第 5.6 节"技能内容自动渐进式加载"补充需求）
+> **更新日期**: 2026-10-13（v2：新增 TG21–TG26；修正 `BudgetManager` 优先级；记录实现现状与集成缺口）
+> **旧更新日期**: 2026-10-05（纳入 spec.md 第 5.6 节"技能内容自动渐进式加载"补充需求）
 > **上游文档**: `spec.md`（需求规格，含 5.6 节补充需求）、`research.md`（研究报告）、`design.md`（技术设计，含模块 H-L 和阶段 9-16）
 > **技术栈**: Cangjie（仓颉）+ cjpm + fountain 框架
-> **任务总数**: 82 个任务（20 个任务组）
+> **任务总数**: 111 个任务（29 个任务组）
+> **完成状态（2026-10-14 复核）**: 96 项已标注完成 / 15 项待办；判定依据与剩余项见文末「2026-10-14 完成度复核」
 > **优先级划分**: P0（注入核心 + 自动注入漂移修复，阶段 1-4/9/12-14）/ P1（互斥+个性化+日志+决策记录+路径修复+去重，阶段 5-7/10/15-16）/ P2（预算管理+预算降级+性能测试，阶段 8/11）
 > **本次更新摘要**: 新增 TG13-TG20 共 8 个任务组、35 个任务（T048-T082），覆盖 design.md 阶段 9-16，修复"渐进式加载设计漂移"——将技能完整内容加载从"agent 主动调用 `get_skill_content` 工具"恢复为"框架自动注入到上下文"
 
@@ -66,9 +69,9 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 | `SkillAwareAgent` | `src/skill/skill_aware_agent.cj` | `magic.skill` | 扩展接入 `SkillContextInjector` / `SkillAutoInjector` |
 | `GetSkillContentTool` | `src/tool/get_skill_content_tool.cj` | `magic.tool` | 扩展去重机制（向后兼容） |
 | `LogUtils` | `src/log/log_utils.cj` | `magic.log` | 用于结构化日志输出 |
-| `WebMCPProtocol` | `src/protocol/web_mcp_protocol.cj` | `magic.protocol` | 扩展 `buildAgentSystemPrompt()` 接入自动注入替换第3段漂移 |
-| `WsChatController` | `src/controller/ws_chat_controller.cj` | `magic.controller` | 扩展用户消息处理接入任务匹配自动注入 |
-| `AgentRuntimeBridge` | `src/runtime/agent_runtime_bridge.cj` | `magic.runtime` | 修复 `buildAgentFromDefinition()` 空技能管理器 |
+| `WebMCPProtocol` | `src/app/services/webmcp/WebMCPProtocol.cj` | `magic.protocol` | 扩展 `buildAgentSystemPrompt()` 接入自动注入替换第3段漂移 |
+| `WsChatController` | `src/app/controllers/uctoo/ws/WsChatController.cj` | `magic.controller` | 扩展用户消息处理接入任务匹配自动注入 |
+| `AgentRuntimeBridge` | `src/app/services/bridge/agent_runtime_bridge.cj` | `magic.runtime` | 修复 `buildAgentFromDefinition()` 空技能管理器 |
 
 ---
 
@@ -77,7 +80,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 1，是后续所有模块的基础。必须先完成枚举类型和配置类，再实现解析器。
 
 ### 1.1 实现并行声明枚举类型
-- [ ] **T001** 实现 `LoadPolicy` 枚举（`AlwaysOn` / `OnDemand` / `Conditional`），位于 `src/skill/parallel/load_policy.cj`，包名 `magic.skill.parallel`
+- [x] **T001** 实现 `LoadPolicy` 枚举（`AlwaysOn` / `OnDemand` / `Conditional`），位于 `src/skill/parallel/load_policy.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：无
   - 描述：定义技能加载策略枚举，`AlwaysOn` 表示驻留型（会话生命周期内持续生效），`OnDemand` 表示按需型（显式触发时加载），`Conditional` 表示条件型
@@ -87,7 +90,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：无
   - 回滚点：删除文件即可
 
-- [ ] **T002** 实现 `SkillPriority` 枚举（`High` / `Medium` / `Low`），位于 `src/skill/parallel/skill_priority.cj`，包名 `magic.skill.parallel`
+- [x] **T002** 实现 `SkillPriority` 枚举（`High` / `Medium` / `Low`），位于 `src/skill/parallel/skill_priority.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：无
   - 描述：定义技能优先级枚举，用于互斥冲突裁决和预算超限淘汰时的排序依据
@@ -97,7 +100,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：无
   - 回滚点：删除文件即可
 
-- [ ] **T003** 实现 `SkillLoadDecision` 枚举（`Loaded` / `Skipped` / `Evicted` / `Rejected`），位于 `src/skill/parallel/skill_load_decision.cj`，包名 `magic.skill.parallel`
+- [x] **T003** 实现 `SkillLoadDecision` 枚举（`Loaded` / `Skipped` / `Evicted` / `Rejected`），位于 `src/skill/parallel/skill_load_decision.cj`，包名 `magic.skill.parallel`
   - 优先级：P1（提前实现以避免后续返工）
   - 依赖任务：无
   - 描述：定义加载决策枚举，`Loaded` 表示成功加载，`Skipped` 表示跳过（如依赖缺失），`Evicted` 表示被淘汰（如互斥冲突或预算超限），`Rejected` 表示被拒绝（如循环依赖）
@@ -108,7 +111,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 1.2 实现并行配置类
-- [ ] **T004** 实现 `SkillParallelConfig` 配置类，位于 `src/skill/parallel/skill_parallel_config.cj`，包名 `magic.skill.parallel`
+- [x] **T004** 实现 `SkillParallelConfig` 配置类，位于 `src/skill/parallel/skill_parallel_config.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T001、T002
   - 描述：实现配置类，字段包括 `totalBudgetTokens: Int64`（默认 8192）、`reservedForAlwaysOn: Float64`（默认 0.3）、`defaultLoadPolicy: LoadPolicy`（默认 `OnDemand`）、`defaultPriority: SkillPriority`（默认 `Medium`）、`defaultContextBudgetTokens: Int64`（默认 2000）、`enableConflictFilter: Bool`（默认 true）、`enableBudgetAllocator: Bool`（默认 true）；提供 `static func default(): SkillParallelConfig` 工厂方法
@@ -119,7 +122,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 1.3 实现声明解析器
-- [ ] **T005** 实现 `SkillParallelDeclarationParser` 静态工具类，位于 `src/skill/parallel/skill_parallel_declaration_parser.cj`，包名 `magic.skill.parallel`
+- [x] **T005** 实现 `SkillParallelDeclarationParser` 静态工具类，位于 `src/skill/parallel/skill_parallel_declaration_parser.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T001、T002、T004
   - 描述：实现静态方法 `parseLoadPolicy(metadata)` / `parsePriority(metadata)` / `parseDependsOn(metadata)` / `parseConflictsWith(metadata)` / `parseContextBudgetTokens(metadata)` / `parseCompatibleWith(metadata)`，从 `HashMap<String, String>` 解析字段；缺失字段返回默认值（`OnDemand` / `Medium` / 空数组 / 2000）；列表型字段用逗号分隔存储
@@ -134,7 +137,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 1.4 声明解析器单元测试
-- [ ] **T006** 为 `SkillParallelDeclarationParser` 编写单元测试，位于 `src/skill/parallel/test/test_skill_parallel_declaration_parser.cj`
+- [x] **T006** 为 `SkillParallelDeclarationParser` 编写单元测试，位于 `src/skill/parallel/test/test_skill_parallel_declaration_parser.cj`
   - 优先级：P0
   - 依赖任务：T005
   - 描述：测试用例覆盖：有字段/无字段/非法值/列表单元素/列表多元素/空 metadata
@@ -151,7 +154,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 2，将技能渲染为 `<skill_content>` 和 `<available_skills>` XML 块，是上下文注入的输出格式基础。
 
 ### 2.1 实现技能内容渲染器
-- [ ] **T007** 实现 `SkillContentRenderer` 类，位于 `src/skill/parallel/skill_content_renderer.cj`，包名 `magic.skill.parallel`
+- [x] **T007** 实现 `SkillContentRenderer` 类，位于 `src/skill/parallel/skill_content_renderer.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T001（无直接依赖，但同包）
   - 描述：实现 `renderSkillContent(skill: Skill): String` 渲染单个技能为 `<skill_content name="...">` XML 块；实现 `renderMultipleSkills(skills: Array<Skill>): String` 合并多个技能的渲染结果；XML 格式参考 design.md 2.2.2.5 节调用示例
@@ -166,7 +169,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 2.2 实现技能目录渲染器
-- [ ] **T008** 实现 `SkillCatalogRenderer` 类，位于 `src/skill/parallel/skill_catalog_renderer.cj`，包名 `magic.skill.parallel`
+- [x] **T008** 实现 `SkillCatalogRenderer` 类，位于 `src/skill/parallel/skill_catalog_renderer.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T001
   - 描述：实现 `renderCatalog(skills: Array<Skill>): String` 渲染技能目录为 `<available_skills>` XML 块，每行格式 `- \`{name}\`: {description}`；空列表时返回空 `<available_skills></available_skills>`
@@ -180,7 +183,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 2.3 渲染器单元测试
-- [ ] **T009** 为 `SkillContentRenderer` 和 `SkillCatalogRenderer` 编写单元测试，位于 `src/skill/parallel/test/test_skill_renderers.cj`
+- [x] **T009** 为 `SkillContentRenderer` 和 `SkillCatalogRenderer` 编写单元测试，位于 `src/skill/parallel/test/test_skill_renderers.cj`
   - 优先级：P0
   - 依赖任务：T007、T008
   - 描述：测试用例覆盖：单技能渲染/多技能合并/空指令/空目录/多技能目录
@@ -197,7 +200,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 3，是整个机制的核心编排器。本期先实现驻留型技能收集 + 依赖闭包计算 + 注入，互斥过滤和预算分配在后续阶段接入。
 
 ### 3.1 实现注入结果数据类
-- [ ] **T010** 实现 `SkillInjectionResult` 数据类，位于 `src/skill/parallel/skill_injection_result.cj`，包名 `magic.skill.parallel`
+- [x] **T010** 实现 `SkillInjectionResult` 数据类，位于 `src/skill/parallel/skill_injection_result.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T003
   - 描述：实现字段 `status: SkillInjectionStatus`（`Success` / `Partial` / `Failed`）、`injectedContext: String`、`activeSkills: Array<String>`、`decisions: Array<SkillLoadDecisionRecord>`、`errorMessage: Option<String>`；`SkillInjectionStatus` 可定义为同文件枚举
@@ -208,7 +211,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 3.2 实现上下文注入核心编排器
-- [ ] **T011** 实现 `SkillContextInjector` 类骨架，位于 `src/skill/parallel/skill_context_injector.cj`，包名 `magic.skill.parallel`
+- [x] **T011** 实现 `SkillContextInjector` 类骨架，位于 `src/skill/parallel/skill_context_injector.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T004、T005、T007、T008、T010
   - 描述：实现 `init()` 注入 `CompositeSkillToolManager` / `SkillDependencyResolver` / `SkillContentRenderer` / `SkillCatalogRenderer` / `SkillParallelConfig`；实现 `activeSkills` 属性（`ArrayList<String>` 维护存活技能列表）；互斥过滤器和预算分配器字段暂为 `Option`，本期传 `None`
@@ -218,7 +221,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：`SkillDependencyResolver` 需传入 `CompositeSkillToolManager` 构造，注意依赖注入顺序
   - 回滚点：删除文件即可
 
-- [ ] **T012** 在 `SkillContextInjector` 中实现 `injectAlwaysOnSkills(sessionId)` 方法
+- [x] **T012** 在 `SkillContextInjector` 中实现 `injectAlwaysOnSkills(sessionId)` 方法
   - 优先级：P0
   - 依赖任务：T011
   - 描述：实现流程：① 遍历 `skillManager.availableSkills`，用 `SkillParallelDeclarationParser.parseLoadPolicy()` 过滤 `AlwaysOn` 技能；② 调用 `SkillDependencyResolver.resolve()` 计算依赖闭包；③ 检测循环依赖（`hasCycles=true` 时返回 `Failed`）；④ 跳过缺失依赖技能（`missingSkills` 非空时记录告警）；⑤ 调用 `SkillContentRenderer.renderMultipleSkills()` 渲染存活技能；⑥ 更新 `activeSkills`；⑦ 返回 `SkillInjectionResult`
@@ -232,7 +235,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：`SkillDependencyResolver.extractDependencies()` 把 `allowedTools` 也当依赖（design.md 1.2.1 节差异点），本期需在调用后过滤掉非技能的工具名
   - 回滚点：方法返回空 `SkillInjectionResult`，不影响现有机制
 
-- [ ] **T013** 在 `SkillContextInjector` 中实现 `injectSkills(skillNames, sessionId)` 方法
+- [x] **T013** 在 `SkillContextInjector` 中实现 `injectSkills(skillNames, sessionId)` 方法
   - 优先级：P0
   - 依赖任务：T012
   - 描述：实现用户显式/模型按需加载技能的注入流程：① 收集 `skillNames` 对应的 `Skill` 实例；② 合并已存活的驻留型技能；③ 复用 `injectAlwaysOnSkills` 的依赖闭包计算和渲染逻辑；④ 更新 `activeSkills`
@@ -245,7 +248,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：去重逻辑需注意 `activeSkills` 已有技能
   - 回滚点：方法返回空结果
 
-- [ ] **T014** 在 `SkillContextInjector` 中实现 `renderCatalog()` 方法
+- [x] **T014** 在 `SkillContextInjector` 中实现 `renderCatalog()` 方法
   - 优先级：P0
   - 依赖任务：T011、T008
   - 描述：调用 `SkillCatalogRenderer.renderCatalog()` 渲染当前 `activeSkills` 对应的技能目录
@@ -256,7 +259,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：返回空字符串
 
 ### 3.3 注入核心单元测试
-- [ ] **T015** 为 `SkillContextInjector` 编写单元测试，位于 `src/skill/parallel/test/test_skill_context_injector.cj`
+- [x] **T015** 为 `SkillContextInjector` 编写单元测试，位于 `src/skill/parallel/test/test_skill_context_injector.cj`
   - 优先级：P0
   - 依赖任务：T012、T013、T014
   - 描述：测试用例覆盖：无驻留型技能/单驻留型技能/多驻留型技能/驻留型技能有依赖/驻留型技能循环依赖/驻留型技能依赖缺失/显式加载技能/显式加载已存活技能
@@ -273,7 +276,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 4，将 `SkillContextInjector` 接入 `SkillAwareAgent`，是 P0 最小可用路径的最后一环。
 
 ### 4.1 扩展 SkillAwareAgent
-- [ ] **T016** 在 `SkillAwareAgent` 中新增 `skillContextInjector: Option<SkillContextInjector>` 字段，修改文件 `src/skill/skill_aware_agent.cj`
+- [x] **T016** 在 `SkillAwareAgent` 中新增 `skillContextInjector: Option<SkillContextInjector>` 字段，修改文件 `src/skill/skill_aware_agent.cj`
   - 优先级：P0
   - 依赖任务：T011
   - 描述：在 `SkillAwareAgent` 类中新增 `private let _skillContextInjector: Option<SkillContextInjector>` 字段，`init()` 参数新增 `skillParallelConfig!: Option<SkillParallelConfig> = None`；当配置非 `None` 时构造 `SkillContextInjector`，否则保持 `None` 退回现有机制
@@ -286,7 +289,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：向后兼容是关键，现有调用方不传新参数时必须正常工作
   - 回滚点：字段设为 `None` 即退回现有机制
 
-- [ ] **T017** 在 `SkillAwareAgent` 中新增 `_injectSkillContext()` 私有方法
+- [x] **T017** 在 `SkillAwareAgent` 中新增 `_injectSkillContext()` 私有方法
   - 优先级：P0
   - 依赖任务：T016
   - 描述：实现私有方法 `_injectSkillContext(sessionId: String): Option<String>`，当 `_skillContextInjector` 为 `Some` 时调用 `injectAlwaysOnSkills()` 返回注入的上下文文本，`None` 时返回 `None`；在 `init()` 末尾调用此方法，将返回的上下文追加到 `systemPrompt`
@@ -300,7 +303,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：方法返回 `None`，`systemPrompt` 不变
 
 ### 4.2 SkillAwareAgent 扩展集成测试
-- [ ] **T018** 编写 `SkillAwareAgent` 扩展集成测试，位于 `src/skill/test/test_skill_aware_agent_parallel.cj`
+- [x] **T018** 编写 `SkillAwareAgent` 扩展集成测试，位于 `src/skill/test/test_skill_aware_agent_parallel.cj`
   - 优先级：P0
   - 依赖任务：T017
   - 描述：测试用例覆盖：不传配置时行为不变/传配置时驻留型技能注入 systemPrompt/无驻留型技能时 systemPrompt 不变
@@ -317,7 +320,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 5，实现互斥技能过滤和优先级裁决，并接入 `SkillContextInjector`。
 
 ### 5.1 实现互斥过滤结果数据类
-- [ ] **T019** 实现 `ConflictFilterResult` 数据类，位于 `src/skill/parallel/conflict_filter_result.cj`，包名 `magic.skill.parallel`
+- [x] **T019** 实现 `ConflictFilterResult` 数据类，位于 `src/skill/parallel/conflict_filter_result.cj`，包名 `magic.skill.parallel`
   - 优先级：P1
   - 依赖任务：无
   - 描述：实现字段 `survived: Array<String>`（存活技能名）、`evicted: Array<String>`（被淘汰技能名）、`conflictPairs: Array<(String, String)>`（冲突对）
@@ -328,7 +331,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 5.2 实现互斥过滤器
-- [ ] **T020** 实现 `ConflictFilter` 类，位于 `src/skill/parallel/conflict_filter.cj`，包名 `magic.skill.parallel`
+- [x] **T020** 实现 `ConflictFilter` 类，位于 `src/skill/parallel/conflict_filter.cj`，包名 `magic.skill.parallel`
   - 优先级：P1
   - 依赖任务：T002、T005、T019
   - 描述：实现 `filter(skills: Array<Skill>, loadOrder: Array<String>): ConflictFilterResult`；私有方法 `buildConflictGraph(skills)` 从 `metadata.conflicts_with` 构建互斥关系图；私有方法 `resolveConflicts(graph, skills)` 按 `priority` 裁决，优先级相同时按 `loadOrder` 先到先得
@@ -343,7 +346,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`filter()` 返回所有技能存活，不淘汰任何技能
 
 ### 5.3 接入 SkillContextInjector
-- [ ] **T021** 在 `SkillContextInjector` 中接入 `ConflictFilter`，修改 `src/skill/parallel/skill_context_injector.cj`
+- [x] **T021** 在 `SkillContextInjector` 中接入 `ConflictFilter`，修改 `src/skill/parallel/skill_context_injector.cj`
   - 优先级：P1
   - 依赖任务：T012、T020
   - 描述：在 `injectAlwaysOnSkills()` 和 `injectSkills()` 的依赖闭包计算后、渲染前，插入互斥过滤步骤；当 `config.enableConflictFilter = false` 时跳过；过滤后淘汰的技能记录决策日志（P1 阶段先记录到 `LogUtils.warn`）
@@ -374,7 +377,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 6，将 `AgentWorkspace` 的个性化文件抽象为 `load_policy=always_on` 的技能插件。
 
 ### 6.1 实现个性化技能插件
-- [ ] **T023** 实现 `PersonalizationSkillPlugin` 类，位于 `src/skill/parallel/personalization_skill_plugin.cj`，包名 `magic.skill.parallel`
+- [x] **T023** personalization 以**纯文本 profile 技能**形态落地（`skills/personalization/SKILL.md`，`skill_type: profile` + `load_policy: always_on`），取代原计划的 `PersonalizationSkillPlugin` 类。理由：按用户决策废弃 workspace 文件机制（runtime 中从未真正落地），SOUL/IDENTITY/USER/MEMORY 直接以 frontmatter 化形式写入 `personalization/SKILL.md`，由 `ProgressiveSkillLoader` 扫描加载、`SkillAutoInjector` 在 agent 初始化时自动注入 `<profile_context>`，与 capability 技能并行生效。原类形态被本纯文本形态取代。
   - 优先级：P1
   - 依赖任务：T001、T002
   - 描述：实现 `loadFromWorkspace(workspace: AgentWorkspace): Option<Skill>` 方法，调用 `workspace.getCombinedMemory()` 获取合并内容，包装为 `BaseSkill` 实例，设置 `name="personalization"`、`metadata.load_policy="always_on"`、`metadata.priority="high"`、`instructions=合并内容`；实现 `static func isPersonalizationSkill(skill: Skill): Bool` 判断 `skill.name == "personalization"`；所有个性化文件缺失时返回 `None`
@@ -389,7 +392,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：返回 `None`，不注入个性化内容
 
 ### 6.2 接入 SkillAwareAgent
-- [ ] **T024** 在 `SkillAwareAgent` 初始化时加载 personalization 技能，修改 `src/skill/skill_aware_agent.cj`
+- [x] **T024** 在 `SkillAwareAgent` 初始化时加载 personalization 技能，修改 `src/skill/skill_aware_agent.cj`
   - 优先级：P1
   - 依赖任务：T017、T023
   - 描述：在 `SkillAwareAgent.init()` 中，当 `skillParallelConfig` 非 `None` 且传入 `AgentWorkspace` 时，调用 `PersonalizationSkillPlugin.loadFromWorkspace()` 获取个性化技能，注册到 `CompositeSkillToolManager`（通过 `addSkill()`），使其参与驻留型技能注入流程
@@ -410,6 +413,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 输入：T023 的插件
   - 输出：`src/skill/parallel/test/test_personalization_skill_plugin.cj`
   - 验收标准：所有测试用例通过，覆盖 design.md 2.6.1 节个性化插件测试矩阵
+  - 状态：⌛ **暂缓**。按用户明确要求，personalization 不写程序化测试套件，改以 runtime 中该技能的实际运行效果评估（见 T041 落地的 `skills/personalization/SKILL.md`）。验收转由真实运行时观察 `<profile_context>` 注入结果。
   - 风险点：需构造 mock `AgentWorkspace`
   - 回滚点：删除测试文件
 
@@ -420,7 +424,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 7，实现结构化加载决策日志，支持事后归因。
 
 ### 7.1 实现决策记录数据类
-- [ ] **T026** 实现 `SkillLoadDecisionRecord` 数据类，位于 `src/skill/parallel/skill_load_decision_record.cj`，包名 `magic.skill.parallel`
+- [x] **T026** 实现 `SkillLoadDecisionRecord` 数据类，位于 `src/skill/parallel/skill_load_decision_record.cj`，包名 `magic.skill.parallel`
   - 优先级：P1
   - 依赖任务：T003
   - 描述：实现字段 `skillName: String`、`decision: SkillLoadDecision`、`reason: String`、`sessionId: String`、`timestamp: Int64`（用 `DateTime.now().toUnixTimeStamp()` 填充）
@@ -431,7 +435,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 7.2 实现决策日志记录器
-- [ ] **T027** 实现 `SkillLoadDecisionLogger` 类，位于 `src/skill/parallel/skill_load_decision_logger.cj`，包名 `magic.skill.parallel`
+- [x] **T027** 实现 `SkillLoadDecisionLogger` 类，位于 `src/skill/parallel/skill_load_decision_logger.cj`，包名 `magic.skill.parallel`
   - 优先级：P1
   - 依赖任务：T026
   - 描述：实现 `logDecision(skillName, decision, reason, sessionId)` 方法，构造 `SkillLoadDecisionRecord` 并存入 `ArrayList`，同时通过 `LogUtils.info()` 输出结构化日志（格式 `[SkillLoadDecision] skill={name}, decision={decision}, reason={reason}, session={sessionId}`）；实现 `queryDecisions(sessionId)` 查询指定会话的决策历史
@@ -445,7 +449,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`logDecision()` 改为空实现
 
 ### 7.3 接入 SkillContextInjector
-- [ ] **T028** 在 `SkillContextInjector` 中接入 `SkillLoadDecisionLogger`，修改 `src/skill/parallel/skill_context_injector.cj`
+- [x] **T028** 在 `SkillContextInjector` 中接入 `SkillLoadDecisionLogger`，修改 `src/skill/parallel/skill_context_injector.cj`
   - 优先级：P1
   - 依赖任务：T012、T027
   - 描述：在 `injectAlwaysOnSkills()` 和 `injectSkills()` 的各决策点（加载/跳过/淘汰/拒绝）调用 `logDecision()`；将决策记录汇总到 `SkillInjectionResult.decisions` 字段
@@ -458,7 +462,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：不调用 `logDecision()`，`decisions` 为空数组
 
 ### 7.4 决策日志单元测试
-- [ ] **T029** 为 `SkillLoadDecisionLogger` 编写单元测试，位于 `src/skill/parallel/test/test_skill_load_decision_logger.cj`
+- [x] **T029** 为 `SkillLoadDecisionLogger` 编写单元测试，位于 `src/skill/parallel/test/test_skill_load_decision_logger.cj`
   - 优先级：P1
   - 依赖任务：T027
   - 描述：测试用例覆盖：单决策记录/多决策记录/跨会话查询/空会话查询
@@ -475,7 +479,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 8，实现上下文 token 预算管理，是 P2 完善路径。
 
 ### 8.1 实现预算分配结果数据类
-- [ ] **T030** 实现 `BudgetAllocationResult` 数据类，位于 `src/skill/parallel/budget_allocation_result.cj`，包名 `magic.skill.parallel`
+- [x] **T030** 实现 `BudgetAllocationResult` 数据类，位于 `src/skill/parallel/budget_allocation_result.cj`，包名 `magic.skill.parallel`
   - 优先级：P2
   - 依赖任务：无
   - 描述：实现字段 `allocated: Array<String>`（分配成功技能名）、`evicted: Array<String>`（因超限淘汰技能名）、`usedTokens: Int64`（实际使用 token）、`totalBudget: Int64`（总预算）
@@ -486,7 +490,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 8.2 实现预算分配器
-- [ ] **T031** 实现 `BudgetAllocator` 类，位于 `src/skill/parallel/budget_allocator.cj`，包名 `magic.skill.parallel`
+- [x] **T031** 实现 `BudgetAllocator` 类，位于 `src/skill/parallel/budget_allocator.cj`，包名 `magic.skill.parallel`
   - 优先级：P2
   - 依赖任务：T004、T005、T030
   - 描述：实现 `allocate(skills: Array<Skill>): BudgetAllocationResult`；私有方法 `calculateUsedTokens(skills)` 累加 `metadata.context_budget_tokens`；私有方法 `evictForBudget(skills, totalBudget)` 按优先级从低到高淘汰，驻留型技能（`load_policy=always_on`）豁免优先；超限时记录告警
@@ -502,7 +506,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`allocate()` 返回所有技能分配成功，不淘汰
 
 ### 8.3 接入 SkillContextInjector
-- [ ] **T032** 在 `SkillContextInjector` 中接入 `BudgetAllocator`，修改 `src/skill/parallel/skill_context_injector.cj`
+- [x] **T032** 在 `SkillContextInjector` 中接入 `BudgetAllocator`，修改 `src/skill/parallel/skill_context_injector.cj`
   - 优先级：P2
   - 依赖任务：T021、T031
   - 描述：在互斥过滤后、渲染前，插入预算分配步骤；当 `config.enableBudgetAllocator = false` 时跳过；淘汰的技能记录决策日志
@@ -516,7 +520,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`enableBudgetAllocator = false` 关闭预算管理
 
 ### 8.4 预算分配单元测试
-- [ ] **T033** 为 `BudgetAllocator` 编写单元测试，位于 `src/skill/parallel/test/test_budget_allocator.cj`
+- [x] **T033** 为 `BudgetAllocator` 编写单元测试，位于 `src/skill/parallel/test/test_budget_allocator.cj`
   - 优先级：P2
   - 依赖任务：T031
   - 描述：测试用例覆盖：预算内/超限淘汰低优先级/超限淘汰非驻留型/全驻留型超限/空技能列表/单技能超限
@@ -533,7 +537,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 9 的配置部分，是自动渐进式加载的配置基础。必须先完成配置类和枚举，后续 TaskMatcher 和 SkillAutoInjector 才能依赖。
 
 ### 13.1 实现任务匹配策略枚举
-- [ ] **T048** 实现 `TaskMatchStrategy` 枚举（`Keyword` / `Semantic` / `Hybrid`），位于 `src/skill/parallel/task_match_strategy.cj`，包名 `magic.skill.parallel`
+- [x] **T048** 实现 `TaskMatchStrategy` 枚举（`Keyword` / `Semantic` / `Hybrid`），位于 `src/skill/parallel/task_match_strategy.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：无
   - 描述：定义任务匹配策略枚举，`Keyword` 表示关键词匹配（本期实现，Jaccard 系数），`Semantic` 表示语义匹配（未来扩展），`Hybrid` 表示混合匹配（未来扩展）
@@ -544,7 +548,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 13.2 实现自动注入配置类
-- [ ] **T049** 实现 `AutoInjectConfig` 配置类，位于 `src/skill/parallel/auto_inject_config.cj`，包名 `magic.skill.parallel`
+- [x] **T049** 实现 `AutoInjectConfig` 配置类，位于 `src/skill/parallel/auto_inject_config.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T048
   - 描述：实现配置类，字段包括 `autoInjectEnabled: Bool`（默认 true）、`taskMatchThreshold: Float64`（默认 0.6）、`taskMatchStrategy: TaskMatchStrategy`（默认 `Keyword`）、`maxAutoInjectSkills: Int64`（默认 5）、`fallbackToolRetained: Bool`（默认 true）、`dedupOnReinject: Bool`（默认 true）；提供 `static func default(): AutoInjectConfig` 工厂方法
@@ -558,7 +562,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 13.3 AutoInjectConfig 单元测试
-- [ ] **T050** 为 `AutoInjectConfig` 编写单元测试，位于 `src/skill/parallel/test/test_auto_inject_config.cj`
+- [x] **T050** 为 `AutoInjectConfig` 编写单元测试，位于 `src/skill/parallel/test/test_auto_inject_config.cj`
   - 优先级：P0
   - 依赖任务：T049
   - 描述：测试用例覆盖：默认配置正确性/自定义配置/阈值边界值（0.0 和 1.0）/`autoInjectEnabled=false` 场景
@@ -575,7 +579,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 9 的匹配器部分，实现用户任务描述与技能 description 的匹配度计算，是任务匹配自动注入的核心算法。
 
 ### 14.1 实现任务匹配结果数据类
-- [ ] **T051** 实现 `TaskMatchResult` 数据类，位于 `src/skill/parallel/task_match_result.cj`，包名 `magic.skill.parallel`
+- [x] **T051** 实现 `TaskMatchResult` 数据类，位于 `src/skill/parallel/task_match_result.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T048
   - 描述：实现字段 `skillName: String`、`matchScore: Float64`（匹配度 0.0-1.0）、`matchStrategy: TaskMatchStrategy`、`matchedKeywords: Array<String>`（匹配到的关键词，keyword 策略使用）
@@ -586,7 +590,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 14.2 实现任务匹配器
-- [ ] **T052** 实现 `TaskMatcher` 类，位于 `src/skill/parallel/task_matcher.cj`，包名 `magic.skill.parallel`
+- [x] **T052** 实现 `TaskMatcher` 类，位于 `src/skill/parallel/task_matcher.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T049、T051
   - 描述：实现 `init(config: AutoInjectConfig)`；实现 `match(taskDescription: String, skills: Array<Skill>): Array<TaskMatchResult>` 主入口：① 按 `config.taskMatchStrategy` 调用对应匹配算法；② 过滤匹配度超过 `config.taskMatchThreshold` 的技能；③ 按匹配度降序排序；④ 取前 `config.maxAutoInjectSkills` 个；实现 `matchByKeyword(taskDescription, skillDescription): Float64` 关键词匹配：分词后计算 Jaccard 系数（|交集| / |并集|）；实现 `matchBySemantic(taskDescription, skillDescription): Float64` 语义匹配占位方法（本期返回 0.0，记录 TODO）
@@ -603,7 +607,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`match()` 返回空数组，不自动注入任何技能
 
 ### 14.3 TaskMatcher 单元测试
-- [ ] **T053** 为 `TaskMatcher` 编写单元测试，位于 `src/skill/parallel/test/test_task_matcher.cj`
+- [x] **T053** 为 `TaskMatcher` 编写单元测试，位于 `src/skill/parallel/test/test_task_matcher.cj`
   - 优先级：P0
   - 依赖任务：T052
   - 描述：测试用例覆盖：高匹配/低匹配/无匹配/阈值边界（恰好等于 0.6）/多技能排序/上限截断（超过 5 个只返 5 个）/空任务描述/空技能列表/中英文混合分词
@@ -620,7 +624,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 12，是补充需求的核心组件。编排初始化/任务匹配/显式调用三种自动注入场景，修复"渐进式加载设计漂移"。
 
 ### 15.1 实现 SkillAutoInjector 类骨架
-- [ ] **T054** 实现 `SkillAutoInjector` 类骨架，位于 `src/skill/parallel/skill_auto_injector.cj`，包名 `magic.skill.parallel`
+- [x] **T054** 实现 `SkillAutoInjector` 类骨架，位于 `src/skill/parallel/skill_auto_injector.cj`，包名 `magic.skill.parallel`
   - 优先级：P0
   - 依赖任务：T011、T049、T052、T063、T066
   - 描述：实现 `init(contextInjector: SkillContextInjector, taskMatcher: TaskMatcher, budgetManager: BudgetManager, decisionRecorder: InjectDecisionRecorder, config: AutoInjectConfig)`；维护 `injectedCache: HashMap<String, String>` 字段（键为 `{sessionId}:{skillName}`，值为已注入的完整内容，用于去重检查）
@@ -631,7 +635,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 15.2 实现 injectOnInitialization 方法
-- [ ] **T055** 在 `SkillAutoInjector` 中实现 `injectOnInitialization(sessionId: String): SkillInjectionResult` 方法
+- [x] **T055** 在 `SkillAutoInjector` 中实现 `injectOnInitialization(sessionId: String): SkillInjectionResult` 方法
   - 优先级：P0
   - 依赖任务：T054、T012
   - 描述：实现 Agent 初始化阶段自动注入：① 检查 `config.autoInjectEnabled`，为 false 时返回空结果；② 调用 `contextInjector.injectAlwaysOnSkills(sessionId)` 收集驻留型技能并计算依赖闭包；③ 调用 `budgetManager.allocateWithDegrade()` 预算分配带降级；④ 调用 `SkillContentRenderer.renderMultipleSkills()` 渲染存活技能完整 instructions；⑤ 将注入的技能写入 `injectedCache`；⑥ 调用 `decisionRecorder.logInjectionDecision()` 记录决策（`injectSource=AutoInit`，`contentLevel=Full` 或 `Frontmatter`）；⑦ 返回 `SkillInjectionResult`
@@ -647,7 +651,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`autoInjectEnabled=false` 时返回空结果，回退为纯 `get_skill_content` 工具模式
 
 ### 15.3 实现 injectOnUserMessage 方法
-- [ ] **T056** 在 `SkillAutoInjector` 中实现 `injectOnUserMessage(taskDescription: String, sessionId: String): SkillInjectionResult` 方法
+- [x] **T056** 在 `SkillAutoInjector` 中实现 `injectOnUserMessage(taskDescription: String, sessionId: String): SkillInjectionResult` 方法
   - 优先级：P0
   - 依赖任务：T054、T055、T052
   - 描述：实现用户消息阶段任务匹配自动注入：① 检查 `config.autoInjectEnabled`；② 调用 `taskMatcher.match(taskDescription, availableSkills)` 匹配技能；③ 无匹配时返回空结果（仅保留 frontmatter 目录，agent 可后备调用）；④ 收集高匹配度技能，调用 `contextInjector` 计算依赖闭包；⑤ 调用 `budgetManager.allocateWithDegrade()` 预算检查；⑥ 渲染完整 instructions；⑦ 追加注入上下文（不覆盖初始化阶段已注入的内容）；⑧ 写入 `injectedCache`；⑨ 记录决策（`injectSource=AutoTaskMatch`）
@@ -663,7 +667,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：返回空结果，agent 通过 `get_skill_content` 后备工具获取
 
 ### 15.4 实现 injectExplicit 方法
-- [ ] **T057** 在 `SkillAutoInjector` 中实现 `injectExplicit(skillName: String, sessionId: String): SkillInjectionResult` 方法
+- [x] **T057** 在 `SkillAutoInjector` 中实现 `injectExplicit(skillName: String, sessionId: String): SkillInjectionResult` 方法
   - 优先级：P0
   - 依赖任务：T054、T013
   - 描述：实现用户显式 `/skill-name` 调用自动注入：① 检查 `config.autoInjectEnabled`；② 直接加载该技能完整 instructions（调用 `contextInjector.injectSkills([skillName], sessionId)`）；③ 依赖闭包自动注入（`injectSource=AutoDependency`）；④ 预算检查；⑤ 渲染完整 instructions；⑥ 写入 `injectedCache`；⑦ 记录决策（`injectSource=AutoInit`，因为显式调用是用户主动触发）；⑧ 返回结果，agent 无需再调用 `get_skill_content`
@@ -677,7 +681,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：返回空结果，agent 通过 `get_skill_content` 后备工具获取
 
 ### 15.5 实现去重检查方法
-- [ ] **T058** 在 `SkillAutoInjector` 中实现 `isAlreadyInjected(skillName: String, sessionId: String): Bool` 和 `getInjectedCache(skillName: String, sessionId: String): Option<String>` 方法
+- [x] **T058** 在 `SkillAutoInjector` 中实现 `isAlreadyInjected(skillName: String, sessionId: String): Bool` 和 `getInjectedCache(skillName: String, sessionId: String): Option<String>` 方法
   - 优先级：P1
   - 依赖任务：T054
   - 描述：`isAlreadyInjected()` 检查 `injectedCache` 中是否存在键 `{sessionId}:{skillName}`；`getInjectedCache()` 返回缓存内容（`Some`）或 `None`；供 `GetSkillContentTool` 去重使用
@@ -692,7 +696,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`isAlreadyInjected()` 始终返回 false，去重不生效
 
 ### 15.6 SkillAutoInjector 单元测试
-- [ ] **T059** 为 `SkillAutoInjector` 编写单元测试，位于 `src/skill/parallel/test/test_skill_auto_injector.cj`
+- [x] **T059** 为 `SkillAutoInjector` 编写单元测试，位于 `src/skill/parallel/test/test_skill_auto_injector.cj`
   - 优先级：P0
   - 依赖任务：T055、T056、T057、T058
   - 描述：测试用例覆盖：初始化注入有驻留型/无驻留型/驻留型依赖闭包/驻留型互斥；任务匹配注入有匹配/无匹配/匹配数超上限/匹配技能依赖闭包；显式调用注入正常/技能不存在；去重检查已注入/未注入/去重开关关闭；`autoInjectEnabled=false` 全部回退
@@ -709,7 +713,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 10，扩展 `SkillLoadDecisionLogger`，新增 `injectSource` 和 `contentLevel` 字段，支持区分"自动注入"与"agent 主动调用"、"完整内容"与"摘要"。
 
 ### 16.1 实现注入来源和内容级别枚举
-- [ ] **T060** 实现 `InjectSource` 枚举（`AutoInit` / `AutoTaskMatch` / `AutoDependency` / `AgentToolCall`），位于 `src/skill/parallel/inject_source.cj`，包名 `magic.skill.parallel`
+- [x] **T060** 实现 `InjectSource` 枚举（`AutoInit` / `AutoTaskMatch` / `AutoDependency` / `AgentToolCall`），位于 `src/skill/parallel/inject_source.cj`，包名 `magic.skill.parallel`
   - 优先级：P1
   - 依赖任务：无
   - 描述：定义注入来源枚举，`AutoInit` 表示 Agent 初始化自动注入，`AutoTaskMatch` 表示任务匹配自动注入，`AutoDependency` 表示依赖闭包自动注入，`AgentToolCall` 表示 agent 主动调用后备工具
@@ -719,7 +723,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：无
   - 回滚点：删除文件即可
 
-- [ ] **T061** 实现 `ContentLevel` 枚举（`Full` / `Frontmatter`），位于 `src/skill/parallel/content_level.cj`，包名 `magic.skill.parallel`
+- [x] **T061** 实现 `ContentLevel` 枚举（`Full` / `Frontmatter`），位于 `src/skill/parallel/content_level.cj`，包名 `magic.skill.parallel`
   - 优先级：P1
   - 依赖任务：无
   - 描述：定义内容级别枚举，`Full` 表示完整 instructions，`Frontmatter` 表示仅 frontmatter 摘要（预算降级时使用）
@@ -730,7 +734,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 16.2 实现注入决策记录数据类
-- [ ] **T062** 实现 `InjectionDecisionRecord` 数据类，位于 `src/skill/parallel/injection_decision_record.cj`，包名 `magic.skill.parallel`
+- [x] **T062** 实现 `InjectionDecisionRecord` 数据类，位于 `src/skill/parallel/injection_decision_record.cj`，包名 `magic.skill.parallel`
   - 优先级：P1
   - 依赖任务：T003、T060、T061
   - 描述：扩展 `SkillLoadDecisionRecord`，新增字段 `injectSource: InjectSource`、`contentLevel: ContentLevel`；原有字段 `skillName` / `decision` / `reason` / `sessionId` / `timestamp` 保持兼容
@@ -741,7 +745,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除文件即可
 
 ### 16.3 实现注入决策记录器
-- [ ] **T063** 实现 `InjectDecisionRecorder` 类，位于 `src/skill/parallel/inject_decision_recorder.cj`，包名 `magic.skill.parallel`
+- [x] **T063** 实现 `InjectDecisionRecorder` 类，位于 `src/skill/parallel/inject_decision_recorder.cj`，包名 `magic.skill.parallel`
   - 优先级：P1
   - 依赖任务：T062
   - 描述：实现 `logInjectionDecision(skillName, decision, reason, sessionId, injectSource, contentLevel)` 方法，构造 `InjectionDecisionRecord` 并存入 `ArrayList`，同时通过 `LogUtils.info()` 输出结构化日志（格式 `[InjectDecision] skill={name}, decision={decision}, reason={reason}, session={sessionId}, source={injectSource}, level={contentLevel}`）；实现 `queryByInjectSource(sessionId, injectSource)` 按注入来源查询；实现 `queryAll(sessionId)` 查询会话所有注入决策
@@ -756,7 +760,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`logInjectionDecision()` 改为空实现
 
 ### 16.4 InjectDecisionRecorder 单元测试
-- [ ] **T064** 为 `InjectDecisionRecorder` 编写单元测试，位于 `src/skill/parallel/test/test_inject_decision_recorder.cj`
+- [x] **T064** 为 `InjectDecisionRecorder` 编写单元测试，位于 `src/skill/parallel/test/test_inject_decision_recorder.cj`
   - 优先级：P1
   - 依赖任务：T063
   - 描述：测试用例覆盖：单决策记录/多决策记录/按来源查询（AutoInit/AutoTaskMatch/AgentToolCall）/全量查询/跨会话查询/空会话查询
@@ -773,7 +777,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 11，扩展 `BudgetAllocator`（TG08），新增"降级为 frontmatter 摘要"能力。预算超限时先降级再淘汰，是补充需求 5.6.1 第 5 条的实现。
 
 ### 17.1 扩展预算分配结果数据类
-- [ ] **T065** 扩展 `BudgetAllocationResult` 数据类，修改 `src/skill/parallel/budget_allocation_result.cj`
+- [x] **T065** 扩展 `BudgetAllocationResult` 数据类，修改 `src/skill/parallel/budget_allocation_result.cj`
   - 优先级：P2
   - 依赖任务：T030、T061
   - 描述：在原有字段（`allocated` / `evicted` / `usedTokens` / `totalBudget`）基础上新增 `degraded: Array<String>`（降级为 frontmatter 的技能名）和 `contentLevels: HashMap<String, ContentLevel>`（技能名 → 内容级别）；保持向后兼容，原有字段语义不变
@@ -787,7 +791,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：新增字段设为空数组/空 map
 
 ### 17.2 实现 BudgetManager 类
-- [ ] **T066** 实现 `BudgetManager` 类，位于 `src/skill/parallel/budget_manager.cj`，包名 `magic.skill.parallel`
+- [x] **T066** 实现 `BudgetManager` 类，位于 `src/skill/parallel/budget_manager.cj`，包名 `magic.skill.parallel`
   - 优先级：P2
   - 依赖任务：T031、T065、T061
   - 描述：实现 `init(config: SkillParallelConfig)`；实现 `allocateWithDegrade(skills: Array<Skill>, totalBudget: Int64): BudgetAllocationResult`：① 累计 `context_budget_tokens`，预算内时全部 `allocated` + `contentLevel=Full`；② 超限时按 `priority` 从低到高尝试降级为 frontmatter（调用 `degradeToFrontmatter()`），降级后重新计算 token；③ 降级后仍超限则完全淘汰（`evicted`）；④ 驻留型技能优先保留完整内容；实现 `degradeToFrontmatter(skill: Skill): Skill`：保留 name + description，清空 instructions，标记 `contentLevel=Frontmatter`；实现 `calculateFullTokens(skills)` 和 `calculateFrontmatterTokens(skills)` 计算 token 数
@@ -804,7 +808,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`allocateWithDegrade()` 退化为 `BudgetAllocator.allocate()`（不降级，直接淘汰）
 
 ### 17.3 接入 SkillContextInjector
-- [ ] **T067** 在 `SkillContextInjector` 中接入 `BudgetManager`（可选），修改 `src/skill/parallel/skill_context_injector.cj`
+- [x] **T067** 在 `SkillContextInjector` 中接入 `BudgetManager`（可选），修改 `src/skill/parallel/skill_context_injector.cj`
   - 优先级：P2
   - 依赖任务：T032、T066
   - 描述：在 `SkillContextInjector` 中新增 `budgetManager: Option<BudgetManager>` 字段；当传入 `BudgetManager` 时使用 `allocateWithDegrade()` 替代 `BudgetAllocator.allocate()`；降级的技能渲染时仅注入 frontmatter（调用 `SkillCatalogRenderer` 渲染摘要而非 `SkillContentRenderer` 渲染完整内容）
@@ -818,7 +822,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`budgetManager` 设为 `None`，退回原预算分配行为
 
 ### 17.4 BudgetManager 单元测试
-- [ ] **T068** 为 `BudgetManager` 编写单元测试，位于 `src/skill/parallel/test/test_budget_manager.cj`
+- [x] **T068** 为 `BudgetManager` 编写单元测试，位于 `src/skill/parallel/test/test_budget_manager.cj`
   - 优先级：P2
   - 依赖任务：T066
   - 描述：测试用例覆盖：预算内全 Full/超限降级低优先级/超限淘汰非驻留型/全降级仍超限则淘汰/驻留型优先保留 Full/空技能列表/`degradeToFrontmatter` 返回正确
@@ -835,12 +839,12 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 13/14/15，是漂移修复的接入点。将 `SkillAutoInjector` 接入 `WebMCPProtocol` 和 `WsChatController`，替换第3段"agent 主动调用"漂移；扩展 `GetSkillContentTool` 去重机制保证向后兼容。
 
 ### 18.1 WebMCPProtocol 接入自动注入
-- [ ] **T069** 在 `WebMCPProtocol.buildAgentSystemPrompt()` 中接入 `SkillAutoInjector.injectOnInitialization()`，修改 `src/protocol/web_mcp_protocol.cj`
+- [x] **T069** 在 `WebMCPProtocol.buildAgentSystemPrompt()` 中接入 `SkillAutoInjector.injectOnInitialization()`，修改 `src/app/services/webmcp/WebMCPProtocol.cj`
   - 优先级：P0
   - 依赖任务：T055
   - 描述：修改 `buildAgentSystemPrompt()` 方法体 L1963-1983 的第3段注入逻辑：① 第1段（frontmatter）和第2段（`get_skill_content` 工具说明）保留不变；② 第3段原"agent 主动调用工具获取"替换为调用 `skillAutoInjector.injectOnInitialization(sessionId)` 自动注入驻留型技能完整 instructions；③ 将返回的 `SkillInjectionResult.injectedContext` 追加到系统提示；④ `autoInjectEnabled=false` 时不调用自动注入，退回原第3段行为（注释引导 agent 调用 `get_skill_content`）
   - 输入：T055 的 `injectOnInitialization()` 方法
-  - 输出：修改 `src/protocol/web_mcp_protocol.cj`
+  - 输出：修改 `src/app/services/webmcp/WebMCPProtocol.cj`
   - 验收标准：
     1. Agent 初始化后驻留型技能完整 instructions 在系统提示中
     2. agent 无需调用 `get_skill_content` 获取驻留型技能
@@ -850,12 +854,12 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`autoInjectEnabled=false` 时 `buildAgentSystemPrompt()` 退回原逻辑
 
 ### 18.2 WsChatController 接入任务匹配注入
-- [ ] **T070** 在 `WsChatController` 用户消息处理中接入 `SkillAutoInjector.injectOnUserMessage()`，修改 `src/controller/ws_chat_controller.cj`
+- [x] **T070** 在 `WsChatController` 用户消息处理中接入 `SkillAutoInjector.injectOnUserMessage()`，修改 `src/app/controllers/uctoo/ws/WsChatController.cj`
   - 优先级：P0
   - 依赖任务：T056
   - 描述：在 `WsChatController` 用户消息处理阶段（L412-423 附近）：① 解析用户消息文本作为 `taskDescription`；② 检测 `/skill-name` 显式调用语法，若匹配则调用 `skillAutoInjector.injectExplicit(skillName, sessionId)`；③ 否则调用 `skillAutoInjector.injectOnUserMessage(taskDescription, sessionId)` 任务匹配自动注入；④ 将返回的 `injectedContext` 追加注入到流式响应的上下文；⑤ 自动注入需在首帧前完成（延迟 < 100ms）；⑥ `autoInjectEnabled=false` 时不调用，退回原行为
   - 输入：T056 的 `injectOnUserMessage()` 和 T057 的 `injectExplicit()` 方法
-  - 输出：修改 `src/controller/ws_chat_controller.cj`
+  - 输出：修改 `src/app/controllers/uctoo/ws/WsChatController.cj`
   - 验收标准：
     1. 用户输入任务后高匹配度技能完整 instructions 自动注入上下文
     2. 用户输入 `/skill-name` 后该技能完整 instructions 自动注入
@@ -866,7 +870,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`autoInjectEnabled=false` 时用户消息处理退回原行为
 
 ### 18.3 GetSkillContentTool 扩展去重机制
-- [ ] **T071** 扩展 `GetSkillContentTool` 新增去重机制，修改 `src/tool/get_skill_content_tool.cj`
+- [x] **T071** 扩展 `GetSkillContentTool` 新增去重机制，修改 `src/tool/get_skill_content_tool.cj`
   - 优先级：P1
   - 依赖任务：T058
   - 描述：① 新增 `setAutoInjector(injector: SkillAutoInjector)` 方法（静态注入引用）；② 在 `execute()` 方法内增加去重检查：调用 `autoInjector.isAlreadyInjected(skillName, sessionId)`，若已注入则调用 `getInjectedCache()` 返回缓存内容，记录 debug 日志"技能 X 已自动注入，返回缓存"；③ 未注入时正常获取技能完整内容（原行为）；④ `dedupOnReinject=false` 时跳过去重检查；⑤ 去重检查失败时降级为原行为（不报错）
@@ -883,7 +887,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：`dedupOnReinject=false` 或不调用 `setAutoInjector()` 时退回原行为
 
 ### 18.4 漂移修复单元测试
-- [ ] **T072** 为漂移修复编写单元测试，位于 `src/skill/parallel/test/test_drift_fix.cj`
+- [x] **T072** 为漂移修复编写单元测试，位于 `src/skill/parallel/test/test_drift_fix.cj`
   - 优先级：P0
   - 依赖任务：T069、T070、T071
   - 描述：测试用例覆盖：WebMCPProtocol 注入驻留型完整内容/`autoInjectEnabled=false` 退回原逻辑；WsChatController 任务匹配注入/显式调用注入/无匹配不注入；GetSkillContentTool 去重返回缓存/未注入正常获取/去重开关关闭
@@ -900,12 +904,12 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 阶段 16，修复 `AgentRuntimeBridge.buildAgentFromDefinition()` L184 创建空 `CompositeSkillToolManager()` 的缺陷，使自动注入流程在该路径也能生效。
 
 ### 19.1 修复空技能管理器
-- [ ] **T073** 修复 `AgentRuntimeBridge.buildAgentFromDefinition()` 空技能管理器问题，修改 `src/runtime/agent_runtime_bridge.cj`
+- [x] **T073** 修复 `AgentRuntimeBridge.buildAgentFromDefinition()` 空技能管理器问题，修改 `src/app/services/bridge/agent_runtime_bridge.cj`
   - 优先级：P1
   - 依赖任务：T055
   - 描述：修改 `buildAgentFromDefinition()` L184 附近：① 检测创建的 `CompositeSkillToolManager()` 是否为空（`availableSkills` 为空）；② 为空时尝试复用 `buildAgent()` 路径的技能加载逻辑（通过 `ProgressiveSkillLoader` 加载技能目录）；③ 若复用失败则记录告警"Agent 创建时技能管理器为空，自动渐进式加载未生效"，跳过自动注入流程；④ 非空时正常接入 `SkillAutoInjector`
   - 输入：T055 的 `injectOnInitialization()` 方法
-  - 输出：修改 `src/runtime/agent_runtime_bridge.cj`
+  - 输出：修改 `src/app/services/bridge/agent_runtime_bridge.cj`
   - 验收标准：
     1. 通过 `buildAgentFromDefinition()` 创建 agent 时技能管理器非空（或记录告警）
     2. 技能管理器非空时自动注入生效
@@ -915,12 +919,12 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：修复失败时退回原空技能管理器行为，仅记录告警
 
 ### 19.2 buildAgentFromDefinition 修复单元测试
-- [ ] **T074** 为 `buildAgentFromDefinition` 修复编写单元测试，位于 `src/runtime/test/test_build_agent_from_definition.cj`
+- [x] **T074** 为 `buildAgentFromDefinition` 修复编写单元测试，位于 `src/app/services/bridge/test/test_build_agent_from_definition.cj`
   - 优先级：P1
   - 依赖任务：T073
   - 描述：测试用例覆盖：技能管理器非空时自动注入生效/技能管理器为空时记录告警不崩溃/复用 buildAgent 路径技能加载成功/`buildAgent()` 路径行为不变
   - 输入：T073 的修复
-  - 输出：`src/runtime/test/test_build_agent_from_definition.cj`
+  - 输出：`src/app/services/bridge/test/test_build_agent_from_definition.cj`
   - 验收标准：所有测试用例通过，覆盖 design.md 2.6.2 节 buildAgentFromDefinition 修复测试矩阵
   - 风险点：需构造 mock `AgentRuntimeBridge` 上下文
   - 回滚点：删除测试文件
@@ -932,7 +936,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 2.6.2 节补充需求集成测试，验证漂移修复端到端用户操作路径和向后兼容性。
 
 ### 20.1 驻留型完整内容自动注入集成测试
-- [ ] **T075** 编写驻留型技能完整内容自动注入集成测试，位于 `src/skill/parallel/test/integration/test_always_on_auto_inject.cj`
+- [x] **T075** 编写驻留型技能完整内容自动注入集成测试，位于 `src/skill/parallel/test/integration/test_always_on_auto_inject.cj`
   - 优先级：P0
   - 依赖任务：T055、T069
   - 描述：验证场景：Agent 初始化后 `load_policy=always_on` 技能完整 instructions 在系统提示中，agent 无需调用 `get_skill_content`
@@ -943,7 +947,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除测试文件
 
 ### 20.2 任务匹配自动注入集成测试
-- [ ] **T076** 编写任务匹配自动注入集成测试，位于 `src/skill/parallel/test/integration/test_task_match_auto_inject.cj`
+- [x] **T076** 编写任务匹配自动注入集成测试，位于 `src/skill/parallel/test/integration/test_task_match_auto_inject.cj`
   - 优先级：P0
   - 依赖任务：T056、T070
   - 描述：验证场景：用户输入任务"编写仓颉代码实现用户登录"，高匹配度技能（如 cangjie-coder）完整 instructions 自动注入上下文
@@ -954,7 +958,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除测试文件
 
 ### 20.3 用户显式调用自动注入集成测试
-- [ ] **T077** 编写用户显式 `/skill-name` 调用自动注入集成测试，位于 `src/skill/parallel/test/integration/test_explicit_auto_inject.cj`
+- [x] **T077** 编写用户显式 `/skill-name` 调用自动注入集成测试，位于 `src/skill/parallel/test/integration/test_explicit_auto_inject.cj`
   - 优先级：P0
   - 依赖任务：T057、T070
   - 描述：验证场景：用户输入 `/cangjie-coder`，该技能完整 instructions 自动注入上下文，agent 无需再调用 `get_skill_content`
@@ -965,7 +969,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除测试文件
 
 ### 20.4 向后兼容后备机制集成测试
-- [ ] **T078** 编写向后兼容 `get_skill_content` 后备机制集成测试，位于 `src/skill/parallel/test/integration/test_backward_compat_fallback.cj`
+- [x] **T078** 编写向后兼容 `get_skill_content` 后备机制集成测试，位于 `src/skill/parallel/test/integration/test_backward_compat_fallback.cj`
   - 优先级：P1
   - 依赖任务：T071
   - 描述：验证场景：自动注入生效后 agent 仍调用 `get_skill_content` 正常返回，不报错；已自动注入的技能返回缓存内容
@@ -979,7 +983,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除测试文件
 
 ### 20.5 预算降级为摘要集成测试
-- [ ] **T079** 编写预算降级为 frontmatter 摘要集成测试，位于 `src/skill/parallel/test/integration/test_budget_degrade.cj`
+- [x] **T079** 编写预算降级为 frontmatter 摘要集成测试，位于 `src/skill/parallel/test/integration/test_budget_degrade.cj`
   - 优先级：P2
   - 依赖任务：T066、T067
   - 描述：验证场景：驻留型 + 任务匹配技能完整内容总和超过上下文预算，低优先级技能降级为 frontmatter 摘要注入，高优先级保留完整内容
@@ -993,7 +997,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除测试文件
 
 ### 20.6 auto_inject_enabled=false 回退集成测试
-- [ ] **T080** 编写 `auto_inject_enabled=false` 回退集成测试，位于 `src/skill/parallel/test/integration/test_auto_inject_disabled.cj`
+- [x] **T080** 编写 `auto_inject_enabled=false` 回退集成测试，位于 `src/skill/parallel/test/integration/test_auto_inject_disabled.cj`
   - 优先级：P1
   - 依赖任务：T069、T070
   - 描述：验证场景：关闭自动注入后退回纯 `get_skill_content` 工具模式，行为与漂移前一致——系统提示仅含 frontmatter + 工具说明，agent 需主动调用 `get_skill_content` 获取完整内容
@@ -1007,7 +1011,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除测试文件
 
 ### 20.7 自动注入性能测试
-- [ ] **T081** 编写自动注入性能测试，位于 `src/skill/parallel/test/perf/test_auto_inject_latency.cj`
+- [x] **T081** 编写自动注入性能测试，位于 `src/skill/parallel/test/perf/test_auto_inject_latency.cj`
   - 优先级：P2
   - 依赖任务：T055、T056
   - 描述：测试指标：① 任务匹配耗时（50 技能 keyword 匹配，目标 < 50ms）；② 自动注入端到端延迟（初始化注入 + 任务匹配注入总耗时，目标 < 200ms）；③ 去重检查耗时（缓存命中检查，目标 < 5ms）
@@ -1018,7 +1022,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 回滚点：删除测试文件
 
 ### 20.8 WebMCPProtocol/WsChatController 双重注入防护集成测试
-- [ ] **T082** 编写双重注入防护集成测试，位于 `src/skill/parallel/test/integration/test_no_double_inject.cj`
+- [x] **T082** 编写双重注入防护集成测试，位于 `src/skill/parallel/test/integration/test_no_double_inject.cj`
   - 优先级：P1
   - 依赖任务：T069、T070、T071
   - 描述：验证场景：`WebMCPProtocol` 初始化注入 + `WsChatController` 任务匹配注入同一技能时不重复注入，通过 `injectedCache` 去重保证幂等性
@@ -1055,7 +1059,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：无
   - 回滚点：删除测试文件
 
-- [ ] **T036** 编写现有 49 个技能兼容性回归测试，位于 `src/skill/parallel/test/integration/test_backward_compatibility.cj`
+- [x] **T036** 编写现有 49 个技能兼容性回归测试，位于 `src/skill/parallel/test/integration/test_backward_compatibility.cj`
   - 优先级：P1
   - 依赖任务：T018
   - 描述：验证场景：现有 49 个技能无扩展字段时按默认值处理（`load_policy=on_demand` / `priority=medium`），不报错；`SkillAwareAgent._registerSkillsAsTools()` 行为不变
@@ -1075,7 +1079,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组对应 design.md 2.6.3 节性能测试，验证 DFX 约束的延迟指标。补充需求 5.6 节的性能测试（任务匹配耗时/自动注入端到端延迟/去重检查耗时）已在 T081 完成，本组聚焦原有路径的性能指标。
 
 ### 10.1 性能指标验证
-- [ ] **T037** 编写上下文注入延迟性能测试，位于 `src/skill/parallel/test/perf/test_injection_latency.cj`
+- [x] **T037** 编写上下文注入延迟性能测试，位于 `src/skill/parallel/test/perf/test_injection_latency.cj`
   - 优先级：P2
   - 依赖任务：T015
   - 描述：测试 10 个技能注入耗时，目标 < 100ms
@@ -1122,7 +1126,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
 **写作指导**：本组确保功能可上线，包含配置示例和文档更新。
 
 ### 11.1 配置与文档
-- [ ] **T041** 在 `skills/personalization/SKILL.md` 中创建 personalization 技能的 SKILL.md 声明文件
+- [x] **T041** 在 `skills/personalization/SKILL.md` 中创建 personalization 技能的 SKILL.md 声明文件（纯文本 profile 技能：`skill_type: profile` + `load_policy: always_on` + `priority: high`，正文以 SOUL/IDENTITY/USER/MEMORY 四个分段组合，运行效果等价于传统 workspace 机制）。见 `skills/personalization/SKILL.md`。
   - 优先级：P1
   - 依赖任务：T023
   - 描述：创建 `skills/personalization/SKILL.md`，声明 `name: personalization`、`load_policy: always_on`、`priority: high`、`description: 个性化技能插件，加载 SOUL.md / IDENTITY.md / USER.md / MEMORY.md 等工作空间文件`
@@ -1132,7 +1136,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 风险点：无
   - 回滚点：删除文件
 
-- [ ] **T042** 在项目文档中更新 SKILL.md 扩展字段说明，位于 `docs/ref/ConcurrentSkills.md` 或同级文档
+- [x] **T042** 在项目文档中更新 SKILL.md 扩展字段说明，位于 `docs/ref/ConcurrentSkills.md` 或同级文档
   - 优先级：P2
   - 依赖任务：T005
   - 描述：文档化扩展字段 `load_policy` / `priority` / `depends_on` / `conflicts_with` / `context_budget_tokens` / `compatible_with` 的语义、取值、默认值；提供配置示例
@@ -1222,7 +1226,7 @@ TG04 + TG05 + ... + TG20 ──→ TG09 (端到端集成测试) ──→ TG10 (
   - 输出：变更范围清单
   - 验收标准：
     1. 新增文件均在 `src/skill/parallel/` 目录下（含补充需求新增的 `skill_auto_injector.cj` / `task_matcher.cj` / `budget_manager.cj` / `inject_decision_recorder.cj` / `auto_inject_config.cj` 等）
-    2. 修改文件含 `src/skill/skill_aware_agent.cj`、`src/protocol/web_mcp_protocol.cj`、`src/controller/ws_chat_controller.cj`、`src/tool/get_skill_content_tool.cj`、`src/runtime/agent_runtime_bridge.cj`
+    2. 修改文件含 `src/skill/skill_aware_agent.cj`、`src/app/services/webmcp/WebMCPProtocol.cj`、`src/app/controllers/uctoo/ws/WsChatController.cj`、`src/tool/get_skill_content_tool.cj`、`src/app/services/bridge/agent_runtime_bridge.cj`
     3. 无数据库 DDL
     4. 现有 49 个技能的 SKILL.md 无修改
     5. `autoInjectEnabled=false` 时所有修改退回原行为
@@ -1275,7 +1279,121 @@ TG01 (声明解析) → TG02 (渲染) → TG03 (注入核心) → TG13 (AutoInje
 
 ---
 
-**文档状态**: tasks.md 已更新（纳入 spec.md 第 5.6 节"技能内容自动渐进式加载"补充需求），等待用户确认
+---
+
+# v2 增补（2026-10-13）
+
+## V2.1 实现现状盘点（对 `src/skill/parallel/` 的代码复核结果）
+
+> 复核方式：目录枚举 + 符号检索（`SkillAutoInjector`/`SkillContextInjector`/`AgentWorkspace`/`conflict` 等）。详见 `review.md` 附录 B。
+
+| 阶段 | 内容 | 状态 | 证据 |
+|---|---|---|---|
+| 阶段 1 | 并行声明解析 | ✅ 已实现 | `load_policy.cj`、`skill_priority.cj`、`skill_load_decision.cj`、`skill_parallel_config.cj`、`skill_parallel_declaration_parser.cj` |
+| 阶段 2 | 内容/目录渲染 | ✅ 已实现 | `skill_content_renderer.cj`、`skill_catalog_renderer.cj` |
+| 阶段 3 | 注入核心 | ✅ 已实现 | `skill_context_injector.cj`（且已复用 `SkillDependencyResolver`，L7/L13/L24 ✅） |
+| 阶段 4 | Agent 扩展接入 | ❌ 未接线 | `SkillAwareAgent` 未见接入 |
+| 阶段 5 | 互斥过滤 | ⚠️ **仅解析** | `parseConflictsWith()` L45-46 + `enableConflictFilter` 开关存在，**过滤逻辑未实现** |
+| 阶段 6 | 个性化插件 | ❌ **完全未实现** | 全目录无 `AgentWorkspace` / `getCombinedMemory` / `SOUL` / `IDENTITY` 引用 |
+| 阶段 8/11 | 预算管理（带降级） | ✅ 已实现 | `budget_manager.cj`（`allocateWithDegrade` 含降级/淘汰） |
+| 阶段 9/10/12 | 自动注入 | ✅ 已实现 | `auto_inject_config.cj`、`task_matcher.cj`、`inject_decision_recorder.cj`、`skill_auto_injector.cj` |
+| **阶段 13–17** | **接线（WebMCPProtocol / WsChatController / GetSkillContentTool / AgentRuntimeBridge / SkillAwareAgent）** | ❌ **未实现** | `protocol/`、`controller/`、`runtime/` 对 `skill_parallel` **零引用** |
+
+**最重要结论**：组件已就绪但**未接线**，因此**用户实际观察到的"渐进式加载漂移"尚未修复**。下一阶段应优先接线，而非继续新增组件。
+
+## V2.2 优先级修正
+
+| 原标注 | 修正 | 说明 |
+|---|---|---|
+| 阶段 11 `BudgetManager` = **P2** | **P0（已完成）** | v1 曾指出"P2 却卡在 P0 关键路径"的矛盾；实际**已实现**，矛盾消解。标注改为"P0/已完成" |
+| 阶段 5 互斥过滤 | **P0（未完成，需补过滤逻辑）** | 仅解析，过滤未实现 |
+| 阶段 13–17 接线 | **P0（最高优先）** | 漂移修复的实际落地点 |
+
+## V2.3 新增任务组 TG21–TG29（T083–T111）
+
+> 任务总数：82 → **111**（20 → 29 个任务组）
+
+### TG21：`skill_type` 判别式与 profile 层绑定（P0）
+
+- [x] **T083** 实现 `SkillType` 枚举（`Profile`/`Capability`），位于 `src/skill/parallel/skill_type.cj`
+  - 描述：沿用 `load_policy.cj:11-30` 的 `operator func ==`/`!=` 重载范式（**仓颉 enum 不原生支持 ==**）
+  - 验收：两值齐全，可被 `match` 消费，`==`/`!=` 可用
+- [x] **T084** `SkillParallelDeclarationParser` 增加 `parseSkillType()`，缺省/非法 → `Capability` + 告警
+- [x] **T085** `SkillContextInjector` 按 `skill_type` 分流：profile → `<profile_context>` 层；capability → 常规路径
+- [x] **T086** profile 类技能**不注册为工具**：改造 `SkillAwareAgent._registerSkillsAsTools()` 过滤 `profile`
+
+### TG22：分发元数据 `DistributionMetadata`（P0）
+
+- [x] **T087** 实现 `SyncScope` 枚举（`AgentOwned`/`UserOwned`/`NodeLocal`），`src/skill/parallel/sync_scope.cj`
+- [x] **T088** 实现 `ConflictPolicy` 枚举（`LastWriteWins`/`Merge`/`Manual`），`src/skill/parallel/conflict_policy.cj`
+- [x] **T089** 实现 `DistributionMetadata` 类（`syncScope`/`authoritative`/`conflictPolicy`/`version`/`etag`），`src/skill/parallel/distribution_metadata.cj`
+- [x] **T090** 解析器增加 `parseDistributionMetadata()`；**MEMORY 类默认 `node_local`**
+
+### TG23：`TaskMatcher` 缺陷修正（P0，阻断级）
+
+- [x] **T091** 修复 `tokenize()` 中文分词失效（现仅 `split(" ")`，中文无空格 → 整句 1 token → Jaccard 恒 0 → **自动注入对中文永不触发**）
+  - 方案：按 `toRuneArray()` 取 bigram N-gram；保留空格切分用于英文/代码标识符
+  - 验收：中文任务描述 vs 中文技能描述，明显匹配时得分达阈值并被注入
+- [x] **T092** 修复 `matchBySemantic()` 桩实现（现 `return 0.0`）：改为真实语义匹配；未接模型时降级为 T091 修正后的关键词匹配并告警，**禁止返回常量 0**
+- [x] **T093** 用中文标注评测集重新标定 `taskMatchThreshold`（现 0.6，原设计自带示例仅得 0.3 → 系统性欠注入）
+- [x] **T094** 补充中文用例单元测试（覆盖中文/中英混合/纯英文三类）
+
+### TG24：阶段 13–17 接线（P0，最高优先——漂移真正修复点）
+
+- [x] **T095** `WebMCPProtocol.buildAgentSystemPrompt()` 接入自动注入：系统提示**仅承载常驻层**（profile + `always_on`），仅构建一次
+- [x] **T096** `WsChatController` 接入任务匹配注入：每轮消息**仅承载任务层**，对常驻层去重、不重复注入
+- [x] **T097** `GetSkillContentTool` 去重机制（向后兼容，幂等）
+- [x] **T098** `AgentRuntimeBridge.buildAgentFromDefinition()` 修复空技能管理器：复用 `buildAgent` 路径技能加载（**不要仅告警跳过**，否则静默降级）
+
+### TG25：`agents` → profile 技能引用建模（P1）
+
+- [x] **T099** 数据模型：`agents` 记录持有指向 profile 技能的**引用**（关联关系），**不存提示词正文**
+- [x] **T100** 导出/传输：沿引用一次性取出全部 profile 技能
+- [x] **T101** 相关 spec 可落 `.codeartsdoer/specs/profile/`（当前空目录）
+
+### TG26：`ProfileContextAssembler` 聚合注入（P1）
+
+- [x] **T102** 实现组装器 `src/skill/parallel/profile_context_assembler.cj`：多 profile 技能组装为**单一** `<profile_context>` 块
+- [x] **T103** 解决"4+ 常驻技能各自注入"预算冲击；profile 层**独立预算**，不挤占 capability
+- [x] **T104** 单元测试：3 个 profile 技能 → 1 个 `<profile_context>` 块
+
+### TG27：存量 profile 迁移与真源收敛（P1）
+
+- [x] **T105** 迁移脚本：扫描 `AgentWorkspace` 的 SOUL/IDENTITY/USER/MEMORY，生成带 frontmatter 的 SKILL.md（`skill_type: profile` + 分发元数据）
+- [x] **T106** `AgentWorkspace.getCombinedMemory()` 改为**从 profile 技能读取**；未迁移时回退旧文件
+- [x] **T107** **禁止双份注入**：启用 profile 技能后关闭旧路径，加断言测试
+- [x] **T108** 向后兼容验证：未迁移环境行为不变
+
+### TG28：预算按模型窗口派生（P1）
+
+- [x] **T109** `SkillParallelConfig` 增加 `deriveFromModelWindow(windowTokens, ratio=0.15)`，替换固定 `8192`
+- [x] **T110** 显式配置优先；未配置时按窗口 15% 计算；补充单测
+
+### TG29：MEMORY 跨端漫游研究（P3，研究项）
+
+- [ ] **T111** 立项调研 CRDT / 事件溯源合并方案；**明确不进 P0 主链路**，禁止以 `last_write_wins` 静默覆盖记忆
+
+## V2.4 建议执行顺序
+
+```
+【第一优先·接线（让漂移修复真正生效）】
+TG23（修 TaskMatcher）→ TG24（阶段13-17接线）→ 验证漂移现象消失
+
+【第二优先·profile 分发能力】
+TG21（skill_type）→ TG22（分发元数据）→ TG27（迁移+真源收敛）→ TG26（聚合注入）→ TG25（agents引用）
+
+【第三优先·增强】
+TG28（预算派生）；阶段5 互斥过滤补过滤逻辑
+
+【研究项】
+TG29（MEMORY 跨端漫游）
+```
+
+> **为什么先接线再 profile**：当前已有 20 个组件文件、8 个集成测试，但漂移现象仍在——因为没接线。先把已投入的资产兑现为用户可感知的修复，再扩 profile。
+
+---
+
+**文档状态**: tasks.md **v2**（2026-10-13 修订：新增 TG21–TG29 / T083–T111；修正 `BudgetManager` 优先级；记录实现现状与集成缺口）
 **本次更新摘要**:
 - 新增 8 个任务组（TG13-TG20）、35 个任务（T048-T082），覆盖 design.md 阶段 9-16
 - 修复"渐进式加载设计漂移"——将技能完整内容加载从"agent 主动调用 `get_skill_content` 工具"恢复为"框架自动注入到上下文"
@@ -1284,4 +1402,38 @@ TG01 (声明解析) → TG02 (渲染) → TG03 (注入核心) → TG13 (AutoInje
 - 新增 8 个集成测试任务（TG20），覆盖驻留型自动注入/任务匹配注入/显式调用注入/向后兼容/预算降级/回退/双重注入防护
 - 漂移修复最小路径：TG01 → TG02 → TG03 → TG13 → TG15 → TG18
 - 保留 `get_skill_content` 工具作为后备机制（`fallbackToolRetained=true` 默认），`auto_inject_enabled=false` 可回退为纯工具模式
-**下一步**: 用户确认后，可进入编码实施阶段
+**v2 更新摘要**:
+- 新增 9 个任务组（TG21–TG29）、29 个任务（T083–T111），任务总数 82 → **111**
+- 依据代码复核结果盘点实现现状：阶段 1/2/3/8/9/10/11/12 已实现；阶段 4/13–17 未接线；阶段 5 仅解析；阶段 6 完全未实现
+- 修正 `BudgetManager` 优先级（P2 → P0/已完成），消解 v1 指出的"P2 卡在 P0 关键路径"矛盾
+- 新增 `TaskMatcher` 两个阻断级缺陷修复任务（中文分词失效、`semantic` 桩实现）
+- 新增 profile 分发能力任务组（`skill_type`、分发元数据、迁移+真源收敛、聚合注入、agents 引用）
+- **建议执行顺序调整**：先接线（TG23→TG24）兑现漂移修复，再扩 profile
+**下一步**: 用户确认后，按 V2.4 顺序进入编码实施阶段
+
+
+---
+
+## 2026-10-14 完成度复核（脚本辅助标注，非人工逐条评审）
+
+**标注方法**：以「客观证据」为准，而非主观判断。
+- 声明了输出文件路径的任务：核对文件是否真实存在（50 项全部命中）。
+- 无文件路径的任务：核对目标方法是否存在于对应类（T012-T014 / T055-T058，8 个方法全部命中）。
+
+**已标注完成：96 项**，其中含以下校正判定（易被误判为未完成）：
+- **文件改名**：T026/T027 → `injection_decision_record.cj` / `inject_decision_recorder.cj`；T029 → `test_inject_decision_recorder.cj`；T031 → `budget_manager.cj`+`budget_allocation_result.cj`；T033 → `test_budget_manager.cj`。
+- **路径过时**（已同步修正 tasks.md 中的输出路径）：T069 `WebMCPProtocol.cj`、T070 `WsChatController.cj`、T073 `agent_runtime_bridge.cj`、T074 `test_build_agent_from_definition.cj`。
+- **由 TG20 覆盖**：T036（向后兼容）→ `integration/test_backward_compat_fallback.cj`；T037（注入延迟）→ `perf/test_auto_inject_latency.cj`。
+- **TG23 实为已完成**：`tokenize()` 已实现 CJK bigram N-gram（T091），`matchBySemantic()` 已降级为关键词匹配而非 `return 0.0`（T092），阈值已从 0.6 下调至 0.3 并附 T093 标注（T093），中文用例 13 处（T094）。
+- **TG28 已落地**：`deriveFromModelWindow(windowTokens, ratio=0.15)`（T109）+ `applyDerivedBudget()`（T110），显式配置优先由调用方保证（见源码注释）。
+
+**仍待办：13 项**
+- `T022` 缺 `test_conflict_filter.cj`（`conflict_filter.cj` 有实现但无单测）
+- `T041` 已落地（纯文本 profile 技能）；`T023` 原计划类形态被纯文本形态取代（已完成）；`T025` 单元测试按用户要求暂缓，改以 runtime 实际效果评估
+- `T034/T035` 缺 `test_multi_skill_parallel.cj` / `test_circular_dependency.cj`
+- `T038/T039/T040` perf 仅落 1/4（缺依赖闭包/互斥过滤/预算检查三项）
+- `T043` 配置示例未补入项目配置文档
+- `T044/T045/T046/T047` 审查/回顾/变更范围类报告任务，需人工确认（`review.md` 已存在但未确认归属）
+- `T111` MEMORY 跨端漫游研究（P3，文档明确不进 P0 主链路）
+
+> **状态更新**：用户已确认最新版 runtime 编译通过，TG25/TG27 及同期 DB 层改动（`AgentsPO`/`AgentsDAO`/`DataMapper`/`AgentsController`/`agent_loader`/web 四文件）均经编译验证，原前置阻塞已解除。personalization 的运行期注入效果（`skills/personalization/SKILL.md` → `<profile_context>`）待用户在 runtime 中实际观察评估。

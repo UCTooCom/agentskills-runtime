@@ -1,8 +1,10 @@
 # 技能并行机制技术设计文档
 
 > **工程目录**: `.codeartsdoer/specs/concurrent_skills/`
+> **版本**: v2（2026-10-13 修订；v1 为 2026-10-05）
 > **生成日期**: 2026-10-05
-> **更新日期**: 2026-10-05（纳入 spec.md 第 5.6 节"技能内容自动渐进式加载"补充需求）
+> **更新日期**: 2026-10-13（v2：纳入 profile 技能类型与分发语义；修正 TaskMatcher 中文分词与语义桩；标注集成缺口现状）
+> **旧更新日期**: 2026-10-05（纳入 spec.md 第 5.6 节"技能内容自动渐进式加载"补充需求）
 > **上游文档**: `research.md`（研究报告）、`spec.md`（需求规格，含 5.6 节补充需求）
 > **设计范围**: agentskills-runtime 上下文级技能并行机制 + 技能内容自动渐进式加载
 > **技术栈**: Cangjie（仓颉）+ cjpm + fountain 框架
@@ -1755,11 +1757,143 @@ BudgetManager --> BudgetAllocator : extends
 
 ---
 
-**文档状态**: design.md 已更新（纳入 spec.md 第 5.6 节"技能内容自动渐进式加载"补充需求），等待用户确认
+# 三、v2 补充设计（2026-10-13）
+
+> 本章为 v2 新增。依据：架构师第二轮澄清（跨节点分发为一阶驱动）+ 对 `src/skill/parallel/` 已实现代码的复核结果。对应需求见 `spec.md` §5.7–§5.11、§6.5。
+
+## 3.1 profile 模块设计（新增模块 M/N/O/P）
+
+### 模块 M：`SkillType`（技能类型判别式）
+
+**文件**：`src/skill/parallel/skill_type.cj`，包名 `magic.skill.parallel`
+
+```cangjie
+public enum SkillType {
+    | Profile
+    | Capability
+
+    public operator func ==(other: SkillType): Bool { ... }   // 沿用 LoadPolicy 的重载范式
+    public operator func !=(other: SkillType): Bool { ... }
+}
+```
+
+- 解析入口：`SkillParallelDeclarationParser.parseSkillType(skill.metadata)`，缺省/非法 → `Capability` + 告警
+- **运行时绑定差异**：
+  - `Profile` → 注入 `<profile_context>` 层、**不注册为工具**、层内独立预算
+  - `Capability` → 走 v1 既有路径（工具注册 + 常规预算）
+
+> **语言红线提醒**：仓颉 enum 不原生支持 `==`/`!=`，须如 `load_policy.cj:11-30` 那样以 `operator func` 重载实现（该写法已在存量代码中验证可行，可直接参照）。
+
+### 模块 N：`ProfileContextAssembler`（profile 聚合组装器）
+
+**文件**：`src/skill/parallel/profile_context_assembler.cj`
+
+职责：把多个 profile 技能（SOUL/IDENTITY/USER）组装为**单一** `<profile_context>` 块：
+
+```
+<profile_context>
+<profile_section source="SOUL.md">...</profile_section>
+<profile_section source="IDENTITY.md">...</profile_section>
+<profile_section source="USER.md">...</profile_section>
+</profile_context>
+```
+
+- 解决"4+ 常驻技能各自注入"导致的预算冲击（对应评审 A4.4）
+- 与 `SkillContentRenderer` 并列，由 `SkillContextInjector` 调用
+
+### 模块 O：`DistributionMetadata`（分发元数据）
+
+**文件**：`src/skill/parallel/distribution_metadata.cj`
+
+```cangjie
+public class DistributionMetadata {
+    public var syncScope: SyncScope          // AgentOwned | UserOwned | NodeLocal
+    public var authoritative: String
+    public var conflictPolicy: ConflictPolicy // LastWriteWins | Merge | Manual
+    public var version: String
+    public var etag: String
+}
+```
+
+- 解析入口：`SkillParallelDeclarationParser.parseDistributionMetadata(skill.metadata)`
+- 消费方：跨节点同步层（**不在本组件内实现传输**，本组件只负责解析与暴露）
+- **关键约束**：`NodeLocal` 技能不参与跨节点传输；MEMORY 类默认 `NodeLocal`
+
+### 模块 P：`ProfileMigration`（存量迁移 + 单一真源收敛）
+
+**文件**：`src/skill/parallel/profile_migration.cj`
+
+1. 一次性迁移：扫描 `AgentWorkspace` 的 SOUL/IDENTITY/USER/MEMORY，生成带 frontmatter 的 SKILL.md（`skill_type: profile` + 分发元数据）
+2. **真源收敛**：迁移后 `AgentWorkspace.getCombinedMemory()` 改为**从 profile 技能读取**；未迁移时回退旧文件读取
+3. **禁止双份注入**：启用 profile 技能后，旧路径必须关闭（对应评审 A4.5 / spec §5.10.1-2）
+
+## 3.2 `TaskMatcher` 缺陷修正（已实现代码暴露，P0）
+
+> 复核发现两个**阻断级**缺陷，详见 `review.md` 附录 B。
+
+| # | 缺陷 | 现状（`task_matcher.cj`） | 修正设计 |
+|---|---|---|---|
+| D1 | **中文分词失效** | `tokenize()` L89-99 仅 `text.split(" ")`；中文无空格 → 整句成为 1 个 token → Jaccard 恒为 0 → **自动注入对中文永不触发** | 引入中文分词：按 `toRuneArray()` 做 N-gram（建议 bigram）或接入分词器；并保留空格切分用于英文/代码标识符 |
+| D2 | **`semantic` 是桩** | `matchBySemantic()` L85-87 `return 0.0` | 改为真实语义匹配（embedding 余弦相似度）；未接模型时**降级为 D1 修正后的关键词匹配**并记告警，**不得返回常量 0** |
+
+**配置默认值同步调整**（`auto_inject_config.cj`）：`taskMatchStrategy` 默认仍为 `Keyword`（因 D2 需模型依赖），但**必须**先完成 D1；`taskMatchThreshold=0.6` 需用中文标注评测集重新标定（原设计自带示例在 D1 下得分 0.3，低于阈值，属系统性欠注入）。
+
+## 3.3 预算上限修正
+
+`SkillParallelConfig.totalBudgetTokens` 现状固定 `8192`（`skill_parallel_config.cj:16`）。改为**按模型上下文窗口派生**：
+
+```cangjie
+public static func deriveFromModelWindow(windowTokens: Int64, ratio!: Float64 = 0.15): Int64
+```
+
+保留显式配置优先；未配置时按窗口 15% 计算。
+
+## 3.4 注入所有权（消除双重注入歧义）
+
+| 注入点 | 承载内容 | 频次 |
+|---|---|---|
+| 系统提示（`WebMCPProtocol.buildAgentSystemPrompt()`） | **仅常驻层**（profile + `always_on`） | 会话构建一次 |
+| 每轮用户消息（`WsChatController`） | **仅任务匹配层** | 每轮 |
+
+- 每轮注入前对常驻层去重，**不重复注入**
+- 任务匹配结果**不写入系统提示**
+
+## 3.5 集成缺口现状（代码复核结论，重要）
+
+对 `src/skill/parallel/` 的复核表明：**阶段 1/2/3/9/10/11/12 的组件已实现（20 个 `.cj` 文件 + 测试用例），但阶段 13–17 的集成尚未落地**：
+
+- `protocol/`、`controller/`、`runtime/` 三个目录对 `SkillAutoInjector` / `SkillContextInjector` / `skill_parallel` **零引用**
+- 即：**用户实际观察到的"渐进式加载漂移"现象尚未被修复**——组件就绪但未接线
+- 本设计 §2.4.2 的"漂移修复最小路径（阶段 1→2→3→9→12→13→14）"中，**阶段 13/14 正是接线步骤，当前为最大缺口**
+- `personalization` 技能插件（阶段 6 / TG06）：代码中**无任何引用**，未实现
+
+> 因此后续编码优先级应调整为：**先完成阶段 13–17 接线，再推进 profile（模块 M/N/O/P）**。详见 `tasks.md` v2。
+
+## 3.6 v2 修订汇总
+
+| v1 设计 | v2 修订 |
+|---|---|
+| personalization 作为普通 `always_on` 技能 | 改为 `skill_type: profile` + 专属 profile 层 + 聚合注入 |
+| 无分发语义 | 新增模块 O（`sync_scope`/`authoritative`/`conflict_policy`/`version`/`etag`）；MEMORY 默认 `node_local` |
+| 真源未收敛 | 新增模块 P（迁移 + `getCombinedMemory()` 收敛，禁双份注入） |
+| `tokenize` 按空格切分 | 修正为中文 N-gram/分词（D1） |
+| `matchBySemantic` 允许返回 0.0 | 修正为真实实现或降级告警（D2） |
+| `totalBudgetTokens=8192` 固定 | 改为按模型窗口派生 |
+| 未说明注入所有权 | 明确"系统提示=常驻层 / 每轮=任务层" |
+| `BudgetManager` 标 P2 | **已实现**，上移为 P0/已完成（见 `tasks.md` v2） |
+
+---
+
+**文档状态**: design.md **v2**（2026-10-13 修订，新增第三章 profile 设计与缺陷修正；已与 research.md/spec.md/tasks.md v2 同步）
 **本次更新摘要**: 
 - 修复"渐进式加载设计漂移"——将技能完整内容加载从"agent 主动调用 `get_skill_content` 工具"恢复为"框架自动注入到上下文"
 - 新增 4 个组件：`SkillAutoInjector`（自动注入器）、`TaskMatcher`（任务匹配器）、`BudgetManager`（预算管理带降级）、`InjectDecisionRecorder`（注入决策记录）
 - 补充 3 个存量组件扩展：`WebMCPProtocol`/`WsChatController`（接入自动注入替换第3段漂移）、`AgentRuntimeBridge`（修复 buildAgentFromDefinition 空技能管理器）、`GetSkillContentTool`（去重机制向后兼容）
 - 新增 8 个实施阶段（阶段 9-16），漂移修复最小路径：阶段 1 → 2 → 3 → 9 → 12 → 13 → 14
 - 保留 `get_skill_content` 工具作为后备机制（`fallbackToolRetained=true` 默认），`auto_inject_enabled=false` 可回退为纯工具模式
-**下一步**: 用户确认后，可进入 SDD task 步生成任务分解 tasks.md（需同步更新 tasks.md 纳入补充需求的任务分解）
+**v2 更新摘要**:
+- 新增第三章：profile 技能类型（`skill_type` 判别式）、`ProfileContextAssembler`（聚合注入）、`DistributionMetadata`（分发元数据）、`ProfileMigration`（迁移 + 真源收敛）四个模块
+- 修正 `TaskMatcher` 两个阻断级缺陷：中文分词失效（D1）、`semantic` 桩实现（D2）
+- 修正 `totalBudgetTokens` 为按模型窗口派生；明确注入所有权（系统提示=常驻层 / 每轮=任务层）
+- 标注集成缺口：阶段 13–17 接线未完成，漂移现象尚未修复
+**下一步**: tasks.md v2 已同步（新增 TG21–TG26，修正 `BudgetManager` 优先级）；建议**优先完成阶段 13–17 接线**，再推进 profile 模块

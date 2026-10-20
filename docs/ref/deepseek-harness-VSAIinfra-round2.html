@@ -355,7 +355,7 @@ strong { color: var(--fg); font-weight: 700; }
 <p>DSH选择TypeScript+Cordis，能实现运行时动态加载/卸载插件。agentskills-runtime选择仓颉静态语言，插件机制必然更偏向"编译时确定+运行时配置"的模式。两种路径各有优劣，不存在唯一正确答案。</p>
 
 <h3>4.5 WebMCP实证：插件与Skills融合的可实现性验证（架构师补充）</h3>
-<p>架构师补充了一个重要实证：2026年3月W3C发布了<strong>WebMCP协议体验版</strong>。agentskills-runtime配套的web项目（<code>apps/web-admin/web</code>）中已实现<strong>WebMCP + WebAgent + WebSkills</strong>机制，将Web应用声明成技能（Skill），使Agent可以直接操作Web应用。</p>
+<p>架构师补充了一个重要实证：2026年3月W3C发布了<strong>WebMCP协议体验版</strong>。agentskills-runtime配套的web项目（<code>apps/web-admin</code>）中已实现<strong>WebMCP + WebAgent + WebSkills</strong>机制，将Web应用声明成技能（Skill），使Agent可以直接操作Web应用。</p>
 <p>这个实证具有双重印证意义：</p>
 <ol>
 <li><strong>印证插件与Skills融合机制的可行性</strong>：Web应用被声明为技能后，Agent即可操作它——这正是"智能插件连接神经系统"理念的已落地形态。后续实现agentskills-runtime正式插件机制时，可吸纳DSH插件机制中已验证的成果（如可逆副作用、显式依赖管理）。</li>

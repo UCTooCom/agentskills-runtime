@@ -10,6 +10,121 @@ import std.collection.ArrayList
 import std.env.getVariable
 import std.time.DateTime
 import std.unicode.*
+// InputStream 必须显式导入：File 的 read()/close() 来自 InputStream 接口扩展，
+// 只 import std.fs 会导致 read/close 不可见（同款坑见
+// src/app/services/bridge/sdd_orchestration_service.cj:19-22 的说明）。
+import std.io.InputStream
+// SHA256 标准实现位于扩展标准库 stdx（官方文档："SHA-256 的实现来自扩展标准库"）。
+import stdx.crypto.digest.*
+import stdx.encoding.hex.*
+
+// ===== OQ-D3: 生成 SHA256SUMS 包完整性清单 =====
+// 遍历 target/release 下所有常规文件，计算 SHA256，写出 Debian 风格清单
+// target/release/SHA256SUMS（相对路径 + 正斜杠）。安装器解压后逐条复核，
+// 任一不匹配即判定介质被篡改或不完整，拒绝安装。
+//
+// 内存安全改造（2026-10-12）：
+// 旧实现用 File.readFrom() 把每个文件整个读进堆，再交给一次性的 pgsql.sha256。
+// target/release 下存在数百 MB 级文件（如 libcangjie-lsp.dll 约 200MB，且它在
+// release 根目录与 release/bin 各存一份），逐个整读会直接 Out of memory —— 打包
+// 恰恰卡死在最后一步 SHA256SUMS。前置拷贝步骤之所以安然无恙，是因为 safeCopy()
+// 走的是 std copy()，内部本身是流式的。
+//
+// 新实现两点改动：
+//   ① 改用 stdx.crypto.digest.SHA256 的增量接口（write() 可分次喂数据、finish()
+//      取摘要），按固定 1MiB 分块读取文件 —— 堆占用恒定约 1MiB，与文件大小无关；
+//   ② 清单行用 StringBuilder 拼接，取代旧版 `content = content + line` 的 O(N²)
+//      重复拷贝（1400+ 个文件时会制造大量垃圾数据）。
+// 注：SHA256 是标准化算法，更换实现不改变摘要值，安装器侧校验结果保持一致。
+let SHA256SUMS_CHUNK_BYTES = 1024 * 1024
+
+/// 以恒定内存占用流式计算文件 SHA256，返回小写十六进制串。
+/// 出错返回 None（由调用方打 WARN，不中断整体打包流程）。
+///
+/// 分块读法参照 src/app/services/tool/CrudGenService.cj:191 readStreamToEnd()
+/// 的同款写法（read() 返回读取字节数，<=0 即 EOF，切片用 buffer[0..bytesRead]）。
+func hashFileSha256Hex(filePath: Path, chunkSize: Int64): Option<String> {
+    try {
+        // 用 File(String, OpenMode) 这个已在项目中验证过的重载
+        let file = File(filePath.toString(), OpenMode.Read)
+        let sha = SHA256()
+        let buffer = Array<Byte>(chunkSize, { _ => 0 })
+        while (true) {
+            let bytesRead = file.read(buffer)
+            if (bytesRead <= 0) {
+                break
+            }
+            sha.write(buffer[0..bytesRead])
+        }
+        file.close()
+        return Some(toHexString(sha.finish()))
+    } catch (e: Exception) {
+        return None
+    }
+}
+
+/// 递归收集目录下全部常规文件（深度优先）。
+///
+/// 关键：std.fs.Directory.walk 的官方契约就是**非递归**的——「遍历 path 对应的
+/// 目录下的子项目（非递归，即不包含子目录的子项目）」（见 CangjieSkills 官方文档
+/// references/api/std/fs/classes/directory/walk.md）。旧实现直接拿它遍历
+/// target/release，结果 SHA256SUMS 只覆盖了根目录十几个顶层文件，bin/ 下的全部 exe
+/// （含 ucInstaller.exe）与数百个 DLL 一条都没进清单，安装器解压后的 OQ-D3 校验
+/// 形同空跑。故这里改用 Directory.readFrom 自行递归。
+func collectReleaseFiles(dirPath: String, out: ArrayList<FileInfo>): Unit {
+    try {
+        for (info in Directory.readFrom(dirPath)) {
+            if (info.isDirectory()) {
+                collectReleaseFiles(info.path.toString(), out)
+            } else {
+                out.add(info)
+            }
+        }
+    } catch (_: Exception) {
+        // 单个子目录不可读时不中断整体清单生成
+    }
+}
+
+func generateSha256Sums(releaseRoot: Path): Int64 {
+    let lines = ArrayList<String>()  // 每行形如 "<hex>  <relpath>"
+    let rootStr = releaseRoot.toString()
+    let files = ArrayList<FileInfo>()
+    collectReleaseFiles(rootStr, files)
+    for (fileInfo in files) {
+        let name = fileInfo.path.fileName
+        if (name == "SHA256SUMS") {
+            continue
+        }
+        let full = fileInfo.path.toString()
+        var relp = full
+        if (full.startsWith(rootStr)) {
+            relp = full.replace(rootStr, "")
+        }
+        if (relp.startsWith("\\") || relp.startsWith("/")) {
+            relp = relp[1..]
+        }
+        relp = relp.replace("\\", "/")
+        if (let Some(hex) <- hashFileSha256Hex(fileInfo.path, SHA256SUMS_CHUNK_BYTES)) {
+            lines.add("${hex}  ${relp}")
+        } else {
+            println("  [WARN] Failed to hash ${full}")
+        }
+    }
+    // StringBuilder 替代旧版字符串反复 + 拼接，避免 O(N²) 拷贝
+    let sb = StringBuilder()
+    for (l in lines) {
+        sb.append(l)
+        sb.append("\n")
+    }
+    let sumPath = Path("${releaseRoot}/SHA256SUMS")
+    try {
+        File.writeTo(sumPath, sb.toString().toArray())
+        println("  [OK] Wrote SHA256SUMS with ${lines.size.toString()} entries -> ${sumPath.toString()}")
+    } catch (e: Exception) {
+        println("  [ERROR] Failed to write SHA256SUMS: ${e.message}")
+    }
+    return lines.size
+}
 
 func getVersionFromCjpm(): String {
     let cjpmPath = Path("./cjpm.toml")
@@ -1248,7 +1363,26 @@ Then copy the certificates to this directory:
     } else {
         println("  [WARN] magic.app.exe not found, entry point may be missing")
     }
-    
+
+    println("")
+    println("[STEP] Packaging installer (ucInstaller.exe) into release/bin/ (T013 / REQ-PCI-005)...")
+    // D1 轨道：installer 作为构件随 runtime 发行包分发，与 runtime 共用 DLL、零额外分发成本。
+    // installer 是独立 cjpm 子工程，须先 `cd installer && cjpm build` 产出 main.exe，
+    // 本步骤将其重命名为 ucInstaller.exe 一并打进 release/bin/（PC 解压后从同目录取用，OQ-D2）。
+    let installerExe = Path("${rootPath}/installer/target/release/bin/main.exe")
+    let installerDst = Path("${binDir}/ucInstaller.exe")
+    if (exists(installerExe)) {
+        if (safeCopy(installerExe.toString(), installerDst.toString(), true)) {
+            println("  [OK] Packaged ucInstaller.exe -> release/bin/ucInstaller.exe")
+        } else {
+            println("  [WARN] Failed to copy ucInstaller.exe into release/bin/")
+        }
+    } else {
+        println("  [WARN] installer not built: ${installerExe}")
+        println("         run `cd installer && cjpm build` first, then re-run package_release.")
+        println("         release/bin/ucInstaller.exe will be absent (REQ-PCI-005 unmet).")
+    }
+
     println("")
     println("[STEP] Copying .env.example...")
     
@@ -1341,6 +1475,11 @@ Then copy the certificates to this directory:
         }
     }
     
+    println("")
+    println("[STEP] Generating SHA256SUMS (OQ-D3)...")
+    let sumCount = generateSha256Sums(targetDir)
+    println("  [INFO] ${sumCount.toString()} files hashed into release/SHA256SUMS")
+
     println("")
     println("[STEP] Creating archive...")
     

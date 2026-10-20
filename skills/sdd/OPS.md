@@ -172,5 +172,5 @@ FROM public.sub_agent_invocations ORDER BY created_at DESC LIMIT 20;
 | 改动阶段集合 | `SddOrchestrationService.STAGES` 唯一定义，别在控制器复制一份 |
 | 新增产物类型 | `artifactFileForStage` / `artifactTypeForStage`；`artifact_type` 只能取既有枚举 |
 | 删子 agent 声明文件 | 重启或触发同步即下线（软删）；确认 `SELECT ... FROM agents WHERE source_path LIKE ...` |
-| 新增模块 / 表 CRUD / 管理界面 / 插件 | 先跑 `loaddbinfo` + `plugingen`/`crudgen`/`crudweb` 出骨架再改，**禁止手撸五层**；`plugingen --mode process` 出的是独立 cjpm 工程，要单独 `cd skills/<name> && cjpm build` |
+| 新增模块 / 表 CRUD / 管理界面 / 插件 | 先跑 `loaddbinfo` + `plugingen`/`crudgen`/`crudweb` 出骨架再改（手动补亦可，但须严格参照生成逻辑补全五层所有位置，禁止只改一半）；`plugingen --mode process` 出的是独立 cjpm 工程，要单独 `cd skills/<name> && cjpm build` |
 | 删除插件 | 走 `pluginuninstall`（运行时/静态资产/DB 痕迹三层）；手删 `skills/{name}/` 会留下 `agent_skills` / `permissions` / `i18` 残留 |

@@ -553,6 +553,12 @@ public class AgentMessagesController {
         if (let Some(deletedAt) <- map.get("deleted_at")) {
             // DateTime类型, 由数据库处理
         }
+        if (let Some(attachments) <- map.get("attachments")) {
+            let attachmentsStr = attachments as String
+            if (let Some(s) <- attachmentsStr) {
+                entity.attachments = Some<String>(s)
+            }
+        }
         return entity
     }
 
@@ -673,7 +679,7 @@ public class AgentMessagesController {
             // 构建CSV内容
             let sb = StringBuilder()
             // 写入CSV头部
-            sb.append("id,from_agent_id,to_agent_id,task_id,message_type,content,status,creator,created_at,updated_at,deleted_at\n")
+            sb.append("id,from_agent_id,to_agent_id,task_id,message_type,content,status,creator,created_at,updated_at,deleted_at,attachments\n")
 
             // 写入数据行
             for (entity in entities) {
@@ -688,6 +694,7 @@ public class AgentMessagesController {
                 sb.append("\"" + "${entity.createdAt.toString()}" + ",")
                 sb.append("\"" + "${entity.updatedAt.toString()}" + ",")
                 sb.append(if (let Some(v) <- entity.deletedAt) { "\"" + v.toString() + "\"," } else { "" })
+                sb.append(if (let Some(v) <- entity.attachments) { "\"" + v + "\"," } else { "" })
                 sb.append("\n")
             }
 
@@ -702,4 +709,42 @@ public class AgentMessagesController {
 
 
 //#endregion AutoCreateCode
+
+    // ========== 定制开发方法（在此区域添加自定义方法）==========
+
+    /**
+     * 获取某条消息的附件解析元数据（T-AP 查询接口）。
+     *
+     * GET /api/v1/uctoo/agent_messages/attachments/:messageId
+     * 返回：{ "messageId": "...", "attachments": [ ... ] }
+     * 消息不存在 → 404；无附件 → attachments 为 []。
+     */
+    public func getAttachments(req: HttpRequest, res: HttpResponse): Unit {
+        try {
+            let userId = req.getLocals("userId")
+            if (userId.isNone()) {
+                res.status(401).json("{\"errno\":\"40100\",\"errmsg\":\"未登录或登录已过期\"}")
+                return
+            }
+            let messageIdOpt = req.pathParam("messageId")
+            if (messageIdOpt.isNone()) {
+                res.status(400).json("{\"errno\":\"40001\",\"errmsg\":\"缺少 messageId\"}")
+                return
+            }
+            let messageId = messageIdOpt.getOrThrow()
+            let result = service.getById(messageId)
+            if (!result.success || result.data.isNone()) {
+                res.status(404).json("{\"errno\":\"40400\",\"errmsg\":\"消息不存在\"}")
+                return
+            }
+            let data = result.data.getOrThrow()
+            let attachmentsJson = match (data.attachments) {
+                case Some(a) => a
+                case None => "[]"
+            }
+            res.status(200).json("{\"messageId\":\"" + messageId + "\",\"attachments\":" + attachmentsJson + "}")
+        } catch (e: Exception) {
+            res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"" + e.message + "\"}")
+        }
+    }
 }

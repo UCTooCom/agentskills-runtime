@@ -87,7 +87,7 @@ cjpm run --skip-build --name magic.plugin.tools.pluginuninstall --run-args "--na
 ### 生成之后必须补的两件事（漏了就是半成品）
 
 - **新表/新列走增量 SQL**：放 `sql/incremental/`，单行 `SELECT ... WHERE NOT EXISTS` 写法；
-  既有表加列受 SDD 铁律 9 白名单额度约束，用完即升级人工闸口，不许绕过。
+  既有表加列/新表须先论证复用可行性（铁律 9 复用优先），复用不成立才允许；DB 结构变更后两种方式二选一：走 `loaddbinfo` → `crudgen`/`plugingen` → `crudweb` 确定性生成，或手动补（须参照生成逻辑补全 PO/DAO/Service/Controller/前端所有位置）。
 - **新增宿主路由必挂 RBAC**：`permissions` 登记 + `role_has_permission` 授权，
   否则 `RequirePermissionMiddleware` 全局中间件一律 403（不是代码 bug，是权限没登记）。
 

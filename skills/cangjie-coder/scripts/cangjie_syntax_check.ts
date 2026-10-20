@@ -103,7 +103,16 @@ function checkImportStatements(lines: string[], result: CheckResult): void {
       if (codeStarted) {
         result.issues.push({ line: i + 1, column: 1, message: "import语句应在文件顶部，package声明之后", severity: "warning", category: "import" });
       }
-    } else if (stripped && !stripped.startsWith("//") && !stripped.startsWith("/*")) {
+    } else if (stripped.startsWith("package ")) {
+      // package 声明本身属于文件头，不算「代码开始」。
+      // 漏掉这一条会让 package 后的第一行 import 全被误报（仓颉规范就是
+      // package 之后紧跟 import，中间允许空行）——已验证 codelabs/effects.cj
+      // 这类生成器原样产物也会被误报。
+      continue;
+    } else if (stripped.startsWith("@")) {
+      // 编译属性宏（@When / @Derive 等）出现在 import 之前是合法的
+      continue;
+    } else if (stripped && !stripped.startsWith("//") && !stripped.startsWith("/*") && !stripped.startsWith("*")) {
       codeStarted = true;
     }
   }

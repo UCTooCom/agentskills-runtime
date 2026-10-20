@@ -312,7 +312,7 @@ resolve(requestCtx) :
 
 ### 9.2 Web 聊天入口文件地图与二次开发注意事项
 
-> 落地复盘（2026-10-06）：T037 的通道选择器在 `/chat` 路由页（`views/chat/index.vue` 的 `ChatRemoter` 已接 `channel-catalog`）可见，但用户实际最常用的**全局浮动抽屉**（`App.vue` 的 `TinyRemoter`）看不到——因为只给全局抽屉传了 `:llm-config`（单数），没传 `:llm-configs`（复数）。`TinyRobotChat.vue:68` 的 `v-if="llmConfigsRef && llmConfigsRef.length > 0"` 因此恒假，选择器静默不渲染。dist 里其实已含选择器代码，是**接线漏了不是没构建**。下文是改聊天代码前的定位地图，避免再改错入口。
+> 落地复盘（2026-10-06）：T037 的通道选择器在 `/chat` 路由页（`views/chat/index.vue` 的 `ChatRemoter` 已接 `channel-catalog`）可见，但用户实际最常用的**全局浮动抽屉**（`App.vue` 的 `TinyRemoter`）看不到——因为只给全局抽屉传了 `:llm-config`（单数），没传 `:llm-configs`（复数）。`TinyRobotChat.vue:68` 的 `v-if="llmConfigsRef && llmConfigsRef.length > 0"` 因此恒假，选择器静默不渲染。dist 里其实已含选择器代码，是**接线漏了不是没构建**。**V8（2026-10-06 同日）进一步改为**：切换器恒显（去掉 `length>0` 门控，目录为空显示「暂无可用通道」），且 `catalog` 不再过滤 `status`——返回全部用户可见通道并带 `status`，前端用绿点（enabled）/红点（degraded·disabled）标识可用性。下文是改聊天代码前的定位地图，避免再改错入口。
 
 #### 9.2.1 文件地图（改之前先认准文件）
 
@@ -321,7 +321,7 @@ resolve(requestCtx) :
 | **入口 A（最常用）** | `src/App.vue` | 全局浮动 `TinyRemoter`（抽屉，`title="UCTOO 智能助手"`），挂在根组件，任何页面可唤起 | 用 `TinyRemoter`（`@opentiny/next-remoter`）。**必须同时传 `:llm-config` 和 `:llm-configs` + `v-model:selected-model-id`**，通道按钮才出现 |
 | **入口 B** | `src/views/chat/index.vue` | `/chat` 路由页（「AI 助手」整页） | 用 `ChatRemoter` 组件，传 `:channel-catalog="channelCatalog"`；同样调 `getChannelCatalog()` |
 | 共享 SDK 层 | `src/lib/webmcp-sdk/packages/next-remoter/src/components/ChatRemoter.vue` | 封装 `TinyRemoter`，把 `channel-catalog` 透传 | 一般**不要改**，只改调用方（App.vue / views/chat） |
-| 共享 SDK 层 | `src/lib/webmcp-sdk/packages/next-remoter/src/components/TinyRobotChat.vue` | 真正渲染输入框 + `ModelSwitch` | **第 68 行**：`<ModelSwitch v-if="llmConfigsRef && llmConfigsRef.length > 0">` —— 选择器仅在 `llmConfigs` 非空时渲染。SDK 内部，非必要不碰 |
+| 共享 SDK 层 | `src/lib/webmcp-sdk/packages/next-remoter/src/components/TinyRobotChat.vue` | 真正渲染输入框 + `ModelSwitch` | **第 68 行**：`<ModelSwitch v-if="llmConfigsRef">` —— 选择器只要有 `llmConfigs` prop 就恒显（V8 起不再用 `length>0` 门控，空列表显示「暂无可用通道」）。SDK 内部，非必要不碰 |
 | 数据层（store） | `src/store/models/uctoo/llm_channel.ts` | Pinia ORM store，封装所有通道 API | `getChannelCatalog()` → `GET /api/v1/uctoo/llm_channel/catalog`（用户面只读目录）；其余是管理 API |
 
 两个入口共用**同一只读目录 API**（`/llm_channel/catalog`）和**同一 localStorage 记忆键**（`uctoo_llm_channel_last`），所以用户在一个入口选的通道，在另一个入口也生效。
@@ -329,10 +329,10 @@ resolve(requestCtx) :
 #### 9.2.2 二次开发七条铁律
 
 1. **双入口必须同步改**：涉及「通道选择器显示/行为/记忆」的改动要同时落在 `App.vue` 与 `views/chat/index.vue`，只改一个两入口表现会分裂（T037 教训）。
-2. **通道选择器靠 `llm-configs`（复数）驱动，不是 `llm-config`（单数）**：`TinyRobotChat.vue:68` 的 `v-if` 只看 `llmConfigsRef`；只传单数 prop 时按钮**静默消失、无报错**（最隐蔽的坑）。`App.vue` 需 `:llm-config` 且 `:llm-configs`；`views/chat` 需 `:channel-catalog`。
+2. **通道选择器靠 `llm-configs`（复数）驱动，不是 `llm-config`（单数）**：`TinyRobotChat.vue:68` 的 `v-if` 只要有 `llmConfigsRef`（prop 已传入）就渲染，**不再要求数组非空**（V8 起恒显）；只传单数 prop 时按钮**静默消失、无报错**（最隐蔽的坑）。`App.vue` 需 `:llm-config` 且 `:llm-configs`；`views/chat` 需 `:channel-catalog`。
 3. **model id 严格用 `"<code>:<modelId>"`**：`llmConfigs` 的 `id`/`model` 必须拼 `${c.code}:${c.default_model}`，与 T036 严格语义一致（不补前缀、不猜通道）。拼错 → 后端 `parseModel` 直接拒。
 4. **前端只消费只读 `catalog` 目录 API，绝不用 `llm_channel` 管理 API 喂选择器**：管理 API 含 `base_url`/`secret_ref`/`health` 且普通用户无权限；目录已裁剪，直接 `getChannelCatalog()`。
-5. **用户可见通道由后端决定**：选择器只渲染 `catalog` 返回项（`status=enabled` 且 `scopes` 含 `"user"`），前端不要自己再过滤或硬编码；想加用户可选通道 → 改后端 `scopes`/`status`。
+5. **用户可见通道由后端决定**：选择器渲染 `catalog` 返回的全部用户可见项（`scopes` 含 `"global"`/`"user"`，V8 起**含所有 `status`**），每条带 `status` 用绿点（enabled）/红点（degraded·disabled）标识可用性；前端不要自己再过滤或硬编码；想调可见性 → 改后端 `scopes`，想调红绿 → 改后端 `status`（或修探针）。
 6. **别动 `TinyRobotChat.vue` / `TinyRemoter` 内部**（在 `lib/webmcp-sdk`，属 vendored SDK）。接线逻辑写在 `App.vue` 与 `views/chat/index.vue`；只有确需改 SDK 交互才碰，且改动影响全工程所有 `TinyRemoter` 用法。
 7. **改完必须 `npm run build` + 跑 `scripts/check-vue-refs.cjs`**：仅凭「dist 里有相关字符串」不能证明接线正确（T037 的 dist 已含选择器代码却不渲染）。
 

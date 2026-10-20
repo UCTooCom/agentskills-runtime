@@ -22,11 +22,23 @@ cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db <数据库
 | `--output <输出目录>` | 指定输出目录（默认 `web/src/views/database/uctoo/`） |
 | `--help, -h` | 显示帮助信息 |
 
+> ⚠️ **默认输出目录实际由环境变量决定，不是 `--output`**。crudweb 启动会打印一行
+> `=== Using output directory from environment: <dir> ===`（该环境变量配在 runtime 的 `.env`）。
+> 实测本机解析为 `D:\...\uctoo-admin\apps\web-admin`，Vue 产物落
+> `apps/web-admin/web/src/views/database/uctoo/{table}/`，store model 落
+> `apps/web-admin/web/src/store/models/uctoo/{table}.ts`。
+> **别按本表「默认 `web/src/views/database/uctoo/`」去仓库根找** —— 这是 monorepo，
+> 根层没有 `views/database`，容易岔到 `apps/miniapp*`、`apps/backend/prisma/uctoo` 等无关目录。
+> 找不到时先跑一次单表看那行 `Using output directory` 打印。
+
 ## 示例
 
 ```bash
-# 生成指定表的 Web CRUD 代码cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table entity"
-# 生成数据库中所有表的 Web CRUD 代码cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --all"```
+# 生成指定表的 Web CRUD 代码
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --table entity"
+# 生成数据库中所有表的 Web CRUD 代码
+cjpm run --skip-build --name magic.app.tools.crudweb --run-args "--db uctoo --all"
+```
 
 ## 生成产物
 
@@ -38,6 +50,33 @@ crudweb 为每张表生成 Vue 管理界面组件：
 | `components/{name}-table.vue` | 数据表格组件（含列表/回收站/分页/筛选） |
 | `components/add-{name}.vue` | 新增表单组件 |
 | `components/edit-form.vue` | 编辑表单组件 |
+
+另外每表生成一个 pinia-orm store model `web/src/store/models/uctoo/{table}.ts`，
+并**自动向同目录 `index.ts` 追加** `export * from './{table}';`（已存在则跳过，可重复执行）。
+
+### 命名规则（按原表名拼文件名会以为产物缺失）
+
+组件文件里的 `{name}` 是**下划线转连字符**后的表名，目录名与 store model 仍保留下划线：
+
+| 表名 | 组件文件 |
+|---|---|
+| `repository` | `add-repository.vue` / `repository-table.vue` |
+| `pivot_table` | `add-pivot-table.vue` / `pivot-table-table.vue` |
+
+### ⚠️ Vue 产物没有保护区（2026-10-14 说明：web 侧难以界定保护区）
+
+与 crudgen / plugingen 的 `AutoCreateCode` 口径**不同**：只有 store model 带
+`//#region Human-Code Preservation` 保护区，**四个 Vue 文件全都不带**，
+对同一张表重复执行 `crudweb --table <t>` 会把前端二开改动整文件冲掉。
+
+**为什么 web 侧不定保护区**：web 组件由模板 + 数据绑定 + 事件拼装，人工二开往往散落在 `<template>` / `<script setup>` / 样式多处，难以像后端那样用一行边界框定"机器区 / 人类区"，强行加保护区反而割裂生成逻辑、得不偿失。
+
+**推荐的 web 二次开发方式（而非在标准 crudweb 生成页上二开）**：
+1. 把 `crudweb` 生成的**标准数据表格页**（如 `src/views/database/uctoo/<表>/`）当作基线，**整份复制**成一份新的二次开发页面（新路由 / 新目录，例如 `src/views/<业务>/<表>-ext/`）；
+2. 在新的二开页上做定制修改（增删字段、改交互、接业务），标准页保持"随时可被 `crudweb` 重生成"的干净状态；
+3. 给新二开页在 **`permissions` 表登记权限节点**（并在 `role_has_permission` 授权，否则 403），菜单入口走 `getUserMenuTree` 暴露。
+
+> 注：若仅是**给既有表加字段**（如 `agents.profile_skills` 这类 schema 扩展），属于基线 CRUD 范畴，直接补在标准生成页上即可，不必另起二开页。
 
 ## 前置条件
 

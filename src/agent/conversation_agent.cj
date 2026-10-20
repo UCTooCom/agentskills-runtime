@@ -79,7 +79,11 @@ private class IteratorWrapper <: Iterator<String> {
             case Some(v) => buffer.append(v)
             case None =>
                 this.agent.conversation.addChatRound(
-                    Message.user(this.request.question, image: this.request.image),
+                    // 多模态（SDD R3 / T-MC-006）：由单图改读多图。
+                    // `allImages()` 合并旧的 image 字段与新的 images 列表，老调用方无需改动。
+                    // 文档附件不在这里二次 ingestion —— 已在入口（WebMCPProtocol）抽取并入问题文本，
+                    // 避免同一份内容被注入两次。
+                    Message.user(this.request.question, images: this.request.allImages()),
                     Message.assistant(this.buffer.toString())
                 )
         }

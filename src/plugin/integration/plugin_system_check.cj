@@ -6,7 +6,7 @@ package magic.plugin.integration
 import std.collection.ArrayList
 import std.fs.{File, Path, Directory, OpenMode, removeIfExists}
 import stdx.encoding.json.{JsonValue, JsonString, JsonObject}
-import magic.utils.readFile
+import magic.utils.{readFile, resolveRuntimeRoot}
 import magic.plugin.{
     Plugin, PluginContext, PluginAnnotation, PluginState, PluginHostManager,
     PluginRegistry, PluginEventBus, PluginLoader, PluginConfigParser,
@@ -33,7 +33,9 @@ import magic.plugins.doc_helper.{DocHelperPlugin, DocHelperRoute}
  * 编译后运行 target/release/bin/magic.plugin.integration.exe 执行全部验证
  */
 main(): Unit {
-    let projectRoot = "D:/UCT/projects/miniapp/qintong/Delivery/uctoo-admin/apps/agentskills-runtime"
+    // 项目根目录动态解析（AGENTSKILLS_RUNTIME_HOME 优先，其次进程工作目录），
+    // 不再写死开发机绝对路径。见 magic.utils.resolveRuntimeRoot。
+    let projectRoot = resolveRuntimeRoot()
     let ctx = TestContext()
 
     // 反射锚点：确保测试插件类被静态链接（防 LTO 裁剪导致 ClassTypeInfo.get 失败）

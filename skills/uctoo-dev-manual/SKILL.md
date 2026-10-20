@@ -28,6 +28,7 @@ description: UCToo 开发手册技能。需要了解 agentskills-runtime 内置�
 | V4 API 规范 | RESTful API 设计规范、列表键名约定、分页/筛选/排序 | [V4 API 规范](./specs/uctoo-v4-api-specification.md) |
 | 数据库设计规范 | 表结构设计、UUID 主键、timestamptz 时间戳、creator 字段行级权限 | [数据库设计规范](../../docs/uctoo-v4/uctoo-database-design-specification.md) |
 | **增量 SQL 规范** | **新增/变更表结构必读**：先按 `sql/uctooDB.sql` 基线抄同族表类型，再写 `sql/incremental/` 幂等脚本；含字段类型速查、标准四列、索引命名、上线五步、交付检查清单 | [增量 SQL 规范](./specs/uctoo-database-sql-convention.md) |
+| **基线库与种子管理（installer）** | **改库后刷新 `sql/uctooDB.sql` 基线必读**：用 installer 的 `db export` 重新导出整库结构与种子（E0~E7 门禁），用 `seed apply`/`seed verify` 落库与校验；含占位符语义、机密门禁、并发编译注意 | [基线库与种子管理（installer）](#基线库与种子管理installer) ｜ [installer 使用文档](../../installer/README.md) |
 | **构建环境 OpenSSL DLL 规范** | **在新机器上搭开发环境后登录 401 必读**：stdx 加载器硬编码 `libcrypto-3-x64.dll`，而 runtime bin 里只有 `libcrypto-3.dll`（少 `-x64`）→ 系统装 4.x 即失败 → `JWTUtil` 吞异常返回空 token → 401。含根因链、三档修复、排查顺序 | [构建环境 OpenSSL DLL 规范](./specs/runtime-openssl-dll-guide.md) |
 | 模块开发规范 | 五层 CRUD 架构（PO/DAO/Service/Controller/Route）、@ModuleRoute 注解 | [模块开发规范](../../docs/uctoo-v4/uctoo-v4-module-development.md) |
 | 权限体系规范 | 用户/角色/权限三层体系、行级权限（creator 字段）、RBAC 中间件 | [权限体系规范](../../docs/uctoo-v4/user-permission-system.md) |
@@ -37,6 +38,7 @@ description: UCToo 开发手册技能。需要了解 agentskills-runtime 内置�
 | V4 中间件指南 | CORS/DeserializeUser/RequirePermission/RowLevel/OperateLog 中间件链 | [V4 中间件指南](../../docs/uctoo-v4/uctoo-v4-middleware-guide.md) |
 | 行级权限系统 | creator 字段行级权限、buildRowLevelCondition、admin 通配符 | [行级权限系统](../../docs/uctoo-v4/row-level-permission-system.md) |
 | **接入新大模型通道 SOP** | 新增 model provider 必改的 2 个 `.cj` + `.env`（含「漏改 ModelController 导致后台看不到」、出站 IPv6 坑、cron 6 段铁律） | [接入新大模型通道](./specs/model-provider-integration.md) |
+| **Web 聊天入口与二次开发注意事项** | web 端两个聊天入口（`App.vue` 全局浮动助手 / `/chat` 路由页）、通道选择器接线面（`llm-configs` 复数驱动 `ModelSwitch`）、localStorage 记忆键 `uctoo_llm_channel_last`、只读目录 `GET /llm_channel/catalog`；**改聊天相关代码前先定位正确文件，避免接错入口**（T037 漏接全局抽屉的教训） | [Web 聊天入口与二次开发注意事项](./specs/web-chat-entry-points.md) |
 
 ### 第三层：插件系统开发指南
 
@@ -142,7 +144,7 @@ agentskills-runtime 提供以下确定性代码生成工具，均位于 `src/app
 # 累积追加：同名插件、不同表名，再次运行只新增这些表的 CRUD，公共产物追加新表（不覆盖旧表）cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --db <数据库名> --tables <新表1>,<新表2>"
 # 覆盖保护区：同名插件、相同表名，再次运行只覆盖该表各层 AutoCreateCode 区域，二开保留cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --db <数据库名> --table <已生成表名>"
 # 空白骨架：仅生成 SKILL.md + plugin.yaml + 包占位 + 插件入口cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --blank"
-# L3 进程隔离轨：独立 cjpm executable 工程（单表，不支持多表累积）cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --mode process"
+# L3 进程隔离轨：独立 cjpm executable 工程（支持多表累积）cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --mode process"
 # L3 进程隔离轨 + 表驱动：生成完整 CRUD 进程插件cjpm run --skip-build --name magic.plugin.tools.plugingen --run-args "--name <插件名> --db <数据库名> --table <表名> --mode process"```
 
 **示例**：
@@ -158,7 +160,7 @@ agentskills-runtime 提供以下确定性代码生成工具，均位于 `src/app
 - `--db <数据库名>`：表驱动模式：数据库名（读 db_info 表结构）
 - `--table <表名>`：表驱动模式：单张表名（与 `--tables` 二选一，优先级低于 `--tables`）
 - `--tables <表名列表>`：表驱动模式：逗号分隔多张表名（多表生成与累积；与 `--table` 二选一）
-- `--mode <轨>`：加载轨：sync（缺省，支持多表）/ dylib / process（单表）
+- `--mode <轨>`：加载轨：sync（缺省，支持多表）/ dylib / process（支持多表）
 - `--blank`：生成空白插件骨架（跳过表结构）
 - `--help, -h`：显示帮助信息
 
@@ -176,7 +178,8 @@ agentskills-runtime 提供以下确定性代码生成工具，均位于 `src/app
 **用途**：与 plugingen 对称的确定性卸载工具，实现三层卸载模型。
 
 **用法**：
-```bashcjpm run --skip-build --name magic.plugin.tools.pluginuninstall --run-args "--name <插件名> [--force]"```
+```bash
+cjpm run --skip-build --name magic.plugin.tools.pluginuninstall --run-args "--name <插件名> [--force]"```
 
 **示例**：
 ```bash
@@ -223,7 +226,9 @@ agentskills-runtime 提供以下确定性代码生成工具，均位于 `src/app
 - 行级权限：`creator` 字段（UUID 类型，关联 uctoo_user.id）
 - 软删除：`deleted_at` 字段（NULL = 未删除，NOT NULL = 已软删除）
 
-**⚠️ 新增或变更数据库结构前，先读初始库基线 `apps/agentskills-runtime/sql/uctooDB.sql`**（PostgreSQL 初始库完整导出，207 张表，是表结构与数据类型的唯一基线）。照同族表（同命名前缀）抄字段类型、默认值、索引写法与 COMMENT 风格，再写 `sql/incremental/<YYYYMMDD>_<模块>_<动作>.sql`，保持整库口径一致：
+**⚠️ 新增或变更数据库结构前，先读初始库基线 `apps/agentskills-runtime/sql/uctooDB.sql`**（PostgreSQL 初始库完整基线，由 installer 的 `db export` 命令生成，是表结构与数据类型的唯一基线）。照同族表（同命名前缀）抄字段类型、默认值、索引写法与 COMMENT 风格，再写 `sql/incremental/<YYYYMMDD>_<模块>_<动作>.sql`，保持整库口径一致：
+
+> 该基线**不要手工编辑**：需要刷新时跑 `ucInstaller.exe --source-dir <仓库根> db export`，过 E5/E7 门禁后自动提升。详见 [基线库与种子管理（installer）](#基线库与种子管理installer) 与 [installer 使用文档](../../installer/README.md)。
 
 ```
 确定要加的表/列
@@ -236,6 +241,29 @@ agentskills-runtime 提供以下确定性代码生成工具，均位于 `src/app
 ```
 
 **详细文档**：[增量 SQL 规范（新增/变更表结构必读）](./specs/uctoo-database-sql-convention.md) ｜ [数据库设计规范](../../docs/uctoo-v4/uctoo-database-design-specification.md)
+
+### 基线库与种子管理（installer）
+
+`sql/uctooDB.sql` 不是手工维护的，而是由 `installer`（仓颉工程 `uc_installer`，产物 `ucInstaller.exe`）的 `db export` 命令生成。installer 同时负责把种子落库与校验（`seed apply` / `seed verify`）。
+
+**两条数据流水线**：
+
+| 命令 | 作用 | 关键阶段 |
+|------|------|----------|
+| `db export` | 从源库导出整库结构 + 种子数据 → `sql/uctooDB.sql` + `sql/seed/seed-manifest.json` | E0 读策略 → E1 连库 → E2–E4.5 分层导出 → E5 六条门禁（体积/行数/破坏性语句/敏感形态/脱敏生效/同步残留/身份列）→ E6 落盘 → E7 临时库重放验真（表总数 / 悬空引用==0 / 超管菜单非空） |
+| `seed apply` | 解析占位符后把种子落库 | P0 身份解析 → P1 结构/非身份数据 → P2 身份重绑定 → P3 孤儿/脱敏占位符 → P4 校验 |
+| `seed verify` | 只跑 P4 三条判据，**不改库** | 表总数一致 · 悬空身份引用==0 · 超管菜单非空 |
+
+**核心约定**：
+
+- **全局选项前置**：`--source-dir <仓库根>` 必须出现在子命令之前；`--source-dir` 必须是含 `.env` 与 `sql/seed/` 的 `agentskills-runtime` 仓库根。
+- **占位符是预期状态**：导出中的 `{{principal:super_admin}}` / `{{ts:epoch}}` / `{{secret:…}}` / `{{env:…}}` 无法作为原生 SQL 字面量落库，E7 原生重放会跳过（降级、非致命），完整校验在 `seed apply` 的 P4 完成。
+- **机密门禁语义**：`export-policy.json` 的 `secretScan` 中带 `^` 前缀的模式（如 `^sk-`/`^ghp_`/`^fc-`）表示「值必须以该形态开头」，未带 `^` 的子串（如 `eyJ`/`postgres://`）表示「任意位置包含」；新增机密模式务必带 `^` 锚定前缀形态。
+- **门禁不过不提升**：E5 或 E7 未过 → 临时产物不提升为正式，绝不覆盖既有 `uctooDB.sql`。
+
+**并发编译**：installer 与 runtime 是独立工程、独立 `target/`、依赖 static 分别编入各自产物，互相不耦合；但**对正在运行的 L3 进程插件 / L2 动态库插件做重编译前应先停止对应进程**，否则 Windows 下会因文件锁导致覆盖写失败、或新旧代码不一致。
+
+**详细文档**：[installer 使用文档](../../installer/README.md)
 
 ### 权限体系规范
 
@@ -383,8 +411,9 @@ agentskills-runtime/
 │   ├── standard/               # 标准文档
 │   └── ...
 ├── sql/                        # SQL 脚本
-│   ├── uctooDB.sql             # 初始库基线（207 表，新增表结构前必先对照）
+│   ├── uctooDB.sql             # 初始库基线（由 installer `db export` 生成，新增/变更表结构前必先对照）
 │   └── incremental/            # 增量 SQL 脚本（新增/变更表结构落这里）
+├── installer/                  # 原生安装器（ucInstaller，仓颉工程 uc_installer；db export / seed apply / seed verify 等）
 └── ...
 ```
 

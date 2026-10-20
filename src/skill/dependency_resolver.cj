@@ -5,7 +5,7 @@ package magic.skill
 
 import std.collection.{ArrayList, HashMap, HashSet}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonArray, JsonString, JsonBool}
-import magic.core.skill.Skill
+import magic.core.skill.{Skill, SkillManager}
 import magic.log.LogUtils
 
 public class SkillDependencyInfo {
@@ -77,9 +77,9 @@ public class DependencyResolutionResult {
 }
 
 public class SkillDependencyResolver {
-    private let _skillManager: CompositeSkillToolManager
+    private let _skillManager: SkillManager
 
-    public init(skillManager!: CompositeSkillToolManager) {
+    public init(skillManager!: SkillManager) {
         _skillManager = skillManager
     }
 

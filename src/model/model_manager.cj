@@ -80,9 +80,12 @@ private let DEFAULT_PROVIDER_MAP = HashMap<String, ProviderConfig>([
     ("evomap",    ProviderConfig("EVOMAP_BASE_URL", // OpenAI-compatible Chat Completions Gateway
                                 "https://api.evomap.ai/v1",
                                 "EVOMAP_API_KEY")),
+    // 2026-10-15：ARCBENCH_API_KEY 已从 .env 下线，这里与 builtin_seed.cj 的 arcbench 种子统一改为
+    // LRT_MODEL_API_KEY（同一网关：LRT_MODEL_BASE_URL 即 https://api.arc-bench.com/v1）。
+    // 使「注册表未命中时的离线兜底」仍能拿到可用密钥，而不是走空密钥。
     ("arcbench",  ProviderConfig("ARCBENCH_BASE_URL", // ArcBench 黑客松网关（OpenAI 兼容）
                                 "https://api.arc-bench.com/v1",
-                                "ARCBENCH_API_KEY")),
+                                "LRT_MODEL_API_KEY")),
     ("tokendance", ProviderConfig("TOKENDANCE_BASE_URL", // openai-compatible
                                  "https://tokendance.space/gateway/v1",
                                  "TOKENDANCE_API_KEY")),
@@ -128,8 +131,18 @@ func getDefaultApiKey(provider: String): String {
     match (getEnv(envVarName)) {
         case Some(v) => return v
         case None =>
-            LogUtils.error("Get env variable ${envVarName} error.")
-            throw Exception("Get env variable ${envVarName} error.")
+            // 2026-10-15：大模型密钥的真相源已迁到 llm_channel.api_key（加密列，web 界面配置），
+            // .env 里各 provider 的 XXX_API_KEY 已整批下线。走注册表路径时，真实密钥来自
+            // ChannelRegistry.resolveSecret()（DB 解密 → secret_ref=env:），本函数返回的
+            // legacy env 值**根本不会被使用**（见 AdapterFactory.buildChatModel 第 23 行）。
+            //
+            // 因此「legacy env 变量缺失」不再是致命错误：降级为 warn + 返回空串。
+            // 此前这里 throw，导致缺少一个已废弃的 env 变量就把整个 runtime 打挂在启动阶段
+            // （当日现象：某已废弃 WebSocket 聊天控制器构造期 FATAL "Get env variable ARCBENCH_API_KEY error"）。
+            // 真正的「没有可用密钥」判定应发生在请求期，由网关返回 401 表达，而不是让进程起不来。
+            LogUtils.warn("Env ${envVarName} not set (legacy provider map). Key should come from " +
+                "llm_channel.api_key configured in web UI; returning empty for legacy path only.")
+            return ""
     }
 }
 
@@ -253,6 +266,12 @@ public struct ModelManager {
     }
 
     public static func createChatModel(modelConfig: ModelConfig): ChatModel {
+        // 走到这里说明注册表未命中该 provider（离线兜底的 legacy 直连路径），此时密钥只能来自
+        // legacy env。空密钥不抛异常（抛了会让进程起不来），只给出可操作的告警。
+        if (modelConfig.apiKey == "" && modelConfig.provider != "ollama" && modelConfig.provider != "llamacpp") {
+            LogUtils.warn("Legacy path: no api key for provider ${modelConfig.provider}. " +
+                "Configure its api_key in web UI (llm_channel) instead of .env; requests may return 401.")
+        }
         match (modelConfig.provider) {
             case "openai" | "dashscope" | "ark" | "deepseek" |
                  "siliconflow" | "zhipuai" | "maas" | "google" | "moonshot" | "openrouter" | "stepfun" | "sophnet" | "orbitai" | "atomgit" | "gmicloud" | "evomap" | "arcbench" =>

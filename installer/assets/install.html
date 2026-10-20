@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentSkills Runtime 安装配置</title>
+    <link rel="stylesheet" href="install.css">
+    <style>
+        /* 加载页面样式 */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+        }
+
+        #loading-screen.hidden {
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .loading-message {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .loading-progress {
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-progress-bar {
+            width: 0%;
+            height: 100%;
+            background: white;
+            transition: width 0.3s ease;
+        }
+
+        .loading-error {
+            background: rgba(255, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .loading-error-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .loading-error-message {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 15px;
+        }
+
+        .loading-error-button {
+            background: white;
+            color: #764ba2;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .loading-error-button:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <!-- 加载页面 -->
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+        <div class="loading-title">AgentSkills Runtime 安装向导</div>
+        <div class="loading-message" id="loading-message">正在启动安装服务...</div>
+        <div class="loading-progress">
+            <div class="loading-progress-bar" id="loading-progress-bar"></div>
+        </div>
+    </div>
+
+    <div id="app">
+        <!-- 头部 -->
+        <header class="header">
+            <h1>AgentSkills Runtime 安装配置向导</h1>
+            <p class="subtitle">引导您完成 agentskills-runtime 的完整安装配置流程</p>
+        </header>
+
+        <!-- 步骤导航 -->
+        <nav class="steps-nav">
+            <div class="step active" data-step="1">
+                <span class="step-number">1</span>
+                <span class="step-label">环境检测</span>
+            </div>
+            <div class="step" data-step="2">
+                <span class="step-number">2</span>
+                <span class="step-label">Runtime 安装</span>
+            </div>
+            <div class="step" data-step="3">
+                <span class="step-number">3</span>
+                <span class="step-label">数据库配置</span>
+            </div>
+            <div class="step" data-step="4">
+                <span class="step-number">4</span>
+                <span class="step-label">SSL 配置</span>
+            </div>
+            <div class="step" data-step="5">
+                <span class="step-number">5</span>
+                <span class="step-label">API 密钥</span>
+            </div>
+            <div class="step" data-step="6">
+                <span class="step-number">6</span>
+                <span class="step-label">管理员账号</span>
+            </div>
+            <div class="step" data-step="7">
+                <span class="step-number">7</span>
+                <span class="step-label">启动服务</span>
+            </div>
+        </nav>
+
+        <!-- 内容区域 -->
+        <main class="content">
+            <!-- 步骤 1: 环境检测 -->
+            <section id="step-1" class="step-content active">
+                <h2>系统环境检测</h2>
+                <p class="description">检测您的系统环境是否满足运行要求</p>
+
+                <div class="check-list">
+                    <div class="check-item" id="check-nodejs">
+                        <div class="check-header">
+                            <span class="label">Node.js</span>
+                            <span class="status pending">检测中...</span>
+                        </div>
+                        <div class="check-detail" style="display: none;">
+                            <p class="current-version"></p>
+                            <p class="required-version"></p>
+                        </div>
+                    </div>
+
+                    <div class="check-item" id="check-postgresql">
+                        <div class="check-header">
+                            <span class="label">PostgreSQL</span>
+                            <span class="status pending">检测中...</span>
+                        </div>
+                        <div class="check-detail" style="display: none;">
+                            <p class="current-version"></p>
+                            <p class="required-version"></p>
+                        </div>
+                    </div>
+
+                    <div class="check-item" id="check-redis">
+                        <div class="check-header">
+                            <span class="label">Redis (可选)</span>
+                            <span class="status pending">检测中...</span>
+                        </div>
+                        <div class="check-detail" style="display: none;">
+                            <p class="current-version"></p>
+                            <p class="required-version"></p>
+                        </div>
+                    </div>
+
+                    <div class="check-item" id="check-ports">
+                        <div class="check-header">
+                            <span class="label">端口检测</span>
+                            <span class="status pending">检测中...</span>
+                        </div>
+                        <div class="check-detail" style="display: none;">
+                            <p class="port-status"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="check-actions">
+                    <button class="btn-secondary" id="recheck-btn">重新检测</button>
+                </div>
+            </section>
+
+            <!-- 步骤 2: Runtime 安装 -->
+            <section id="step-2" class="step-content">
+                <h2>AgentSkills Runtime 安装</h2>
+                <p class="description">安装 AI 代理运行时环境</p>
+
+                <div class="runtime-status" id="runtime-status">
+                    <div class="status-card">
+                        <div class="status-header">
+                            <span class="status-icon">⏳</span>
+                            <span class="status-text">检测中...</span>
+                        </div>
+                        <div class="status-details" id="runtime-details">
+                            <p>正在检测 Runtime 安装状态...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="runtime-actions" id="runtime-actions" style="display: none;">
+                    <button class="btn-primary" id="install-runtime-btn">安装 Runtime</button>
+                    <button class="btn-secondary" id="skip-runtime-btn" style="display: none;">跳过安装</button>
+                </div>
+
+                <div class="runtime-progress" id="runtime-progress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="runtime-progress-fill"></div>
+                    </div>
+                    <p class="progress-text" id="runtime-progress-text">正在安装...</p>
+                </div>
+
+                <div class="runtime-info" style="margin-top: 20px;">
+                    <h3>关于 AgentSkills Runtime</h3>
+                    <p>AgentSkills Runtime 是 AI 代理技能的运行环境，提供：</p>
+                    <ul>
+                        <li><strong>AI 模型集成</strong>：支持多种主流 AI 模型提供商
+                            <ul style="margin-top: 5px; margin-left: 20px; font-size: 13px;">
+                                <li><strong>StepFun (阶跃星辰)</strong>：step-1-8k, step-1-32k 等模型</li>
+                                <li><strong>DeepSeek</strong>：deepseek-chat, deepseek-coder 等模型</li>
+                                <li><strong>Sophnet</strong>：MiniMax-M2.5 等模型</li>
+                                <li><strong>华为云 MaaS</strong>：qwen3-coder-480b-a35b-instruct 等模型</li>
+                                <li><strong>OpenAI</strong>：gpt-4, gpt-3.5-turbo 等模型</li>
+                                <li><strong>智谱 AI (ZhipuAI)</strong>：glm-4, glm-3-turbo 等模型</li>
+                                <li><strong>阿里云 DashScope</strong>：qwen-turbo, qwen-plus 等模型</li>
+                                <li><strong>SiliconFlow</strong>：多种开源模型</li>
+                                <li><strong>Google Gemini</strong>：gemini-pro 等模型</li>
+                                <li><strong>Moonshot (月之暗面)</strong>：moonshot-v1-8k 等模型</li>
+                                <li><strong>火山引擎 ARK</strong>：字节跳动大模型服务</li>
+                                <li><strong>OpenRouter</strong>：统一接入多种模型</li>
+                                <li><strong>Ollama</strong>：本地部署的开源模型</li>
+                                <li><strong>LLama.cpp</strong>：本地推理服务</li>
+                            </ul>
+                        </li>
+                        <li><strong>技能管理和执行</strong>：安装、运行和管理 AI 技能</li>
+                        <li><strong>自然语言处理能力</strong>：文本生成、嵌入、图像生成</li>
+                        <li><strong>跨平台支持</strong>：Windows、macOS、Linux</li>
+                        <li><strong>技能搜索</strong>：支持 GitHub、Gitee、AtomGit 仓库搜索</li>
+                        <li><strong>网络搜索</strong>：集成 Firecrawl 进行网络内容抓取</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 步骤 3: 数据库配置 -->
+            <section id="step-3" class="step-content">
+                <h2>PostgreSQL 数据库配置</h2>
+                <p class="description">配置数据库连接信息</p>
+
+                <!-- PostgreSQL 检测状态 -->
+                <div class="db-check-status" id="db-check-status">
+                    <div class="status-card">
+                        <div class="status-header">
+                            <span class="status-icon">⏳</span>
+                            <span class="status-text">检测中...</span>
+                        </div>
+                        <div class="status-details" id="db-check-details">
+                            <p>正在检测 PostgreSQL 安装状态...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PostgreSQL 安装指引 -->
+                <div class="db-install-guide" id="db-install-guide" style="display: none;">
+                    <h3>PostgreSQL 未安装</h3>
+                    <p>请按照以下步骤安装 PostgreSQL：</p>
+                    <ol>
+                        <li>
+                            <strong>下载 PostgreSQL</strong><br>
+                            访问官方网站：<a href="https://www.postgresql.org/download/" target="_blank">https://www.postgresql.org/download/</a><br>
+                            选择适合您操作系统的版本（推荐 PostgreSQL 14 或更高版本）
+                        </li>
+                        <li>
+                            <strong>安装 PostgreSQL</strong><br>
+                            Windows: 下载安装程序并运行<br>
+                            macOS: 使用 Homebrew: <code>brew install postgresql@14</code><br>
+                            Linux: 使用包管理器: <code>sudo apt-get install postgresql-14</code>
+                        </li>
+                        <li>
+                            <strong>初始化数据库</strong><br>
+                            安装完成后，PostgreSQL 会自动创建默认数据库和用户<br>
+                            默认用户: <code>postgres</code><br>
+                            默认端口: <code>5432</code>
+                        </li>
+                        <li>
+                            <strong>创建数据库</strong><br>
+                            使用 pgAdmin 或命令行创建数据库：<br>
+                            <code>CREATE DATABASE uctoo;</code>
+                        </li>
+                    </ol>
+                    <button class="btn-secondary" id="recheck-postgresql-btn">重新检测 PostgreSQL</button>
+                </div>
+
+                <!-- 数据库配置表单 -->
+                <form class="config-form" id="db-config-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="db-host">数据库主机 <span class="required">*</span></label>
+                        <input type="text" id="db-host" name="dbHost" value="localhost" required>
+                        <span class="hint">数据库服务器地址</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="db-port">数据库端口 <span class="required">*</span></label>
+                        <input type="number" id="db-port" name="dbPort" value="5432" required>
+                        <span class="hint">PostgreSQL 默认端口: 5432</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="db-name">数据库名称 <span class="required">*</span></label>
+                        <input type="text" id="db-name" name="dbName" value="uctoo" required>
+                        <span class="hint">数据库名称，默认: uctoo</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="db-user">数据库用户 <span class="required">*</span></label>
+                        <input type="text" id="db-user" name="dbUser" value="postgres" required>
+                        <span class="hint">数据库用户名</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="db-password">数据库密码 <span class="required">*</span></label>
+                        <input type="password" id="db-password" name="dbPassword" required>
+                        <span class="hint">数据库密码</span>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="test-db-btn">测试连接</button>
+                        <button type="button" class="btn-primary" id="save-db-btn">保存配置</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- 步骤 4: 域名及SSL 配置 -->
+            <section id="step-4" class="step-content">
+                <h2>域名及 SSL 证书配置</h2>
+                <p class="description">配置服务端 API 域名和 HTTPS 安全连接</p>
+
+                <!-- 域名配置 -->
+                <div class="domain-config" style="margin-bottom: 30px;">
+                    <h3>服务端 API 域名配置</h3>
+                    <div class="form-group">
+                        <label for="backend-url">后端 API 地址 <span class="required">*</span></label>
+                        <input type="text" id="backend-url" name="backendUrl" placeholder="https://api.example.com" required>
+                        <span class="hint">服务端 API 的完整地址，必须以 https:// 开头（生产环境）或 http:// 开头（开发环境）</span>
+                    </div>
+                    <div class="domain-examples" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+                        <p style="margin: 0; font-size: 13px; color: #666;">
+                            <strong>示例：</strong><br>
+                            • 生产环境：https://api.yourdomain.com<br>
+                            • 开发环境：http://localhost:8080<br>
+                            • 自定义端口：https://yourdomain.com:8443
+                        </p>
+                    </div>
+                </div>
+
+                <!-- SSL 证书配置 -->
+                <div class="ssl-config">
+                    <h3>SSL 证书配置</h3>
+                    <div class="ssl-options">
+                        <div class="option-card">
+                            <input type="radio" id="ssl-dev" name="sslType" value="development" checked>
+                            <label for="ssl-dev">
+                                <h3>开发环境 (自签名证书)</h3>
+                                <p>自动生成自签名证书，仅用于开发测试</p>
+                            </label>
+                        </div>
+
+                        <div class="option-card">
+                            <input type="radio" id="ssl-prod" name="sslType" value="production">
+                            <label for="ssl-prod">
+                                <h3>生产环境 (自定义证书)</h3>
+                                <p>上传您自己的 SSL 证书文件</p>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="ssl-upload" id="ssl-upload-section" style="display: none; margin-top: 20px;">
+                        <div class="form-group">
+                            <label for="cert-file">证书文件 (.crt 或 .pem) <span class="required">*</span></label>
+                            <input type="file" id="cert-file" accept=".crt,.pem">
+                            <span class="hint">上传您的 SSL 证书文件</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="key-file">私钥文件 (.key 或 .pem) <span class="required">*</span></label>
+                            <input type="file" id="key-file" accept=".key,.pem">
+                            <span class="hint">上传您的 SSL 私钥文件</span>
+                        </div>
+                    </div>
+
+                    <!-- SSL 说明 -->
+                    <div class="ssl-info" style="margin-top: 20px; padding: 15px; background: #e6f7ff; border-radius: 4px; border-left: 4px solid #1890ff;">
+                        <p style="margin: 0; font-size: 14px; color: #0050b3;">
+                            <strong>说明：</strong><br>
+                            • 自签名证书的域名将自动从上方 API 地址中提取<br>
+                            • 例如：API 地址为 <code>https://api.example.com</code>，则证书域名为 <code>api.example.com</code><br>
+                            • 生产环境请确保上传的证书域名与 API 地址域名一致
+                        </p>
+                    </div>
+                </div>
+
+                <div class="form-actions" style="margin-top: 30px;">
+                    <button type="button" class="btn-primary" id="save-ssl-btn">保存配置</button>
+                </div>
+            </section>
+
+            <!-- 步骤 5: 大模型 API 密钥配置 -->
+            <section id="step-5" class="step-content">
+                <h2>大模型 API 密钥配置</h2>
+                <p class="description">配置大模型 API 密钥，用于 AI 功能</p>
+
+                <div class="model-provider-info" style="margin-bottom: 20px; padding: 15px; background: #f0f5ff; border-radius: 4px; border-left: 4px solid #1890ff;">
+                    <p style="margin: 0; font-size: 14px; color: #0050b3;">
+                        <strong>说明：</strong><br>
+                        • 至少配置一个大模型 API 密钥以使用 AI 功能<br>
+                        • 不同提供商支持不同的模型和能力<br>
+                        • 密钥将保存到 Runtime 的 .env 配置文件中
+                    </p>
+                </div>
+
+                <form class="config-form" id="api-config-form">
+                    <!-- OpenAI -->
+                    <div class="form-group">
+                        <label for="openai-api-key">OpenAI API Key</label>
+                        <input type="password" id="openai-api-key" name="openaiApiKey" placeholder="sk-...">
+                        <span class="hint">GPT-4, GPT-3.5 等模型 | <a href="https://platform.openai.com/api-keys" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- StepFun (阶跃星辰) -->
+                    <div class="form-group">
+                        <label for="stepfun-api-key">StepFun API Key (阶跃星辰)</label>
+                        <input type="password" id="stepfun-api-key" name="stepfunApiKey" placeholder="输入 StepFun API Key">
+                        <span class="hint">step-1-8k, step-1-32k 等模型 | <a href="https://platform.stepfun.com/" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- DeepSeek -->
+                    <div class="form-group">
+                        <label for="deepseek-api-key">DeepSeek API Key</label>
+                        <input type="password" id="deepseek-api-key" name="deepseekApiKey" placeholder="输入 DeepSeek API Key">
+                        <span class="hint">deepseek-chat, deepseek-coder 等模型 | <a href="https://platform.deepseek.com/" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- Sophnet -->
+                    <div class="form-group">
+                        <label for="sophnet-api-key">Sophnet API Key</label>
+                        <input type="password" id="sophnet-api-key" name="sophnetApiKey" placeholder="输入 Sophnet API Key">
+                        <span class="hint">MiniMax-M2.5 等模型 | <a href="https://www.sophnet.com/" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- 华为云 MaaS -->
+                    <div class="form-group">
+                        <label for="maas-api-key">华为云 MaaS API Key</label>
+                        <input type="password" id="maas-api-key" name="maasApiKey" placeholder="输入华为云 MaaS API Key">
+                        <span class="hint">qwen3-coder 等模型 | <a href="https://www.huaweicloud.com/product/modelarts.html" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- 智谱 AI -->
+                    <div class="form-group">
+                        <label for="zhipu-api-key">智谱 AI API Key (ZhipuAI)</label>
+                        <input type="password" id="zhipu-api-key" name="zhipuApiKey" placeholder="输入智谱 AI API Key">
+                        <span class="hint">glm-4, glm-3-turbo 等模型 | <a href="https://open.bigmodel.cn/" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- 阿里云 DashScope -->
+                    <div class="form-group">
+                        <label for="dashscope-api-key">阿里云 DashScope API Key</label>
+                        <input type="password" id="dashscope-api-key" name="dashscopeApiKey" placeholder="输入阿里云 DashScope API Key">
+                        <span class="hint">qwen-turbo, qwen-plus 等模型 | <a href="https://dashscope.console.aliyun.com/" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- SiliconFlow -->
+                    <div class="form-group">
+                        <label for="siliconflow-api-key">SiliconFlow API Key</label>
+                        <input type="password" id="siliconflow-api-key" name="siliconflowApiKey" placeholder="输入 SiliconFlow API Key">
+                        <span class="hint">多种开源模型 | <a href="https://siliconflow.cn/" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- Google Gemini -->
+                    <div class="form-group">
+                        <label for="google-api-key">Google Gemini API Key</label>
+                        <input type="password" id="google-api-key" name="googleApiKey" placeholder="输入 Google API Key">
+                        <span class="hint">gemini-pro 等模型 | <a href="https://makersuite.google.com/app/apikey" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- Moonshot (月之暗面) -->
+                    <div class="form-group">
+                        <label for="moonshot-api-key">Moonshot API Key (月之暗面)</label>
+                        <input type="password" id="moonshot-api-key" name="moonshotApiKey" placeholder="输入 Moonshot API Key">
+                        <span class="hint">moonshot-v1-8k 等模型 | <a href="https://platform.moonshot.cn/" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- 火山引擎 ARK -->
+                    <div class="form-group">
+                        <label for="ark-api-key">火山引擎 ARK API Key (字节跳动)</label>
+                        <input type="password" id="ark-api-key" name="arkApiKey" placeholder="输入火山引擎 ARK API Key">
+                        <span class="hint">字节跳动大模型服务 | <a href="https://www.volcengine.com/product/ark" target="_blank">获取密钥</a></span>
+                    </div>
+
+                    <!-- OpenRouter -->
+                    <div class="form-group">
+                        <label for="openrouter-api-key">OpenRouter API Key</label>
+                        <input type="password" id="openrouter-api-key" name="openrouterApiKey" placeholder="输入 OpenRouter API Key">
+                        <span class="hint">统一接入多种模型 | <a href="https://openrouter.ai/keys" target="_blank">获取密钥</a></span>
+                    </div>
+                </form>
+
+                <div class="form-actions" style="margin-top: 30px;">
+                    <button type="button" class="btn-primary" id="save-api-keys-btn">保存配置</button>
+                </div>
+            </section>
+
+            <!-- 步骤 6: 管理员账号创建 -->
+            <section id="step-6" class="step-content">
+                <h2>创建管理员账号</h2>
+                <p class="description">创建系统管理员账号，用于登录后台管理系统</p>
+
+                <div class="admin-info" style="margin-bottom: 20px; padding: 15px; background: #fff7e6; border-radius: 4px; border-left: 4px solid #fa8c16;">
+                    <p style="margin: 0; font-size: 14px; color: #d48806;">
+                        <strong>说明：</strong><br>
+                        • 管理员账号将保存到 uctoo_user 数据表<br>
+                        • 密码使用 bcrypt 加密存储<br>
+                        • 请妥善保管管理员账号信息<br>
+                        • <strong style="color: #fa8c16;">此步骤可选，如不填写可直接点击"下一步"跳过</strong>
+                    </p>
+                </div>
+
+                <form class="config-form" id="admin-config-form">
+                    <div class="form-group">
+                        <label for="admin-email">管理员邮箱</label>
+                        <input type="email" id="admin-email" name="adminEmail" placeholder="admin@example.com">
+                        <span class="hint">管理员登录邮箱，对应 uctoo_user 表 email 字段（可选）</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin-username">管理员账号</label>
+                        <input type="text" id="admin-username" name="adminUsername" placeholder="admin">
+                        <span class="hint">管理员登录账号，对应 uctoo_user 表 username 字段（可选）</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin-password">登录密码</label>
+                        <input type="password" id="admin-password" name="adminPassword">
+                        <span class="hint">至少 8 位，包含大小写字母、数字和特殊字符，对应 uctoo_user 表 password 字段（可选）</span>
+                        <div class="password-strength">
+                            <div class="strength-bar">
+                                <div class="strength-fill" id="strength-fill"></div>
+                            </div>
+                            <span class="strength-text" id="strength-text">密码强度：弱</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin-password-confirm">确认密码</label>
+                        <input type="password" id="admin-password-confirm" name="adminPasswordConfirm">
+                        <span class="hint">再次输入密码（可选）</span>
+                    </div>
+                </form>
+
+                <div class="form-actions" style="margin-top: 30px;">
+                    <button type="button" class="btn-primary" id="save-admin-btn">保存配置</button>
+                </div>
+            </section>
+
+            <!-- 步骤 7: 启动服务 -->
+            <section id="step-7" class="step-content">
+                <h2>启动服务</h2>
+                <p class="description">启动 agentskills-runtime 服务</p>
+
+                <div class="config-preview">
+                    <h3>配置预览</h3>
+                    <pre id="config-preview-content">正在生成配置...</pre>
+                </div>
+
+                <div class="startup-status" id="startup-status" style="display: none;">
+                    <h3>启动状态</h3>
+                    <div class="status-item">
+                        <span class="status-label">服务状态:</span>
+                        <span class="status-value" id="runtime-status">准备启动</span>
+                    </div>
+                    <div class="log-output" id="startup-log">
+                        <p>等待启动...</p>
+                    </div>
+                </div>
+
+                <div class="startup-actions">
+                    <button class="btn-primary" id="start-runtime-btn">启动服务</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- 操作按钮 -->
+        <footer class="actions">
+            <button id="prev-btn" class="btn-secondary" disabled>上一步</button>
+            <button id="next-btn" class="btn-primary">下一步</button>
+        </footer>
+    </div>
+    <script src="install.js"></script>
+</body>
+</html>

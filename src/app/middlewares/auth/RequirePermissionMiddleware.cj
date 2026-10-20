@@ -108,6 +108,10 @@ public class RequirePermissionMiddleware <: Middleware {
         if (route == "/health" || route == "/hello" || route == "/api/v1/health" || route == "/api/v1/info" || route == "/") {
             return true
         }
+        // 运维只读端点（T054 运行日志 / T055 环境能力，M2 冻结区豁免，公开只读）
+        if (route.contains("/api/v1/uctoo/ops/")) {
+            return true
+        }
         // AI 聊天相关路由（OpenAI 兼容 API）
         if (route.contains("/api/v1/ai/")) {
             return true
@@ -130,6 +134,15 @@ public class RequirePermissionMiddleware <: Middleware {
         }
         // AIP 智能体自动登录路由（Agent通过agent_id获取JWT）
         if (route.contains("/api/v1/uctoo/aip/identity/agent-login")) {
+            return true
+        }
+        // 用户面通道目录（GET /api/v1/uctoo/llm_channel/catalog）：
+        // 只读、仅返回非敏感字段（code/display_name/default_model/capabilities/priority/
+        // is_default/api_key_set(bool)/status），不含 api_key/base_url/secret_ref/config；
+        // 供聊天框通道切换器在匿名态也能展示可选通道（dynamic-model-channel T037）。
+        // 仅放行该 GET 字面量路由；写操作与其余 admin 端点（list/detail/health/models/audit）
+        // 仍受 RBAC 保护。admin-only 通道由 ChannelService.listUserCatalog 按 scope 过滤，不泄露。
+        if (route == "/api/v1/uctoo/llm_channel/catalog") {
             return true
         }
         false

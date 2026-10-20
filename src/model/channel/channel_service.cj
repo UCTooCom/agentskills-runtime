@@ -3,8 +3,8 @@
  */
 package magic.model.channel
 
-import magic.app.dao.uctoo.{ModelChannelDAO, ModelChannelAuditDAO, ModelChannelModelDAO, ModelRouteRuleDAO, ModelPricingDAO}
-import magic.app.models.uctoo.{ModelChannelPO, ModelChannelAuditPO, ModelChannelModelPO, ModelRouteRulePO}
+import magic.app.dao.uctoo.{LlmChannelDAO, LlmChannelAuditDAO, LlmChannelModelDAO, LlmRouteRuleDAO, ModelPricingDAO}
+import magic.app.models.uctoo.{LlmChannelPO, LlmChannelAuditPO, LlmChannelModelPO, LlmRouteRulePO}
 import std.time.DateTime
 import std.collection.{HashMap, ArrayList}
 import stdx.encoding.json.{JsonValue, JsonObject, JsonString, JsonNull, JsonArray, JsonInt, JsonBool}
@@ -28,12 +28,21 @@ public class ChannelService {
     }
 
     /**
-     * 首次启动播种：llm_channel 为空时写入内置 20 通道（source=seed），并设 arcbench 为默认。
+     * 首次启动播种：llm_channel 为空时写入内置 20 通道（source=seed），并设 deepseek 为默认。
      * 返回本次播种条数（0 表示已存在，未改动）。
+     *
+     * 【默认通道为什么是 deepseek（2026-10-16 修订）】
+     * 此前这里**硬偏好 arcbench**：只要种子里有 arcbench 就把它钉成默认。后果是用户在界面上
+     * 看到的默认通道不是自己在管理界面选的那个，而是代码里写死的一个厂商 —— 这正是本工程要
+     * 淘汰的「用户不可见的硬编码兜底」（dynamic-model-channel 的初衷）。
+     * 修订原则：
+     *   ① 播种只负责「让表里有一个可用默认」，默认取 deepseek（与本户要求的产品默认一致）；
+     *   ② 默认一旦进库，后续真相就是 `llm_channel.is_default`，由界面 / 增量 SQL 改写，
+     *      代码不再偏袒任何 provider —— 「界面可见 = 实际生效」。
      */
     public func seedIfEmpty(): Int64 {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 if (dao.countModelChannels() > 0) {
                     return 0
@@ -46,10 +55,11 @@ public class ChannelService {
                         n += 1
                     }
                 }
-                // 设全局默认通道：arcbench 优先，否则取列表首元素。
-                if (dao.findModelChannelByCode("arcbench").isSome()) {
-                    dao.unsetDefaultExcept("arcbench")
-                    dao.setDefaultByCode("arcbench")
+                // 设全局默认通道：deepseek 优先，否则取列表首元素。
+                // 偏好本身不是"兜底"，而是播种时的一次性选择；之后以库里的 is_default 为真相。
+                if (dao.findModelChannelByCode("deepseek").isSome()) {
+                    dao.unsetDefaultExcept("deepseek")
+                    dao.setDefaultByCode("deepseek")
                 } else {
                     let all = dao.findAllModelChannels()
                     if (all.size > 0) {
@@ -70,35 +80,35 @@ public class ChannelService {
         }
     }
 
-    public func getChannelByCode(code: String): Option<ModelChannelPO> {
+    public func getChannelByCode(code: String): Option<LlmChannelPO> {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 return dao.findModelChannelByCode(code)
             }
-            return None<ModelChannelPO>
+            return None<LlmChannelPO>
         } catch (e: Exception) {
             LogUtils.error("ChannelService.getChannelByCode(${code}) 失败：${e.message}")
-            return None<ModelChannelPO>
+            return None<LlmChannelPO>
         }
     }
 
-    public func listChannels(): ArrayList<ModelChannelPO> {
+    public func listChannels(): ArrayList<LlmChannelPO> {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 return dao.findAllModelChannels()
             }
-            return ArrayList<ModelChannelPO>()
+            return ArrayList<LlmChannelPO>()
         } catch (e: Exception) {
             LogUtils.error("ChannelService.listChannels 失败：${e.message}")
-            return ArrayList<ModelChannelPO>()
+            return ArrayList<LlmChannelPO>()
         }
     }
 
     public func countChannels(): Int64 {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 return dao.countModelChannels()
             }
@@ -111,9 +121,11 @@ public class ChannelService {
     /**
      * 用户面通道目录（REQ-DMC-021 / T035，design.md §9.1）。
      *
-     * 与普通 listChannels 的区别：这里只返回「终端用户可在聊天框里选」的通道，
-     * 即 status=enabled 且作用域对用户可见。调用方（LlmChannelController.catalog）
-     * 再做字段裁剪，敏感字段（base_url / secret_ref / health / config）绝不出口。
+     * 返回「终端用户可在聊天框里选」的全部通道 —— 即作用域对用户可见的通道，
+     * **不再按 status 过滤**：前端切换器会展示所有通道，并用状态灯（绿灯=enabled /
+     * 红灯=degraded·disabled）提示可用性（V8：用户明确要求"无可用通道也显示空列表、
+     * 且全量通道带状态标识"）。调用方（LlmChannelController.catalog）再做字段裁剪，
+     * 敏感字段（base_url / secret_ref / health / config）绝不出口，但会带上 status。
      *
      * 作用域判定：scopes 含 "user" 或 "global" 均视为对用户可见。
      * - "user"  = 显式开放给用户面；
@@ -121,13 +133,11 @@ public class ChannelService {
      * ⚠️ 内置种子 BUILTIN_SEED 的 scopes 是 ["global"]，若只认 "user"，
      *    全新安装（或已播种的库）目录会是空的 —— 切换器直接变空壳。
      */
-    public func listUserCatalog(): ArrayList<ModelChannelPO> {
-        let out = ArrayList<ModelChannelPO>()
+    public func listUserCatalog(): ArrayList<LlmChannelPO> {
+        let out = ArrayList<LlmChannelPO>()
         for (po in listChannels()) {
-            if (po.status == "enabled") {
-                if (isUserVisibleScope(po.scopes)) {
-                    out.add(po)
-                }
+            if (isUserVisibleScope(po.scopes)) {
+                out.add(po)
             }
         }
         return out
@@ -150,7 +160,7 @@ public class ChannelService {
      */
     public func setDefault(code: String): Bool {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 if (dao.findModelChannelByCode(code).isNone()) {
                     LogUtils.error("ChannelService.setDefault 失败：通道 ${code} 不存在")
@@ -183,11 +193,11 @@ public class ChannelService {
      */
     public func writeAudit(channelCode: String, action: String, before: String, after: String, source: String): Unit {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 let ch = dao.findModelChannelByCode(channelCode)
                 let channelId: Option<String> = if (let Some(c) <- ch) { Some(c.id) } else { None<String> }
-                let audit = ModelChannelAuditPO(
+                let audit = LlmChannelAuditPO(
                     "",
                     channelId,
                     action,
@@ -197,7 +207,7 @@ public class ChannelService {
                     source,
                     DateTime.now()
                 )
-                let auditDAOOpt = ORM.executor() as ModelChannelAuditDAO
+                let auditDAOOpt = ORM.executor() as LlmChannelAuditDAO
                 if (let Some(auditDAO) <- auditDAOOpt) {
                     auditDAO.insertModelChannelAudit(audit)
                 }
@@ -210,13 +220,14 @@ public class ChannelService {
     /**
      * 构造通道快照 JSON 用于审计，密钥一律掩码为 "***"。
      */
-    public func channelAuditPayload(po: ModelChannelPO): String {
+    public func channelAuditPayload(po: LlmChannelPO): String {
         var map = HashMap<String, JsonValue>()
         map.add("code", JsonString(po.code))
         map.add("display_name", optJson(po.displayName))
         map.add("protocol", JsonString(po.protocol))
         map.add("base_url", optJson(po.baseUrl))
         map.add("secret_ref", JsonString("***"))   // 密钥绝不写明文
+        map.add("api_key", JsonString("***"))       // api_key 密文也绝不进审计
         map.add("default_model", optJson(po.defaultModel))
         map.add("capabilities", JsonString(po.capabilities))
         map.add("scopes", JsonString(po.scopes))
@@ -244,17 +255,17 @@ public class ChannelService {
     /**
      * 新增通道（管理 API /add）。返回创建后的 PO（含 id）；失败（code 空或已存在）返回 None。
      */
-    public func addChannel(po: ModelChannelPO, source: String): Option<ModelChannelPO> {
+    public func addChannel(po: LlmChannelPO, source: String): Option<LlmChannelPO> {
         try {
             if (po.code.isEmpty()) {
                 LogUtils.error("ChannelService.addChannel: code 不能为空")
-                return None<ModelChannelPO>
+                return None<LlmChannelPO>
             }
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 if (dao.findModelChannelByCode(po.code).isSome()) {
                     LogUtils.error("ChannelService.addChannel: 通道 ${po.code} 已存在")
-                    return None<ModelChannelPO>
+                    return None<LlmChannelPO>
                 }
                 let now = DateTime.now()
                 po.id = ""
@@ -274,13 +285,13 @@ public class ChannelService {
                     writeAudit(po.code, "add", "{}", channelAuditPayload(po), source)
                     // 广播变更 → 触发 ChannelRegistry 即时 refresh（V1 热生效）
                     ChannelEventBus.shared().publish(ChannelChanged(po.code, 0))
-                    return Some<ModelChannelPO>(po)
+                    return Some<LlmChannelPO>(po)
                 }
             }
-            return None<ModelChannelPO>
+            return None<LlmChannelPO>
         } catch (e: Exception) {
             LogUtils.error("ChannelService.addChannel(${po.code}) 失败：${e.message}")
-            return None<ModelChannelPO>
+            return None<LlmChannelPO>
         }
     }
 
@@ -288,12 +299,12 @@ public class ChannelService {
      * 更新通道（管理 API /edit）。请求表单提供的值覆盖既有值；空字符串/None 保留原值。
      * revision 自增 → 触发 ModelInstanceCache 失效与新实例构建（V4 drain）。
      */
-    public func updateChannel(po: ModelChannelPO, source: String): Bool {
+    public func updateChannel(po: LlmChannelPO, source: String): Bool {
         try {
             if (po.code.isEmpty()) {
                 return false
             }
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 let existingOpt = dao.findModelChannelByCode(po.code)
                 if (existingOpt.isNone()) {
@@ -305,6 +316,8 @@ public class ChannelService {
                 existing.protocol = if (po.protocol.isEmpty()) { existing.protocol } else { po.protocol }
                 existing.baseUrl = if (let Some(v) <- po.baseUrl) { if (v.isEmpty()) { existing.baseUrl } else { po.baseUrl } } else { existing.baseUrl }
                 existing.secretRef = if (let Some(v) <- po.secretRef) { if (v.isEmpty()) { existing.secretRef } else { po.secretRef } } else { existing.secretRef }
+                // api_key：控制器已在写入前用 SecretCrypto 加密成密文存入 po.apiKey；空串表示不改、保留原值
+                existing.apiKey = if (let Some(v) <- po.apiKey) { if (v.isEmpty()) { existing.apiKey } else { po.apiKey } } else { existing.apiKey }
                 existing.defaultModel = if (let Some(v) <- po.defaultModel) { if (v.isEmpty()) { existing.defaultModel } else { po.defaultModel } } else { existing.defaultModel }
                 existing.capabilities = if (po.capabilities.isEmpty()) { existing.capabilities } else { po.capabilities }
                 existing.scopes = if (po.scopes.isEmpty()) { existing.scopes } else { po.scopes }
@@ -333,7 +346,7 @@ public class ChannelService {
      */
     public func deleteChannel(code: String, source: String): Bool {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 let existingOpt = dao.findModelChannelByCode(code)
                 if (existingOpt.isNone()) {
@@ -360,7 +373,7 @@ public class ChannelService {
      */
     public func toggleChannel(code: String, enabled: Bool, source: String): Bool {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 let existingOpt = dao.findModelChannelByCode(code)
                 if (existingOpt.isNone()) {
@@ -427,25 +440,25 @@ public class ChannelService {
      * 审计表是 append-only（只插入不 UPDATE），因此没有软删过滤。
      * 每条记录含 source（seed / api / ui / agent），用于追溯是谁改的（design.md §8）。
      */
-    public func listAudits(code: String, limit: Int64): ArrayList<ModelChannelAuditPO> {
+    public func listAudits(code: String, limit: Int64): ArrayList<LlmChannelAuditPO> {
         try {
-            let daoOpt = ORM.executor() as ModelChannelAuditDAO
+            let daoOpt = ORM.executor() as LlmChannelAuditDAO
             if (let Some(dao) <- daoOpt) {
                 if (code.isEmpty()) {
                     return dao.findRecentModelChannelAudits(limit)
                 }
                 return dao.findModelChannelAuditsByCode(code, limit)
             }
-            return ArrayList<ModelChannelAuditPO>()
+            return ArrayList<LlmChannelAuditPO>()
         } catch (e: Exception) {
             LogUtils.error("ChannelService.listAudits 失败：${e.message}")
-            return ArrayList<ModelChannelAuditPO>()
+            return ArrayList<LlmChannelAuditPO>()
         }
     }
 
     public func countAudits(): Int64 {
         try {
-            let daoOpt = ORM.executor() as ModelChannelAuditDAO
+            let daoOpt = ORM.executor() as LlmChannelAuditDAO
             if (let Some(dao) <- daoOpt) {
                 return dao.countModelChannelAudits()
             }
@@ -460,11 +473,11 @@ public class ChannelService {
 
     /**
      * 三枪探测结果写回：能力位 + 健康快照 + 探测时间。
-     * 不 bump revision（理由见 ModelChannelDAO.updateChannelProbe）。
+     * 不 bump revision（理由见 LlmChannelDAO.updateChannelProbe）。
      */
     public func applyProbeResult(code: String, capabilities: String, healthJson: String): Bool {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 let rows = dao.updateChannelProbe(code, capabilities, healthJson, DateTime.now())
                 return rows >= 0
@@ -481,7 +494,7 @@ public class ChannelService {
      */
     public func applyHealthStatus(code: String, status: String): Bool {
         try {
-            let daoOpt = ORM.executor() as ModelChannelDAO
+            let daoOpt = ORM.executor() as LlmChannelDAO
             if (let Some(dao) <- daoOpt) {
                 let rows = dao.updateChannelStatusOnly(code, status, DateTime.now())
                 return rows >= 0
@@ -498,32 +511,32 @@ public class ChannelService {
     /**
      * 某通道下的模型条目列表（用于下拉 / 同步结果展示）。
      */
-    public func listModelsByChannel(code: String): ArrayList<ModelChannelModelPO> {
+    public func listModelsByChannel(code: String): ArrayList<LlmChannelModelPO> {
         try {
             let chOpt = getChannelByCode(code)
             if (chOpt.isNone()) {
-                return ArrayList<ModelChannelModelPO>()
+                return ArrayList<LlmChannelModelPO>()
             }
-            let daoOpt = ORM.executor() as ModelChannelModelDAO
+            let daoOpt = ORM.executor() as LlmChannelModelDAO
             if (let Some(dao) <- daoOpt) {
                 return dao.findModelChannelModelsByChannelId(chOpt.getOrThrow().id)
             }
-            return ArrayList<ModelChannelModelPO>()
+            return ArrayList<LlmChannelModelPO>()
         } catch (e: Exception) {
             LogUtils.error("ChannelService.listModelsByChannel(${code}) 失败：${e.message}")
-            return ArrayList<ModelChannelModelPO>()
+            return ArrayList<LlmChannelModelPO>()
         }
     }
 
     /**
      * 全部通道的模型条目（GET /models 数据源；供聊天框 / 管理页下拉）。
      */
-    public func listAllModels(): ArrayList<ModelChannelModelPO> {
+    public func listAllModels(): ArrayList<LlmChannelModelPO> {
         try {
-            let daoOpt = ORM.executor() as ModelChannelModelDAO
+            let daoOpt = ORM.executor() as LlmChannelModelDAO
             if (let Some(dao) <- daoOpt) {
                 let channels = listChannels()
-                let out = ArrayList<ModelChannelModelPO>()
+                let out = ArrayList<LlmChannelModelPO>()
                 for (ch in channels) {
                     let models = dao.findModelChannelModelsByChannelId(ch.id)
                     for (m in models) {
@@ -532,29 +545,29 @@ public class ChannelService {
                 }
                 return out
             }
-            return ArrayList<ModelChannelModelPO>()
+            return ArrayList<LlmChannelModelPO>()
         } catch (e: Exception) {
             LogUtils.error("ChannelService.listAllModels 失败：${e.message}")
-            return ArrayList<ModelChannelModelPO>()
+            return ArrayList<LlmChannelModelPO>()
         }
     }
 
     // ==================== T027：路由规则 CRUD（llm_route_rule） ====================
 
-    public func listRouteRules(): ArrayList<ModelRouteRulePO> {
+    public func listRouteRules(): ArrayList<LlmRouteRulePO> {
         try {
-            let daoOpt = ORM.executor() as ModelRouteRuleDAO
+            let daoOpt = ORM.executor() as LlmRouteRuleDAO
             if (let Some(dao) <- daoOpt) {
                 return dao.findAllModelRouteRules()
             }
-            return ArrayList<ModelRouteRulePO>()
+            return ArrayList<LlmRouteRulePO>()
         } catch (e: Exception) {
             LogUtils.error("ChannelService.listRouteRules 失败：${e.message}")
-            return ArrayList<ModelRouteRulePO>()
+            return ArrayList<LlmRouteRulePO>()
         }
     }
 
-    public func addRouteRule(po: ModelRouteRulePO, source: String): Option<ModelRouteRulePO> {
+    public func addRouteRule(po: LlmRouteRulePO, source: String): Option<LlmRouteRulePO> {
         try {
             if (po.scope.isEmpty()) {
                 po.scope = "global"
@@ -568,29 +581,29 @@ public class ChannelService {
             po.deletedAt = None<DateTime>
             po.createdAt = DateTime.now()
             po.updatedAt = DateTime.now()
-            let daoOpt = ORM.executor() as ModelRouteRuleDAO
+            let daoOpt = ORM.executor() as LlmRouteRuleDAO
             if (let Some(dao) <- daoOpt) {
                 let id = dao.insertModelRouteRule(po)
                 if (id != "") {
                     po.id = id
                     LogUtils.info("ChannelService.addRouteRule: 新增规则 scope=${po.scope} strategy=${po.strategy}")
                     this.loadRouteRules()
-                    return Some<ModelRouteRulePO>(po)
+                    return Some<LlmRouteRulePO>(po)
                 }
             }
-            return None<ModelRouteRulePO>
+            return None<LlmRouteRulePO>
         } catch (e: Exception) {
             LogUtils.error("ChannelService.addRouteRule(${po.scope}) 失败：${e.message}")
-            return None<ModelRouteRulePO>
+            return None<LlmRouteRulePO>
         }
     }
 
-    public func updateRouteRule(po: ModelRouteRulePO, source: String): Bool {
+    public func updateRouteRule(po: LlmRouteRulePO, source: String): Bool {
         try {
             if (po.id.isEmpty()) {
                 return false
             }
-            let daoOpt = ORM.executor() as ModelRouteRuleDAO
+            let daoOpt = ORM.executor() as LlmRouteRuleDAO
             if (let Some(dao) <- daoOpt) {
                 let existingOpt = dao.findModelRouteRuleById(po.id)
                 if (existingOpt.isNone()) {
@@ -623,7 +636,7 @@ public class ChannelService {
 
     public func deleteRouteRule(id: String, source: String): Bool {
         try {
-            let daoOpt = ORM.executor() as ModelRouteRuleDAO
+            let daoOpt = ORM.executor() as LlmRouteRuleDAO
             if (let Some(dao) <- daoOpt) {
                 let rows = dao.softDeleteModelRouteRuleById(id)
                 if (rows > 0) {
@@ -679,7 +692,7 @@ public class ChannelService {
             })
 
             // 2. 规则列表
-            let daoOpt = ORM.executor() as ModelRouteRuleDAO
+            let daoOpt = ORM.executor() as LlmRouteRuleDAO
             if (let Some(dao) <- daoOpt) {
                 let pos = dao.findAllModelRouteRules()
                 var rules = ArrayList<RouteRule>()
@@ -802,7 +815,7 @@ public class ChannelService {
                                 continue
                             }
                             let obj = objOpt.getOrThrow()
-                            let po = ModelChannelPO()
+                            let po = LlmChannelPO()
                             po.code = importStr(obj, "code")
                             if (po.code.isEmpty()) {
                                 continue

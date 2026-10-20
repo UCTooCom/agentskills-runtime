@@ -10,9 +10,8 @@ import magic.app.core.database.{DatabaseConnection, DatabaseConfig, DatabaseConn
 import magic.app.middlewares.auth.{DeserializeUserMiddleware, RequirePermissionMiddleware}
 import magic.app.middlewares.permission.RowLevelPermissionMiddleware
 import magic.app.middlewares.CORSMiddleware
-import magic.app.services.uctoo.{PermissionsService, UserHasRolesService, RoleHasPermissionService, UctooSessionService, UctooPermissionProvider}
+import magic.app.services.uctoo.{PermissionsService, UserHasRolesService, RoleHasPermissionService, UctooSessionService, UctooPermissionProvider, ConfigService}
 import magic.app.utils.auth.{JWTUtil, CookieUtil}
-import magic.app.controllers.uctoo.ws.WsChatController
 import magic.app.routes.skill.SkillRoutes
 import magic.app.routes.tool.ToolRoutes
 import magic.app.routes.webmcp.WebMCPRoutes
@@ -29,7 +28,9 @@ import magic.tool.webmcp.{WebRequestApprovalTool, ApprovalDecisionRecord}
 import magic.app.services.uctoo.AgentApprovalsService
 import magic.app.services.tool.ToolAuditService
 import magic.app.services.uctoo.OperateLogService
+import magic.app.services.ops.{RuntimeLogService, RuntimeCapabilityCollector}
 import magic.config.{Config as AppConfig}
+import magic.app.models.uctoo.ConfigPO
 // 提示词可视化配置（组合根注入，避免 compactor 反向依赖 config；见 PromptConfig 类注释）
 import magic.compactor.PromptConfig
 import magic.core.skill.SkillManager
@@ -58,6 +59,7 @@ import std.convert.*
 import std.collection.ArrayList
 import std.env.{getWorkingDirectory, getVariable}
 import std.fs.*
+import stdx.encoding.json.JsonObject
 import std.fs.Path
 import std.database.sql.DriverManager
 import f_orm.*
@@ -110,7 +112,6 @@ public class Application {
     private let _progressiveSkillLoader: ProgressiveSkillLoader
     private let _skillInstallPath: String
     private var _chatModel: Option<ChatModel> = None
-    private var _chatModelError: Option<String> = None
     private var schedulerEngineInitialized: Bool = false
     private var _agentLoadManager: AgentLoadManager
     private var _pluginManager: Option<PluginHostManager> = None // 插件系统总控（阶段一双轨接入）
@@ -210,34 +211,17 @@ public class Application {
             LogUtils.error("Failed to load skills: ${ex.message}")
         }
 
-        let modelConfigOpt = getVariable("MODEL_CONFIG")
-        let modelProviderOpt = getVariable("MODEL_PROVIDER")
-        let modelNameOpt = getVariable("MODEL_NAME")
-
-        let modelName = if (modelConfigOpt.isSome()) {
-            let mc = modelConfigOpt.getOrThrow()
-            if (!mc.isEmpty()) {
-                mc
-            } else if (modelProviderOpt.isSome() && modelNameOpt.isSome()) {
-                let mp = modelProviderOpt.getOrThrow()
-                let mn = modelNameOpt.getOrThrow()
-                "${mp}:${mn}"
-            } else {
-                "stepfun:step-3"
-            }
-        } else if (modelProviderOpt.isSome() && modelNameOpt.isSome()) {
-            let mp = modelProviderOpt.getOrThrow()
-            let mn = modelNameOpt.getOrThrow()
-            "${mp}:${mn}"
-        } else {
-            "stepfun:step-3"
-        }
-        LogUtils.info("Using chat model: ${modelName}")
-        // T010：不再启动期建实例、也不因模型创建失败跳过路由注册。
-        // 改用 LazyChatModel —— 构造永不抛错，真实 ChatModel 在请求边界按 ChannelRegistry 解析，
-        // 因此「通道失败/未就绪」不再阉割 chat 路由（REQ-DMC-017 V3）。
-        _chatModel = Some(LazyChatModel(modelName))
-        LogUtils.info("Chat model resolver (lazy) prepared: ${modelName}")
+        // Plan A（2026-10-14）：默认聊天通道的真相唯一来自 DB llm_channel.is_default。
+        // 已彻底移除 .env 的 MODEL_* 兜底（大模型通道配置统一由 llm_channel 表承载，
+        // api_key 经 web 管理界面加密写入 llm_channel.api_key）。断库逃生舱改为内置种子通道
+        // 断库逃生舱改为内置种子通道；播种时的默认取 deepseek（2026-10-16 起不再偏袒 arcbench，
+        // 详见 ChannelService.seedIfEmpty），进库后一律以 llm_channel.is_default 为准。
+        let envModelSpec = ""
+        LogUtils.info("Chat default source=DB(llm_channel.is_default); .env MODEL_CONFIG fallback removed")
+        // T010：构造永不抛错，真实 ChatModel 在请求边界解析。
+        // 哨兵 DB_DEFAULT_SPEC 表示「取 DB 默认通道」；无 .env 兜底（fallbackSpec 为空）。
+        _chatModel = Some(LazyChatModel(LazyChatModel.DB_DEFAULT_SPEC, fallbackSpec: envModelSpec))
+        LogUtils.info("Chat model resolver (lazy, DB-default) prepared")
 
         // T010/M2：启动装配通道注册表（DB 优先，空/失败退化为内置种子，保证断库仍可用 V7）。
         // 与 LazyChatModel 配合：注册表就绪后，下一请求按注册表解析真实通道实例。
@@ -245,7 +229,7 @@ public class Application {
             ChannelService.shared().seedIfEmpty()
             ChannelRegistry.shared().load()
             ChannelService.shared().loadRouteRules()
-            // T030：把通道服务注入 Agent 工具，并按 .env 开关决定 Agent 能否自动切通道
+            // T030：把通道服务注入 Agent 工具，并按 config 表开关决定 Agent 能否自动切通道
             injectChannelAgentTools()
             LogUtils.info("ChannelRegistry bootstrap done: ${ChannelRegistry.shared().listSnapshots().size} channels, default=${ChannelRegistry.shared().getDefaultCode()}")
         } catch (e: Exception) {
@@ -419,34 +403,17 @@ public class Application {
             LogUtils.error("Failed to load skills: ${ex.message}")
         }
 
-        let modelConfigOpt = getVariable("MODEL_CONFIG")
-        let modelProviderOpt = getVariable("MODEL_PROVIDER")
-        let modelNameOpt = getVariable("MODEL_NAME")
-
-        let modelName = if (modelConfigOpt.isSome()) {
-            let mc = modelConfigOpt.getOrThrow()
-            if (!mc.isEmpty()) {
-                mc
-            } else if (modelProviderOpt.isSome() && modelNameOpt.isSome()) {
-                let mp = modelProviderOpt.getOrThrow()
-                let mn = modelNameOpt.getOrThrow()
-                "${mp}:${mn}"
-            } else {
-                "stepfun:step-3"
-            }
-        } else if (modelProviderOpt.isSome() && modelNameOpt.isSome()) {
-            let mp = modelProviderOpt.getOrThrow()
-            let mn = modelNameOpt.getOrThrow()
-            "${mp}:${mn}"
-        } else {
-            "stepfun:step-3"
-        }
-        LogUtils.info("Using chat model: ${modelName}")
-        // T010：不再启动期建实例、也不因模型创建失败跳过路由注册。
-        // 改用 LazyChatModel —— 构造永不抛错，真实 ChatModel 在请求边界按 ChannelRegistry 解析，
-        // 因此「通道失败/未就绪」不再阉割 chat 路由（REQ-DMC-017 V3）。
-        _chatModel = Some(LazyChatModel(modelName))
-        LogUtils.info("Chat model resolver (lazy) prepared: ${modelName}")
+        // Plan A（2026-10-14）：默认聊天通道的真相唯一来自 DB llm_channel.is_default。
+        // 已彻底移除 .env 的 MODEL_* 兜底（大模型通道配置统一由 llm_channel 表承载，
+        // api_key 经 web 管理界面加密写入 llm_channel.api_key）。断库逃生舱改为内置种子通道
+        // 断库逃生舱改为内置种子通道；播种时的默认取 deepseek（2026-10-16 起不再偏袒 arcbench，
+        // 详见 ChannelService.seedIfEmpty），进库后一律以 llm_channel.is_default 为准。
+        let envModelSpec = ""
+        LogUtils.info("Chat default source=DB(llm_channel.is_default); .env MODEL_CONFIG fallback removed")
+        // T010：构造永不抛错，真实 ChatModel 在请求边界解析。
+        // 哨兵 DB_DEFAULT_SPEC 表示「取 DB 默认通道」；无 .env 兜底（fallbackSpec 为空）。
+        _chatModel = Some(LazyChatModel(LazyChatModel.DB_DEFAULT_SPEC, fallbackSpec: envModelSpec))
+        LogUtils.info("Chat model resolver (lazy, DB-default) prepared")
 
         // T010/M2：启动装配通道注册表（DB 优先，空/失败退化为内置种子，保证断库仍可用 V7）。
         // 与 LazyChatModel 配合：注册表就绪后，下一请求按注册表解析真实通道实例。
@@ -454,7 +421,7 @@ public class Application {
             ChannelService.shared().seedIfEmpty()
             ChannelRegistry.shared().load()
             ChannelService.shared().loadRouteRules()
-            // T030：把通道服务注入 Agent 工具，并按 .env 开关决定 Agent 能否自动切通道
+            // T030：把通道服务注入 Agent 工具，并按 config 表开关决定 Agent 能否自动切通道
             injectChannelAgentTools()
             LogUtils.info("ChannelRegistry bootstrap done: ${ChannelRegistry.shared().listSnapshots().size} channels, default=${ChannelRegistry.shared().getDefaultCode()}")
         } catch (e: Exception) {
@@ -653,11 +620,7 @@ public class Application {
         
         // 注册聊天相关路由（ChatModel 配置错误时跳过，仅禁用 AI 聊天功能，框架其余部分照常运行）
         if (let Some(chatModel) <- _chatModel) {
-            // 注册WebSocket路由（需要特殊处理）
-            let wsChatController = WsChatController(_skillManager, chatModel, _agentLoadManager)
-            server.registerWebSocketRoute("/api/v1/uctoo/ws/chat", wsChatController.handleChat)
-
-            // 注册 WebMCP 路由（支持前端 webmcp-sdk 通信）
+            // 注册 WebMCP 路由（支持前端 webmcp-sdk 通信，真正的 agent 聊天链路）
             let webmcpRoutes = WebMCPRoutes(router, _skillManager, chatModel, _agentLoadManager)
             webmcpRoutes.register()
             LogUtils.info("WebMCP routes registered successfully")
@@ -672,8 +635,8 @@ public class Application {
             aiRoutes.register()
             LogUtils.info("AI routes registered successfully")
         } else {
-            LogUtils.warn("Chat routes skipped (AI features disabled): invalid model configuration - fix MODEL_CONFIG/MODEL_PROVIDER/MODEL_NAME in .env and restart")
-            println("WARN: Chat routes skipped - AI features disabled until MODEL_CONFIG is fixed. Other framework features work normally.")
+            LogUtils.warn("Chat routes skipped (AI features disabled): no usable default channel in llm_channel (configure api_key + set is_default via web UI)")
+            println("WARN: Chat routes skipped - AI features disabled until a default llm_channel is configured. Other framework features work normally.")
         }
         
         // 注册同步管理路由
@@ -704,12 +667,34 @@ public class Application {
                 case None =>
                     schedulerJson = "\"scheduler\":{\"running\":false,\"error\":\"not initialized\"}"
             }
-            // 暴露 ChatModel 配置状态，供 web/PC 端检测大模型配置是否正确
+            // 暴露 ChatModel 真实可用性（AC-273 / R-41）：不再用 LazyChatModel 是否"拿到一个值"
+            // 冒充可用性，改为反映通道注册表与默认通道的真实健康状态。
             var chatModelJson = "\"chatModel\":{\"available\":true}"
-            if (_chatModel.isNone()) {
-                let errMsg = _chatModelError.getOrDefault({ => "unknown error" })
-                // 转义 JSON 字符串中的特殊字符
-                let safeErrMsg = errMsg.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
+            var chatAvailable = false
+            var chatDetail = ""
+            try {
+                let registry = ChannelRegistry.shared()
+                if (!registry.isLoaded()) {
+                    chatDetail = "通道注册表未加载（无可用模型通道，检查 llm_channel 表与种子配置）"
+                } else {
+                    match (registry.getDefault()) {
+                        case Some(snap) =>
+                            if (snap.status == "disabled") {
+                                chatDetail = "默认模型通道 ${snap.code} 已被禁用（status=disabled）"
+                            } else if (snap.status == "degraded") {
+                                chatDetail = "默认模型通道 ${snap.code} 已被探活降级（status=degraded，连续健康探测失败）"
+                            } else {
+                                chatAvailable = true
+                            }
+                        case None =>
+                            chatDetail = "未配置默认模型通道（llm_channel 中无 is_default=true 的通道）"
+                    }
+                }
+            } catch (e: Exception) {
+                chatDetail = "通道可用性评估异常：${e.message}"
+            }
+            if (!chatAvailable) {
+                let safeErrMsg = chatDetail.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
                 chatModelJson = "\"chatModel\":{\"available\":false,\"error\":\"${safeErrMsg}\"}"
             }
             res.status(200).json("{\"status\":\"ok\",\"version\":\"${runtimeVersion}\",${schedulerJson},${chatModelJson}}")
@@ -717,6 +702,46 @@ public class Application {
         // todo:从cjpm.toml配置文件读取系统信息
         router.get("/api/v1/info", { req, res =>
             res.status(200).json("{\"name\":\"uctoo-backend-v4\",\"version\":\"${runtimeVersion}\",\"language\":\"cangjie\"}")
+        })
+
+        // ===== T054 / T055（M2 冻结区豁免 1/2）：运维只读端点 =====
+        // 实例化系统运行日志读取服务与环境能力采集器（复用同包唯一实现，R-42）。
+        let runtimeLogService = RuntimeLogService()
+        let capabilityCollector = RuntimeCapabilityCollector()
+        // 启动即采集能力清单并落盘 ./runtime/capabilities.json（失败仅记录，不阻断，spec §5 / R-42）。
+        try {
+            capabilityCollector.collectAndPersist()
+            LogUtils.info("RuntimeCapabilityCollector startup collect done")
+        } catch (e: Exception) {
+            LogUtils.warn("RuntimeCapabilityCollector", "启动采集失败（不阻断）: ${e.message}")
+        }
+
+        // T054：运行系统自身日志读取端点。防目录穿越（参数绝不作为路径）、不查业务表（AC-267/270）。
+        router.get("/api/v1/uctoo/ops/logs", { req, res =>
+            let file = match (req.queryParam("file")) {
+                case Some(f) => f
+                case None => ""
+            }
+            var lines: Int64 = -1
+            let linesStr = req.queryParam("lines")
+            if (linesStr.isSome()) {
+                let parsed = Int64.tryParse(linesStr.getOrThrow())
+                if (parsed.isSome()) {
+                    lines = parsed.getOrThrow()
+                }
+            }
+            let json = runtimeLogService.readLog(file, lines, -1).toJsonString()
+            res.status(200).json(json)
+        })
+
+        // T055：系统与环境能力采集端点。复用唯一采集器（R-42）；严禁 Node.js（R-40）。
+        router.get("/api/v1/uctoo/ops/env", { req, res =>
+            try {
+                let json = capabilityCollector.buildOpsResponse()
+                res.status(200).json(json)
+            } catch (e: Exception) {
+                res.status(500).json("{\"ok\":false,\"error\":\"${e.message}\"}")
+            }
         })
         
         println("[STARTUP-DIAG] >>> entering SchedulerEngine.initialize (DB: crontab)")
@@ -1013,9 +1038,22 @@ public class Application {
 func injectChannelAgentTools(): Unit {
     try {
         LlmChannelAgentTools.setChannelService(ChannelService.shared())
+        // 开关真相源已迁移至 config 表（LLM_CHANNEL_AUTO_SWITCH），默认 false；
+        // 兼容过渡期：若 config 表无此行，再回退读 .env（已废弃，后续移除）。
         var autoSwitch = "false"
-        if (let Some(v) <- getVariable("LLM_CHANNEL_AUTO_SWITCH")) {
-            if (!v.isEmpty()) { autoSwitch = v }
+        try {
+            let cfgResult = ConfigService().getConfigByKey("LLM_CHANNEL_AUTO_SWITCH")
+            if (cfgResult.success) {
+                let po = cfgResult.data.getOrThrow()
+                if (let Some(v) <- po.value) {
+                    if (!v.isEmpty()) { autoSwitch = v }
+                }
+            }
+        } catch (_: Exception) {}
+        if (autoSwitch == "false") {
+            if (let Some(v) <- getVariable("LLM_CHANNEL_AUTO_SWITCH")) {
+                if (!v.isEmpty()) { autoSwitch = v }
+            }
         }
         let enabled = autoSwitch == "true" || autoSwitch == "1" || autoSwitch == "TRUE"
         LlmChannelAgentTools.setAutoSwitchEnabled(enabled)

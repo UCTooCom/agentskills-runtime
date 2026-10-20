@@ -53,9 +53,10 @@ public interface MessagesDAO <: RootDAO {
                 creator,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                attachments
             ) values(
-${arg(entity.userId)},
+                ${arg(entity.userId)},
                 ${arg(entity.senderId)},
                 ${arg(entity.messageType)},
                 ${arg(entity.title)},
@@ -67,7 +68,8 @@ ${arg(entity.userId)},
                 ${arg(entity.creator)},
                 ${arg(entity.createdAt)},
                 ${arg(entity.updatedAt)},
-                ${arg(entity.deletedAt)}
+                ${arg(entity.deletedAt)},
+                ${arg(entity.attachments)}
             )
             returning id
         ''').singleFirst<String>() ?? ""
@@ -82,7 +84,7 @@ ${arg(entity.userId)},
      */
     func findMessagesById(id: String): Option<MessagesPO> {
         executor.setSql('''
-            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at from messages where id = ${arg(id)}
+            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at, attachments from messages where id = ${arg(id)}
         ''').first<MessagesPO>()
     }
 
@@ -107,6 +109,7 @@ ${arg(entity.userId)},
                 read_at = ${arg(entity.readAt)},
                 creator = ${arg(entity.creator)},
                 deleted_at = ${arg(entity.deletedAt)},
+                attachments = ${arg(entity.attachments)},
                 updated_at = ${arg(DateTime.now())}
             where id = ${arg(entity.id)}
         ''').update
@@ -157,7 +160,7 @@ ${arg(entity.userId)},
      */
     func findAllMessagesPage(page: Int64, size: Int64): Pagination<MessagesPO> {
         executor.page<MessagesPO>('''
-            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at from messages order by created_at desc
+            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at, attachments from messages order by created_at desc
         ''', size, page: page)
     }
 
@@ -170,7 +173,7 @@ ${arg(entity.userId)},
      */
     func findMessagesByCreatorPage(creator: String, page: Int64, size: Int64): Pagination<MessagesPO> {
         executor.page<MessagesPO>('''
-            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at from messages where creator = ${arg(creator)} order by created_at desc
+            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at, attachments from messages where creator = ${arg(creator)} order by created_at desc
         ''', size, page: page)
     }
 
@@ -180,7 +183,7 @@ ${arg(entity.userId)},
      */
     func listAllMessages(): ArrayList<MessagesPO> {
         executor.setSql('''
-            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at from messages order by created_at desc
+            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at, attachments from messages order by created_at desc
         ''').list<MessagesPO>()
     }
 
@@ -194,7 +197,7 @@ ${arg(entity.userId)},
             return ArrayList<MessagesPO>()
         }
         executor.setSql('''
-            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at from messages where id ${IN(ids)}
+            select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at, attachments from messages where id ${IN(ids)}
         ''').list<MessagesPO>()
     }
 
@@ -233,7 +236,7 @@ ${arg(entity.userId)},
      */
     func findMessagesByFilterPage(link: ?String, description: ?String, deletedAt: ?String, page: Int64, size: Int64): Pagination<MessagesPO> {
         let sql = StringBuilder()
-        sql.append("select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at from messages where 1=1")
+        sql.append("select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at, attachments from messages where 1=1")
 
         if (let Some(linkVal) <- link) {
             if (linkVal != "") {
@@ -306,7 +309,7 @@ ${arg(entity.userId)},
      */
     func findMessagesByDynamicCondition(whereClause: String, orderByClause: String, page: Int64, size: Int64): Pagination<MessagesPO> {
         let sql = StringBuilder()
-        sql.append("select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at from messages")
+        sql.append("select id, user_id, sender_id, message_type, title, content, msg_related_type, related_id, is_read, read_at, creator, created_at, updated_at, deleted_at, attachments from messages")
 
         if (!whereClause.isEmpty()) {
             sql.append(" where ${whereClause}")

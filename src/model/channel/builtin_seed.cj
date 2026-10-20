@@ -3,7 +3,7 @@
  */
 package magic.model.channel
 
-import magic.app.models.uctoo.ModelChannelPO
+import magic.app.models.uctoo.LlmChannelPO
 import std.time.DateTime
 import std.collection.ArrayList
 
@@ -59,7 +59,7 @@ public let BUILTIN_CHANNEL_SEED: Array<BuiltinChannelSeed> = [
     BuiltinChannelSeed("gmicloud", "GMICloud", "openai-chat", "https://api.gmi-serving.com/v1", "GMICLOUD_API_KEY", CHAT_CAP),
     BuiltinChannelSeed("atomgit", "AtomGit", "openai-chat", "https://api.atomgit.com/api/v5", "ATOMGIT_API_KEY", CHAT_CAP),
     BuiltinChannelSeed("evomap", "EvoMap", "openai-chat", "https://api.evomap.ai/v1", "EVOMAP_API_KEY", CHAT_CAP),
-    BuiltinChannelSeed("arcbench", "ArcBench", "openai-chat", "https://api.arc-bench.com/v1", "ARCBENCH_API_KEY", CHAT_CAP),
+    BuiltinChannelSeed("arcbench", "ArcBench", "openai-chat", "https://api.arc-bench.com/v1", "LRT_MODEL_API_KEY", CHAT_CAP),
     BuiltinChannelSeed("tokendance", "Tokendance", "tokendance", "https://tokendance.space/gateway/v1", "TOKENDANCE_API_KEY", CHAT_EMBED_CAP),
     BuiltinChannelSeed("ollama", "Ollama", "ollama", "http://localhost:11434", "", CHAT_EMBED_CAP),
     BuiltinChannelSeed("llamacpp", "LlamaCPP", "llamacpp", "http://localhost:8080", "", EMBED_ONLY_CAP)
@@ -69,36 +69,37 @@ public let BUILTIN_CHANNEL_SEED: Array<BuiltinChannelSeed> = [
  * 把种子数据落成 llm_channel 的 PO（source=seed 由 ChannelService 负责记审计，
  * 这里只产出实体；creator/默认标记等由调用方决定）。
  */
-public func buildSeedChannels(): ArrayList<ModelChannelPO> {
+public func buildSeedChannels(): ArrayList<LlmChannelPO> {
     let now = DateTime.now()
-    let list = ArrayList<ModelChannelPO>()
+    let list = ArrayList<LlmChannelPO>()
     for (s in BUILTIN_CHANNEL_SEED) {
         let secretRef: Option<String> = if (s.keyEnvVar == "") {
             None<String>
         } else {
             Some("env:${s.keyEnvVar}")
         }
-        let po = ModelChannelPO(
-            "",
+        let po = LlmChannelPO(
+            "",                                             // id
             s.code,
-            Some(s.displayName),
+            Some(s.displayName),                           // display_name
             s.protocol,
-            Some(s.baseUrl),
-            secretRef,
-            None<String>,
+            Some(s.baseUrl),                               // base_url
+            secretRef,                                     // secret_ref
+            None<String>,                                  // default_model：留空，由管理员在界面后补
             s.capabilities,
-            "[\"global\"]",
-            0,
-            "enabled",
-            false,
-            "{}",
-            None<DateTime>,
-            "{}",
-            0,
-            None<String>,
-            now,
-            now,
-            None<DateTime>
+            "[\"global\"]",                                // scopes
+            0,                                             // priority
+            "enabled",                                     // status
+            false,                                         // is_default
+            "{}",                                          // health
+            None<DateTime>,                                // probe_at
+            "{}",                                          // config
+            0,                                             // revision
+            None<String>,                                  // creator
+            now,                                           // created_at
+            now,                                           // updated_at
+            None<DateTime>,                                // deleted_at
+            None<String>                                   // api_key：种子只用 secret_ref 引用，绝不落密钥明文/密文
         )
         list.add(po)
     }

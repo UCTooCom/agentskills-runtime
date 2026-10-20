@@ -5,7 +5,7 @@
 **代号**: Recursive Self-Improvement · Native Multimodal（递归自进化 · 原生多模态）
 **平台**: Windows x64, Linux x64, macOS x64/ARM64
 
-> 本版是 0.0.29（Sub-Agent Orchestration）之后的一次大型迭代。主线两条：**① RSI 递归自进化系统从方法论落地为可运行能力**，配套大模型通道管理体系；**② 多模态原生对话 v2**，把文档解析外置为可独立装卸的 L2/L3 插件。同时完成了原生安装器（RuntimeNativeInstaller）的代码闭环、PC 客户端对接、以及 monorepo 开发主目录的奠基。本周期还用 SDD 工程化方法沉淀了 66 份特性规范，作为后续迭代的资产。
+> 本版是 0.0.29（Sub-Agent Orchestration）之后的一次大型迭代。主线两条：**① RSI 递归自进化系统从方法论落地为可运行能力**，配套大模型通道管理体系；**② 多模态原生对话 v2**，把文档解析外置为可独立装卸的 L2/L3 插件。同时完成了原生安装器（RuntimeNativeInstaller）的代码闭环、PC 客户端对接、以及 monorepo 开发主目录的奠基。本周期还用 SDD 工程化方法在 `specs/` 下新建/推进了 16 个工程目录（约 80 份文档），并回补修订了 `.codeartsdoer/specs` 中的 6 个目录（22 份文档，含 3 份特性规范）；该目录合计 66 个工程目录为跨 9 个月的历史累积归档，非本周期产出。
 
 ---
 
@@ -149,7 +149,30 @@ installer 工程自身代码至 **T056 闭环**（59 文件 / ~15.0k 行，CLI �
 
 ### SDD 工程化产出（规范资产）
 
-本周期用 SDD 六步流水线 + 人在回路闸口，在 `.codeartsdoer/specs` 下沉淀了 **66 份特性规范文档**（含多子系统工程与单特性工程），涵盖：agent-intelligence、skill-evolution、concurrent-skills、profile、memory-provider、context-optimization、agent-teams、agent-orchestration、agent-loop、agent-error-recovery、dynamic-model-channel、fullstack-codegen、language-skills-orchestration、collaboration-skills、code-gen-skills、agentic-factory 等。这些是当前迭代的**设计/规范资产**，多数处于 spec/design 阶段，作为后续代码实现的输入。
+> **口径更正（2026-10-21 复核）**：下文原先表述的"本周期沉淀 66 份特性规范、多数处于 spec/design 待实现"与目录实际更新时间不符，已按实测数据重写。
+
+`.codeartsdoer/specs` 现共 **66 个工程目录 / 451 份文档**，时间跨度 **2025-12 ~ 2026-10-14**（其中 17 个目录的最新修改时间完全相同，为 2026-07-24 05:30 的批量补写）。按文件修改时间统计，**本周期（0.0.29 发布 10-03 → 0.0.30 发布 10-18）内实际有更新的仅 6 个目录、22 个文件**：
+
+| 目录 | 更新时间 | 文件数 | 性质 |
+|------|---------|--------|------|
+| `concurrent_skills` | 10-13 ~ 10-14 | 5 | 特性规范（v2 修订） |
+| `dynamic-model-channel` | 10-04 ~ 10-06 | 5 | 特性规范（本版主线配套） |
+| `AgenticSoftwareFactoryHackathon` | 10-03 ~ 10-04 | 4 | 黑客松参赛材料 |
+| `profile` | 10-13 | 1 | 参考资料单文件 |
+| `plugin-system` | 10-07 | 1 | 单篇缺口记录 |
+| `sdd` | 10-14 | 5 | SDD 方法论模板（非特性规范） |
+
+即真正属于「特性规范」的本周期产出是 **3 个目录**（`concurrent_skills` / `dynamic-model-channel` / `plugin-system`），另 2 个为参考资料与黑客松材料、1 个为 SDD 方法论模板——合计 6 个目录、22 份文件，而非 66 份。
+
+**实现方式以"代码先行、文档回补"为主**。具体证据：
+
+- 66 个目录中 **31 个的文档含「存量功能」分析章节**（29 个特性目录 + `sdd`/`sdd-skills` 方法论目录）。典型如 `fullstack-codegen/design.md`、`skill-evolution/design.md`，首章即"一、需求与存量功能关系分析 → 1.1 已实现功能"，逐条列出「需求功能 / 存量功能 / 代码位置 / 匹配度」，匹配度标到 100%（后端 CRUD 生成 → `src/app/tools/crudgen/`）、90%（定时任务调度 → `src/app/services/crontab/SchedulerEngine.cj`）。这是**从既有代码反向整理规范**的结构，不是先设计后实现。
+- `concurrent_skills/tasks.md` 头部明载：`完成状态（2026-10-14 复核）：96 项已标注完成 / 15 项待办`，且 v2 修订摘要为"修复渐进式加载设计漂移"——即文档用于记录并校正既有实现。
+- 抽样核对源码：已有实现的包括 `concurrent_skills`（→ `src/skill/parallel/budget_manager.cj`、`profile_context_assembler.cj` 等）、`dynamic-model-channel`（→ `src/app/controllers/uctoo/llm_channel/`、`src/app/dao/uctoo/LlmChannelDAO.cj`）、`memory-provider`（→ `src/interaction/memory_provider.cj`）；**查无对应实现**的包括 `agent-intelligence`（RepoMap / PageRank）、`context-optimization`（5 层压缩管道）。
+
+因此这批文档的正确定性是：**既有实现的规范化沉淀 + 未落地特性的设计输入，两者混合**，而非统一"待实现的规范资产"。
+
+**本周期真正新建的 SDD 工程在 `specs/` 下**（19 个目录 / 111 份文档，其中 80 份写于 2026-10）：`plugin-system-enhancement` 主工程 + 6 子系统（10-19，29 份）、`PcClientInstallerIntegration`（10-18）、`RuntimeNativeInstaller`（10-17）、`RSI`（10-17）、`multimodal-native-chat` 主工程 + 4 子系统（10-16）、`web-admin-migration`（10-11）、`UctooMonorepoWorkspace`（10-10）；另 3 个（`001-mcp-agent-skills`、`002-agentskills-standard-support`、`003-agentskills-enhancement`）为 2026-01~02 的历史目录。
 
 ---
 
@@ -283,7 +306,7 @@ set CORDIS_SKIP_PROCESS_PLUGINS=sdd
 | [RuntimeNativeInstaller 状态盘点](./specs/RuntimeNativeInstaller/STATUS.md) | 安装器完成度与跨工程项 |
 | [PcClientInstallerIntegration 状态](./specs/PcClientInstallerIntegration/STATUS.md) | PC 客户端对接 Phase 1~5 状态 |
 | [UctooMonorepoWorkspace 规格](./specs/UctooMonorepoWorkspace/spec.md) | monorepo 目录与工具选型 |
-| [特性规范资产目录](./.codeartsdoer/specs/) | 本周期 SDD 产出的 66 份特性规范 |
+| [特性规范资产目录](./.codeartsdoer/specs/) | 历史累积归档 66 个工程目录 / 451 份文档（本周期更新 6 个、22 份） |
 
 ---
 
@@ -295,7 +318,7 @@ set CORDIS_SKIP_PROCESS_PLUGINS=sdd
 - **会话永不过期 / 日志无滚动**：沿用 0.0.29 已知问题，`login_health_check_20261003.sql` 默认 `ROLLBACK` 干跑，需人工改 `COMMIT` 才生效。
 - **stdx 的 OpenSSL DLL 硬编码问题**尚未在 stdx 侧修复：Windows 上用 stdx crypto 且装了 OpenSSL 4.x 的用户仍可能 401，靠出包复制 `*-3-x64.dll` 规避。
 - **cjpm 增量构建不因「依赖 compile-option 变更」重编依赖**：cordis-cj 升级后务必 `cjpm clean && cjpm build`，否则新依赖不生效。
-- **部分 SDD 特性规范尚在设计阶段**：66 份规范中多数处于 spec/design，未全部进入代码实现，不构成本版可交付功能。
+- **`.codeartsdoer/specs` 系累积归档，不计入本版交付**：66 个目录中本周期仅 6 个有更新（22 个文件）；其中 29 个特性目录是以「存量功能 / 代码位置 / 匹配度」对照开篇的回补式规范（如 `concurrent_skills` 已 96/111 完成、`fullstack-codegen` 匹配度 100%），另有 `agent-intelligence`、`context-optimization` 等确无源码落地。整体不等同于"66 份待实现的规范"，不构成本版可交付功能。
 - **L3 进程轨插件的 `stdx` DLL 路径注入**依赖 `CANGJIE_STDX_PATH` 环境变量，某些 cjpm 配置下可能需手动设置。
 - **OpenTiny `genui-sdk-vue` 依赖断裂**、frameworks/vue 与 tiny-robot 0.5.1 版本冲突，GenUI 渲染器集成暂缓（P2）。
 - cordis-cj 的 UDS 传输在 Windows 上不可用，L3 轨固定使用 stdio。

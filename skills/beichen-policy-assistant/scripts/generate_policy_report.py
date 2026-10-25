@@ -75,23 +75,55 @@ def check_condition(cond_val: str, profile: dict, kind: str) -> str:
     return "待核实"
 
 
+def is_pending(m: dict) -> bool:
+    """判定条目是否处于「待核实」状态（G5 过滤依据）"""
+    if not m:
+        return False
+    if m.get("status") == "待核实":
+        return True
+    cred = m.get("credibility") or {}
+    return cred.get("status") == "待核实"
+
+
 def build_template_report(profile: dict, matches: dict) -> str:
+    all_matches = matches.get("matches", []) or []
+    # G5：待核实项禁止进入正式报告
+    credible = [m for m in all_matches if not is_pending(m)]
+    pending = [m for m in all_matches if is_pending(m)] + (matches.get("excluded") or [])
+
     lines = [f"# 政策适配研判报告 - {profile.get('company_name', '')}", ""]
     lines.append(f"- 生成日期：{matches.get('match_date', '')}")
     lines.append(f"- 注册区域：{profile.get('region', '')}")
     lines.append(f"- 所属行业：{'、'.join(profile.get('industry', [])) or '待核实'}")
     lines.append(f"- 企业资质：{'、'.join(profile.get('qualification', [])) or '暂无'}")
     lines.append("")
+    lines.append("## 适用范围（务必阅读）")
+    lines.append("")
+    lines.append("> 本报告的政策依据来自**本地政策原文库（北京地区政策，当前 74 条）**与公开渠道检索结果，")
+    lines.append("> **不代表全国通用**，也不覆盖各区自行发布的全部细则；跨地区或区级申报请以当地主管部门发布的原文为准。")
+    lines.append("> 未能在原文库中备案的结论，均在报告中标注「未备案」并保留可点开来源，供人工复核。")
+    lines.append("")
     lines.append("## 匹配政策清单（按匹配度排序）")
     lines.append("")
-    lines.append("| 序号 | 政策编号 | 政策名称 | 层级/领域 | 匹配度 | 匹配依据 |")
-    lines.append("|------|---------|---------|----------|--------|---------|")
-    for i, m in enumerate(matches.get("matches", []), 1):
-        lines.append(f"| {i} | {m.get('policy_no')} | {m.get('title')} | {m.get('level')}/{m.get('domain')} | {m.get('score')} | {m.get('basis')} |")
+    lines.append("| 序号 | 政策编号 | 政策名称 | 层级/领域 | 匹配度 | 匹配依据 | 来源 |")
+    lines.append("|------|---------|---------|----------|--------|---------|------|")
+    for i, m in enumerate(credible, 1):
+        if m.get("url"):
+            src = f"[原文]({m['url']})"
+        elif m.get("file"):
+            src = f"原文库 {m['file']}"
+        else:
+            src = "—"
+        lines.append(
+            f"| {i} | {m.get('policy_no') or '—'} | {m.get('title')} | {m.get('level')}/{m.get('domain')} "
+            f"| {m.get('score')} | {m.get('basis')} | {src} |"
+        )
+    if not credible:
+        lines.append("| — | — | 本次未查到可采信的匹配政策 | — | — | — | — |")
     lines.append("")
     lines.append("## 申报条件对标分析")
     lines.append("")
-    for m in matches.get("matches", []):
+    for m in credible:
         lines.append(f"### 政策 {m.get('policy_no')} - {m.get('title')}")
         cond = m.get("conditions") or {}
         if cond.get("region"):
@@ -108,12 +140,31 @@ def build_template_report(profile: dict, matches: dict) -> str:
         lines.append("")
     lines.append("## 申报建议与优先级")
     lines.append("")
-    for i, m in enumerate(matches.get("matches", [])[:5], 1):
+    for i, m in enumerate(credible[:5], 1):
         lines.append(f"{i}. 【高优先级】可申报" + (f"（匹配度 {m.get('score')} 分）" if m.get('score') else ""))
-        lines.append(f"   - 政策：{m.get('title')}（编号 {m.get('policy_no')}）")
-        lines.append(f"   - 支持方式：{m.get('support', '待补充')}")
+        lines.append(f"   - 政策：{m.get('title')}（编号 {m.get('policy_no') or '—'}）")
+        lines.append(f"   - 支持方式：{m.get('support') or '待补充'}")
         lines.append(f"   - 建议关注 {m.get('department', '')} 官网申报通知")
+        if m.get("url"):
+            lines.append(f"   - 来源：{m['url']}")
+
+    # 「敢说不知道」对外可见：未查到可靠依据的条目单列，绝不放进正式结论
     lines.append("")
+    lines.append("## 未查到可靠依据（已排除出正式结论）")
+    lines.append("")
+    if not pending:
+        lines.append("本次未产生被排除的条目。")
+        lines.append("")
+    else:
+        lines.append(f"以下 {len(pending)} 条线索**无法核验出处**（信源不可核验 / 已过时效 / 原文库不可用且非政府信源），")
+        lines.append("已按要求排除出正式结论，**不作为申报依据**：")
+        lines.append("")
+        lines.append("| 序号 | 线索标题 | 排除原因 |")
+        lines.append("|------|---------|---------|")
+        for k, p in enumerate(pending, 1):
+            reason = p.get("reason") or (p.get("credibility") or {}).get("reason") or "原文库未命中，未备案"
+            lines.append(f"| {k} | {p.get('title') or '（无标题）'} | {reason} |")
+        lines.append("")
     lines.append("## 合规声明")
     lines.append("")
     lines.append("> 本报告由产业政策智能体自动生成，数据来源于公开渠道与政策知识库，每条匹配结论均已溯源至政策原文库编号；仅供申报参考，不构成法律意见。")

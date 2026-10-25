@@ -65,8 +65,14 @@ public class AuthorizeUtil {
      * @param res HTTP响应对象
      * @param authProvider 认证提供者
      * @param isLocal 是否本地登录
+     * @param agentAccessToken 人类登录成功后顺带签发的主 agent token（D3），为空表示未签发
+     * @param agentUserId 主 agent 绑定的 uctoo_user.id
+     * @param agentId 主 agent 实体 id（agents.id）
+     * @param agentTokenTtl 主 agent token 有效期（秒）
      */
-    public func authorizeAndEnd(user: UctooUserPO, req: HttpRequest, res: HttpResponse, authProvider: Int32, isLocal: Bool): Unit {
+    public func authorizeAndEnd(user: UctooUserPO, req: HttpRequest, res: HttpResponse, authProvider: Int32, isLocal: Bool,
+                                agentAccessToken!: String = "", agentUserId!: String = "",
+                                agentId!: String = "", agentTokenTtl!: Int64 = 0): Unit {
         try {
             // 1. 创建会话
             let userAgent = req.header("user-agent") ?? "No agent detected"
@@ -99,7 +105,9 @@ public class AuthorizeUtil {
                     res.status(302).header("Location", frontendUrl)
                 } else {
                     // 本地登录，返回JSON
-                    let responseData = buildLoginResponse(user, accessToken, refreshToken)
+                    let responseData = buildLoginResponse(user, accessToken, refreshToken,
+                        agentAccessToken: agentAccessToken, agentUserId: agentUserId,
+                        agentId: agentId, agentTokenTtl: agentTokenTtl)
                     res.status(200).json(responseData)
                 }
             } else {
@@ -189,8 +197,12 @@ public class AuthorizeUtil {
     
     /**
      * 构建登录响应
+     *
+     * agent 三元组只在签发成功时追加；为空则响应结构与改造前逐字一致（旧前端零兼容成本）。
      */
-    private func buildLoginResponse(user: UctooUserPO, accessToken: String, refreshToken: String): String {
+    private func buildLoginResponse(user: UctooUserPO, accessToken: String, refreshToken: String,
+                                    agentAccessToken!: String = "", agentUserId!: String = "",
+                                    agentId!: String = "", agentTokenTtl!: Int64 = 0): String {
         // 获取 Token TTL 配置
         let accessTokenTTL = getTokenTTL("ACCESS_TOKEN_VALIDITY_SEC", 1728000)
         let refreshTokenTTL = getTokenTTL("REFRESH_TOKEN_VALIDITY_SEC", 6048000)
@@ -208,6 +220,15 @@ public class AuthorizeUtil {
         sb.append("\"access_token_ttl\":${accessTokenTTL},")
         sb.append("\"refresh_token_ttl\":${refreshTokenTTL},")
         sb.append("\"uctoo_user\":${userToJsonWithRolesAndPermissions(user, roles, permissions)}")
+        // 主 agent 无密码自动登录产物（D3）。刻意**不写 Cookie**：agent token 与主 token
+        // 不同身份，塞进 Cookie 会被后续请求默认携带，等于把 agent 身份静默套在所有调用上。
+        // 交给前端显式持有，谁要用 agent 身份谁自己带。
+        if (!agentAccessToken.isEmpty()) {
+            sb.append(",\"agent_access_token\":\"${agentAccessToken}\",")
+            sb.append("\"agent_user_id\":\"${agentUserId}\",")
+            sb.append("\"agent_id\":\"${agentId}\",")
+            sb.append("\"agent_access_token_ttl\":${agentTokenTtl}")
+        }
         sb.append("}")
         sb.append("}")
         sb.toString()

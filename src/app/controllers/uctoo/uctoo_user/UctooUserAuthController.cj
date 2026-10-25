@@ -5,7 +5,8 @@ package magic.app.controllers.uctoo.uctoo_user
 
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.models.uctoo.{UctooUserPO, UserHasRolesPO}
-import magic.app.services.uctoo.{UctooUserService, LoginLogService, SmsLogService, UserHasRolesService}
+import magic.app.services.uctoo.{UctooUserService, LoginLogService, SmsLogService, UserHasRolesService, AgentsService}
+import magic.app.services.aip.AgentAuthService
 import magic.app.utils.auth.{BcryptUtil, AuthorizeUtil, JWTUtil, AuthProvider}
 import magic.log.LogUtils
 import std.time.DateTime
@@ -140,14 +141,26 @@ public class UctooUserAuthController {
             LoginLogService.recordLoginSuccess(loginAccount, clientIp, browser, os, Some<String>(u.id))
             let msLog = (MonoTime.now() - tLog).toMilliseconds()
             
-            // 4. 授权登录（建会话 + 签 token + 写回响应）
+            // 4. 主 agent 无密码自动登录（D3）：人类账号登录成功即顺带把主 agent 也登录上。
+            //    不区分人类账号的角色——只要口令校验通过就触发，agent 账号本身禁止口令登录，
+            //    所以「人类登录成功」就是这里唯一可信的授权凭据。
+            //    **失败绝不阻断人类登录**（见 autoLoginMainAgent 的红线注释）。
+            //    已知边界：只覆盖本地口令登录这条路径。OAuth 回调走 302 重定向、没有 JSON 载体，
+            //    agent token 无处安放，故不触发（需要时应在回调落地页再补一次显式调用）。
+            let tAgent = MonoTime.now()
+            let (agentToken, agentUserId, agentId, agentTtl) = autoLoginMainAgent(loginAccount)
+            let msAgent = (MonoTime.now() - tAgent).toMilliseconds()
+
+            // 5. 授权登录（建会话 + 签 token + 写回响应）
             let tAuth = MonoTime.now()
-            authorizeUtil.authorizeAndEnd(u, req, res, AuthProvider.Local, true)
+            authorizeUtil.authorizeAndEnd(u, req, res, AuthProvider.Local, true,
+                agentAccessToken: agentToken, agentUserId: agentUserId,
+                agentId: agentId, agentTokenTtl: agentTtl)
             let msAuth = (MonoTime.now() - tAuth).toMilliseconds()
             
             let msTotal = (MonoTime.now() - tStart).toMilliseconds()
             LogUtils.info("SigninTiming",
-                "account=${loginAccount} total=${msTotal}ms query=${msQuery}ms bcrypt=${msBcrypt}ms loginLog=${msLog}ms authorize=${msAuth}ms")
+                "account=${loginAccount} total=${msTotal}ms query=${msQuery}ms bcrypt=${msBcrypt}ms loginLog=${msLog}ms agentAutoLogin=${msAgent}ms authorize=${msAuth}ms")
             if (msTotal > 3000) {
                 // 只报内部告警阈值。前端 axios 超时由前端配置决定，硬编码在这里会随前端调整而失真：
                 // 2026-10-03 实测文案仍写着 15000ms，而前端早已放宽到 30 秒，排查时容易被误导。
@@ -158,6 +171,68 @@ public class UctooUserAuthController {
         } catch (e: Exception) {
             LogUtils.error("Signin failed: ${e.message}")
             res.status(500).json("{\"errno\":\"50000\",\"errmsg\":\"${e.message}\"}")
+        }
+    }
+    
+    /// 主 agent 无密码自动登录（D3）。
+    ///
+    /// 需求：人类账号通过登录接口登录成功后，**随即**自动登录主 agent 账号，且不区分
+    /// 人类账号的角色——口令校验通过本身就是这里的授权凭据（agent 账号自身禁止口令
+    /// 登录，见上面 signin 的 AUTH-AGENT-001，所以不存在「人类冒用 agent 口令」的路径）。
+    ///
+    /// 为什么绑的是主 agent 而不是「该用户自己的 agent」：主 agent（agent_type='MAIN'）
+    /// 是系统级单例，与人类账号是多对一。人类一侧的身份靠自己那份 token；agent 一侧只
+    /// 解决「以 agent 身份执行」的署名问题，任务归属由 `owner_user_id` 记真人
+    /// （agent-user-dual-identity design D1），两者不冲突。
+    ///
+    /// 红线：
+    ///   - **失败绝不阻断人类登录**。主 agent 缺失、未绑定 uctoo_user、status 不为 1、
+    ///     签发异常，一律降级为空 token + 一条日志，人类登录照常成功。把 agent 侧的
+    ///     故障透传成 500，等于让身份子系统的一次抖动挡住所有人进门。
+    ///   - 主 agent 判据与 `GET /api/v1/uctoo/agents/main` 同款（agent_type='MAIN' 第一条）。
+    ///   - 此处**不把 token 塞进 Cookie**，也不写进进程级 TokenManager：前者会让 agent
+    ///     身份被后续请求默认携带，后者会留下无人清理的常驻状态。token 只随本次登录
+    ///     响应返回，由前端显式持有。
+    ///
+    /// @param loginAccount 仅用于日志定位的人类登录名
+    /// @return (agentToken, agentUserId, agentId, ttl)；未签发时 token 为空串
+    private func autoLoginMainAgent(loginAccount: String): (String, String, String, Int64) {
+        let empty: (String, String, String, Int64) = ("", "", "", 0)
+        try {
+            // 过滤条件写法与 `GET /api/v1/uctoo/agents/main` 逐字一致，保证两处挑中的是同一条
+            let mainFilter = "{\"agent_type\":{\"equals\":\"MAIN\"}}"
+            let (agents, _) = AgentsService().getListWithFilter(1, 1, "", mainFilter)
+            if (agents.size == 0) {
+                LogUtils.warn("AgentAutoLogin",
+                    "人类账号 ${loginAccount} 登录成功，但库中没有 MAIN 主 agent，跳过 agent 自动登录")
+                return empty
+            }
+            let mainAgent = agents[0]
+            let st: Int32 = mainAgent.status.getOrDefault({ => 0 })
+            if (st != 1) {
+                LogUtils.warn("AgentAutoLogin",
+                    "主 agent ${mainAgent.id} 的 status=${st}（期望 1），跳过 agent 自动登录")
+                return empty
+            }
+            let result = AgentAuthService().agentAutoLogin(mainAgent.id)
+            if (!result.success) {
+                let failReason = result.reason ?? "未知原因"
+                LogUtils.warn("AgentAutoLogin",
+                    "主 agent ${mainAgent.id} 自动登录失败（不阻断人类登录）：${failReason}")
+                return empty
+            }
+            if (result.data.isNone()) {
+                LogUtils.warn("AgentAutoLogin", "主 agent ${mainAgent.id} 自动登录返回空数据，跳过")
+                return empty
+            }
+            let login = result.data.getOrThrow()
+            let agentUserId = mainAgent.userId.getOrDefault({ => "" })
+            LogUtils.info("AgentAutoLogin",
+                "人类账号 ${loginAccount} 登录成功，主 agent 同步登录：agentId=${mainAgent.id}, agentUserId=${agentUserId}")
+            return (login.accessToken, agentUserId, mainAgent.id, login.expiresIn)
+        } catch (e: Exception) {
+            LogUtils.error("AgentAutoLogin: 主 agent 自动登录异常（不阻断人类登录）: ${e.message}")
+            return empty
         }
     }
     

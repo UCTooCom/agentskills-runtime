@@ -1,0 +1,10 @@
+# yuanbao-policy 插件清单（L3 进程隔离轨）
+# 本插件不依赖任何数据库表，能力为「元宝搜索检索 + 可信度四因子标注 + 政策原文库交叉验证」。
+name: yuanbao-policy
+version: 1.0.0
+mode: process
+command: ./skills/yuanbao-policy/target/release/bin/skill_yuanbao_policy.exe
+enabled: true
+order: 20
+autoRestart: true
+description: L3 进程隔离轨插件 yuanbao-policy（元宝搜索检索内核，输出带可信度标签与政策编号的结构化线索）

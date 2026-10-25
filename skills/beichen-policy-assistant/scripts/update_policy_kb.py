@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.request
 from datetime import datetime
@@ -27,6 +28,10 @@ SOURCE_URLS = {
     "北京市科委": "https://kw.beijing.gov.cn/",
     "中关村管委会": "https://zgcgw.beijing.gov.cn/",
 }
+
+# T-16：储备条目状态（人工研判前）/ 人工确认后的状态
+PENDING_STATUS = "待研判"
+CONFIRMED_STATUS = "confirmed"
 
 
 def script_dir():
@@ -68,12 +73,66 @@ def fetch_source(url: str) -> list:
     return items
 
 
+def fetch_yuanbao(query: str, freshness: str):
+    """T-16：调用 yuanbao-search 做政策巡检（--industry gov + 时效窗）。
+
+    只取「可采信」条目进储备库，每条必带 url / 发现时间 / 来源请求标识（spec §6.8）。
+    通道失败不抛异常，返回失败条目由调用方记录并继续（G13）。
+    """
+    script = os.path.normpath(os.path.join(script_dir(), "..", "..", "yuanbao-search",
+                                           "scripts", "yuanbao_search.py"))
+    if not os.path.exists(script):
+        return [], [{"source": "yuanbao-search", "error": f"检索脚本不存在：{script}"}]
+    argv = [sys.executable, script, "--query", query, "--industry", "gov", "--cnt", "50"]
+    if freshness:
+        argv += ["--freshness", freshness]
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", timeout=180)
+    except Exception as e:  # noqa: BLE001
+        return [], [{"source": "yuanbao-search", "error": str(e)}]
+    out = (r.stdout or "").strip()
+    if not out:
+        return [], [{"source": "yuanbao-search", "error": "检索无输出（配额或网络异常）"}]
+    try:
+        data = json.loads(out)
+    except Exception:  # noqa: BLE001
+        return [], [{"source": "yuanbao-search", "error": "检索输出无法解析"}]
+    if data.get("ok") is False:
+        return [], [{"source": "yuanbao-search", "error": data.get("error") or "检索通道降级",
+                     "degraded": True}]
+    now = datetime.now().isoformat()
+    request_id = str(data.get("requestId", ""))
+    items = []
+    for it in data.get("items") or []:
+        items.append({
+            "policy_no": None,
+            "policyNo": it.get("policyNo", ""),
+            "policyFile": it.get("policyFile", ""),
+            "title": it.get("title", ""),
+            "url": it.get("url", ""),
+            "site": it.get("site", ""),
+            "department": it.get("site", ""),
+            "level": "",
+            "domain": "",
+            "published_date": it.get("date", ""),
+            "discovered_at": now,
+            "request_id": request_id,
+            "freshness": freshness or "",
+            "credibility": it.get("credibility"),
+            "source": "yuanbao-search(gov)",
+            "status": PENDING_STATUS,
+        })
+    return items, []
+
+
 def demo_pending(date: str) -> list:
-    """生成示例储备流水（模拟抓取结果，覆盖 pending 与 confirmed 状态）。"""
+    """生成示例储备流水（模拟抓取结果，覆盖 待研判 与 confirmed 状态）。"""
     return [
         {"policy_no": None, "title": "朝阳区关于支持数据要素产业高质量发展的若干措施（征求意见稿）",
          "url": "https://example.gov.cn/notice/demo-1", "department": "朝阳区数据局",
-         "level": "区级", "domain": "数据要素", "published_date": date, "status": "pending"},
+         "level": "区级", "domain": "数据要素", "published_date": date,
+         "discovered_at": datetime.now().isoformat(), "request_id": "demo", "source": "demo",
+         "status": PENDING_STATUS},
         {"policy_no": None, "title": "北京市关于进一步支持人工智能创新应用的通知",
          "url": "https://example.gov.cn/notice/demo-2", "department": "北京市经信局",
          "level": "市级", "domain": "人工智能", "published_date": date, "status": "confirmed",
@@ -82,25 +141,64 @@ def demo_pending(date: str) -> list:
 
 
 def fetch_mode(args):
+    freshness = getattr(args, "freshness", "m3") or "m3"
+    query = getattr(args, "query", "") or "北京 产业政策 申报 通知 支持措施"
     pending = []
+    failed_sources = []
+    yuanbao_count = 0
+    request_id = ""
+
     if args.demo:
         pending = demo_pending(args.date)
     else:
-        sources = SOURCE_URLS if args.sources == "default" else {u: u for u in args.sources.split(",")}
-        for name, url in sources.items():
+        # T-16：--sources 支持 default / yuanbao / 逗号分隔 URL，可组合；单源失败记录并继续（G13）
+        tokens = [t.strip() for t in (args.sources or "").split(",") if t.strip()]
+        if not tokens:
+            tokens = ["default"]
+        src_map = {}
+        use_yuanbao = False
+        for t in tokens:
+            if t == "default":
+                src_map.update(SOURCE_URLS)
+            elif t == "yuanbao":
+                use_yuanbao = True
+            else:
+                src_map[t] = t
+
+        if use_yuanbao:
+            items, failed = fetch_yuanbao(query, freshness)
+            for it in items:
+                if not request_id and it.get("request_id"):
+                    request_id = it["request_id"]
+                pending.append(it)
+                yuanbao_count += 1
+            failed_sources.extend(failed)
+
+        for name, url in src_map.items():
             items = fetch_source(url)
             for it in items:
                 if "error" in it:
-                    pending.append({"source": name, "url": url, "error": it["error"]})
+                    pending.append({"source": name, "url": url, "error": it["error"],
+                                    "discovered_at": datetime.now().isoformat(),
+                                    "status": PENDING_STATUS})
+                    failed_sources.append({"source": name, "url": url, "error": it["error"]})
                 else:
-                    it.update({"source": name, "department": name, "published_date": args.date, "status": "pending"})
+                    it.update({"source": name, "department": name, "published_date": args.date,
+                               "discovered_at": datetime.now().isoformat(), "request_id": "",
+                               "status": PENDING_STATUS})
                     pending.append(it)
+
     os.makedirs(args.pending, exist_ok=True)
     out = os.path.join(args.pending, f"{args.date}.json")
-    payload = {"date": args.date, "fetched_at": datetime.now().isoformat(), "count": len(pending), "items": pending}
+    payload = {"date": args.date, "fetched_at": datetime.now().isoformat(), "count": len(pending),
+               "pending_status": PENDING_STATUS, "yuanbao_count": yuanbao_count,
+               "request_id": request_id, "freshness": freshness,
+               "failed_sources": failed_sources, "items": pending}
     with open(out, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
-    print(json.dumps({"success": True, "mode": "fetch", "output": out, "count": len(pending)}, ensure_ascii=False))
+    print(json.dumps({"success": True, "mode": "fetch", "output": out, "count": len(pending),
+                      "yuanbao_count": yuanbao_count, "failed_sources": len(failed_sources)},
+                     ensure_ascii=False))
 
 
 def render_markdown(item: dict, new_no: str) -> str:
@@ -138,10 +236,20 @@ def commit_mode(args):
         sys.exit(1)
     with open(pending_file, encoding="utf-8") as f:
         payload = json.load(f)
-    confirmed = [it for it in payload.get("items", []) if it.get("status") == "confirmed" and not it.get("policy_no")]
+    # T-16：只采纳人工确认（confirmed）的条目；历史 "pending" 归一化为「待研判」并保留
+    legacy_migrated = 0
+    for it in payload.get("items", []):
+        if it.get("status") == "pending":
+            it["status"] = PENDING_STATUS
+            legacy_migrated += 1
+    confirmed = [it for it in payload.get("items", [])
+                 if it.get("status") == CONFIRMED_STATUS and not it.get("policy_no")]
     if not confirmed:
+        with open(pending_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
         print(json.dumps({"success": True, "mode": "commit", "committed": 0,
-                          "note": "无已确认待入库条目"}, ensure_ascii=False))
+                          "note": "无已确认待入库条目（条目仍保持「待研判」，需人工研判后标记 confirmed）",
+                          "pending_count": len(payload.get("items", []))}, ensure_ascii=False))
         return
 
     index_path = os.path.join(args.kb, "policy-index.json")
@@ -167,6 +275,7 @@ def commit_mode(args):
             "file": os.path.join("policy-original", fname),
         })
         item["policy_no"] = new_no
+        item["status"] = CONFIRMED_STATUS
         item["reviewer"] = args.reviewer
         item["reviewed_at"] = review_time
         committed += 1
@@ -176,7 +285,9 @@ def commit_mode(args):
     with open(pending_file, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     print(json.dumps({"success": True, "mode": "commit", "committed": committed,
-                      "reviewer": args.reviewer, "next_policy_no": str(max_no)}, ensure_ascii=False))
+                      "reviewer": args.reviewer, "reviewed_at": datetime.now().strftime("%Y-%m-%d"),
+                      "next_policy_no": str(max_no), "legacy_migrated": legacy_migrated},
+                     ensure_ascii=False))
 
 
 def main():
@@ -188,6 +299,8 @@ def main():
     parser.add_argument("--demo", action="store_true", help="生成示例储备流水")
     parser.add_argument("--kb", default=default_kb(), help="知识库根目录")
     parser.add_argument("--pending", default=default_pending(), help="储备库目录")
+    parser.add_argument("--freshness", default="m3", help="时效窗（元宝巡检用，如 d7/m3/y1）")
+    parser.add_argument("--query", default="北京 产业政策 申报 通知 支持措施", help="元宝巡检检索词")
     args = parser.parse_args()
 
     if args.commit:

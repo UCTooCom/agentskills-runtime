@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.request
 from datetime import datetime
@@ -27,6 +28,141 @@ try:
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
+
+
+# ---------------------------------------------------------------------------
+# T-12：缺失字段经检索采集并标来源，禁止编造（REQ-PD-020/021、spec §6.5 第 2 条）
+# ---------------------------------------------------------------------------
+
+# 可被检索补采的字段（画像路径 ↔ 中文名）
+SEARCHABLE_FIELDS = [
+    ("business.registered_capital", "注册资本"),
+    ("business.established_time", "成立日期"),
+    ("business.legal_representative", "法定代表人"),
+    ("business.business_scope", "经营范围"),
+    ("operation.scale", "企业规模"),
+    ("operation.products", "产品/业务"),
+    ("industry", "所属行业"),
+    ("qualification", "资质认定"),
+]
+
+
+def search_script():
+    """检索脚本路径（PY 版调用同语言版本，保证行为一致）。"""
+    return os.path.normpath(os.path.join(script_dir(), "..", "..", "yuanbao-search", "scripts", "yuanbao_search.py"))
+
+
+def get_by_path(obj, p):
+    cur = obj
+    for k in p.split("."):
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(k)
+    return cur
+
+
+def set_by_path(obj, p, v):
+    ks = p.split(".")
+    cur = obj
+    for k in ks[:-1]:
+        if not isinstance(cur.get(k), dict):
+            cur[k] = {}
+        cur = cur[k]
+    cur[ks[-1]] = v
+
+
+def is_blank(v):
+    if isinstance(v, list):
+        return len(v) == 0
+    s = str(v if v is not None else "").strip()
+    return not s or s in ("待补充", "待核实")
+
+
+def run_yuanbao_search(company, fields):
+    """调用 yuanbao-search 检索补采。失败返回空证据（降级不中断，G11）。"""
+    if not fields:
+        return [], [], ""
+    script = search_script()
+    if not os.path.exists(script):
+        return [], [f"检索脚本不存在，跳过补采：{script}"], ""
+    query = f"{company} {' '.join(fields)}"
+    try:
+        r = subprocess.run([sys.executable, script, "--query", query, "--industry", "news",
+                            "--cnt", "5", "--no-kb"],
+                           capture_output=True, text=True, encoding="utf-8", timeout=90)
+    except Exception as e:  # noqa: BLE001
+        return [], [f"检索补采失败，字段留空：{e}"], ""
+    out = (r.stdout or "").strip()
+    if not out:
+        return [], ["检索补采无输出（可能配额受限或网络异常），字段留空"], ""
+    try:
+        data = json.loads(out)
+    except Exception:  # noqa: BLE001
+        return [], ["检索补采输出无法解析，字段留空"], ""
+    warns = []
+    if data.get("ok") is False:
+        warns.append(f"检索通道降级（{data.get('error') or '未知原因'}），字段留空")
+    evidence = []
+    for it in data.get("items") or []:
+        evidence.append({
+            "title": it.get("title", ""),
+            "url": it.get("url", ""),
+            "site": it.get("site", ""),
+            "date": it.get("date", ""),
+            "passage": str(it.get("passage", ""))[:500],
+            "status": (it.get("credibility") or {}).get("status", ""),
+        })
+    return evidence, warns, data.get("requestId", "")
+
+
+def extract_from_evidence(company, evidence, fields):
+    """从检索证据中抽取字段：仅在 LLM 可用时执行，且只填证据中明确出现的字段。"""
+    if not evidence or not fields:
+        return {}, ""
+    if not llm_available():
+        return {}, "未配置 LLM，检索证据仅存档，字段保持未获取（禁止推测填充）"
+    want = [(p, cn) for (p, cn) in SEARCHABLE_FIELDS if p in fields]
+    evidence_text = "\n\n".join(
+        f"[{i + 1}] 标题：{e.get('title', '')}\n链接：{e.get('url', '')}\n摘要：{e.get('passage', '')}"
+        for i, e in enumerate(evidence))
+    prompt = (f"下面是关于企业「{company}」的公开检索结果。请只抽取**证据中明确写出**的字段；\n"
+              "证据中没有的字段一律返回 null，禁止推测、禁止编造、禁止用行业常识补全。\n"
+              "返回 JSON（不要任何多余文字）：{\"注册资本\": {\"value\": \"...\"或null, \"ref\": \"证据编号\"}, ...}\n"
+              f"需要抽取的字段：{'、'.join(cn for _, cn in want)}\n\n检索证据：\n{evidence_text}")
+    try:
+        out = call_llm(prompt, "你是企业信息抽取助手。只依据给定证据抽取，证据没有的一律返回 null。")
+        m = re.search(r'\{[\s\S]*\}', out)
+        if not m:
+            raise ValueError("LLM 未返回 JSON")
+        data = json.loads(m.group(0))
+        filled = {}
+        for p, cn in want:
+            cell = data.get(cn)
+            val = cell.get("value") if isinstance(cell, dict) else cell
+            if val is None:
+                continue
+            s = str(val).strip()
+            if not s or s in ("待补充", "null"):
+                continue
+            ref_idx = str(cell.get("ref", "")) if isinstance(cell, dict) else ""
+            idx = int(re.sub(r'\D', '', ref_idx) or 0) - 1
+            ref = evidence[idx].get("url", "") if 0 <= idx < len(evidence) else ""
+            filled[p] = {"value": s, "ref": ref}
+        return filled, ""
+    except Exception as e:  # noqa: BLE001
+        return {}, f"证据抽取失败（{e}），字段保持未获取"
+
+
+def mark_sources(profile, prefill):
+    """为已填/未填字段打来源标记（预填 / 原接口 / 未获取）。"""
+    src = {}
+    for p, _cn in SEARCHABLE_FIELDS:
+        v = get_by_path(profile, p)
+        if not is_blank(v):
+            src[p] = "预填" if p.split(".")[-1] in prefill else "原接口"
+        else:
+            src[p] = "未获取"
+    profile["field_sources"] = src
 
 
 def script_dir():
@@ -98,6 +234,10 @@ def build_skeleton(company_name: str, prefill: dict) -> dict:
         "profile_date": datetime.now().strftime("%Y-%m-%d"),
         "source_note": "公开信息聚合（工商/经营/舆情，未获取字段已标记待补充）",
         "pending_fields": [],
+        # T-12：采集通道留痕（预填 / 检索采集 / 未获取）
+        "field_sources": {},
+        "search_evidence": [],
+        "search_meta": {"used": False, "request_id": "", "channel": "", "note": ""},
     }
 
 
@@ -169,7 +309,14 @@ def render_md(profile: dict) -> str:
     lines += ["## 舆情信息", "",
               f"- 正面：{'、'.join(profile['public_opinion']['positive']) or '无'}",
               f"- 负面：{'、'.join(profile['public_opinion']['negative']) or '无'}", ""]
-    lines += ["## 画像摘要", "", profile["summary"], "",
+    lines += ["## 采集来源（T-12：每条属性的采集通道）", ""]
+    lines += [f"- {cn}：{profile.get('field_sources', {}).get(p, '未记录')}" for p, cn in SEARCHABLE_FIELDS]
+    if profile.get("search_evidence"):
+        lines += ["", "检索证据："]
+        lines += [f"- [{i + 1}] [{e.get('title') or e.get('url')}]({e.get('url')})"
+                  f"（{e.get('site', '')} {e.get('date', '')}）"
+                  for i, e in enumerate(profile["search_evidence"][:5])]
+    lines += ["", "## 画像摘要", "", profile["summary"], "",
               f"> 生成日期：{profile['profile_date']}；{profile['source_note']}"]
     return "\n".join(lines)
 
@@ -179,12 +326,17 @@ def main():
     parser.add_argument("--company", required=True, help="企业名称（批量用逗号分隔）")
     parser.add_argument("--outdir", default=default_outdir(), help="画像输出目录")
     parser.add_argument("--data", default=None, help="预填企业信息 JSON（可选）")
+    parser.add_argument("--no-search", action="store_true", help="关闭检索补采（缺省开启）")
     args = parser.parse_args()
 
+    # T-12 / spec §5.3.3 第 1 条：企业名称为必填项，缺失以非零状态退出
+    if not (args.company or "").strip():
+        print("错误: --company 不能为空（企业名称为必填项）", file=sys.stderr)
+        sys.exit(2)
     companies = [c.strip() for c in re.split(r'[,，;；]', args.company) if c.strip()]
     if not companies:
-        print("错误: --company 不能为空", file=sys.stderr)
-        sys.exit(1)
+        print("错误: --company 不能为空（企业名称为必填项）", file=sys.stderr)
+        sys.exit(2)
 
     prefill_map = {}
     if args.data:
@@ -214,8 +366,37 @@ def main():
     results = []
     for name in companies:
         slug = make_slug(name)
-        profile = build_skeleton(name, prefill_map.get(name, {}))
+        prefill = prefill_map.get(name, {})
+        profile = build_skeleton(name, prefill)
         fill_pending(profile)
+        mark_sources(profile, prefill)
+
+        # T-12：对缺失字段走检索补采；失败不中断，字段留空
+        if not args.no_search:
+            cn2path = {cn: p for p, cn in SEARCHABLE_FIELDS}
+            want_paths = [cn2path[cn] for cn in profile["pending_fields"] if cn in cn2path]
+            if want_paths:
+                evidence, warns, req_id = run_yuanbao_search(
+                    name, [cn for p, cn in SEARCHABLE_FIELDS if p in want_paths])
+                profile["search_evidence"] = evidence
+                note = warns + ([] if evidence else ["检索无可用证据"])
+                profile["search_meta"] = {"used": True, "request_id": req_id,
+                                          "channel": "yuanbao-search", "note": "；".join(note)}
+                if evidence:
+                    filled, ex_note = extract_from_evidence(name, evidence, want_paths)
+                    for p, cell in filled.items():
+                        if is_blank(get_by_path(profile, p)):
+                            set_by_path(profile, p, cell["value"])
+                            profile["field_sources"][p] = (f"检索采集（{cell['ref']}）" if cell["ref"]
+                                                           else "检索采集")
+                    if ex_note:
+                        profile["search_meta"]["note"] = "；".join(
+                            [x for x in [profile["search_meta"]["note"], ex_note] if x])
+                    fill_pending(profile)  # 抽取后重算待补充清单
+        else:
+            profile["search_meta"] = {"used": False, "request_id": "", "channel": "",
+                                      "note": "已通过 --no-search 关闭检索补采"}
+
         profile["summary"] = summarize(profile)
         jpath = os.path.join(args.outdir, f"{slug}.json")
         mpath = os.path.join(args.outdir, f"{slug}.md")
@@ -224,7 +405,9 @@ def main():
         with open(mpath, "w", encoding="utf-8") as f:
             f.write(render_md(profile))
         results.append({"company": name, "slug": slug, "profile_json": jpath, "profile_md": mpath,
-                        "pending_fields": profile["pending_fields"]})
+                        "pending_fields": profile["pending_fields"],
+                        "field_sources": profile["field_sources"],
+                        "search_evidence_count": len(profile["search_evidence"])})
 
     print(json.dumps({"success": True, "count": len(results), "profiles": results,
                       "output": results[0]["profile_json"] if len(results) == 1 else args.outdir,

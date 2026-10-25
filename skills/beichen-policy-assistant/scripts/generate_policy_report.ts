@@ -90,24 +90,45 @@ function checkCondition(condVal: any, profile: any, kind: string): string {
   return "待核实";
 }
 
+/** 判定条目是否处于「待核实」状态（G5 过滤依据） */
+function isPending(m: any): boolean {
+  if (!m) return false;
+  if (m.status === "待核实") return true;
+  if (m.credibility && m.credibility.status === "待核实") return true;
+  return false;
+}
+
 function buildTemplateReport(profile: any, matches: any): string {
+  const all: any[] = matches.matches || [];
+  // G5：待核实项禁止进入正式报告
+  const credible = all.filter((m) => !isPending(m));
+  const pending = all.filter(isPending).concat(matches.excluded || []);
+
   const lines: string[] = [
     `# 政策适配研判报告 - ${profile.company_name || ""}`, "",
     `- 生成日期：${matches.match_date || ""}`,
     `- 注册区域：${profile.region || ""}`,
     `- 所属行业：${(profile.industry || []).join("、") || "待核实"}`,
     `- 企业资质：${(profile.qualification || []).join("、") || "暂无"}`, "",
+    "## 适用范围（务必阅读）", "",
+    "> 本报告的政策依据来自**本地政策原文库（北京地区政策，当前 74 条）**与公开渠道检索结果，",
+    "> **不代表全国通用**，也不覆盖各区自行发布的全部细则；跨地区或区级申报请以当地主管部门发布的原文为准。",
+    "> 未能在原文库中备案的结论，均在报告中标注「未备案」并保留可点开来源，供人工复核。", "",
     "## 匹配政策清单（按匹配度排序）", "",
-    "| 序号 | 政策编号 | 政策名称 | 层级/领域 | 匹配度 | 匹配依据 |",
-    "|------|---------|---------|----------|--------|---------|",
+    "| 序号 | 政策编号 | 政策名称 | 层级/领域 | 匹配度 | 匹配依据 | 来源 |",
+    "|------|---------|---------|----------|--------|---------|------|",
   ];
   let i = 1;
-  for (const m of (matches.matches || [])) {
-    lines.push(`| ${i} | ${m.policy_no} | ${m.title} | ${m.level}/${m.domain} | ${m.score} | ${m.basis} |`);
+  for (const m of credible) {
+    const src = m.url ? `[原文](${m.url})` : m.file ? `原文库 ${m.file}` : "—";
+    lines.push(`| ${i} | ${m.policy_no || "—"} | ${m.title} | ${m.level}/${m.domain} | ${m.score} | ${m.basis} | ${src} |`);
     i++;
   }
+  if (credible.length === 0) {
+    lines.push("| — | — | 本次未查到可采信的匹配政策 | — | — | — | — |");
+  }
   lines.push("", "## 申报条件对标分析", "");
-  for (const m of (matches.matches || [])) {
+  for (const m of credible) {
     lines.push(`### 政策 ${m.policy_no} - ${m.title}`);
     const cond = m.conditions || {};
     if (cond.region) {
@@ -129,14 +150,35 @@ function buildTemplateReport(profile: any, matches: any): string {
   }
   lines.push("## 申报建议与优先级", "");
   let j = 1;
-  for (const m of (matches.matches || []).slice(0, 5)) {
+  for (const m of credible.slice(0, 5)) {
     lines.push(`${j}. 【高优先级】可申报` + (m.score ? `（匹配度 ${m.score} 分）` : ""));
-    lines.push(`   - 政策：${m.title}（编号 ${m.policy_no}）`);
+    lines.push(`   - 政策：${m.title}（编号 ${m.policy_no || "—"}）`);
     lines.push(`   - 支持方式：${m.support || "待补充"}`);
     lines.push(`   - 建议关注 ${m.department || ""} 官网申报通知`);
+    if (m.url) lines.push(`   - 来源：${m.url}`);
     j++;
   }
-  lines.push("", "## 合规声明", "");
+
+  // 「敢说不知道」对外可见：未查到可靠依据的条目单列，绝不放进正式结论
+  lines.push("", "## 未查到可靠依据（已排除出正式结论）", "");
+  if (pending.length === 0) {
+    lines.push("本次未产生被排除的条目。", "");
+  } else {
+    lines.push(
+      `以下 ${pending.length} 条线索**无法核验出处**（信源不可核验 / 已过时效 / 原文库不可用且非政府信源），`,
+      "已按要求排除出正式结论，**不作为申报依据**：", "",
+      "| 序号 | 线索标题 | 排除原因 |", "|------|---------|---------|"
+    );
+    let k = 1;
+    for (const p of pending) {
+      const reason = p.reason || (p.credibility && p.credibility.reason) || "原文库未命中，未备案";
+      lines.push(`| ${k} | ${p.title || "（无标题）"} | ${reason} |`);
+      k++;
+    }
+    lines.push("");
+  }
+
+  lines.push("## 合规声明", "");
   lines.push("> 本报告由产业政策智能体自动生成，数据来源于公开渠道与政策知识库，每条匹配结论均已溯源至政策原文库编号；仅供申报参考，不构成法律意见。", "");
   return lines.join("\n");
 }
@@ -159,7 +201,11 @@ async function main() {
   let llmUsed = false;
   let report: string;
   if (llmAvailable()) {
-    const prompt = `请基于以下企业画像与匹配矩阵，生成政策适配研判报告（Markdown，含匹配清单、条件对标表、缺口分析、申报建议）。\n画像：${JSON.stringify(profile, null, 2)}\n匹配矩阵：${JSON.stringify(matches, null, 2)}`;
+    const prompt =
+      `请基于以下企业画像与匹配矩阵，生成政策适配研判报告（Markdown，含适用范围说明、匹配清单、条件对标表、缺口分析、申报建议）。\n` +
+      `硬性要求：① 报告开头必须声明适用范围为北京地区政策库、非全国通用；② status 为"待核实"或 excluded 中的条目` +
+      `一律不得写入正式结论，须单列到"未查到可靠依据"章节并说明原因；③ 每条结论必须给出可点开的来源 URL；\n` +
+      `画像：${JSON.stringify(profile, null, 2)}\n匹配矩阵：${JSON.stringify(matches, null, 2)}`;
     try {
       report = await callLlm(prompt);
       if (report.trim()) {

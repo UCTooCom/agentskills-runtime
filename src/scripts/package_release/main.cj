@@ -755,7 +755,9 @@ main(args: Array<String>): Unit {
     
     // Copy 0.0.26+ dependency DLLs (http_lib + 7 transitive deps are static libs, no DLL output, skipped here)
     // cos produces DLLs; pgsql/cj_mail/activemq4cj/hyperion are CJO-only, walk yields 0 DLLs harmlessly
-    let extraDeps = ["cos", "pgsql", "cj_mail", "activemq4cj", "hyperion"]
+    // plugin_spi：L3 插件轨 SPI 契约包（path 依赖，dynamic 产物）。2026-10-24 事故：
+    // 它没在清单里 ⇒ libplugin_spi.dll 没进 bin ⇒ 主 exe 加载期 0xC0000135 秒退。
+    let extraDeps = ["cos", "pgsql", "cj_mail", "activemq4cj", "hyperion", "plugin_spi"]
     for (depName in extraDeps) {
         println("")
         println("[STEP] Copying ${depName} DLLs to bin...")
@@ -818,6 +820,57 @@ main(args: Array<String>): Unit {
         } else {
             println("  [WARN] Directory not found: ${moduleDir}")
         }
+    }
+    
+    // ---------------------------------------------------------------------
+    // 兜底补漏：上面是一张**手写清单**，新增依赖忘了登记就会漏拷 DLL。
+    // Windows 只搜 exe 所在目录（bin），漏一个的后果是主 exe 在加载期即失败：
+    // 退出码 0xC0000135，进程一行输出都没有，表现为"启动就崩、重启还是崩"
+    // （2026-10-24 的 plugin_spi 就是这么漏的）。
+    // 这里遍历 target/release 下全部依赖目录，把 bin 里还缺的 DLL 补齐，
+    // 使打包不依赖清单的完整性。只补缺失项，不覆盖已有的正确副本。
+    // ---------------------------------------------------------------------
+    println("")
+    println("[STEP] Sweeping any remaining dependency DLLs into bin (catch-all)...")
+    
+    let depDirs = ArrayList<String>()
+    Directory.walk(targetDir.toString()) { entry =>
+        if (entry.isDirectory()) {
+            let dirName = entry.path.fileName
+            if (dirName != "bin" && !shouldExcludeDirectory(dirName)) {
+                depDirs.add(entry.path.toString())
+            }
+        }
+        true
+    }
+    
+    let sweptDlls = ArrayList<String>()
+    for (depPath in depDirs) {
+        Directory.walk(depPath) { fileInfo =>
+            if (!fileInfo.isDirectory()) {
+                let name = fileInfo.path.fileName
+                
+                if (name.endsWith(".dll") || name.endsWith(".so") || name.endsWith(".dylib")) {
+                    if (!shouldExcludeDll(name)) {
+                        let destPath = Path("${binDir}/${name}")
+                        if (!exists(destPath)) {
+                            safeCopy(fileInfo.path.toString(), destPath.toString(), true)
+                            sweptDlls.add(name)
+                            totalDlls.add(name)
+                        }
+                    }
+                }
+            }
+            true
+        }
+    }
+    
+    println("  [OK] Swept ${sweptDlls.size.toString()} missing DLLs into bin/")
+    if (sweptDlls.size > 0) {
+        for (swept in sweptDlls) {
+            println("       + ${swept}")
+        }
+        println("  [HINT] 这些 DLL 不在手写清单里，说明有新增依赖未登记——请把对应包名补进清单。")
     }
     
     println("")

@@ -7,15 +7,15 @@ version: 1.0.0
 steps:
   - name: build-profile
     step_type: script
-    script: scripts/build_enterprise_profile.py
+    script: skills/beichen-policy-assistant/scripts/build_enterprise_profile.py
     depends_on: []
     input:
       company: "${input.company}"
-      outdir: "output/profiles"
+      outdir: "skills/beichen-policy-assistant/output/profiles"
 
   - name: match-policy
     step_type: script
-    script: scripts/match_policy.py
+    script: skills/beichen-policy-assistant/scripts/match_policy.py
     depends_on:
       - build-profile
     input:
@@ -24,17 +24,17 @@ steps:
 
   - name: generate-report
     step_type: script
-    script: scripts/generate_policy_report.py
+    script: skills/beichen-policy-assistant/scripts/generate_policy_report.py
     depends_on:
       - match-policy
     input:
       profile: "${build-profile.output}/${input.company_slug}.json"
       matches: "${match-policy.output}/${input.company_slug}-${input.date}.json"
-      outdir: "output/reports"
+      outdir: "skills/beichen-policy-assistant/output/reports"
 
   - name: persist-report
     step_type: script
-    script: scripts/save_to_db.py
+    script: skills/beichen-policy-assistant/scripts/save_to_db.py
     depends_on:
       - generate-report
     input:

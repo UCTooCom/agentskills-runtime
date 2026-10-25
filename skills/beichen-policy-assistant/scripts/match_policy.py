@@ -29,6 +29,143 @@ except ImportError:
     HAS_REQUESTS = False
 
 
+# ---------------------------------------------------------------------------
+# T-13：匹配结论强制绑定 policy_no（REQ-PD-022）
+# 无法绑定 policy_no 的条目一律不作为匹配结论输出，转入「待核实」集合。
+# 检索侧条目经原文库交叉验证（复用 yuanbao-search/scripts/policy_kb.py）绑定编号；
+# 验证器不可用时全部转待核实，绝不放宽阈值凑数（R4）。
+# ---------------------------------------------------------------------------
+
+_PKB_IMPORTED = False
+_PKB = None
+
+
+def normalize_no(v):
+    """policy_no 规范化：去空白；空串/占位值一律视为未绑定。"""
+    s = str(v if v is not None else "").strip()
+    if not s or s in ("—", "-", "null", "None"):
+        return ""
+    return s
+
+
+def normalize_deadline(v):
+    """申报截止时间规范化：只接受明确日期，其它判为未知（禁止推测值）。"""
+    s = str(v if v is not None else "").strip()
+    if not s:
+        return None
+    m = re.match(r'^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?', s)
+    if not m:
+        return None
+    if m.group(4):
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}T{m.group(4)}:{m.group(5)}:00"
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+
+
+def load_policy_kb():
+    """加载 yuanbao-search 的交叉验证器；失败返回 None（调用方据此全部转待核实）。"""
+    global _PKB_IMPORTED, _PKB
+    if _PKB_IMPORTED:
+        return _PKB
+    _PKB_IMPORTED = True
+    mod_dir = os.path.abspath(os.path.join(script_dir(), "..", "..", "yuanbao-search", "scripts"))
+    try:
+        if mod_dir not in sys.path:
+            sys.path.insert(0, mod_dir)
+        import policy_kb  # type: ignore
+        _PKB = policy_kb
+    except Exception as e:  # noqa: BLE001
+        _PKB = None
+        print(f"警告: 原文库交叉验证器不可用，检索结论将全部转待核实: {e}", file=sys.stderr)
+    return _PKB
+
+
+def pending_from_web_item(it, reason):
+    return {
+        "policy_no": "",
+        "title": it.get("title", ""),
+        "url": it.get("url", ""),
+        "site": it.get("site", ""),
+        "date": it.get("date", ""),
+        "status": "待核实",
+        "reason": reason,
+        "note": "未绑定政策原文库 policy_no，不作为匹配结论",
+    }
+
+
+def find_entry(kb, policy_no):
+    for e in kb.get("entries", []):
+        if str(e.get("policy_no")) == policy_no:
+            return e
+    return None
+
+
+def bind_web_items(web_data, index_path):
+    """把检索结果绑定到原文库编号，返回 dict(bound, pending, kb_count, kb_error)。"""
+    if isinstance(web_data.get("items"), list):
+        raw_items = web_data["items"]
+    elif isinstance(web_data.get("policies"), list):
+        raw_items = web_data["policies"]
+    else:
+        raw_items = []
+    if not raw_items:
+        return {"bound": [], "pending": [], "kb_count": 0, "kb_error": ""}
+
+    mod = load_policy_kb()
+    if mod is None:
+        return {"bound": [],
+                "pending": [pending_from_web_item(it, "原文库交叉验证器不可用，无法绑定 policy_no") for it in raw_items],
+                "kb_count": 0, "kb_error": "交叉验证器不可用"}
+    kb = mod.load_kb(index_path)
+    if not kb.get("ok"):
+        err = kb.get("error") or "未知原因"
+        return {"bound": [],
+                "pending": [pending_from_web_item(it, f"原文库不可用（{err}），无法绑定 policy_no") for it in raw_items],
+                "kb_count": 0, "kb_error": err}
+    index = mod.build_index(kb)
+
+    bound, pending = [], []
+    for it in raw_items:
+        title = str(it.get("title", "") or "")
+        passage = str(it.get("passage") or it.get("summary") or it.get("content") or "")
+        policy_no = normalize_no(it.get("policyNo", it.get("policy_no")))
+        file_ = str(it.get("policyFile") or it.get("file") or "")
+        evidence = "检索通道已标注" if policy_no else ""
+        if not policy_no:
+            m = mod.match_policy(title, passage, index)
+            if m and m.get("hit") and normalize_no(m.get("policyNo")):
+                policy_no = normalize_no(m.get("policyNo"))
+                file_ = str(m.get("file") or "")
+                ev = m.get("evidence", "")
+                evidence = {"title": "标题级交叉验证", "core": "核心名重叠交叉验证",
+                            "fulltext": "正文全名交叉验证"}.get(ev, "交叉验证命中")
+        if not policy_no:
+            pending.append(pending_from_web_item(it, "未通过原文库交叉验证，无 policy_no 可绑定"))
+            continue
+        entry = find_entry(kb, policy_no) or {}
+        score = int(round(it["scoreNorm"] * 100)) if isinstance(it.get("scoreNorm"), (int, float)) else 0
+        bound.append({
+            "policy_no": policy_no,
+            "title": title or entry.get("title", ""),
+            "domain": entry.get("domain", ""),
+            "level": entry.get("level", ""),
+            "department": entry.get("department", ""),
+            "support": entry.get("support", ""),
+            "score": score,
+            "basis": f"检索命中（证据：{evidence}）",
+            "gap": [],
+            "conditions": {},
+            "status": "matched",
+            "deadline": None,
+            "source": f"policy-original/{file_}" if file_ else (f"policy-original/{entry.get('file', '')}" if entry.get("file") else ""),
+            "url": str(it.get("url", "") or ""),
+            "site": str(it.get("site", "") or ""),
+            "date": str(it.get("date", "") or ""),
+            "channel": "检索采集",
+            "kb_evidence": evidence,
+        })
+    return {"bound": bound, "pending": pending, "kb_count": kb.get("count", 0), "kb_error": ""}
+
+
 def script_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
@@ -168,11 +305,18 @@ def main():
         index = json.load(f)
 
     topn = max(1, args.topn)
-    matches, eliminated = [], []
+    matches, eliminated, unbound = [], [], []
     for policy in index.get("policies", []):
         reason = hard_filter(policy, profile)
         if reason:
             eliminated.append({"policy_no": policy.get("policy_no"), "title": policy.get("title"), "reason": reason})
+            continue
+        # T-13：本地原文库条目本身缺 policy_no → 不作为匹配结论，转入待核实
+        if not normalize_no(policy.get("policy_no")):
+            unbound.append({"policy_no": "", "title": policy.get("title", ""), "url": "",
+                            "status": "待核实",
+                            "reason": "原文库条目缺少 policy_no，无法作为可核验结论",
+                            "note": "未绑定政策原文库 policy_no，不作为匹配结论"})
             continue
         score, basis, gap = llm_score(policy, profile) if llm_available() else (rule_score(policy, profile), build_basis(policy, profile), [])
         matches.append({
@@ -187,21 +331,25 @@ def main():
             "gap": gap,
             "conditions": policy.get("conditions", {}),
             "status": "matched",
+            "deadline": normalize_deadline(policy.get("deadline") or (policy.get("conditions") or {}).get("deadline")),
             "source": f"policy-original/{policy.get('file', '')}",
+            "channel": "原文库",
         })
 
     matches.sort(key=lambda x: x["score"], reverse=True)
     top = matches[:topn]
 
-    # 幻觉治理：互联网实时政策无法绑定本地 policy_no 的进入待核实
-    pending_verify = []
+    # T-13：检索侧条目经交叉验证绑定 policy_no；绑定成功进结论，失败进待核实
+    bound, web_pending, kb_count, kb_error = [], [], 0, ""
     if args.web and os.path.exists(args.web):
         with open(args.web, encoding="utf-8") as f:
             web_data = json.load(f)
-        for item in web_data.get("policies", []):
-            if "policy_no" not in item:
-                pending_verify.append({"title": item.get("title", ""), "source": item.get("url", ""),
-                                       "status": "待核实", "note": "无法绑定政策原文库 policy_no"})
+        r = bind_web_items(web_data, index_path)
+        bound, web_pending = r["bound"], r["pending"]
+        kb_count, kb_error = r["kb_count"], r["kb_error"]
+
+    final_matches = top + bound
+    pending = unbound + web_pending
 
     os.makedirs(args.outdir, exist_ok=True)
     slug = profile.get("slug", os.path.splitext(os.path.basename(args.profile))[0])
@@ -212,15 +360,24 @@ def main():
         "match_date": args.date,
         "total_policies": len(index.get("policies", [])),
         "eliminated": eliminated,
-        "matches": top,
-        "matched_count": len([m for m in matches if m["score"] > 0]),
-        "pending_verify": pending_verify,
+        "matches": final_matches,
+        "matched_count": len([m for m in matches if m["score"] > 0]) + len(bound),
+        # 「pending」为规范键；「excluded」为与 generate_policy_report 的契约别名（同一数组）
+        "pending": pending,
+        "excluded": pending,
+        "policy_no_coverage": (
+            len([m for m in final_matches if normalize_no(m.get("policy_no"))]) / len(final_matches)
+            if final_matches else 1.0),
+        "kb_count": kb_count,
+        "kb_error": kb_error,
     }
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    print(json.dumps({"success": True, "output": out_path, "matched_count": len(top),
-                      "eliminated": len(eliminated), "pending_verify": len(pending_verify),
+    print(json.dumps({"success": True, "output": out_path, "matched_count": len(final_matches),
+                      "eliminated": len(eliminated), "pending": len(pending),
+                      "bound_from_search": len(bound),
+                      "policy_no_coverage": result["policy_no_coverage"],
                       "llm_used": llm_available()}, ensure_ascii=False))
 
 

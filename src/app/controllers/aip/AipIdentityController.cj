@@ -5,7 +5,7 @@ package magic.app.controllers.aip
 
 import magic.app.core.http.{HttpRequest, HttpResponse}
 import magic.app.core.response.APIResult
-import magic.app.services.aip.{AipIdentityService, AgentAuthService}
+import magic.app.services.aip.{AipIdentityService, AgentAuthService, AgentLoginMode}
 import magic.app.services.aip.model.{LocalIdentityRequest, AgentLoginResult, IdentityInfo}
 import magic.log.LogUtils
 import stdx.encoding.json.{JsonValue, JsonObject}
@@ -84,7 +84,10 @@ public class AipIdentityController {
                 return
             }
 
-            let result = authService.agentAutoLogin(agentId)
+            // 本路由是 GB/Z 185 智能体互联入口，签 aip 专用密钥（保持 AIP 语义不变）；
+            // AgentAuthService 的默认模式已改为 Local（宿主本地验签用 config 密钥），
+            // 这里必须显式指定，否则互联侧拿到的 token 与 AIP 约定不一致。
+            let result = authService.agentAutoLogin(agentId, mode: AgentLoginMode.Interconnection)
             if (result.success) {
                 if (result.data.isSome()) {
                     res.status(200).json(result.data.getOrThrow().toJsonValue().toString())

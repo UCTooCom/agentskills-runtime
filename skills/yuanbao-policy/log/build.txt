@@ -1,0 +1,858 @@
+Microsoft Windows [版本 10.0.19045.6466]
+(c) Microsoft Corporation。保留所有权利。
+
+C:\Users\patrick>d:
+
+D:\>cd D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy
+
+D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy>cjpm build
+warning[0m: unused function:'check_Boolean_0'
+    |
+    |   /* 11.322 */        func check_Boolean_0 < T_Boolean_0 >(_: Bool): ToString where T_Boolean_0 <: ToString {
+    |  _____________________^
+    | | /* 11.323 */            throw Exception()
+    | | /* 11.324 */        }
+    | |_____________________^ unused function
+    |
+    # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the code after the macro is expanded as follows
+    |
+    |   /* 11.1 */public enum JsonValue <: JsonDeserializable < JsonValue > & JsonSerializable {
+    |  _^
+    | | /* 11.2 */    | Null
+    | | /* 11.3 */    | Boolean(Bool)
+    | | /* 11.4 */    | Number(Float64)
+    | | /* 11.5 */    | String(String)
+    | | /* 11.6 */    | Array(ArrayList < JsonValue >)
+    | | /* 11.7 */    | Map(HashMap < String, JsonValue >)
+    | | /* 11.8 */
+    | | /* 11.9 */    public static func fromJson(r: JsonReader): JsonValue {
+    | | /* 11.10 */        while(let Some(v) <- r.peek()) {
+    | | /* 11.11 */            match(v) {
+    | | /* 11.12 */                case JsonNull =>
+    | | /* 11.13 */                r.skip()
+    | | /* 11.14 */                return JsonValue.Null
+    | | /* 11.15 */                case JsonBool =>
+    | | /* 11.16 */                let b = r.readValue < Bool >()
+    | | /* 11.17 */                return JsonValue.Boolean(b)
+    | | /* 11.18 */                case JsonNumber =>
+    | | /* 11.19 */                let f = r.readValue < Float64 >()
+    | | /* 11.20 */                return JsonValue.Number(f)
+    | | /* 11.21 */                case BeginArray =>
+    | | /* 11.22 */                let arr = r.readValue < ArrayList < JsonValue >>()
+    | | /* 11.23 */                return JsonValue.Array(arr)
+    | | /* 11.24 */                case JsonString =>
+    | | /* 11.25 */                let str = r.readValue < String >()
+    | | /* 11.26 */                return JsonValue.String(str)
+    | | /* 11.27 */                case BeginObject =>
+    | | /* 11.28 */                let m = r.readValue < HashMap < String, JsonValue >>()
+    | | /* 11.29 */                return JsonValue.Map(m)
+    | | /* 11.30 */                case _ =>
+    | | /* 11.31 */                throw Exception("Invalid JSON token")
+    | | /* 11.32 */            }
+    | | /* 11.33 */        }
+    | | /* 11.34 */        return JsonValue.Null
+    | | /* 11.35 */    }
+    | | /* 11.36 */
+    | | /* 11.37 */    public func toJson(w: JsonWriter): Unit {
+    | | /* 11.38 */        match(this) {
+    | | /* 11.39 */            case JsonValue.Null => w.writeNullValue()
+    | | /* 11.40 */            case JsonValue.Boolean(b) => w.writeValue(b)
+    | | /* 11.41 */            case JsonValue.Number(n) => w.writeValue(n)
+    | | /* 11.42 */            case JsonValue.String(s) => w.writeValue(s)
+    | | /* 11.43 */            case JsonValue.Array(arr) => w.writeValue(arr)
+    | | /* 11.44 */            case JsonValue.Map(m) => w.writeValue(m)
+    | | /* 11.45 */        }
+    | | /* 11.46 */    }
+    | | /* 11.47 */
+    | | /* 11.48 */    public static func parse(json: String): JsonValue {
+    | | /* 11.49 */        let buffer = ByteBuffer(json.toArray())
+    | | /* 11.50 */        let reader = JsonReader(buffer)
+    | | /* 11.51 */        JsonValue.fromJson(reader)
+    | | /* 11.52 */    }
+    | | /* 11.53 */
+    | | /* 11.54 */    public static func parse(bytes: Array < UInt8 >): JsonValue {
+    | | /* 11.55 */        let buffer = ByteBuffer(bytes)
+    | | /* 11.56 */        let reader = JsonReader(buffer)
+    | | /* 11.57 */        JsonValue.fromJson(reader)
+    | | /* 11.58 */    }
+    | | /* 11.59 */
+    | | /* 11.60 */    public func stringify(): String {
+    | | /* 11.61 */        let buffer = ByteBuffer()
+    | | /* 11.62 */        let writer = JsonWriter(buffer)
+    | | /* 11.63 */        this.toJson(writer)
+    | | /* 11.64 */        writer.flush()
+    | | /* 11.65 */        buffer.flush()
+    | | /* 11.66 */        String.fromUtf8(buffer.bytes())
+    | | /* 11.67 */    }
+    | | /* 11.68 */
+    | | /* 11.69 */    public func toBytes(): Array < UInt8 > {
+    | | /* 11.70 */        let buffer = ByteBuffer()
+    | | /* 11.71 */        let writer = JsonWriter(buffer)
+    | | /* 11.72 */        this.toJson(writer)
+    | | /* 11.73 */        writer.flush()
+    | | /* 11.74 */        buffer.flush()
+    | | /* 11.75 */        buffer.bytes()
+    | | /* 11.76 */    }
+    | | /* 11.77 */
+    | | /* 11.78 */    public func isNull(): Bool {
+    | | /* 11.79 */        match(this) {
+    | | /* 11.80 */            case JsonValue.Null => true
+    | | /* 11.81 */            case _ => false
+    | | /* 11.82 */        }
+    | | /* 11.83 */    }
+    | | /* 11.84 */
+    | | /* 11.85 */    public func isBool(): Bool {
+    | | /* 11.86 */        match(this) {
+    | | /* 11.87 */            case JsonValue.Boolean(_) => true
+    | | /* 11.88 */            case _ => false
+    | | /* 11.89 */        }
+    | | /* 11.90 */    }
+    | | /* 11.91 */
+    | | /* 11.92 */    public func isNumber(): Bool {
+    | | /* 11.93 */        match(this) {
+    | | /* 11.94 */            case JsonValue.Number(_) => true
+    | | /* 11.95 */            case _ => false
+    | | /* 11.96 */        }
+    | | /* 11.97 */    }
+    | | /* 11.98 */
+    | | /* 11.99 */    public func isString(): Bool {
+    | | /* 11.100 */        match(this) {
+    | | /* 11.101 */            case JsonValue.String(_) => true
+    | | /* 11.102 */            case _ => false
+    | | /* 11.103 */        }
+    | | /* 11.104 */    }
+    | | /* 11.105 */
+    | | /* 11.106 */    public func isArray(): Bool {
+    | | /* 11.107 */        match(this) {
+    | | /* 11.108 */            case JsonValue.Array(_) => true
+    | | /* 11.109 */            case _ => false
+    | | /* 11.110 */        }
+    | | /* 11.111 */    }
+    | | /* 11.112 */
+    | | /* 11.113 */    public func isMap(): Bool {
+    | | /* 11.114 */        match(this) {
+    | | /* 11.115 */            case JsonValue.Map(_) => true
+    | | /* 11.116 */            case _ => false
+    | | /* 11.117 */        }
+    | | /* 11.118 */    }
+    | | /* 11.119 */
+    | | /* 11.120 */    public func asBool(): Option < Bool > {
+    | | /* 11.121 */        match(this) {
+    | | /* 11.122 */            case JsonValue.Boolean(b) => Some(b)
+    | | /* 11.123 */            case _ => None
+    | | /* 11.124 */        }
+    | | /* 11.125 */    }
+    | | /* 11.126 */
+    | | /* 11.127 */    public func asNumber(): Option < Float64 > {
+    | | /* 11.128 */        match(this) {
+    | | /* 11.129 */            case JsonValue.Number(n) => Some(n)
+    | | /* 11.130 */            case _ => None
+    | | /* 11.131 */        }
+    | | /* 11.132 */    }
+    | | /* 11.133 */
+    | | /* 11.134 */    public func asString(): Option < String > {
+    | | /* 11.135 */        match(this) {
+    | | /* 11.136 */            case JsonValue.String(s) => Some(s)
+    | | /* 11.137 */            case _ => None
+    | | /* 11.138 */        }
+    | | /* 11.139 */    }
+    | | /* 11.140 */
+    | | /* 11.141 */    public func asArray(): Option < ArrayList < JsonValue >> {
+    | | /* 11.142 */        match(this) {
+    | | /* 11.143 */            case JsonValue.Array(arr) => Some(arr)
+    | | /* 11.144 */            case _ => None
+    | | /* 11.145 */        }
+    | | /* 11.146 */    }
+    | | /* 11.147 */
+    | | /* 11.148 */    public func asMap(): Option < HashMap < String, JsonValue >> {
+    | | /* 11.149 */        match(this) {
+    | | /* 11.150 */            case JsonValue.Map(m) => Some(m)
+    | | /* 11.151 */            case _ => None
+    | | /* 11.152 */        }
+    | | /* 11.153 */    }
+    | | /* 11.154 */
+    | | /* 11.155 */
+    | | /* 11.156 */
+    | | /* 11.157 */    public func cast < T >(): Option < T > {
+    | | /* 11.158 */        match(this) {
+    | | /* 11.159 */            case JsonValue.Boolean(b: T) => Some(b)
+    | | /* 11.160 */            case JsonValue.Number(n: T) => Some(n)
+    | | /* 11.161 */            case JsonValue.String(s: T) => Some(s)
+    | | /* 11.162 */            case JsonValue.Array(a: T) => Some(a)
+    | | /* 11.163 */            case JsonValue.Map(m: T) => Some(m)
+    | | /* 11.164 */            case _ => None
+    | | /* 11.165 */        }
+    | | /* 11.166 */    }
+    | | /* 11.167 */
+    | | /* 11.168 */    public operator func[](key: String):?JsonValue {
+    | | /* 11.169 */        match(this) {
+    | | /* 11.170 */            case JsonValue.Map(m) => m.get(key)
+    | | /* 11.171 */            case _ => None
+    | | /* 11.172 */        }
+    | | /* 11.173 */    }
+    | | /* 11.174 */
+    | | /* 11.175 */    public operator func[](index: Int64):?JsonValue {
+    | | /* 11.176 */        match(this) {
+    | | /* 11.177 */            case JsonValue.Array(arr) =>
+    | | /* 11.178 */            if(index >= 0 && index < arr.size) {
+    | | /* 11.179 */                Some(arr[index])
+    | | /* 11.180 */            } else {
+    | | /* 11.181 */                None
+    | | /* 11.182 */            }
+    | | /* 11.183 */            case _ => None
+    | | /* 11.184 */        }
+    | | /* 11.185 */    }
+    | | /* 11.186 */
+    | | /* 11.187 */    public func get(key: String, default: JsonValue): JsonValue {
+    | | /* 11.188 */        match(this[key]) {
+    | | /* 11.189 */            case Some(v) => v
+    | | /* 11.190 */            case None => default
+    | | /* 11.191 */        }
+    | | /* 11.192 */    }
+    | | /* 11.193 */
+    | | /* 11.194 */    public func getOr(default: JsonValue): JsonValue {
+    | | /* 11.195 */        match(this) {
+    | | /* 11.196 */            case JsonValue.Null => default
+    | | /* 11.197 */            case _ => this
+    | | /* 11.198 */        }
+    | | /* 11.199 */    }
+    | | /* 11.200 */
+    | | /* 11.201 */
+    | | /* 11.202 */    public static func from(v: Bool): JsonValue {
+    | | /* 11.203 */        JsonValue.Boolean(v)
+    | | /* 11.204 */    }
+    | | /* 11.205 */
+    | | /* 11.206 */    public static func from(v: Int64): JsonValue {
+    | | /* 11.207 */        JsonValue.Number(Float64(v))
+    | | /* 11.208 */    }
+    | | /* 11.209 */
+    | | /* 11.210 */    public static func from(v: Float64): JsonValue {
+    | | /* 11.211 */        JsonValue.Number(v)
+    | | /* 11.212 */    }
+    | | /* 11.213 */
+    | | /* 11.214 */    public static func from(v: String): JsonValue {
+    | | /* 11.215 */        JsonValue.String(v)
+    | | /* 11.216 */    }
+    | | /* 11.217 */
+    | | /* 11.218 */    public static func from(v: ArrayList < JsonValue >): JsonValue {
+    | | /* 11.219 */        JsonValue.Array(v)
+    | | /* 11.220 */    }
+    | | /* 11.221 */
+    | | /* 11.222 */    public static func from(v: HashMap < String, JsonValue >): JsonValue {
+    | | /* 11.223 */        JsonValue.Map(v)
+    | | /* 11.224 */    }
+    | | /* 11.225 */
+    | | /* 11.226 */
+    | | /* 11.227 */    public static func from < T >(obj: T): JsonValue where T <: JsonSerializable {
+    | | /* 11.228 */        JsonValue.fromObject(obj)
+    | | /* 11.229 */    }
+    | | /* 11.230 */
+    | | /* 11.231 */    public static func fromObject < T >(obj: T): JsonValue where T <: JsonSerializable {
+    | | /* 11.232 */        let buffer = ByteBuffer()
+    | | /* 11.233 */        let writer = JsonWriter(buffer)
+    | | /* 11.234 */        obj.toJson(writer)
+    | | /* 11.235 */        writer.flush()
+    | | /* 11.236 */        buffer.flush()
+    | | /* 11.237 */        let reader = JsonReader(buffer)
+    | | /* 11.238 */        JsonValue.fromJson(reader)
+    | | /* 11.239 */    }
+    | | /* 11.240 */
+    | | /* 11.241 */    public static func toObject < T >(jsonValue: JsonValue): T where T <: JsonDeserializable < T > {
+    | | /* 11.242 */        let buffer = ByteBuffer()
+    | | /* 11.243 */        let writer = JsonWriter(buffer)
+    | | /* 11.244 */        jsonValue.toJson(writer)
+    | | /* 11.245 */        writer.flush()
+    | | /* 11.246 */        buffer.flush()
+    | | /* 11.247 */        let reader = JsonReader(buffer)
+    | | /* 11.248 */        T.fromJson(reader)
+    | | /* 11.249 */    }
+    | | /* 11.250 */
+    | | /* 11.251 */
+    | | /* 11.252 */    public static func fromDataModel(dm: DataModel): JsonValue {
+    | | /* 11.253 */        match(dm) {
+    | | /* 11.254 */            case d: DataModelNull => JsonValue.Null
+    | | /* 11.255 */            case d: DataModelBool => JsonValue.Boolean(d.getValue())
+    | | /* 11.256 */            case d: DataModelInt => JsonValue.Number(Float64(d.getValue()))
+    | | /* 11.257 */            case d: DataModelFloat => JsonValue.Number(d.getValue())
+    | | /* 11.258 */            case d: DataModelString => JsonValue.String(d.getValue())
+    | | /* 11.259 */            case d: DataModelSeq =>
+    | | /* 11.260 */            let arr = ArrayList < JsonValue >()
+    | | /* 11.261 */            for(e in d.getItems()) { arr.add(JsonValue.fromDataModel(e)) }
+    | | /* 11.262 */            JsonValue.Array(arr)
+    | | /* 11.263 */            case d: DataModelStruct =>
+    | | /* 11.264 */            let m = HashMap < String, JsonValue >()
+    | | /* 11.265 */            for(f in d.getFields()) { m[f.getName()] = JsonValue.fromDataModel(f.getData()) }
+    | | /* 11.266 */            JsonValue.Map(m)
+    | | /* 11.267 */            case _ => JsonValue.Null
+    | | /* 11.268 */        }
+    | | /* 11.269 */    }
+    | | /* 11.270 */
+    | | /* 11.271 */
+    | | /* 11.272 */    public func toDataModel(): DataModel {
+    | | /* 11.273 */        match(this) {
+    | | /* 11.274 */            case JsonValue.Null => DataModelNull()
+    | | /* 11.275 */            case JsonValue.Boolean(b) => DataModelBool(b)
+    | | /* 11.276 */            case JsonValue.Number(n) => DataModelFloat(n)
+    | | /* 11.277 */            case JsonValue.String(s) => DataModelString(s)
+    | | /* 11.278 */            case JsonValue.Array(arr) =>
+    | | /* 11.279 */            let items = ArrayList < DataModel >()
+    | | /* 11.280 */            for(v in arr) { items.add(v.toDataModel()) }
+    | | /* 11.281 */            DataModelSeq(items)
+    | | /* 11.282 */            case JsonValue.Map(m) =>
+    | | /* 11.283 */            let dms = DataModelStruct()
+    | | /* 11.284 */            for((k, v) in m) { dms.add(Field(k, v.toDataModel())) }
+    | | /* 11.285 */            dms
+    | | /* 11.286 */        }
+    | | /* 11.287 */    }
+    | | /* 11.288 */}
+    | | /* 11.289 */extend JsonValue <: ToString {
+    | | /* 11.290 */    public func toString(): String {
+    | | /* 11.291 */        let sb = StringBuilder()
+    | | /* 11.292 */        sb.append("JsonValue")
+    | | /* 11.293 */        match(this) {
+    | | /* 11.294 */            case Null => sb.append(".Null")
+    | | /* 11.295 */            ()
+    | | /* 11.296 */            case Boolean(field0) => sb.append(".Boolean")
+    | | /* 11.297 */            sb.append("(")
+    | | /* 11.298 */            sb.append(field0.toString())
+    | | /* 11.299 */            sb.append(")")
+    | | /* 11.300 */            case Number(fl0) => sb.append(".Number")
+    | | /* 11.301 */            sb.append("(")
+    | | /* 11.302 */            sb.append(fl0.toString())
+    | | /* 11.303 */            sb.append(")")
+    | | /* 11.304 */            case String(str0) => sb.append(".String")
+    | | /* 11.305 */            sb.append("(")
+    | | /* 11.306 */            sb.append(str0.toString())
+    | | /* 11.307 */            sb.append(")")
+    | | /* 11.308 */            case Array(field0) => sb.append(".Array")
+    | | /* 11.309 */            sb.append("(")
+    | | /* 11.310 */            sb.append(field0.toString())
+    | | /* 11.311 */            sb.append(")")
+    | | /* 11.312 */            case Map(field0) => sb.append(".Map")
+    | | /* 11.313 */            sb.append("(")
+    | | /* 11.314 */            sb.append(field0.toString())
+    | | /* 11.315 */            sb.append(")")
+    | | /* 11.316 */        }
+    | | /* 11.317 */        return sb.toString()
+    | | /* 11.318 */    }
+    | | /* 11.319 */}
+    | | /* 11.320 */extend JsonValue {
+    | | /* 11.321 */    private func derivingChecks_(): Unit {
+    | | /* 11.322 */        func check_Boolean_0 < T_Boolean_0 >(_: Bool): ToString where T_Boolean_0 <: ToString {
+    | | /* 11.323 */            throw Exception()
+    | | /* 11.324 */        }
+    | | /* 11.325 */        let _ = check_Boolean_0 < Bool >
+    | | /* 11.326 */        func check_Number_1 < T_Number_1 >(_: Float64): ToString where T_Number_1 <: ToString {
+    | | /* 11.327 */            throw Exception()
+    | | /* 11.328 */        }
+    | | /* 11.329 */        let _ = check_Number_1 < Float64 >
+    | | /* 11.330 */        func check_String_2 < T_String_2 >(_: String): ToString where T_String_2 <: ToString {
+    | | /* 11.331 */            throw Exception()
+    | | /* 11.332 */        }
+    | | /* 11.333 */        let _ = check_String_2 < String >
+    | | /* 11.334 */        func check_Array_3 < T_Array_3 >(_: ArrayList < JsonValue >): ToString where T_Array_3 <: ToString {
+    | | /* 11.335 */            throw Exception()
+    | | /* 11.336 */        }
+    | | /* 11.337 */        let _ = check_Array_3 < ArrayList < JsonValue >>
+    | | /* 11.338 */        func check_Map_4 < T_Map_4 >(_: HashMap < String, JsonValue >): ToString where T_Map_4 <: ToString {
+    | | /* 11.339 */            throw Exception()
+    | | /* 11.340 */        }
+    | | /* 11.341 */        let _ = check_Map_4 < HashMap < String, JsonValue >>
+    | | /* 11.342 */        derivingChecks2_()
+    | | /* 11.343 */    }
+    | | /* 11.344 */    private func derivingChecks2_(): Unit {
+    | | /* 11.345 */        derivingChecks_()
+    | | /* 11.346 */    }
+    | | /* 11.347 */}
+    | | /* 11.348 */
+    | |____________^
+    |
+note[0m: the warning occurs after the macro is expanded
+   ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\jsonvalue\src\jsonvalue.cj:11:1:
+    |
+11  |   @Derive[ToString]
+    |  _^
+12  | | public enum JsonValue <: JsonDeserializable<JsonValue> & JsonSerializable {
+    | | ...
+299 | | }
+    | |_^
+    |
+
+warning[0m: unused function:'check_Number_1'
+    |
+    |   /* 11.326 */        func check_Number_1 < T_Number_1 >(_: Float64): ToString where T_Number_1 <: ToString {
+    |  _____________________^
+    | | /* 11.327 */            throw Exception()
+    | | /* 11.328 */        }
+    | |_____________________^ unused function
+    |
+    # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the warning occurs after the macro is expanded
+   ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\jsonvalue\src\jsonvalue.cj:11:1:
+    |
+11  |   @Derive[ToString]
+    |  _^
+12  | | public enum JsonValue <: JsonDeserializable<JsonValue> & JsonSerializable {
+    | | ...
+299 | | }
+    | |_^
+    |
+
+warning[0m: unused function:'check_String_2'
+    |
+    |   /* 11.330 */        func check_String_2 < T_String_2 >(_: String): ToString where T_String_2 <: ToString {
+    |  _____________________^
+    | | /* 11.331 */            throw Exception()
+    | | /* 11.332 */        }
+    | |_____________________^ unused function
+    |
+    # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the warning occurs after the macro is expanded
+   ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\jsonvalue\src\jsonvalue.cj:11:1:
+    |
+11  |   @Derive[ToString]
+    |  _^
+12  | | public enum JsonValue <: JsonDeserializable<JsonValue> & JsonSerializable {
+    | | ...
+299 | | }
+    | |_^
+    |
+
+warning[0m: unused function:'check_Array_3'
+    |
+    |   /* 11.334 */        func check_Array_3 < T_Array_3 >(_: ArrayList < JsonValue >): ToString where T_Array_3 <: ToString {
+    |  _____________________^
+    | | /* 11.335 */            throw Exception()
+    | | /* 11.336 */        }
+    | |_____________________^ unused function
+    |
+    # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the warning occurs after the macro is expanded
+   ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\jsonvalue\src\jsonvalue.cj:11:1:
+    |
+11  |   @Derive[ToString]
+    |  _^
+12  | | public enum JsonValue <: JsonDeserializable<JsonValue> & JsonSerializable {
+    | | ...
+299 | | }
+    | |_^
+    |
+
+warning[0m: unused function:'check_Map_4'
+    |
+    |   /* 11.338 */        func check_Map_4 < T_Map_4 >(_: HashMap < String, JsonValue >): ToString where T_Map_4 <: ToString {
+    |  _____________________^
+    | | /* 11.339 */            throw Exception()
+    | | /* 11.340 */        }
+    | |_____________________^ unused function
+    |
+    # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the warning occurs after the macro is expanded
+   ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\jsonvalue\src\jsonvalue.cj:11:1:
+    |
+11  |   @Derive[ToString]
+    |  _^
+12  | | public enum JsonValue <: JsonDeserializable<JsonValue> & JsonSerializable {
+    | | ...
+299 | | }
+    | |_^
+    |
+
+5 warnings generated, 5 warnings printed.
+warning[0m: unused function:'check_Int_0'
+   |
+   |   /* 7.62 */        func check_Int_0 < T_Int_0 >(_: Int64): ToString where T_Int_0 <: ToString {
+   |  ___________________^
+   | | /* 7.63 */            throw Exception()
+   | | /* 7.64 */        }
+   | |___________________^ unused function
+   |
+   # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the code after the macro is expanded as follows
+   |
+   |   /* 7.1 */public enum RequestId <: JsonSerializable & JsonDeserializable < RequestId > & Hashable & Equatable < RequestId > {
+   |  _^
+   | | /* 7.2 */    | Int(Int64)
+   | | /* 7.3 */    | String(String)
+   | | /* 7.4 */
+   | | /* 7.5 */    public func toJson(w: JsonWriter): Unit {
+   | | /* 7.6 */        match(this) {
+   | | /* 7.7 */            case RequestId.Int(i) => w.writeValue(i)
+   | | /* 7.8 */            case RequestId.String(s) => w.writeValue(s)
+   | | /* 7.9 */        }
+   | | /* 7.10 */    }
+   | | /* 7.11 */
+   | | /* 7.12 */    public static func fromJson(r: JsonReader): RequestId {
+   | | /* 7.13 */        while(let Some(v) <- r.peek()) {
+   | | /* 7.14 */            match(v) {
+   | | /* 7.15 */                case JsonNumber => return RequestId.Int(r.readValue < Int64 >())
+   | | /* 7.16 */                case JsonString => return RequestId.String(r.readValue < String >())
+   | | /* 7.17 */                case _ => r.skip()
+   | | /* 7.18 */            }
+   | | /* 7.19 */        }
+   | | /* 7.20 */        throw JsonRpcException(ErrorCodes.INVALID_REQUEST, "Invalid RequestId: expected number or string")
+   | | /* 7.21 */    }
+   | | /* 7.22 */
+   | | /* 7.23 */    public func hashCode(): Int64 {
+   | | /* 7.24 */        match(this) {
+   | | /* 7.25 */            case RequestId.Int(i) => i
+   | | /* 7.26 */            case RequestId.String(s) => s.hashCode()
+   | | /* 7.27 */        }
+   | | /* 7.28 */    }
+   | | /* 7.29 */
+   | | /* 7.30 */    public operator func ==(other: RequestId): Bool {
+   | | /* 7.31 */        match(this) {
+   | | /* 7.32 */            case RequestId.Int(i) => match(other) {
+   | | /* 7.33 */                case RequestId.Int(j) => i == j
+   | | /* 7.34 */                case _ => false
+   | | /* 7.35 */            }
+   | | /* 7.36 */            case RequestId.String(s) => match(other) {
+   | | /* 7.37 */                case RequestId.String(t) => s == t
+   | | /* 7.38 */                case _ => false
+   | | /* 7.39 */            }
+   | | /* 7.40 */        }
+   | | /* 7.41 */    }
+   | | /* 7.42 */}
+   | | /* 7.43 */extend RequestId <: ToString {
+   | | /* 7.44 */    public func toString(): String {
+   | | /* 7.45 */        let sb = StringBuilder()
+   | | /* 7.46 */        sb.append("RequestId")
+   | | /* 7.47 */        match(this) {
+   | | /* 7.48 */            case Int(i0) => sb.append(".Int")
+   | | /* 7.49 */            sb.append("(")
+   | | /* 7.50 */            sb.append(i0.toString())
+   | | /* 7.51 */            sb.append(")")
+   | | /* 7.52 */            case String(str0) => sb.append(".String")
+   | | /* 7.53 */            sb.append("(")
+   | | /* 7.54 */            sb.append(str0.toString())
+   | | /* 7.55 */            sb.append(")")
+   | | /* 7.56 */        }
+   | | /* 7.57 */        return sb.toString()
+   | | /* 7.58 */    }
+   | | /* 7.59 */}
+   | | /* 7.60 */extend RequestId {
+   | | /* 7.61 */    private func derivingChecks_(): Unit {
+   | | /* 7.62 */        func check_Int_0 < T_Int_0 >(_: Int64): ToString where T_Int_0 <: ToString {
+   | | /* 7.63 */            throw Exception()
+   | | /* 7.64 */        }
+   | | /* 7.65 */        let _ = check_Int_0 < Int64 >
+   | | /* 7.66 */        func check_String_1 < T_String_1 >(_: String): ToString where T_String_1 <: ToString {
+   | | /* 7.67 */            throw Exception()
+   | | /* 7.68 */        }
+   | | /* 7.69 */        let _ = check_String_1 < String >
+   | | /* 7.70 */        derivingChecks2_()
+   | | /* 7.71 */    }
+   | | /* 7.72 */    private func derivingChecks2_(): Unit {
+   | | /* 7.73 */        derivingChecks_()
+   | | /* 7.74 */    }
+   | | /* 7.75 */}
+   | | /* 7.76 */
+   | |__________^
+   |
+note[0m: the warning occurs after the macro is expanded
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\jsonrpc\src\types.cj:7:1:
+   |
+7  |   @Derive[ToString]
+   |  _^
+8  | | public enum RequestId <: JsonSerializable & JsonDeserializable<RequestId> & Hashable & Equatable<RequestId> {
+   | | ...
+49 | | }
+   | |_^
+   |
+
+warning[0m: unused function:'check_String_1'
+   |
+   |   /* 7.66 */        func check_String_1 < T_String_1 >(_: String): ToString where T_String_1 <: ToString {
+   |  ___________________^
+   | | /* 7.67 */            throw Exception()
+   | | /* 7.68 */        }
+   | |___________________^ unused function
+   |
+   # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the warning occurs after the macro is expanded
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\jsonrpc\src\types.cj:7:1:
+   |
+7  |   @Derive[ToString]
+   |  _^
+8  | | public enum RequestId <: JsonSerializable & JsonDeserializable<RequestId> & Hashable & Equatable<RequestId> {
+   | | ...
+49 | | }
+   | |_^
+   |
+
+2 warnings generated, 2 warnings printed.
+error[0m: expected a member name after '.' in qualified name, found keyword 'init'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy\src\policy_kb.cj:79:25:
+   |
+79 |         return PolicyKb.init()
+   |                        ~^^^^ expected a member name here
+   |                        |
+   |                        after '.' in qualified name
+   |
+help: you could escape keyword as a member name using '`':
+   |
+79 |         return PolicyKb.`init`()
+   |                         ~~~~~~
+   |
+
+error[0m: expected expression or declaration, found '}'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy\src\policy_kb.cj:80:5:
+   |
+80 |     }
+   |     ^ expected expression or declaration here
+   |
+
+error[0m: expected a member name after '.' in qualified name, found keyword 'init'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy\src\policy_kb.cj:87:29:
+   |
+87 |             return PolicyKb.init(path, ArrayList<PolicyEntry>(), "政策索引读取失败")
+   |                            ~^^^^ expected a member name here
+   |                            |
+   |                            after '.' in qualified name
+   |
+help: you could escape keyword as a member name using '`':
+   |
+87 |             return PolicyKb.`init`(path, ArrayList<PolicyEntry>(), "政策索引读取失败")
+   |                             ~~~~~~
+   |
+
+error[0m: expected expression or declaration, found '}'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy\src\policy_kb.cj:88:9:
+   |
+88 |         }
+   |         ^ expected expression or declaration here
+   |
+
+error[0m: expected a member name after '.' in qualified name, found keyword 'init'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy\src\policy_kb.cj:90:29:
+   |
+90 |             return PolicyKb.init(path, ArrayList<PolicyEntry>(), "政策索引为空")
+   |                            ~^^^^ expected a member name here
+   |                            |
+   |                            after '.' in qualified name
+   |
+help: you could escape keyword as a member name using '`':
+   |
+90 |             return PolicyKb.`init`(path, ArrayList<PolicyEntry>(), "政策索引为空")
+   |                             ~~~~~~
+   |
+
+error[0m: expected expression or declaration, found '}'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy\src\policy_kb.cj:91:9:
+   |
+91 |         }
+   |         ^ expected expression or declaration here
+   |
+
+error[0m: expected a member name after '.' in qualified name, found keyword 'init'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy\src\policy_kb.cj:96:29:
+   |
+96 |             return PolicyKb.init(path, ArrayList<PolicyEntry>(), "政策索引解析失败")
+   |                            ~^^^^ expected a member name here
+   |                            |
+   |                            after '.' in qualified name
+   |
+help: you could escape keyword as a member name using '`':
+   |
+96 |             return PolicyKb.`init`(path, ArrayList<PolicyEntry>(), "政策索引解析失败")
+   |                             ~~~~~~
+   |
+
+error[0m: expected expression or declaration, found '}'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy\src\policy_kb.cj:97:9:
+   |
+97 |         }
+   |         ^ expected expression or declaration here
+   |
+
+16 errors generated, 8 errors printed.
+Error: failed to compile package `skill_yuanbao_policy`, return code is 1
+warning[0m: unused function:'main'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\cordis-cj\cordis_plugin\src\examples\event_emit\main.cj:11:1:
+   |
+11 |   main(): Int64 {
+   |  _^
+12 | |     PluginRuntime.run("event-emit", [], [], { ctx =>
+   | | ...
+19 | | }
+   | |_^ unused function
+   |
+   # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+
+1 warning generated, 1 warning printed.
+warning[0m: unused function:'main'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\cordis-cj\cordis_plugin\src\examples\event_sub\main.cj:11:1:
+   |
+11 |   main(): Int64 {
+   |  _^
+12 | |     PluginRuntime.run("event-sub", [], [], { ctx =>
+   | | ...
+20 | | }
+   | |_^ unused function
+   |
+   # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+
+1 warning generated, 1 warning printed.
+warning[0m: unused function:'main'
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\cordis-cj\cordis_plugin\src\examples\e2e\main.cj:22:1:
+   |
+22 |   main(): Int64 {
+   |  _^
+23 | |     let handler = { ctx: PluginContext =>
+   | | ...
+55 | | }
+   | |_^ unused function
+   |
+   # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+
+1 warning generated, 1 warning printed.
+warning[0m: unused function:'main'
+   |
+   |   /* 6.23 */main(): Int64 {
+   |  ___________^
+   | | /* 6.24 */    PluginRuntime.run("MacroPlugin",[],["echo", "add"], { ctx =>
+   | | /* 6.25 */        let __plugin = MacroPlugin()
+   | | /* 6.26 */
+   | | /* 6.27 */        ctx.registerHandler("echo", { _, args => __plugin.echo(args) })
+   | | /* 6.28 */
+   | | /* 6.29 */
+   | | /* 6.30 */        ctx.registerHandler("add", { _, args => __plugin.add(args) })
+   | | /* 6.31 */
+   | | /* 6.32 */    })
+   | | /* 6.33 */    return 0
+   | | /* 6.34 */}
+   | |___________^ unused function
+   |
+   # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the code after the macro is expanded as follows
+   |
+   |   /* 6.1 */public class MacroPlugin {
+   |  _^
+   | | /* 6.2 */    public func echo(args: Array < JsonValue >): JsonValue {
+   | | /* 6.3 */        if(args.size > 0) {
+   | | /* 6.4 */            args[0]
+   | | /* 6.5 */        }
+   | | /* 6.6 */        else {
+   | | /* 6.7 */            JsonValue.Null
+   | | /* 6.8 */        }
+   | | /* 6.9 */    }
+   | | /* 6.10 */    public func add(args: Array < JsonValue >): JsonValue {
+   | | /* 6.11 */        let a = match(args[0]) {
+   | | /* 6.12 */            case JsonValue.Number(n) => n
+   | | /* 6.13 */            case _ => 0.0
+   | | /* 6.14 */        }
+   | | /* 6.15 */        let b = match(args[1]) {
+   | | /* 6.16 */            case JsonValue.Number(n) => n
+   | | /* 6.17 */            case _ => 0.0
+   | | /* 6.18 */        }
+   | | /* 6.19 */        JsonValue.Number(a + b)
+   | | /* 6.20 */    }
+   | | /* 6.21 */}
+   | | /* 6.22 */
+   | | /* 6.23 */main(): Int64 {
+   | | /* 6.24 */    PluginRuntime.run("MacroPlugin",[],["echo", "add"], { ctx =>
+   | | /* 6.25 */        let __plugin = MacroPlugin()
+   | | /* 6.26 */
+   | | /* 6.27 */        ctx.registerHandler("echo", { _, args => __plugin.echo(args) })
+   | | /* 6.28 */
+   | | /* 6.29 */
+   | | /* 6.30 */        ctx.registerHandler("add", { _, args => __plugin.add(args) })
+   | | /* 6.31 */
+   | | /* 6.32 */    })
+   | | /* 6.33 */    return 0
+   | | /* 6.34 */}
+   | | /* 6.35 */
+   | |__________^
+   |
+note[0m: the warning occurs after the macro is expanded
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\cordis-cj\cordis_plugin\src\examples\macro_demo\main.cj:6:1:
+   |
+6  |   @Plugin[]
+   |  _^
+7  | | public class MacroPlugin {
+   | | ...
+23 | | }
+   | |_^
+   |
+
+1 warning generated, 1 warning printed.
+warning[0m: unused function:'main'
+   |
+   |   /* 13.35 */main(): Int64 {
+   |  ____________^
+   | | /* 13.36 */    PluginRuntime.run("InjectDemo",["add"],["calc"], { ctx =>
+   | | /* 13.37 */        let __plugin = InjectDemo(ctx)
+   | | /* 13.38 */
+   | | /* 13.39 */        ctx.registerHandler("calc", { _, args => __plugin.calc(args) })
+   | | /* 13.40 */
+   | | /* 13.41 */    })
+   | | /* 13.42 */    return 0
+   | | /* 13.43 */}
+   | |____________^ unused function
+   |
+   # note: this warning can be suppressed by setting the compiler option `-Woff unused`
+note[0m: the code after the macro is expanded as follows
+   |
+   |   /* 13.1 */public class InjectDemo {
+   |  _^
+   | | /* 13.2 */    public var add: ServiceProxy
+   | | /* 13.3 */    public func calc(args: Array < JsonValue >): JsonValue {
+   | | /* 13.4 */        let a = if(args.size > 0) {
+   | | /* 13.5 */            match(args[0]) {
+   | | /* 13.6 */                case JsonValue.Number(n) => n
+   | | /* 13.7 */                case _ => 5.0
+   | | /* 13.8 */            }
+   | | /* 13.9 */        }
+   | | /* 13.10 */        else {
+   | | /* 13.11 */            5.0
+   | | /* 13.12 */        }
+   | | /* 13.13 */
+   | | /* 13.14 */        let b = if(args.size > 1) {
+   | | /* 13.15 */            match(args[1]) {
+   | | /* 13.16 */                case JsonValue.Number(n) => n
+   | | /* 13.17 */                case _ => 6.0
+   | | /* 13.18 */            }
+   | | /* 13.19 */        }
+   | | /* 13.20 */        else {
+   | | /* 13.21 */            6.0
+   | | /* 13.22 */        }
+   | | /* 13.23 */
+   | | /* 13.24 */        let result = this.add.call < JsonValue >("add",[JsonValue.Number(a), JsonValue.Number(b)])
+   | | /* 13.25 */        match(result) {
+   | | /* 13.26 */            case JsonValue.Number(n) => JsonValue.Number(n)
+   | | /* 13.27 */            case _ => JsonValue.Null
+   | | /* 13.28 */        }
+   | | /* 13.29 */    }
+   | | /* 13.30 */    public init(__ctx: PluginContext) {
+   | | /* 13.31 */        this.add = __ctx.proxy("add")
+   | | /* 13.32 */    }
+   | | /* 13.33 */}
+   | | /* 13.34 */
+   | | /* 13.35 */main(): Int64 {
+   | | /* 13.36 */    PluginRuntime.run("InjectDemo",["add"],["calc"], { ctx =>
+   | | /* 13.37 */        let __plugin = InjectDemo(ctx)
+   | | /* 13.38 */
+   | | /* 13.39 */        ctx.registerHandler("calc", { _, args => __plugin.calc(args) })
+   | | /* 13.40 */
+   | | /* 13.41 */    })
+   | | /* 13.42 */    return 0
+   | | /* 13.43 */}
+   | | /* 13.44 */
+   | |___________^
+   |
+note[0m: the warning occurs after the macro is expanded
+  ==> D:\UCT\projects\uctoo\apps\agentskills-runtime\libs\cordis-cj\cordis_plugin\src\examples\inject_demo\main.cj:13:1:
+   |
+13 |   @Plugin[]
+   |  _^
+14 | | public class InjectDemo {
+   | | ...
+37 | | }
+   | |_^
+   |
+
+1 warning generated, 1 warning printed.
+Error: cjpm build failed
+
+D:\UCT\projects\uctoo\apps\agentskills-runtime\skills\yuanbao-policy>

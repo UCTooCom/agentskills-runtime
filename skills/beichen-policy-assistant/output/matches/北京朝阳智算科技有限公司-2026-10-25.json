@@ -1,0 +1,417 @@
+{
+  "slug": "北京朝阳智算科技有限公司",
+  "company_name": "北京朝阳智算科技有限公司",
+  "match_date": "2026-10-25",
+  "total_policies": 74,
+  "eliminated": [],
+  "matches": [
+    {
+      "policy_no": "19",
+      "title": "北京市促进人工智能产业发展若干政策",
+      "domain": "人工智能",
+      "level": "市级",
+      "department": "北京市经济和信息化局",
+      "support": "",
+      "score": 45,
+      "basis": "层级市级·领域人工智能；领域命中：人工智能",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\19-北京市促进人工智能产业发展若干政策.md",
+      "channel": "原文库"
+    },
+    {
+      "policy_no": "20",
+      "title": "北京市朝阳区促进人工智能产业发展措施",
+      "domain": "人工智能",
+      "level": "区级",
+      "department": "朝阳区科信局",
+      "support": "",
+      "score": 45,
+      "basis": "层级区级·领域人工智能；领域命中：人工智能",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\20-北京市朝阳区促进人工智能产业发展措施.md",
+      "channel": "原文库"
+    },
+    {
+      "policy_no": "23",
+      "title": "北京市数据资产入表试点工作方案",
+      "domain": "数据要素",
+      "level": "市级",
+      "department": "北京市财政局、市经信局",
+      "support": "",
+      "score": 45,
+      "basis": "层级市级·领域数据要素；领域命中：数据要素",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\23-北京市数据资产入表试点工作方案.md",
+      "channel": "原文库"
+    },
+    {
+      "policy_no": "24",
+      "title": "北京市数据跨境流动便利化试点政策",
+      "domain": "数据要素",
+      "level": "市级",
+      "department": "北京市网信办、市经信局",
+      "support": "",
+      "score": 45,
+      "basis": "层级市级·领域数据要素；领域命中：数据要素",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\24-北京市数据跨境流动便利化试点政策.md",
+      "channel": "原文库"
+    },
+    {
+      "policy_no": "25",
+      "title": "北京市朝阳区数据要素产业发展若干政策",
+      "domain": "数据要素",
+      "level": "区级",
+      "department": "朝阳区科信局、区大数据中心",
+      "support": "",
+      "score": 45,
+      "basis": "层级区级·领域数据要素；领域命中：数据要素",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\25-北京市朝阳区数据要素产业发展若干政策.md",
+      "channel": "原文库"
+    }
+  ],
+  "matched_count": 74,
+  "pending": [
+    {
+      "policy_no": "",
+      "title": "我省出台人工智能创新发展财政支持政策",
+      "url": "https://www.jiangsu.gov.cn/art/2026/10/24/art_60095_11847418.html",
+      "site": "江苏省人民政府",
+      "date": "2026/10/24 07:03:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "人工智能產業競爭轉向拼效率",
+      "url": "https://finance.people.com.cn/BIG5/n1/2026/1016/c1004-40815686.html",
+      "site": "人民网",
+      "date": "2026/10/16 07:56:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "十条举措让智能体更“能干”",
+      "url": "https://www.digitalchina.gov.cn/2026/xwzx/szkx/202610/t20261015_5382144.htm",
+      "site": "数字中国建设峰会",
+      "date": "2026/10/15 10:11:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "三年培育超萬家AI科創中小企業",
+      "url": "https://finance.people.com.cn/BIG5/n1/2026/0905/c1004-40793022.html",
+      "site": "人民网",
+      "date": "2026/09/05 08:57:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "利好!八部门联合发布",
+      "url": "https://m.gmw.cn/2026-01/08/content_1304294899.htm",
+      "site": "光明网",
+      "date": "2026/01/08 08:41:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "当AI浪潮涌来,济南靠什么“乘风起”?",
+      "url": "https://innovation.jinan.gov.cn/col/col127084/art/2026/art_f52bd3c31dbc4ababf8222f8a38c72b8.html",
+      "site": "济南起步区政府",
+      "date": "2026/09/10 09:32:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "成都高新区管委会办公室关于印发《成都高新技术产业开发区深入实施“人工智能”行动 加快算力基础设施高质量发展若干措施》的通知",
+      "url": "https://www.cdht.gov.cn/gkml/cdgxjscykfqxjjcyj/xzgfxwj/1546639052789252096.shtml",
+      "site": "成都高新技术产业开发区",
+      "date": "2026/09/07 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "关于印发招远市“人工智能”三年行动方案的通知",
+      "url": "https://www.zhaoyuan.gov.cn/col/col100081/art/2026/art_8accf95d57b24c7995f4992ce95c306e.html?type=4JnkXemNbirDhO2Om8bBC",
+      "site": "招远市政府",
+      "date": "2026/06/11 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "市政府新闻发布会问答实录(2026年7月7日)",
+      "url": "https://www.shanghai.gov.cn/nw9820/20260707/de3c6a83c5094876adb1bdf353120e64.html",
+      "site": "上海市人民政府",
+      "date": "2026/07/07 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "关于加强人工智能算力服务资源政策扶持力度的建议",
+      "url": "https://www.yuhang.gov.cn/col/col1229797525/art/2026/art_516d6ae6be9748608429893652ed510d.html",
+      "site": "余杭区人民政府",
+      "date": "2026/07/13 11:51:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "四川省发展和改革委员会等部门关于印发《四川省推进算力网建设的若干政策措施(试行)》的通知(川发改数据〔2026〕338号)",
+      "url": "http://scms.gov.cn/gongkai/show/9e555ca2063c72fdaabf648712060bd4.html",
+      "site": "雅安市名山区人民政府门户网站",
+      "date": "2026/08/19 09:41:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "深圳市推动人工智能与应用发展行动计划(2026—2028年)",
+      "url": "https://www.szns.gov.cn/xxgk/jdxxgk/tyjdb/xxgk/zcfg/zcfgjgfxwj/content/post_13015650.html",
+      "site": "南山区人民政府",
+      "date": "2026/10/12 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "北京市丰台区科学技术和信息化局关于印发《丰台区支持人工智能科技创新和产业创新融合发展的若干措施》的通知",
+      "url": "https://www.ncsti.gov.cn/kjdt/tzgg/202602/t20260209_237793.html",
+      "site": "国际科技创新中心网络服务平台",
+      "date": "2026/02/09 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "八部门联合印发《“人工智能制造”专项行动实施意见》",
+      "url": "https://www.news.cn/tech/20260113/635d4b8aa5ed44d6af693ae39fe53b14/c.html",
+      "site": "新华网",
+      "date": "2026/01/13 08:44:18",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "贵州:发布20条新政策支持人工智能发展",
+      "url": "https://fgw.nanning.gov.cn/cms/content/queryOfPreview.action?contentId=124508",
+      "site": "南宁市政府门户网站",
+      "date": "2026/07/20 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "创新成本做减法 产业生态做加法 深圳加速打造人工智能先锋城市",
+      "url": "https://fgw.sz.gov.cn/ztzl/qtztzl/szscjmyjjfzzhfwpt/xwzl/content/post_12783052.html",
+      "site": "深圳市发改委",
+      "date": "2026/05/14 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    }
+  ],
+  "excluded": [
+    {
+      "policy_no": "",
+      "title": "我省出台人工智能创新发展财政支持政策",
+      "url": "https://www.jiangsu.gov.cn/art/2026/10/24/art_60095_11847418.html",
+      "site": "江苏省人民政府",
+      "date": "2026/10/24 07:03:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "人工智能產業競爭轉向拼效率",
+      "url": "https://finance.people.com.cn/BIG5/n1/2026/1016/c1004-40815686.html",
+      "site": "人民网",
+      "date": "2026/10/16 07:56:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "十条举措让智能体更“能干”",
+      "url": "https://www.digitalchina.gov.cn/2026/xwzx/szkx/202610/t20261015_5382144.htm",
+      "site": "数字中国建设峰会",
+      "date": "2026/10/15 10:11:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "三年培育超萬家AI科創中小企業",
+      "url": "https://finance.people.com.cn/BIG5/n1/2026/0905/c1004-40793022.html",
+      "site": "人民网",
+      "date": "2026/09/05 08:57:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "利好!八部门联合发布",
+      "url": "https://m.gmw.cn/2026-01/08/content_1304294899.htm",
+      "site": "光明网",
+      "date": "2026/01/08 08:41:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "当AI浪潮涌来,济南靠什么“乘风起”?",
+      "url": "https://innovation.jinan.gov.cn/col/col127084/art/2026/art_f52bd3c31dbc4ababf8222f8a38c72b8.html",
+      "site": "济南起步区政府",
+      "date": "2026/09/10 09:32:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "成都高新区管委会办公室关于印发《成都高新技术产业开发区深入实施“人工智能”行动 加快算力基础设施高质量发展若干措施》的通知",
+      "url": "https://www.cdht.gov.cn/gkml/cdgxjscykfqxjjcyj/xzgfxwj/1546639052789252096.shtml",
+      "site": "成都高新技术产业开发区",
+      "date": "2026/09/07 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "关于印发招远市“人工智能”三年行动方案的通知",
+      "url": "https://www.zhaoyuan.gov.cn/col/col100081/art/2026/art_8accf95d57b24c7995f4992ce95c306e.html?type=4JnkXemNbirDhO2Om8bBC",
+      "site": "招远市政府",
+      "date": "2026/06/11 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "市政府新闻发布会问答实录(2026年7月7日)",
+      "url": "https://www.shanghai.gov.cn/nw9820/20260707/de3c6a83c5094876adb1bdf353120e64.html",
+      "site": "上海市人民政府",
+      "date": "2026/07/07 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "关于加强人工智能算力服务资源政策扶持力度的建议",
+      "url": "https://www.yuhang.gov.cn/col/col1229797525/art/2026/art_516d6ae6be9748608429893652ed510d.html",
+      "site": "余杭区人民政府",
+      "date": "2026/07/13 11:51:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "四川省发展和改革委员会等部门关于印发《四川省推进算力网建设的若干政策措施(试行)》的通知(川发改数据〔2026〕338号)",
+      "url": "http://scms.gov.cn/gongkai/show/9e555ca2063c72fdaabf648712060bd4.html",
+      "site": "雅安市名山区人民政府门户网站",
+      "date": "2026/08/19 09:41:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "深圳市推动人工智能与应用发展行动计划(2026—2028年)",
+      "url": "https://www.szns.gov.cn/xxgk/jdxxgk/tyjdb/xxgk/zcfg/zcfgjgfxwj/content/post_13015650.html",
+      "site": "南山区人民政府",
+      "date": "2026/10/12 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "北京市丰台区科学技术和信息化局关于印发《丰台区支持人工智能科技创新和产业创新融合发展的若干措施》的通知",
+      "url": "https://www.ncsti.gov.cn/kjdt/tzgg/202602/t20260209_237793.html",
+      "site": "国际科技创新中心网络服务平台",
+      "date": "2026/02/09 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "八部门联合印发《“人工智能制造”专项行动实施意见》",
+      "url": "https://www.news.cn/tech/20260113/635d4b8aa5ed44d6af693ae39fe53b14/c.html",
+      "site": "新华网",
+      "date": "2026/01/13 08:44:18",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "贵州:发布20条新政策支持人工智能发展",
+      "url": "https://fgw.nanning.gov.cn/cms/content/queryOfPreview.action?contentId=124508",
+      "site": "南宁市政府门户网站",
+      "date": "2026/07/20 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "创新成本做减法 产业生态做加法 深圳加速打造人工智能先锋城市",
+      "url": "https://fgw.sz.gov.cn/ztzl/qtztzl/szscjmyjjfzzhfwpt/xwzl/content/post_12783052.html",
+      "site": "深圳市发改委",
+      "date": "2026/05/14 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    }
+  ],
+  "policy_no_coverage": 1,
+  "kb_count": 74,
+  "kb_error": ""
+}

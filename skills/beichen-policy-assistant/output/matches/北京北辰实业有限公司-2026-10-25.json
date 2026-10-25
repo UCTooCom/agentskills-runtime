@@ -1,0 +1,357 @@
+{
+  "slug": "北京北辰实业有限公司",
+  "company_name": "北京北辰实业有限公司",
+  "match_date": "2026-10-25",
+  "total_policies": 74,
+  "eliminated": [],
+  "matches": [
+    {
+      "policy_no": "1",
+      "title": "北京市高层次创新创业人才支持计划科技新星计划管理办法",
+      "domain": "人才支持",
+      "level": "市级",
+      "department": "北京市科委",
+      "support": "",
+      "score": 30,
+      "basis": "层级市级·领域人才支持",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\1-北京市高层次创新创业人才支持计划科技新星计划管理办法.md",
+      "channel": "原文库"
+    },
+    {
+      "policy_no": "2",
+      "title": "北京市博士后科研工作站管理办法",
+      "domain": "人才支持",
+      "level": "市级",
+      "department": "北京市人社局",
+      "support": "",
+      "score": 30,
+      "basis": "层级市级·领域人才支持",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\2-北京市博士后科研工作站管理办法.md",
+      "channel": "原文库"
+    },
+    {
+      "policy_no": "3",
+      "title": "北京市技能大师工作室建设管理办法",
+      "domain": "人才支持",
+      "level": "市级",
+      "department": "北京市人社局",
+      "support": "",
+      "score": 30,
+      "basis": "层级市级·领域人才支持",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\3-北京市技能大师工作室建设管理办法.md",
+      "channel": "原文库"
+    },
+    {
+      "policy_no": "4",
+      "title": "北京市支持留学回国人才创新创业若干措施",
+      "domain": "人才支持",
+      "level": "市级",
+      "department": "北京市人社局",
+      "support": "",
+      "score": 30,
+      "basis": "层级市级·领域人才支持",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\4-北京市支持留学回国人才创新创业若干措施.md",
+      "channel": "原文库"
+    },
+    {
+      "policy_no": "5",
+      "title": "北京市朝阳区高层次人才引进支持政策",
+      "domain": "人才支持",
+      "level": "区级",
+      "department": "朝阳区人才工作局",
+      "support": "",
+      "score": 30,
+      "basis": "层级区级·领域人才支持",
+      "gap": [],
+      "conditions": {},
+      "status": "matched",
+      "deadline": null,
+      "source": "policy-original/policy-original\\5-北京市朝阳区高层次人才引进支持政策.md",
+      "channel": "原文库"
+    }
+  ],
+  "matched_count": 74,
+  "pending": [
+    {
+      "policy_no": "",
+      "title": "北交所和新三板匯聚專精特新企業超4000家 “小巨人”企業佔比近四成",
+      "url": "https://bj.people.com.cn/BIG5/n2/2026/1021/c82839-41728463.html",
+      "site": "人民网",
+      "date": "2026/10/21 14:20:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "投融资对接专场 暨“一月一链”全国行专场活动启幕",
+      "url": "https://zhengxie.bjxch.gov.cn/xxxq/pnidpv1005962.html",
+      "site": "北京市西城区人民政府",
+      "date": "2026/10/23 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "财政支出力度如何?一揽子政策怎样发力?财政部详解财政热点问题",
+      "url": "https://www.gov.cn/zhengce/202601/content_7055524.htm",
+      "site": "中国政府网",
+      "date": "2026/01/21 08:17:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "推动中小企业回款难问题整体好转",
+      "url": "https://www.gov.cn/zhengce/202609/content_7081096.htm",
+      "site": "中国政府网",
+      "date": "2026/09/15 09:45:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "新政策 新服务 新合作 金融“活水”浇灌中小企业拔节生长",
+      "url": "https://www.beijing.gov.cn/fuwu/lqfw/gggs/202610/t20261022_4914078.html",
+      "site": "北京市人民政府",
+      "date": "2026/10/22 08:57:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "2026年上半年中国财政政策执行情况报告",
+      "url": "https://www.shanwei.gov.cn/swczj/yaowen/tzgg/content/post_1281858.html",
+      "site": "汕尾市人民政府门户网站",
+      "date": "2026/10/09 16:24:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "天津监管局反映海河产业基金以财政金融协同赋能产业高质量发展取得良好成效",
+      "url": "https://tj.mof.gov.cn/gzdt2/caizhengjiancha/202610/t20261023_4003352.htm",
+      "site": "财政部网站",
+      "date": "2026/10/23 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "工业和信息化部等十部门印发《促进中小企业发展“十五五”规划》",
+      "url": "https://www.jxyf.gov.cn/yfxrmzf/zzygzl/pc/content/2108101963308437504/content_2108101963308437504.html",
+      "site": "宜丰政府网",
+      "date": "2026/10/08 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "对市十六届人大六次会议第018号建议的答复(关于促进中小企业提质增效､培育发展新质生产力的建议)",
+      "url": "https://gxj.nantong.gov.cn/ntsjxw/rdjy/content/ab56c983-9750-4a43-b476-8969e6f2e302.html",
+      "site": "南通市人民政府",
+      "date": "2026/09/29 17:02:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "我省综合运用财政政策工具支持先进制造业发展",
+      "url": "https://glq.fuzhou.gov.cn/zgfzzt/sjxw/fzjx/hqzc/202609/t20260923_5375353.htm",
+      "site": "福州市人民政府",
+      "date": "2026/09/23 10:35:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "工信部等十部门印发《促进中小企业发展“十五五”规划》",
+      "url": "https://jxt.hubei.gov.cn/bmdt/rdjj/202609/t20260907_6008340.shtml",
+      "site": "湖北省经济和信息化厅",
+      "date": "2026/09/05 09:47:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "工业和信息化部等十部门关于印发《促进中小企业发展“十五五”规划》的通知",
+      "url": "https://www.gzzf.gov.cn/zwgk/zdlygk/myjj/myjjgl/202609/t20260930_90957363.html",
+      "site": "贞丰县人民政府",
+      "date": "2026/09/30 16:56:14",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "广州推出专精特新中小企业扶持政策“升级版”",
+      "url": "https://sqzc.gd.gov.cn/rdzt/zxqygzlfz/jdpl/content/post_4947666.html",
+      "site": "广东省人民政府",
+      "date": "2026/08/27 14:49:59",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    }
+  ],
+  "excluded": [
+    {
+      "policy_no": "",
+      "title": "北交所和新三板匯聚專精特新企業超4000家 “小巨人”企業佔比近四成",
+      "url": "https://bj.people.com.cn/BIG5/n2/2026/1021/c82839-41728463.html",
+      "site": "人民网",
+      "date": "2026/10/21 14:20:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "投融资对接专场 暨“一月一链”全国行专场活动启幕",
+      "url": "https://zhengxie.bjxch.gov.cn/xxxq/pnidpv1005962.html",
+      "site": "北京市西城区人民政府",
+      "date": "2026/10/23 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "财政支出力度如何?一揽子政策怎样发力?财政部详解财政热点问题",
+      "url": "https://www.gov.cn/zhengce/202601/content_7055524.htm",
+      "site": "中国政府网",
+      "date": "2026/01/21 08:17:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "推动中小企业回款难问题整体好转",
+      "url": "https://www.gov.cn/zhengce/202609/content_7081096.htm",
+      "site": "中国政府网",
+      "date": "2026/09/15 09:45:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "新政策 新服务 新合作 金融“活水”浇灌中小企业拔节生长",
+      "url": "https://www.beijing.gov.cn/fuwu/lqfw/gggs/202610/t20261022_4914078.html",
+      "site": "北京市人民政府",
+      "date": "2026/10/22 08:57:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "2026年上半年中国财政政策执行情况报告",
+      "url": "https://www.shanwei.gov.cn/swczj/yaowen/tzgg/content/post_1281858.html",
+      "site": "汕尾市人民政府门户网站",
+      "date": "2026/10/09 16:24:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "天津监管局反映海河产业基金以财政金融协同赋能产业高质量发展取得良好成效",
+      "url": "https://tj.mof.gov.cn/gzdt2/caizhengjiancha/202610/t20261023_4003352.htm",
+      "site": "财政部网站",
+      "date": "2026/10/23 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "工业和信息化部等十部门印发《促进中小企业发展“十五五”规划》",
+      "url": "https://www.jxyf.gov.cn/yfxrmzf/zzygzl/pc/content/2108101963308437504/content_2108101963308437504.html",
+      "site": "宜丰政府网",
+      "date": "2026/10/08 00:00:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "对市十六届人大六次会议第018号建议的答复(关于促进中小企业提质增效､培育发展新质生产力的建议)",
+      "url": "https://gxj.nantong.gov.cn/ntsjxw/rdjy/content/ab56c983-9750-4a43-b476-8969e6f2e302.html",
+      "site": "南通市人民政府",
+      "date": "2026/09/29 17:02:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "我省综合运用财政政策工具支持先进制造业发展",
+      "url": "https://glq.fuzhou.gov.cn/zgfzzt/sjxw/fzjx/hqzc/202609/t20260923_5375353.htm",
+      "site": "福州市人民政府",
+      "date": "2026/09/23 10:35:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "工信部等十部门印发《促进中小企业发展“十五五”规划》",
+      "url": "https://jxt.hubei.gov.cn/bmdt/rdjj/202609/t20260907_6008340.shtml",
+      "site": "湖北省经济和信息化厅",
+      "date": "2026/09/05 09:47:00",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "工业和信息化部等十部门关于印发《促进中小企业发展“十五五”规划》的通知",
+      "url": "https://www.gzzf.gov.cn/zwgk/zdlygk/myjj/myjjgl/202609/t20260930_90957363.html",
+      "site": "贞丰县人民政府",
+      "date": "2026/09/30 16:56:14",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    },
+    {
+      "policy_no": "",
+      "title": "广州推出专精特新中小企业扶持政策“升级版”",
+      "url": "https://sqzc.gd.gov.cn/rdzt/zxqygzlfz/jdpl/content/post_4947666.html",
+      "site": "广东省人民政府",
+      "date": "2026/08/27 14:49:59",
+      "status": "待核实",
+      "reason": "未通过原文库交叉验证，无 policy_no 可绑定",
+      "note": "未绑定政策原文库 policy_no，不作为匹配结论"
+    }
+  ],
+  "policy_no_coverage": 1,
+  "kb_count": 74,
+  "kb_error": ""
+}

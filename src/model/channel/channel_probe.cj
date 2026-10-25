@@ -30,6 +30,11 @@ import magic.log.LogUtils
  */
 public class ChannelProbe {
     private static let INSTANCE = ChannelProbe()
+
+    // 探测请求统一 UA：底层 HTTP 走 curl 时默认 UA 带 curl 字样，
+    // 部分网关（如 TokLens）会直接 403 拒绝，导致通道被误判为 degraded。
+    private static let DEFAULT_PROBE_UA = "AgentSkills-Runtime/1.0"
+
     public static func shared(): ChannelProbe {
         INSTANCE
     }
@@ -470,6 +475,9 @@ public class ChannelProbe {
     private func authHeader(apiKey: String): HashMap<String, String> {
         let h = HashMap<String, String>()
         h.add("Content-Type", "application/json")
+        // 必须显式声明 UA：底层 HTTP 走 curl 时默认 UA 带 curl 字样，
+        // 部分网关（如 TokLens）会直接 403 拒绝，导致探测被误判为通道不可用（degraded）。
+        h.add("User-Agent", DEFAULT_PROBE_UA)
         if (!apiKey.isEmpty()) {
             h.add("Authorization", "Bearer ${apiKey}")
         }

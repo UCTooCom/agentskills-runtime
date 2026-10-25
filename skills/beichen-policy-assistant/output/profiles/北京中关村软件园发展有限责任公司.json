@@ -1,0 +1,70 @@
+{
+  "company_name": "北京中关村软件园发展有限责任公司",
+  "slug": "北京中关村软件园发展有限责任公司",
+  "region": "北京市朝阳区",
+  "industry": [
+    "软件和信息技术服务业",
+    "人工智能",
+    "基础软件（信创）"
+  ],
+  "qualification": [],
+  "stage": "待核实",
+  "business": {
+    "registered_capital": "待补充",
+    "established_time": "待补充",
+    "legal_representative": "待补充",
+    "business_scope": "中关村软件园开发建设、运营管理与产业服务（园区运营主体）；同时自研开源智能体基础设施"
+  },
+  "operation": {
+    "scale": "待补充",
+    "products": "采用仓颉编程语言开发的开源智能体基础设施 agentskills-runtime（开源地址：https://atomgit.com/UCToo/agentskills-runtime）；面向 AI Agent 的技能运行时、智能体互联国标（GB/Z 185）实现、插件系统与长程任务编排",
+    "qualifications": []
+  },
+  "public_opinion": {
+    "positive": [],
+    "negative": [],
+    "neutral": []
+  },
+  "profile_date": "2026-10-25",
+  "source_note": "公开信息聚合未获可用证据；本画像之行业与产品字段由企业方（用户）在会话中直接提供，属一手事实；其余字段标记待补充，未作推测填充。",
+  "pending_fields": [
+    "注册资本",
+    "成立日期",
+    "经营范围明细",
+    "企业规模",
+    "资质认定（高新技术企业/专精特新等）"
+  ],
+  "field_sources": {
+    "industry": "user_provided",
+    "operation.products": "user_provided",
+    "business.business_scope": "user_provided",
+    "qualification": "未获取",
+    "business.registered_capital": "未获取",
+    "business.established_time": "未获取",
+    "business.legal_representative": "未获取",
+    "operation.scale": "未获取"
+  },
+  "search_evidence": [
+    {
+      "field": "operation.products",
+      "value": "采用仓颉编程语言开发的开源智能体基础设施 agentskills-runtime（开源地址：https://atomgit.com/UCToo/agentskills-runtime）；面向 AI Agent 的技能运行时、智能体互联国标（GB/Z 185）实现、插件系统与长程任务编排",
+      "source": "user_provided",
+      "note": "用户（企业方）在会话中直接提供，属一手事实；开源仓库地址可作为可核验出处",
+      "url": "https://atomgit.com/UCToo/agentskills-runtime"
+    },
+    {
+      "field": "industry",
+      "value": "软件和信息技术服务业、人工智能、基础软件（信创）",
+      "source": "user_provided",
+      "note": "由产品性质（仓颉语言 / 开源智能体基础设施）推得之行业归属，非工商登记口径",
+      "url": "https://atomgit.com/UCToo/agentskills-runtime"
+    }
+  ],
+  "search_meta": {
+    "used": true,
+    "request_id": "eba3522a-98e3-45b3-b8fc-06320304882a",
+    "channel": "yuanbao-search",
+    "note": "检索无可用证据"
+  },
+  "summary": "北京中关村软件园发展有限责任公司，注册于北京市朝阳区，为中关村软件园开发运营主体；自研产品为采用仓颉编程语言的开源智能体基础设施 agentskills-runtime，技术栈覆盖基础软件（信创）、人工智能与智能体运行时，主攻方向为国产编程语言生态、开源软件与智能体互联标准实现。"
+}

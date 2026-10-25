@@ -1,0 +1,250 @@
+-- 产业政策智能体落库 SQL
+-- 生成时间: 2026-10-25T13:55:03
+
+UPDATE public.company SET org_description = '北京中关村软件园发展有限责任公司，注册于北京市朝阳区，为中关村软件园开发运营主体；自研产品为采用仓颉编程语言的开源智能体基础设施 agentskills-runtime，技术栈覆盖基础软件（信创）、人工智能与智能体运行时，主攻方向为国产编程语言生态、开源软件与智能体互联标准实现。', region = '北京市朝阳区', org_type = 'beichen-enterprise', updated_at = CURRENT_TIMESTAMP WHERE company_name = '北京中关村软件园发展有限责任公司' AND deleted_at IS NULL;
+INSERT INTO public.company (company_name, region, social_credit_code, established_time, registered_capital, registered_address, mailing_address, legal_representative, legal_representativemobile, legal_representative_email, contact_name, contact_mobile, contact_email, contact_title, website, company_introduction, business_licence, org_description, org_type) SELECT '北京中关村软件园发展有限责任公司', '北京市朝阳区', '', '', '', '', '', '', '', '', '', '', '', '', '', '北京中关村软件园发展有限责任公司，注册于北京市朝阳区，为中关村软件园开发运营主体；自研产品为采用仓颉编程语言的开源智能体基础设施 agentskills-runtime，技术栈覆盖基础软件（信创）、人工智能与智能体运行时，主攻方向为国产编程语言生态、开源软件与智能体互联标准实现。', '', '北京中关村软件园发展有限责任公司，注册于北京市朝阳区，为中关村软件园开发运营主体；自研产品为采用仓颉编程语言的开源智能体基础设施 agentskills-runtime，技术栈覆盖基础软件（信创）、人工智能与智能体运行时，主攻方向为国产编程语言生态、开源软件与智能体互联标准实现。', 'beichen-enterprise' WHERE NOT EXISTS (SELECT 1 FROM public.company WHERE company_name = '北京中关村软件园发展有限责任公司' AND deleted_at IS NULL);
+-- 以下必填列未采集到，已写空串（未编造）：social_credit_code、established_time、registered_capital、registered_address、mailing_address、legal_representative、legal_representativemobile、legal_representative_email、contact_name、contact_mobile、contact_email、contact_title、website、business_licence
+
+INSERT INTO public.tasks (id, title, description, task_type, task_status, priority, company_id, creator_id, tags, extra_data, deadline, created_at, updated_at) SELECT '07076694-b6ed-411d-b181-a6d7fecc4a71', '政策适配报告 - 北京中关村软件园发展有限责任公司', '# 政策适配研判报告 - 北京中关村软件园发展有限责任公司
+
+- 生成日期：2026-10-25
+- 注册区域：北京市朝阳区
+- 所属行业：软件和信息技术服务业、人工智能、基础软件（信创）
+- 企业资质：暂无
+
+## 适用范围（务必阅读）
+
+> 本报告的政策依据来自**本地政策原文库（北京地区政策，当前 74 条）**与公开渠道检索结果，
+> **不代表全国通用**，也不覆盖各区自行发布的全部细则；跨地区或区级申报请以当地主管部门发布的原文为准。
+> 未能在原文库中备案的结论，均在报告中标注「未备案」并保留可点开来源，供人工复核。
+
+## 匹配政策清单（按匹配度排序）
+
+| 序号 | 政策编号 | 政策名称 | 层级/领域 | 匹配度 | 匹配依据 | 来源 |
+|------|---------|---------|----------|--------|---------|------|
+| 1 | 19 | 北京市促进人工智能产业发展若干政策 | 市级/人工智能 | 45 | 层级市级·领域人工智能；领域命中：人工智能 | — |
+| 2 | 20 | 北京市朝阳区促进人工智能产业发展措施 | 区级/人工智能 | 45 | 层级区级·领域人工智能；领域命中：人工智能 | — |
+| 3 | 74 | 《支持人工智能OPC创新发展行动方案（试行）》 | 市级/人工智能 | 45 | 层级市级·领域人工智能；领域命中：人工智能 | — |
+| 4 | 1 | 北京市高层次创新创业人才支持计划科技新星计划管理办法 | 市级/人才支持 | 30 | 层级市级·领域人才支持 | — |
+| 5 | 2 | 北京市博士后科研工作站管理办法 | 市级/人才支持 | 30 | 层级市级·领域人才支持 | — |
+| 6 | 3 | 北京市技能大师工作室建设管理办法 | 市级/人才支持 | 30 | 层级市级·领域人才支持 | — |
+| 7 | 4 | 北京市支持留学回国人才创新创业若干措施 | 市级/人才支持 | 30 | 层级市级·领域人才支持 | — |
+| 8 | 5 | 北京市朝阳区高层次人才引进支持政策 | 区级/人才支持 | 30 | 层级区级·领域人才支持 | — |
+| 9 | 6 | 北京市知识产权资助奖励管理办法 | 市级/知识产权 | 30 | 层级市级·领域知识产权 | — |
+| 10 | 7 | 北京市专利导航试点工作方案 | 市级/知识产权 | 30 | 层级市级·领域知识产权 | — |
+| 11 | 8 | 关于促进北京市知识产权质押融资服务高质量发展的实施方案 | 市级/知识产权 | 30 | 层级市级·领域知识产权 | — |
+| 12 | 9 | 北京市国际科技创新中心知识产权能力提升计划管理办法 | 市级/知识产权 | 30 | 层级市级·领域知识产权 | — |
+| 13 | 10 | 北京市朝阳区知识产权资助奖励办法 | 区级/知识产权 | 30 | 层级区级·领域知识产权 | — |
+| 14 | 11 | 北京市朝阳区高价值专利培育支持政策 | 区级/知识产权 | 30 | 层级区级·领域知识产权 | — |
+| 15 | 12 | 北京市朝阳区知识产权质押融资贴息办法 | 区级/知识产权 | 30 | 层级区级·领域知识产权 | — |
+| 16 | 48 | 北京市经济和信息化局 北京市财政局 关于印发2026年北京市高精尖产业发展项目资金和支持中小企业发展资金实施指南(第二批)的通知 | 市级/高新技术产业 | 93 | 检索命中（证据：检索通道已标注） | [原文](https://jxj.beijing.gov.cn/zwgk/2024zcwj/202607/t20260730_4801241.html) |
+
+## 申报条件对标分析
+
+### 政策 19 - 北京市促进人工智能产业发展若干政策
+- 缺口项：无（以申报通知为准）
+
+### 政策 20 - 北京市朝阳区促进人工智能产业发展措施
+- 缺口项：无（以申报通知为准）
+
+### 政策 74 - 《支持人工智能OPC创新发展行动方案（试行）》
+- 缺口项：无（以申报通知为准）
+
+### 政策 1 - 北京市高层次创新创业人才支持计划科技新星计划管理办法
+- 缺口项：无（以申报通知为准）
+
+### 政策 2 - 北京市博士后科研工作站管理办法
+- 缺口项：无（以申报通知为准）
+
+### 政策 3 - 北京市技能大师工作室建设管理办法
+- 缺口项：无（以申报通知为准）
+
+### 政策 4 - 北京市支持留学回国人才创新创业若干措施
+- 缺口项：无（以申报通知为准）
+
+### 政策 5 - 北京市朝阳区高层次人才引进支持政策
+- 缺口项：无（以申报通知为准）
+
+### 政策 6 - 北京市知识产权资助奖励管理办法
+- 缺口项：无（以申报通知为准）
+
+### 政策 7 - 北京市专利导航试点工作方案
+- 缺口项：无（以申报通知为准）
+
+### 政策 8 - 关于促进北京市知识产权质押融资服务高质量发展的实施方案
+- 缺口项：无（以申报通知为准）
+
+### 政策 9 - 北京市国际科技创新中心知识产权能力提升计划管理办法
+- 缺口项：无（以申报通知为准）
+
+### 政策 10 - 北京市朝阳区知识产权资助奖励办法
+- 缺口项：无（以申报通知为准）
+
+### 政策 11 - 北京市朝阳区高价值专利培育支持政策
+- 缺口项：无（以申报通知为准）
+
+### 政策 12 - 北京市朝阳区知识产权质押融资贴息办法
+- 缺口项：无（以申报通知为准）
+
+### 政策 48 - 北京市经济和信息化局 北京市财政局 关于印发2026年北京市高精尖产业发展项目资金和支持中小企业发展资金实施指南(第二批)的通知
+- 缺口项：无（以申报通知为准）
+
+## 申报建议与优先级
+
+1. 【高优先级】可申报（匹配度 45 分）
+   - 政策：北京市促进人工智能产业发展若干政策（编号 19）
+   - 支持方式：待补充
+   - 建议关注 北京市经济和信息化局 官网申报通知
+2. 【高优先级】可申报（匹配度 45 分）
+   - 政策：北京市朝阳区促进人工智能产业发展措施（编号 20）
+   - 支持方式：待补充
+   - 建议关注 朝阳区科信局 官网申报通知
+3. 【高优先级】可申报（匹配度 45 分）
+   - 政策：《支持人工智能OPC创新发展行动方案（试行）》（编号 74）
+   - 支持方式：待补充
+   - 建议关注 北京市经信局 官网申报通知
+4. 【高优先级】可申报（匹配度 30 分）
+   - 政策：北京市高层次创新创业人才支持计划科技新星计划管理办法（编号 1）
+   - 支持方式：待补充
+   - 建议关注 北京市科委 官网申报通知
+5. 【高优先级】可申报（匹配度 30 分）
+   - 政策：北京市博士后科研工作站管理办法（编号 2）
+   - 支持方式：待补充
+   - 建议关注 北京市人社局 官网申报通知
+
+## 未查到可靠依据（已排除出正式结论）
+
+以下 89 条线索**无法核验出处**（信源不可核验 / 已过时效 / 原文库不可用且非政府信源），
+已按要求排除出正式结论，**不作为申报依据**：
+
+| 序号 | 线索标题 | 排除原因 |
+|------|---------|---------|
+| 1 | 破解“看得见､做不好”难题——高技能人才培养,让产业前沿与教育课堂“握手” | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 2 | 关于组织开展2026年度宁波市首版次软件产品申报工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 3 | 西湖区关于开展2026年度首版次软件产品认定推荐工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 4 | 湖南省重点领域关键软件技术攻关及产业化项目实施细则》政策解读 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 5 | 关于开展2026年杭州市新一轮推进软件和信息技术服务业高质量发展若干政策项目申报工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 6 | 2026数字中国创新大赛·信创赛道全面启动 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 7 | 厦门火炬高新区管委会关于印发《厦门火炬高新区关于支持人工智能和软件产业发展的若干措施》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 8 | 关于开展2026年天津市信息技术应用创新解决方案(应用案例)征集工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 9 | 豫工信办案〔2025〕67号 河南省工业和信息化厅 关于对省十四届人大三次会议第156号建议的答复 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 10 | 关于转发工业和信息化部国家重点研发 计划“工业软件”等7个重点专项2025年度项目申报指南的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 11 | 大力发展信息技术产业增强先进制造业发展动力推进会在杭州召开 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 12 | 安徽省工业和信息化厅关于组织开展2026年省首版次软件(第二批)申报评定工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 13 | 西安经开区工信局 关于组织申报国家先进技术产品转化应用目录(2026年度)技术产品 的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 14 | 关于组织开展2026年度湖南省首版次软件产品认定工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 15 | 合肥高新区关于组织开展2026年省首版次软件(第二批)申报评定工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 16 | 关于开展2026年湖南省信息技术应用创新解决方案征集工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 17 | 关于组织开展2026年江苏省信息技术应用创新解决方案(应用案例)和领先实践项目征集工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 18 | 安徽省工业和信息化厅关于组织开展2026年省首版次软件(第一批)申报评定工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 19 | 福建省工业和信息化厅关于组织申报2026年省软件业技术创新重点攻关及产业化项目的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 20 | 关于开展2026年山西省信息技术应用创新解决方案征集工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 21 | 湖北省经济和信息化厅 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 22 | 省经信厅办公室关于开展2026年湖北省首版次软件产品申报工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 23 | 福州市人民政府办公厅印发福州市关于扎实推进新型工业化促进制造业高质量发展总体方案的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 24 | 福建省工业和信息化厅关于组织申报2026年省制造业技术创新重点攻关及产业化项目的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 25 | 转发《关于开展2027年度辽宁省科技计划项目指南建议征集工作的通知》 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 26 | 关于组织开展2026年典型软件产品和解决方案征集工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 27 | 鸿蒙生态大会2026举办 “鸿图计划”发布推动生态规模化落地 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 28 | 关于印发《湖南省培育开源鸿蒙生态加快软件和信息服务创新发展的实施方案》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 29 | 深圳市龙华区工业和信息化局政府信息公开 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 30 | 东湖高新区对市政协十四届五次会议第20260535号提案的答复 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 31 | 关于开展开源鸿蒙应用场景揭榜挂帅项目征集工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 32 | 长沙县人民政府 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 33 | 浙江省发展和改革委员会关于省十四届人大四次会议金30号建议的答复 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 34 | 【部门】《市人民政府办公厅关于印发武汉市加快培育发展开源鸿蒙生态的实施方案的通知》政策解读 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 35 | 深圳市宝安区工业和信息化局关于印发《宝安区推动开源鸿蒙/RISC-V生态高质量发展的若干措施》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 36 | 新智联·新未来:开源鸿蒙叩开万物智联产业新大门 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 37 | 公开征求对《重庆市软信领域创新创业社区和开源社区建设运营“揭榜挂帅”榜单(征求意见稿)》的意见 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 38 | 重庆启动开源鸿蒙生态建设 计划五年内培育5万名系统开发者 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 39 | 向新､向智､向未来——2026年罗湖区委一号文件专场 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 40 | 政策精准宣贯·生态协同赋能 2026年北京市第二批高精尖产业资金政策解读会圆满举办 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 41 | 北京市广播电视局关于印发 《北京市促进“人工智能视听”产业 高质量发展重点项目支持管理办法 (2026—2029年)》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 42 | 北京市促进“人工智能视听”产业高质量发展重点项目申报指南(2026年) | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 43 | 北京经济技术开发区管理委员会关于印发《北京经济技术开发区关于支持词元驱动智能经济高质量发展的若干措施(试行)》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 44 | 北京市廣播電視局關於印發《北京市促進“人工智慧視聽”産業高品質發展重點項目支援管理辦法 (2026—2029年)》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 45 | 关于征集2026年科技服务业专项企业效能提升项目(第二批)的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 46 | 2026年中关村科学城模型券政策申报指南 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 47 | 2026年度海淀区支持“人工智能文化”发展项目申报指南 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 48 | 亦庄模数世界大模型生态服务站设立 一站式服务构建人工智能大模型产业生态 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 49 | 第十五届中国创新创业大赛工业智能体专业赛清华宣介会举办 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 50 | 北京发布智能体引领发展新政 以“摸高”计划突破智能上限 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 51 | 2026年中关村科学城关键核心技术“揭榜挂帅”专项(第一批)申报指南 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 52 | 【重磅利好】丰台区“人工智能”黄金政策上线!最高千万级支持,诚邀企业共绘未来! | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 53 | 北京市东城区经济和信息化局关于印发《东城区关于支持OPC高质量发展的若干措施》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 54 | 北京市通州区经济和信息化局关于印发《关于北京城市副中心支持数字经济高质量发展的若干措施》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 55 | 经开区为养虾人铺就零门槛创新之路 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 56 | 关于启动《关于北京城市副中心促进数智产业高质量发展的若干措施》申报工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 57 | 关于开展2026年石景山区科技服务业项目征集工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 58 | 北京市自然科学基金委员会办公室关于发布2026年北京市自然科学基金第四批项目申请的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 59 | 杭州高新开发区(滨江)管委会､政府关于印发杭州高新开发区(滨江)进一步加快新一代人工智能产业应用发展若干措施的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 60 | 【专项规划】长沙经济技术开发区管委会 关于印发《长沙经济技术开发区关于智能体和“一人公司”开源社区安全发展的十条措施》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 61 | 北京市发布《北京市关加快智能体引领发展的若干措施》 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 62 | 算力部署､软件智能技改､“模型首方案” 北京最高补贴3000万 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 63 | 教育部信息化教指委2026年全国职业院校智能体产教融合应用研究创新项目申报启动 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 64 | 合肥市科学技术局､市发展和改革委员会､市工业和信息化局､市数据资源管理局关于印发《合肥市加快智能体引领高质量发展的若干措施》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 65 | 长沙最高百万元奖励培育“独角兽”､助力“养龙虾” | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 66 | 工信部印发《“人工智能软件”专项行动实施方案》 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 67 | 为AI创业打造“零压力”热土 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 68 | 深圳市宝安区科技创新局关于印发《深圳市宝安区推动人工智能赋能产业创新发展的若干措施》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 69 | 区政府关于印发《崇川区关于加快人工智能产业高质量发展的政策意见(试行)》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 70 | 七问一图,读懂《“人工智能软件”专项行动实施方案》 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 71 | 北京市发展和改革委员会等单位关于印发北京市加快智能体引领发展若干措施的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 72 | 工信部印发《人工智能中小企业创业支持计划(2026-2028年)》 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 73 | 国家网信办､国家发展改革委､工业和信息化部联合印发《智能体规范应用与创新发展实施意见》 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 74 | 《“人工智能软件”专项行动实施方案》提出:到2030年关键软件全面实现智能化升级 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 75 | 重庆市数字经济产业园管委会关于转发《重庆市经济和信息化委员会 重庆市发展和改革委员会 重庆市财政局 重庆市人力资源和社会保障局 重庆市大数据应用发展管理局关于印发重庆市进一步推进软件和信息服务业“满天星”行动计划若干政策》的通知》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 76 | 工信部印发《人工智能中小企业创业支持计划(2026—2028年)》-南充市经济合作和外事局 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 77 | 国家网信办､国家发展改革委､工业和信息化部联合印发《智能体规范应用与创新发展实施意见》 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 78 | 深圳市工业和信息化局关于印发《深圳市工业和信息化局打造人工智能先锋城市项目扶持计划操作规程(2026年修订版)》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 79 | 关于开展2026年度浦东新区促进人工智能产业高质量发展专项(大模型等AI新技术应用项目) 申报工作的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 80 | 江西省工业和信息化厅 江西省财政厅关于印发支持深化制造业数智化转型若干措施的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 81 | 关于开展2026年度宁波市开源项目政策申报的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 82 | 关于组织开展东湖高新区2026年度软件产业政策(第一批)资金申报的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 83 | 关于举办“鲁智杯”职工数智技术应用竞赛——第十届山东新动能·软件创新创业大赛的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 84 | 创新成本做减法 产业生态做加法 深圳加速打造人工智能先锋城市 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 85 | 浙江省经济和信息化厅等七部门印发《关于加快推进浙江省开源体系建设的实施意见》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 86 | 深圳加速打造人工智能先锋城市 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 87 | 火炬高新区11月政策预报 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 88 | 关于发布重庆市工业和信息化领域“揭榜挂帅”项目榜单(具身智能方向第三批)的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+| 89 | 关于印发《长宁区加快软件和信息技术服务业发展“十五五”规划》的通知 | 未通过原文库交叉验证，无 policy_no 可绑定 |
+
+## 合规声明
+
+> 本报告由产业政策智能体自动生成，数据来源于公开渠道与政策知识库，每条匹配结论均已溯源至政策原文库编号；仅供申报参考，不构成法律意见。
+', 'policy-match', 'completed', 'normal', c.id, COALESCE((SELECT u.id FROM public.uctoo_user u WHERE u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), '["beichen", "policy-match"]'::jsonb, '{"profile_date": "2026-10-25", "matched_count": 75, "policy_nos": ["19", "20", "74", "1", "2"], "follow_status": "已完成", "report_file": "北京中关村软件园发展有限责任公司-2026-10-25.md"}'::jsonb, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM public.company c WHERE c.company_name = '北京中关村软件园发展有限责任公司' AND c.deleted_at IS NULL AND NOT EXISTS (  SELECT 1 FROM public.tasks t   WHERE t.company_id = c.id AND t.title = '政策适配报告 - 北京中关村软件园发展有限责任公司' AND t.deleted_at IS NULL);
+
+-- 截止时间未知：政策编号 19 未获取到明确截止日期，deadline 写 NULL，不作推测填充
+INSERT INTO public.tasks (id, title, description, task_type, task_status, priority, company_id, creator_id, tags, extra_data, deadline, created_at, updated_at) SELECT '872f8e12-0473-4876-b8c5-a648b8b13a54', '政策申报 - 北京市促进人工智能产业发展若干政策', '政策编号：19
+支持方式：待补充
+匹配依据：层级市级·领域人工智能；领域命中：人工智能
+截止时间：截止时间未知（主管部门尚未公布或未获取到明确日期）
+申报材料以主管部门通知为准。', 'policy-apply', 'open', 'normal', c.id, COALESCE((SELECT u.id FROM public.uctoo_user u WHERE u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), '["beichen", "policy-apply"]'::jsonb, '{"policy_no": "19", "domain": "人工智能", "level": "市级", "department": "北京市经济和信息化局", "deadline": null, "deadline_known": false, "follow_status": "待启动", "materials": ["以主管部门发布的申报通知为准"], "materials_source": "条目未提供材料清单，未作推测填充", "source": "policy-original/policy-original\\\\19-北京市促进人工智能产业发展若干政策.md", "url": ""}'::jsonb, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM public.company c WHERE c.company_name = '北京中关村软件园发展有限责任公司' AND c.deleted_at IS NULL AND NOT EXISTS (  SELECT 1 FROM public.tasks t   WHERE t.company_id = c.id AND t.title = '政策申报 - 北京市促进人工智能产业发展若干政策' AND t.deleted_at IS NULL);
+
+-- 截止时间未知：政策编号 20 未获取到明确截止日期，deadline 写 NULL，不作推测填充
+INSERT INTO public.tasks (id, title, description, task_type, task_status, priority, company_id, creator_id, tags, extra_data, deadline, created_at, updated_at) SELECT '01dae7c2-3e57-4fad-b855-399e5e3dc35a', '政策申报 - 北京市朝阳区促进人工智能产业发展措施', '政策编号：20
+支持方式：待补充
+匹配依据：层级区级·领域人工智能；领域命中：人工智能
+截止时间：截止时间未知（主管部门尚未公布或未获取到明确日期）
+申报材料以主管部门通知为准。', 'policy-apply', 'open', 'normal', c.id, COALESCE((SELECT u.id FROM public.uctoo_user u WHERE u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), '["beichen", "policy-apply"]'::jsonb, '{"policy_no": "20", "domain": "人工智能", "level": "区级", "department": "朝阳区科信局", "deadline": null, "deadline_known": false, "follow_status": "待启动", "materials": ["以主管部门发布的申报通知为准"], "materials_source": "条目未提供材料清单，未作推测填充", "source": "policy-original/policy-original\\\\20-北京市朝阳区促进人工智能产业发展措施.md", "url": ""}'::jsonb, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM public.company c WHERE c.company_name = '北京中关村软件园发展有限责任公司' AND c.deleted_at IS NULL AND NOT EXISTS (  SELECT 1 FROM public.tasks t   WHERE t.company_id = c.id AND t.title = '政策申报 - 北京市朝阳区促进人工智能产业发展措施' AND t.deleted_at IS NULL);
+
+-- 截止时间未知：政策编号 74 未获取到明确截止日期，deadline 写 NULL，不作推测填充
+INSERT INTO public.tasks (id, title, description, task_type, task_status, priority, company_id, creator_id, tags, extra_data, deadline, created_at, updated_at) SELECT '33779862-a3cc-48a3-bc05-9a71629e84de', '政策申报 - 《支持人工智能OPC创新发展行动方案（试行）》', '政策编号：74
+支持方式：待补充
+匹配依据：层级市级·领域人工智能；领域命中：人工智能
+截止时间：截止时间未知（主管部门尚未公布或未获取到明确日期）
+申报材料以主管部门通知为准。', 'policy-apply', 'open', 'normal', c.id, COALESCE((SELECT u.id FROM public.uctoo_user u WHERE u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), '["beichen", "policy-apply"]'::jsonb, '{"policy_no": "74", "domain": "人工智能", "level": "市级", "department": "北京市经信局", "deadline": null, "deadline_known": false, "follow_status": "待启动", "materials": ["以主管部门发布的申报通知为准"], "materials_source": "条目未提供材料清单，未作推测填充", "source": "policy-original/policy-original\\\\74-《支持人工智能OPC创新发展行动方案（试行）》.md", "url": ""}'::jsonb, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM public.company c WHERE c.company_name = '北京中关村软件园发展有限责任公司' AND c.deleted_at IS NULL AND NOT EXISTS (  SELECT 1 FROM public.tasks t   WHERE t.company_id = c.id AND t.title = '政策申报 - 《支持人工智能OPC创新发展行动方案（试行）》' AND t.deleted_at IS NULL);
+
+-- 截止时间未知：政策编号 1 未获取到明确截止日期，deadline 写 NULL，不作推测填充
+INSERT INTO public.tasks (id, title, description, task_type, task_status, priority, company_id, creator_id, tags, extra_data, deadline, created_at, updated_at) SELECT 'bc1f9b03-e8c4-42d8-b15d-93495442a847', '政策申报 - 北京市高层次创新创业人才支持计划科技新星计划管理办法', '政策编号：1
+支持方式：待补充
+匹配依据：层级市级·领域人才支持
+截止时间：截止时间未知（主管部门尚未公布或未获取到明确日期）
+申报材料以主管部门通知为准。', 'policy-apply', 'open', 'normal', c.id, COALESCE((SELECT u.id FROM public.uctoo_user u WHERE u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), '["beichen", "policy-apply"]'::jsonb, '{"policy_no": "1", "domain": "人才支持", "level": "市级", "department": "北京市科委", "deadline": null, "deadline_known": false, "follow_status": "待启动", "materials": ["以主管部门发布的申报通知为准"], "materials_source": "条目未提供材料清单，未作推测填充", "source": "policy-original/policy-original\\\\1-北京市高层次创新创业人才支持计划科技新星计划管理办法.md", "url": ""}'::jsonb, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM public.company c WHERE c.company_name = '北京中关村软件园发展有限责任公司' AND c.deleted_at IS NULL AND NOT EXISTS (  SELECT 1 FROM public.tasks t   WHERE t.company_id = c.id AND t.title = '政策申报 - 北京市高层次创新创业人才支持计划科技新星计划管理办法' AND t.deleted_at IS NULL);
+
+-- 截止时间未知：政策编号 2 未获取到明确截止日期，deadline 写 NULL，不作推测填充
+INSERT INTO public.tasks (id, title, description, task_type, task_status, priority, company_id, creator_id, tags, extra_data, deadline, created_at, updated_at) SELECT '08cfd124-6c64-44f3-bf50-4666f2358494', '政策申报 - 北京市博士后科研工作站管理办法', '政策编号：2
+支持方式：待补充
+匹配依据：层级市级·领域人才支持
+截止时间：截止时间未知（主管部门尚未公布或未获取到明确日期）
+申报材料以主管部门通知为准。', 'policy-apply', 'open', 'normal', c.id, COALESCE((SELECT u.id FROM public.uctoo_user u WHERE u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), '["beichen", "policy-apply"]'::jsonb, '{"policy_no": "2", "domain": "人才支持", "level": "市级", "department": "北京市人社局", "deadline": null, "deadline_known": false, "follow_status": "待启动", "materials": ["以主管部门发布的申报通知为准"], "materials_source": "条目未提供材料清单，未作推测填充", "source": "policy-original/policy-original\\\\2-北京市博士后科研工作站管理办法.md", "url": ""}'::jsonb, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM public.company c WHERE c.company_name = '北京中关村软件园发展有限责任公司' AND c.deleted_at IS NULL AND NOT EXISTS (  SELECT 1 FROM public.tasks t   WHERE t.company_id = c.id AND t.title = '政策申报 - 北京市博士后科研工作站管理办法' AND t.deleted_at IS NULL);

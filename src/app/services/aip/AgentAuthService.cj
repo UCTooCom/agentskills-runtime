@@ -17,6 +17,10 @@ import magic.log.LogUtils
 /// agent 自动登录模式：
 /// - Local：本地独立运行的 agent 用 config 密钥（jwtSecret，与用户同钥）签发，可被现有 DeserializeUserMiddleware 验过；
 /// - Interconnection：GB/Z 185 智能体互联模式，使用专用 aip-agent-secret-key（保持 AIP 专用，不并入本地校验）。
+///
+/// **默认 Local**（design D2）：宿主进程验签只认 config jwtSecret（`main.cj` 的 JWTUtil），
+/// 默认给 aip 密钥签出的 token 在受保护路由上必然 401，等于「登录成功但什么都调不动」。
+/// 只有 GB/Z 185 互联入口（`/api/v1/uctoo/aip/identity/agent-login`）才显式传 Interconnection。
 public enum AgentLoginMode {
     | Local
     | Interconnection
@@ -36,7 +40,12 @@ public class AgentAuthService {
         ORM.executor()
     }
 
-    public func agentAutoLogin(agentId: String, mode!: AgentLoginMode = AgentLoginMode.Interconnection): APIResult<AgentLoginResult> {
+    /// agent 无密码自动登录。
+    ///
+    /// agent 账号的 password 是占位值且口令登录被显式拒绝
+    /// （`UctooUserAuthController` 的 AUTH-AGENT-001），本方法是它**唯一**的登录入口：
+    /// 只要实体与账号的双指针成立、user_type='agent'、status=1，服务端即可直接签发 token。
+    public func agentAutoLogin(agentId: String, mode!: AgentLoginMode = AgentLoginMode.Local): APIResult<AgentLoginResult> {
         try {
             let agentOpt = getExecutor().findAgentsById(agentId)
             if (agentOpt.isNone()) {
@@ -75,6 +84,10 @@ public class AgentAuthService {
                 case AgentLoginMode.Interconnection => generateAgentToken(user.id)
                 case AgentLoginMode.Local => localJwtUtil.generateAccessToken(user.id, "agent_auto_${dateTimeToTimestamp(DateTime.now())}")
             }
+            // 回写 agent 账号行的 access_token 列。注意这是**共享单例**账号：多人登录会互相
+            // 覆盖这一列。因为 JWT 无状态（验签只看密钥与过期时间），覆盖不影响在途 token
+            // 的有效性，只影响「从库里读 access_token 当当前凭证用」的那类消费方。
+            // 不改这里是为了保持 AIP 互联侧既有行为不变——谁要动，先把消费方找全。
             user.accessToken = Some(token)
             user.updatedAt = DateTime.now()
             getExecutor().updateUctooUser(user)

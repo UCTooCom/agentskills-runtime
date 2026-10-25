@@ -1,9 +1,9 @@
 ---
 name: beichen-policy-assistant
-description: 产业政策智能体（北辰产业政策智能体）—— 实现北辰命题"政策赋能精准化"课题的政策库—匹配库—申报库全流程 SOP。输入企业名称自动生成全景企业画像（工商/经营/舆情），基于三层知识库（政策原文库/官方解读库/实操洞察库）与全网实时资源双源检索，语义级匹配市、区两级政策，生成可溯源的适配研判报告，创建申报任务，结果写入 company 表与 tasks 表并通过 aibuilder 呈现。触发词："政策匹配"、"政策申报"、"企业画像"、"政策智能体"、"能申报什么政策"、"产业政策"、"专项政策"、"政策查询"、"申报条件"。
+description: 产业政策智能体（北辰产业政策智能体）—— 实现北辰命题"政策赋能精准化"课题的政策库—匹配库—申报库全流程 SOP。支持两类入口：① 主题/产业方向检索（不给企业名，直接检索近期可申报的产业政策，带可信度四因子与原文库交叉验证）；② 给定企业名称做全景画像→政策匹配→研判报告→申报任务→落库。触发词："政策匹配"、"政策申报"、"企业画像"、"政策智能体"、"能申报什么政策"、"产业政策"、"专项政策"、"政策查询"、"申报条件"、"检索产业政策"、"近期可申报"。关联检索内核 yuanbao-search（skills/yuanbao-search/）。
 license: MIT
 version: "1.0.0"
-compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/web_fetch/web_search）。脚本优先使用 TypeScript 版本（需 Node.js v23.10.0+，原生支持 TypeScript：`node --experimental-strip-types scripts/<script>.ts`）；TS 版本运行有错误时降级使用 Python 版本（需 Python 3.8+ + requests 库，落库模式需 psycopg2-binary / pg）
+compatibility: 需要 runtime 内置工具 cli_execute（在 runtime 根目录执行子进程）。脚本优先使用 TypeScript 版本（需 Node.js v23.10.0+，原生支持 TypeScript：`node --experimental-strip-types`）；TS 版本运行有错误时降级使用 Python 版本（需 Python 3.8+ + requests 库）。
 metadata:
   author: UCToo Team (beichen-hackathon)
   version: "1.0.0"
@@ -14,186 +14,132 @@ allowed-tools: network, filesystem, cli
 
 # 产业政策智能体（北辰产业政策智能体）
 
-## 概述
+## ⚠️ 执行方式红线（务必先看，否则一定"卡住"）
 
-本技能实现北辰产业云社区命题"政策赋能精准化"课题的最佳实践 SOP：
-**企业画像 → 政策检索 → 政策匹配 → 报告生成 → 申报任务 → 结果落库**，
-并配套 **知识库初始化** 与 **政策库自动更新** 两个能力。
+1. **用 `cli_execute` 直接跑脚本文件**，不要调用 `yuanbao-search` / `yuanbao-policy` 这两个"技能工具"。
+   - 它们作为技能工具被调用时只返回一句占位状态字符串（"`Skill xxx executed with arguments...`"），**不返回任何检索/匹配结果**，这会导致你误以为"调了元宝但没进展"。
+   - 真正干活的是 `skills/yuanbao-search/scripts/yuanbao_search.ts` 这个脚本文件，必须通过 `cli_execute` 执行。
+2. **`cli_execute` 的子进程永远在 runtime 根目录运行**，所有脚本路径必须是**相对于 runtime 根目录**的绝对层级路径，**必须以 `skills/...` 开头**：
+   - 本技能脚本：`skills/beichen-policy-assistant/scripts/<脚本>.ts`
+   - 检索内核脚本：`skills/yuanbao-search/scripts/yuanbao_search.ts`
+   - ❌ 错误写法（会报 can't open file）：`scripts/xxx.ts`、`init_policy_kb.ts`、`yuanbao_search.ts`
+3. `cli_execute` 的 `args` 传 **JSON 数组字符串**，例如：
+   `"args": "[\"--experimental-strip-types\",\"skills/yuanbao-search/scripts/yuanbao_search.ts\",\"--query\",\"...\"]"`
 
-- 数据来源：公开工商/经营/舆情信息 + 三层政策知识库 + 政府公开网站（合规抓取）
-- 输出形态：结构化企业画像、政策匹配矩阵、适配研判报告、申报任务
-- 落库方式：企业画像写入 `company` 表，匹配报告与申报任务写入关联的 `tasks` 表（复用 aibuilder 呈现）
-- 算力底座：昇腾 AI（AtomGit 昇腾 API）——通过 runtime `.env` 配置大模型提供商即可
+---
 
-## 核心设计：三层知识库根除幻觉
+## 入口判断（先定走哪条路）
 
-通用大模型在政策场景存在信息滞后 / 理解肤浅 / 逻辑失真三大困境，本技能通过三层知识库彻底解决：
+- **场景 A · 主题/产业方向检索（用户没给具体企业名）** → 直接走下方【场景 A】，**不要索取企业名**，立即检索并出清单。
+  例："检索我近期可以申报的产业政策"、"专精特新 有哪些申报政策"、"高精尖产业资金 申报条件"。
+- **场景 B · 给定企业名称做全流程** → 走下方【场景 B】：画像 → 匹配 → 报告 → 落库。
 
-| 层 | 目录 | 作用 |
-|----|------|------|
-| 政策原文库 | `knowledge/policy-original/` | 市、区两级政策全文，信息源头真实完整 |
-| 官方解读库 | `knowledge/policy-interpretation/` | 权威问答与解读，锚定官方口径 |
-| 实操洞察库 | `knowledge/policy-insight/` | 申报流程要点、常见退回原因、隐性规则 |
+> 用户原话含"检索/查询/有哪些/什么政策/可申报"且**未出现企业全称**时，一律按场景 A 处理，禁止反问企业名。
 
-**硬性要求**：所有匹配结论必须引用政策原文库条目编号（`policy_no`），无出处的匹配结果一律标记为"待核实"，不进入正式报告。
+---
 
-## 全流程 SOP
+## 场景 A · 主题/产业方向检索（当前主用路径）
 
+**目标**：按用户给的产业方向/政策主题，检索近期可申报的产业政策，输出带可信度四因子的线索清单。
+
+**第 1 步：直接调用 `cli_execute` 运行检索内核**（不要先问企业名）：
+
+```json
+{
+  "command": "node",
+  "args": "[\"--experimental-strip-types\", \"skills/yuanbao-search/scripts/yuanbao_search.ts\", \"--query\", \"<把用户主题组织成检索词，如：专精特新 中小企业 申报 条件>\", \"--industry\", \"gov\", \"--cnt\", \"20\", \"--freshness\", \"1y\", \"--json\"]"
+}
 ```
-┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐
-│ 0.初始化  │ → │ 1.画像   │ → │ 2.匹配   │ → │ 3.报告   │ → │ 4.申报   │ → │ 5.落库   │
-│ init     │   │ profile │   │ match   │   │ report  │   │ apply   │   │ persist │
-└─────────┘   └─────────┘   └─────────┘   └─────────┘   └─────────┘   └─────────┘
-        （另含 6.政策库自动更新 update_policy_kb，供每日 cron 触发）
+
+- `--freshness 1y` 表示近一年；用户说"近期/今年"可用 `"2026-01-01,2026-12-31"`。
+- `--cnt` 收敛到 {10,20,30,40,50}，默认 50；演示取 20 即可。
+- `--json` 让脚本输出单行 JSON（stdout），诊断信息走 stderr，互不污染。
+
+**第 2 步：解析 stdout 里的单行 JSON**，关键字段：
+- `items[]`：`title` / `url` / `date` / `passage` / `credibility.status`（可采信｜待核实）/ `policyNo`（命中原文库的政策编号）/ `scoreNorm`。
+- `stats`：`returned`（返回数）/ `credible`（可采信数）/ `excluded`（待核实数）。
+- `excluded[]`：未过门禁的条目，必须**如实列出并说明原因**（这是"敢说不知道"的对外证据，不得隐瞒）。
+
+**第 3 步：向用户呈现结果**，固定结构：
+1. 一句话结论（命中多少条可采信、适用范围北京政策原文库 74 条）。
+2. 可采信清单（表格）：序号｜政策/线索标题｜来源(.gov.cn 优先)｜发布日期｜可信度｜原文库编号(policyNo)｜要点 passage。
+3. 待核实清单（excluded）：每条标注"未命中原文库 / 信源最低 / 已过期"等具体原因。
+4. 合规声明："以上线索仅供申报参考，不构成法律意见；建议在正式申报前以主管部门最新发布为准。"
+5. 若用户想进一步做"企业级匹配"，再询问企业全称，转入场景 B。
+
+> 检索内核会自动与 `skills/beichen-policy-assistant/knowledge/policy-index.json`（北京 74 条政策原文库）做交叉验证；命中的条目会带 `policyNo`，未命中的标"未在本地政策原文库备案，需人工复核"，二者都可采信（官方发布页 URL 本身就是可核验出处）。
+
+---
+
+## 场景 B · 企业全流程（给定企业名称）
+
+> 脚本路径一律带 `skills/beichen-policy-assistant/scripts/` 前缀。
+
+### Step 0：知识库初始化（Init，首次或库变更时跑）
+
+```json
+{ "command": "node", "args": "[\"--experimental-strip-types\", \"skills/beichen-policy-assistant/scripts/init_policy_kb.ts\", \"--seed\", \"skills/beichen-policy-assistant/knowledge/policy-seed.json\"]" }
 ```
-
-### Step 0：知识库初始化（Init）
-
-以命题附件 74 条政策目录为种子，生成三层知识库结构。
-
-**脚本**：`scripts/init_policy_kb.ts`（降级：`scripts/init_policy_kb.py`）
-```bash
-cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/init_policy_kb.ts", "--seed", "knowledge/policy-seed.json"]})
-# 输出：knowledge/policy-original/{序号}-{政策名称}.md（74 条）+ knowledge/policy-index.json
-```
+输出：`knowledge/policy-original/{序号}-{政策名称}.md`（74 条）+ `knowledge/policy-index.json`。
 
 ### Step 1：全景企业画像（Profile）
 
-输入企业名称，聚合工商、经营、舆情多渠道公开信息，经信息甄别、冗余过滤、要点萃取，输出结构化企业画像。
-
-**脚本**：`scripts/build_enterprise_profile.ts`（降级：`scripts/build_enterprise_profile.py`）
-```bash
-cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/build_enterprise_profile.ts", "--company", "北京北辰实业有限公司"]})
-# 输出：output/profiles/{企业slug}.json + .md
+```json
+{ "command": "node", "args": "[\"--experimental-strip-types\", \"skills/beichen-policy-assistant/scripts/build_enterprise_profile.ts\", \"--company\", \"<企业全称>\"]" }
 ```
-- 未配置 LLM 时用规则降级完成要点萃取，保证可运行
+输出：`output/profiles/{企业slug}.json` + `.md`。未配置 LLM 时用规则降级萃取，保证可运行。
 
 ### Step 2：多元政策匹配（Match）
 
-基于企业画像语义匹配三层知识库与全网实时资源，输出匹配矩阵。
-
-**脚本**：`scripts/match_policy.ts`（降级：`scripts/match_policy.py`）
-```bash
-cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/match_policy.ts", "--profile", "output/profiles/{企业slug}.json", "--topn", "10"]})
-# 输出：output/matches/{企业slug}-{date}.json（匹配矩阵：政策编号/评分/依据/缺口项）
+```json
+{ "command": "node", "args": "[\"--experimental-strip-types\", \"skills/beichen-policy-assistant/scripts/match_policy.ts\", \"--profile\", \"skills/beichen-policy-assistant/output/profiles/<企业slug>.json\", \"--topn\", \"10\"]" }
 ```
-- 硬性条件初筛（注册区域/资质/行业）→ 双源检索 → 语义评分 → policy_no 绑定
+输出：`output/matches/<企业slug>-<date>.json`（匹配矩阵：政策编号/评分/依据/缺口项）。
 
 ### Step 3：适配研判报告（Report）
 
-调用昇腾 API 生成结构化适配研判报告，无 LLM 时模板降级。
-
-**脚本**：`scripts/generate_policy_report.ts`（降级：`scripts/generate_policy_report.py`）
-```bash
-cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/generate_policy_report.ts", "--profile", "output/profiles/{企业slug}.json", "--matches", "output/matches/{企业slug}-{date}.json"]})
-# 输出：output/reports/{企业slug}-{date}.md（含条件对标表、缺口分析、合规声明）
+```json
+{ "command": "node", "args": "[\"--experimental-strip-types\", \"skills/beichen-policy-assistant/scripts/generate_policy_report.ts\", \"--profile\", \"skills/beichen-policy-assistant/output/profiles/<企业slug>.json\", \"--matches\", \"skills/beichen-policy-assistant/output/matches/<企业slug>-<date>.json\"]" }
 ```
+输出：`output/reports/<企业slug>-<date>.md`（含条件对标表、缺口分析、合规声明）。
 
 ### Step 4：申报任务（Apply）
+为 Top N 匹配政策生成申报任务（材料清单、截止时间），写入匹配矩阵 meta。
 
-为 Top N 匹配政策生成申报任务（含材料清单与截止时间），写入匹配矩阵 meta 供落库使用。
+### Step 5：结果落库（Persist，仅生成 SQL）
 
-### Step 5：结果落库（Persist）
-
-企业画像 upsert 到 `company` 表，匹配报告与申报任务写入 `tasks` 表。
-
-**脚本**：`scripts/save_to_db.ts`（降级：`scripts/save_to_db.py`）
-```bash
-cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/save_to_db.ts", "--profile", "output/profiles/{企业slug}.json", "--report", "output/reports/{企业slug}-{date}.md", "--matches", "output/matches/{企业slug}-{date}.json", "--sql-only"]})
-# 输出：output/sql/policy_*.sql（company upsert + tasks 写入 policy-match / policy-apply）
+```json
+{ "command": "node", "args": "[\"--experimental-strip-types\", \"skills/beichen-policy-assistant/scripts/save_to_db.ts\", \"--profile\", \"skills/beichen-policy-assistant/output/profiles/<企业slug>.json\", \"--report\", \"skills/beichen-policy-assistant/output/reports/<企业slug>-<date>.md\", \"--matches\", \"skills/beichen-policy-assistant/output/matches/<企业slug>-<date>.json\", \"--sql-only\"]" }
 ```
+输出：`output/sql/policy_*.sql`（company upsert + tasks 写入 policy-match / policy-apply）。
 
-### Step 6：政策库自动更新（Auto-Update）
-
-每日定时从政府网站抓取最新政策进入储备库，人工研判确认后转入正式库。
-
-**脚本**：`scripts/update_policy_kb.ts`（降级：`scripts/update_policy_kb.py`）
-```bash
-# 抓取模式（每日 cron 触发）
-cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/update_policy_kb.ts", "--sources", "default"]})
-# 输出：output/pending/{date}.json（状态 pending，待人工研判）
-
-# commit 模式（人工研判确认后）
-cli_execute({"command": "node", "args": ["--experimental-strip-types", "scripts/update_policy_kb.ts", "--commit", "--date", "2026-08-29", "--reviewer", "张工"]})
-# 效果：储备库中被确认条目转入政策原文库，索引状态更新
-```
-
-## 脚本执行显式命令示例（即使不读完整 SOP 也可直接执行）
-
-> 工作目录：`apps/agentskills-runtime/skills/beichen-policy-assistant`；优先使用 TypeScript 版本（Node.js v23.10.0+），TS 版本运行有错误时降级使用 Python 版本。
-
-```bash
-# 0. 初始化知识库
-node --experimental-strip-types scripts/init_policy_kb.ts --seed knowledge/policy-seed.json
-# 降级: python scripts/init_policy_kb.py --seed knowledge/policy-seed.json
-
-# 1. 企业画像
-node --experimental-strip-types scripts/build_enterprise_profile.ts --company "北京北辰实业有限公司"
-# 降级: python scripts/build_enterprise_profile.py --company "北京北辰实业有限公司"
-
-# 2. 政策匹配
-node --experimental-strip-types scripts/match_policy.ts --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --topn 10
-# 降级: python scripts/match_policy.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --topn 10
-
-# 3. 适配报告
-node --experimental-strip-types scripts/generate_policy_report.ts --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json
-# 降级: python scripts/generate_policy_report.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json
-
-# 4. 结果落库（仅生成 SQL 文件，无需数据库驱动）
-node --experimental-strip-types scripts/save_to_db.ts --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --report output/reports/beijing_beichen_shiyeyouxiangongsi-2026-08-29.md --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json --sql-only
-# 降级: python scripts/save_to_db.py --profile output/profiles/beijing_beichen_shiyeyouxiangongsi.json --report output/reports/beijing_beichen_shiyeyouxiangongsi-2026-08-29.md --matches output/matches/beijing_beichen_shiyeyouxiangongsi-2026-08-29.json --sql-only
-```
+---
 
 ## 输入参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `company` | string | 画像/匹配/报告时必填 | 目标企业名称（支持批量，逗号分隔） |
+| `company` | string | 场景 B 必填 | 目标企业全称（支持批量，逗号分隔） |
 | `topn` | int | 否 | 匹配/申报 Top N（默认 10） |
-| `policy_no` | string | 否 | 指定政策编号（单政策查询） |
-| `reviewer` | string | commit 时必填 | 研判人（政策更新 commit 留痕） |
-| `mode` | string | 否 | update 模式：默认抓取 / `commit` 研判入库 |
-| `sql_only` | bool | 否 | 落库仅生成 SQL 文件（默认 true） |
+| `query` | string | 场景 A 必填 | 主题检索词（≤200 字符） |
+| `freshness` | string | 否 | 时效窗，场景 A 用：`1y`/`2026-01-01,2026-12-31` 等 |
 
-**输入验证**：`company` 为空时脚本报错退出（`sys.exit(1)`）；`topn` 非正数时回退默认值；commit 缺 `reviewer` 时拒绝执行。
+## 错误处理与降级
 
-## 错误处理与降级策略
+- 检索内核 `http_client` 通道超时 → 自动回退内置 fetch（stderr 告警，结果仍可采信）。
+- LLM 不可用 → 匹配用规则打分、报告用模板生成，均不中断流程。
+- 脚本 TS 版异常 → 改用同目录 `.py` 版（参数签名一致）。
+- 数据库连接失败 → save_to_db 用 `--sql-only` 仅出 SQL 文件。
 
-- **工商接口不可用**：画像降级为 web_search 采集 + 字段留空标记"待补充"
-- **LLM 不可用**：匹配用规则打分、报告用模板生成，均不中断流程
-- **数据库连接失败**：save_to_db.py 支持 `--sql-only` 生成 SQL 文件
-- **政府网站反爬**：update_policy_kb.py 多源重试 + 指数退避，失败记录 error 字段不中断
-- **编码错误**：cli_execute stdout 编码失败时按"遇挫不停"原则换 web_search / web_fetch 采集
+## 输出与合规
 
-## 输出
-
-| 输出 | 路径/位置 | 说明 |
-|------|----------|------|
-| 三层知识库 | `knowledge/` | 政策原文库/官方解读库/实操洞察库 + 索引 |
-| 企业画像 | `output/profiles/` | 结构化画像 JSON + Markdown |
-| 匹配矩阵 | `output/matches/` | 企业 × 政策匹配矩阵 JSON |
-| 适配报告 | `output/reports/` | 适配研判报告 Markdown |
-| 储备流水 | `output/pending/` | 政策自动更新待研判流水 |
-| 落库 | company / tasks 表 | aibuilder 可呈现（企业/报告/申报任务） |
-
-## 安全与合规
-
-- **数据合规**：仅抓取政府公开网站与公开工商/舆情信息，记录来源与抓取时间
-- **人工研判门禁**：储备库 → 正式库必须人工 commit（`--reviewer` 留痕）
-- **内容合规**：报告固定附加"仅供申报参考，不构成法律意见"声明
-- **权限安全**：脚本仅访问白名单数据源与本地数据库
-- **信创合规**：仓颉 Runtime + 昇腾算力 + 国产数据库
-- **审计留痕**：画像、匹配、更新、落库全流程产物持久化于 output/
+- 三层知识库 / 企业画像 / 匹配矩阵 / 研判报告落 `skills/beichen-policy-assistant/output/` 与 `knowledge/`。
+- 报告固定附"仅供申报参考，不构成法律意见"。
+- 北京地区 74 条政策原文库，报告须明示适用范围，不得让用户误认为全国通用。
 
 ## 严禁事项
 
-- 严禁抓取未授权数据（付费接口、反爬站点、企业隐私数据）
-- 严禁输出无溯源的政策匹配结论（幻觉治理硬性要求）
-- 严禁伪造政策来源与匹配依据
-- 严禁绕过人工研判门禁直接提交正式库
-
-## 参考文档
-
-- 内置工具：`apps/agentskills-runtime/docs/builtin-tools.md`
-- 数据库结构：`apps/agentskills-runtime/sql/uctooDB.sql`（company / tasks 表）
-- 技能开发：`apps/agentskills-runtime/docs/uctoo-v4/uctoo-v4-module-development.md`
+- 严禁抓取未授权数据（付费接口、反爬站点、企业隐私数据）。
+- 严禁输出无溯源的政策匹配结论（幻觉治理硬性要求）。
+- 严禁伪造政策来源与匹配依据；未绑定 `policy_no` 或信源不可核验者一律标"待核实"进 `excluded[]`。
+- 严禁绕过人工研判门禁直接提交正式库。

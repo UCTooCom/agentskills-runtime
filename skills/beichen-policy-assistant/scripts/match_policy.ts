@@ -7,6 +7,7 @@
  */
 import * as path from "path";
 import * as fs from "fs";
+import { pathToFileURL } from "url";
 
 // 等价 Python json.dumps(v, ensure_ascii=False)（默认分隔符 ": " / ", "，非 ASCII 不转义），
 // 保证发给 LLM 的 prompt 与 py 版逐字节一致
@@ -173,6 +174,151 @@ async function llmScore(policy: any, profile: any): Promise<[number, string, any
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * T-13：匹配结论强制绑定 policy_no（REQ-PD-022）
+ * 无法绑定 policy_no 的条目一律不作为匹配结论输出，转入「待核实」集合。
+ * 检索侧条目经原文库交叉验证（复用 yuanbao-search/scripts/policy_kb.ts）绑定编号；
+ * 验证器不可用时全部转待核实，绝不放宽阈值凑数（R4）。
+ * ------------------------------------------------------------------------- */
+
+/** policy_no 规范化：去空白；空串/占位值一律视为未绑定 */
+function normalizeNo(v: any): string {
+  const s = String(v ?? "").trim();
+  if (!s || s === "—" || s === "-" || s === "null" || s === "None") return "";
+  return s;
+}
+
+/**
+ * 申报截止时间规范化：只接受明确的 YYYY-MM-DD / YYYY-MM-DDTHH:mm 形式，
+ * 其它一律判为未知（返回 null）——禁止用推测值填充（spec §6.7 第 4 条）。
+ */
+function normalizeDeadline(v: any): string | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+  if (!m) return null;
+  return m[4] ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00` : `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+/** 交叉验证器模块缓存：null=未加载，false=加载失败 */
+let PKB: any = null;
+
+async function loadPolicyKb(): Promise<any> {
+  if (PKB !== null) return PKB;
+  const modPath = path.join(__dirname, "..", "..", "yuanbao-search", "scripts", "policy_kb.ts");
+  try {
+    PKB = await import(pathToFileURL(modPath).href);
+  } catch (e: any) {
+    PKB = false;
+    console.error(`警告: 原文库交叉验证器不可用，检索结论将全部转待核实: ${e && e.message ? e.message : e}`);
+  }
+  return PKB;
+}
+
+/** 检索条目无法绑定 policy_no 时的待核实记录 */
+function pendingFromWebItem(it: any, reason: string): any {
+  return {
+    policy_no: "",
+    title: it.title || "",
+    url: it.url || "",
+    site: it.site || "",
+    date: it.date || "",
+    status: "待核实",
+    reason,
+    note: "未绑定政策原文库 policy_no，不作为匹配结论",
+  };
+}
+
+/** 按 policy_no 在原文库中查条目，补齐层级/领域/主管部门等呈现字段 */
+function findEntry(kb: any, policyNo: string): any {
+  for (const e of kb.entries || []) {
+    if (String(e.policy_no) === policyNo) return e;
+  }
+  return null;
+}
+
+/**
+ * 把检索结果（yuanbao_search 输出）绑定到原文库编号。
+ * 返回 { bound, pending, kbCount, kbError }。
+ */
+async function bindWebItems(webData: any, indexPath: string): Promise<any> {
+  const rawItems: any[] = Array.isArray(webData.items)
+    ? webData.items
+    : Array.isArray(webData.policies)
+      ? webData.policies
+      : [];
+  if (!rawItems.length) return { bound: [], pending: [], kbCount: 0, kbError: "" };
+
+  const mod = await loadPolicyKb();
+  if (!mod) {
+    return {
+      bound: [],
+      pending: rawItems.map((it: any) => pendingFromWebItem(it, "原文库交叉验证器不可用，无法绑定 policy_no")),
+      kbCount: 0,
+      kbError: "交叉验证器不可用",
+    };
+  }
+  const kb = mod.loadKb(indexPath);
+  if (!kb.ok) {
+    return {
+      bound: [],
+      pending: rawItems.map((it: any) =>
+        pendingFromWebItem(it, `原文库不可用（${kb.error || "未知原因"}），无法绑定 policy_no`)),
+      kbCount: 0,
+      kbError: kb.error || "原文库不可用",
+    };
+  }
+  const index = mod.buildIndex(kb);
+
+  const bound: any[] = [];
+  const pending: any[] = [];
+  for (const it of rawItems) {
+    const title = String(it.title || "");
+    const passage = String(it.passage || it.summary || it.content || "");
+    let policyNo = normalizeNo(it.policyNo ?? it.policy_no);
+    let file = String(it.policyFile || it.file || "");
+    let evidence = policyNo ? "检索通道已标注" : "";
+
+    if (!policyNo) {
+      const m = mod.matchPolicy(title, passage, index);
+      if (m && m.hit && normalizeNo(m.policyNo)) {
+        policyNo = normalizeNo(m.policyNo);
+        file = String(m.file || "");
+        evidence = m.evidence === "title" ? "标题级交叉验证"
+          : m.evidence === "core" ? "核心名重叠交叉验证"
+            : m.evidence === "fulltext" ? "正文全名交叉验证" : "交叉验证命中";
+      }
+    }
+    if (!policyNo) {
+      pending.push(pendingFromWebItem(it, "未通过原文库交叉验证，无 policy_no 可绑定"));
+      continue;
+    }
+    const entry = findEntry(kb, policyNo);
+    const score = typeof it.scoreNorm === "number" ? Math.round(it.scoreNorm * 100) : 0;
+    bound.push({
+      policy_no: policyNo,
+      title: title || (entry ? entry.title : ""),
+      domain: entry ? entry.domain : "",
+      level: entry ? entry.level : "",
+      department: entry ? entry.department : "",
+      support: String(it.support || ""),
+      score,
+      basis: `检索命中（证据：${evidence}）`,
+      gap: [],
+      conditions: {},
+      status: "matched",
+      deadline: normalizeDeadline(it.deadline),
+      source: file ? `policy-original/${file}` : (entry ? `policy-original/${entry.file || ""}` : ""),
+      url: String(it.url || ""),
+      site: String(it.site || ""),
+      date: String(it.date || ""),
+      channel: "检索采集",
+      kb_evidence: evidence,
+    });
+  }
+  return { bound, pending, kbCount: kb.count, kbError: "" };
+}
+
 async function main() {
   const args = parseArgs();
   const profilePath = typeof args.profile === "string" ? args.profile : "";
@@ -199,10 +345,21 @@ async function main() {
 
   const matches: any[] = [];
   const eliminated: any[] = [];
+  const unbound: any[] = [];
   for (const policy of (index.policies || [])) {
     const reason = hardFilter(policy, profile);
     if (reason) {
       eliminated.push({ policy_no: policy.policy_no, title: policy.title, reason });
+      continue;
+    }
+    // T-13：本地原文库条目本身缺 policy_no → 不作为匹配结论，转入待核实
+    if (!normalizeNo(policy.policy_no)) {
+      unbound.push({
+        policy_no: "", title: policy.title || "", url: "",
+        status: "待核实",
+        reason: "原文库条目缺少 policy_no，无法作为可核验结论",
+        note: "未绑定政策原文库 policy_no，不作为匹配结论",
+      });
       continue;
     }
     let score: number, basis: string, gap: any[];
@@ -225,22 +382,31 @@ async function main() {
       gap,
       conditions: policy.conditions || {},
       status: "matched",
+      deadline: normalizeDeadline(policy.deadline ?? (policy.conditions || {}).deadline),
       source: `policy-original/${policy.file || ""}`,
+      channel: "原文库",
     });
   }
 
   matches.sort((a, b) => b.score - a.score);
   const top = matches.slice(0, topn);
 
-  const pendingVerify: any[] = [];
+  // T-13：检索侧条目经交叉验证绑定 policy_no；绑定成功进结论，失败进待核实
+  let bound: any[] = [];
+  let webPending: any[] = [];
+  let kbCount = 0;
+  let kbError = "";
   if (web && fs.existsSync(web)) {
     const webData = JSON.parse(fs.readFileSync(web, "utf-8"));
-    for (const item of (webData.policies || [])) {
-      if (!("policy_no" in item)) {
-        pendingVerify.push({ title: item.title || "", source: item.url || "", status: "待核实", note: "无法绑定政策原文库 policy_no" });
-      }
-    }
+    const r = await bindWebItems(webData, indexPath);
+    bound = r.bound;
+    webPending = r.pending;
+    kbCount = r.kbCount;
+    kbError = r.kbError;
   }
+
+  const finalMatches = top.concat(bound);
+  const pending = unbound.concat(webPending);
 
   fs.mkdirSync(outdir, { recursive: true });
   const slug = profile.slug || path.parse(profilePath).name;
@@ -251,15 +417,24 @@ async function main() {
     match_date: date,
     total_policies: (index.policies || []).length,
     eliminated,
-    matches: top,
-    matched_count: matches.filter(m => m.score > 0).length,
-    pending_verify: pendingVerify,
+    matches: finalMatches,
+    matched_count: matches.filter(m => m.score > 0).length + bound.length,
+    // 「pending」为规范键；「excluded」为与 generate_policy_report 的契约别名（同一数组）
+    pending,
+    excluded: pending,
+    policy_no_coverage: finalMatches.length
+      ? finalMatches.filter((m: any) => normalizeNo(m.policy_no)).length / finalMatches.length
+      : 1,
+    kb_count: kbCount,
+    kb_error: kbError,
   };
   fs.writeFileSync(outPath, JSON.stringify(result, null, 2), "utf-8");
 
   console.log(JSON.stringify({
-    success: true, output: outPath, matched_count: top.length,
-    eliminated: eliminated.length, pending_verify: pendingVerify.length,
+    success: true, output: outPath, matched_count: finalMatches.length,
+    eliminated: eliminated.length, pending: pending.length,
+    bound_from_search: bound.length,
+    policy_no_coverage: result.policy_no_coverage,
     llm_used: llmAvailable(),
   }));
 }

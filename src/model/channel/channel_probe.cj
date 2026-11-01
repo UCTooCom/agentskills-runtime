@@ -160,7 +160,7 @@ public class ChannelProbe {
             let baseUrl = ChannelRegistry.shared().resolveBaseUrl(code)
             let apiKey = ChannelRegistry.shared().resolveSecret(code)
             let mid = if (modelId.isEmpty()) {
-                ch.defaultModel.getOrDefault({ => code })
+                ch.defaultModel.getOrDefault({ => "" })
             } else {
                 modelId
             }
@@ -170,6 +170,27 @@ public class ChannelProbe {
             // 插件只报事实，熔断计数/降级仍由本类后续流程统一处理。
             if (PluginAdapterBridge.isPluginProtocol(ch.protocol)) {
                 return this.probeViaPlugin(ch, mid)
+            }
+
+            // P1 空密钥通道跳过防护：OpenAI 兼容通道若未配置密钥（secret 为空，含 cookie/SSO 等
+            // host 侧不持有 Key 的网关），发出必 401 噪音。直接跳过三枪探测并 WARN，消除探活噪音。
+            if (apiKey.isEmpty()) {
+                result.put("ok", JsonBool(false))
+                result.put("detail", JsonString(
+                    "通道 ${code} 未配置密钥（secret 为空），跳过探测；请先在通道管理界面为该通道配置 API Key / 凭据"))
+                LogUtils.warn("ChannelProbe.probe 跳过 ${code}：secret 为空，未配置密钥无法探活")
+                return result
+            }
+
+            // P1 缺 model 通道跳过防护：OpenAI 兼容通道若未配置 default_model（且无显式 modelId），
+            // 旧逻辑用通道 code 当模型名发出，必然触发 400 "you must provide a model parameter" /
+            // "Missing model"。这里直接跳过三枪探测并给出 WARN 提示，消除手动/UI/agent 探活噪音。
+            if (mid.isEmpty()) {
+                result.put("ok", JsonBool(false))
+                result.put("detail", JsonString(
+                    "通道 ${code} 未配置模型（default_model 为空），跳过探测；请先在通道管理界面为该通道设置模型"))
+                LogUtils.warn("ChannelProbe.probe 跳过 ${code}：default_model 为空，缺模型无法探活")
+                return result
             }
 
             let (chatOk, chatDetail) = gunChat(baseUrl, apiKey, mid)
@@ -308,7 +329,19 @@ public class ChannelProbe {
                 let code = ch.code
                 let baseUrl = ChannelRegistry.shared().resolveBaseUrl(code)
                 let apiKey = ChannelRegistry.shared().resolveSecret(code)
-                let mid = ch.defaultModel.getOrDefault({ => code })
+                // P1 空密钥通道跳过防护：未配置密钥的通道（含 cookie/SSO 等 host 侧不持有 Key 的网关）无法完成
+                // OpenAI 兼容探活，发出必 401 噪音。跳过 curl，不计入 failStreak、不翻转状态（属配置缺失非服务故障）。
+                if (apiKey.isEmpty()) {
+                    LogUtils.warn("ChannelProbe.probeHealthAll 跳过 ${code}：secret 为空，未配置密钥无法探活")
+                    continue
+                }
+                let mid = ch.defaultModel.getOrDefault({ => "" })
+                // P1 缺 model 通道跳过防护：未配置 default_model 的通道无法执行健康探活，
+                // 跳过 curl 以免产生 400 噪音；不计入 failStreak（属配置缺失而非服务故障），不翻转状态。
+                if (mid.isEmpty()) {
+                    LogUtils.warn("ChannelProbe.probeHealthAll 跳过 ${code}：default_model 为空，无法探活")
+                    continue
+                }
                 let (ok, detail) = gunChat(baseUrl, apiKey, mid)
                 writeHealth(ch, mid, ok, detail)
 

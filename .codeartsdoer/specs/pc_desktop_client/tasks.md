@@ -356,11 +356,11 @@ M11 跨平台支持（可选，依赖 M10）
 
 ### 3.7 数据库初始化脚本
 
-- [ ] TASK-M3-28：在 `resources/sql/` 目录下放置 `uctoov4InitData.sql` 文件（uctoo 数据库 Schema + 初始数据）
+- [ ] TASK-M3-28：在 `resources/sql/` 目录下放置 `uctooDB.sql` 文件（uctoo 数据库 Schema + 初始数据）
 - [ ] TASK-M3-29：在 `electron-builder.json` 的 `extraResources` 中配置 SQL 初始化脚本：`{ "from": "resources/sql", "to": "sql" }`
-- [ ] TASK-M3-30：验证 `electron/modules/pgsql.ts` 的 `initialize()` 方法中 psql 导入 SQL 路径正确指向安装目录下的 `sql/uctoov4InitData.sql`
+- [ ] TASK-M3-30：验证 `electron/modules/pgsql.ts` 的 `initialize()` 方法中 psql 导入 SQL 路径正确指向安装目录下的 `sql/uctooDB.sql`
 
-**优先级**：P0 | **依赖**：3.1, 3.6 | **预估工时**：0.5 天 | **验收标准**：uctoov4InitData.sql 文件存在于 resources/sql/ 目录，electron-builder.json 包含 sql extraResources 配置，initialize() 可正确导入 SQL
+**优先级**：P0 | **依赖**：3.1, 3.6 | **预估工时**：0.5 天 | **验收标准**：uctooDB.sql 文件存在于 resources/sql/ 目录，electron-builder.json 包含 sql extraResources 配置，initialize() 可正确导入 SQL
 
 ### 3.8 M3 PostgreSQL 集成验证
 

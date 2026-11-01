@@ -1246,7 +1246,9 @@ public class WebMCPProtocol {
             LogUtils.info("WebMCP 请求级通道生效：${spec}")
             return Some(m)
         } catch (e: Exception) {
-            LogUtils.error("WebMCP 请求级通道解析失败，沿用默认通道：${spec}，原因：${e.message}")
+            // P1：请求级通道解析失败是可恢复降级（沿用默认通道继续聊天），按设计注释
+            // "解析失败只降级、不报错"，降级为 WARN，避免把可恢复回退刷成 ERROR 噪音。
+            LogUtils.warn("WebMCP 请求级通道解析失败，沿用默认通道：${spec}，原因：${e.message}")
             return None<ChatModel>
         }
     }

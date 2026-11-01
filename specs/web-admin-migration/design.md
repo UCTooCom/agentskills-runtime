@@ -169,7 +169,7 @@ agentskills-runtime/
 │       ├── permission.service.ts  # 权限服务（需融合）
 │       └── crud.service.ts
 └── sql/
-    └── uctoov4InitData.sql    # PostgreSQL初始化数据（需融合）
+    └── uctooDB.sql    # PostgreSQL初始化数据（需融合）
 ```
 
 ### 2.3 组件交互

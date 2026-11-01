@@ -1,5 +1,5 @@
 ---
-name: llm_channel_tokendance
+name: llm-channel-tokendance
 description: >
   L3 通道适配器插件（模式B）。为 protocol=plugin:llm_channel_tokendance 的
   llm_channel 通道提供 adapter.describe / chat / chatStream / probe 四个契约方法，

@@ -183,18 +183,34 @@ private func contains(arr: Array<Int64>, v: Int64): Bool {
 
 /// 跑一条返回单值（首行首列）的查询；无结果返回空串。
 /// `param` 为命名参数（带默认空串）：带 `?` 占位符的语句传参，否则省略。
+///
+/// ⚠️ 必须显式关闭 `Statement` / `QueryResult`：与 rbac.cj 的 seedQuery 同理，
+/// 在长生命周期连接上循环调用时不关闭会累积句柄并最终阻塞后续语句。
 private func queryCell(conn: Connection, sql: String, param!: String = ""): String {
+    var stmt: Option<Statement> = None<Statement>
+    var rs: Option<QueryResult> = None<QueryResult>
     try {
-        let stmt = conn.prepareStatement(sql)
+        let s = conn.prepareStatement(sql)
+        stmt = Some(s)
         if (!param.isEmpty()) {
-            stmt.set<String>(0, param)
+            s.set<String>(0, param)
         }
-        let rs = stmt.query()
-        if (rs.next()) {
-            return match (rs.getOrNull<String>(0)) { case Some(v) => v; case None => "" }
+        let r = s.query()
+        rs = Some(r)
+        if (r.next()) {
+            return match (r.getOrNull<String>(0)) { case Some(v) => v; case None => "" }
         }
         return ""
     } catch (_: Exception) {
         return ""
+    } finally {
+        match (rs) {
+            case Some(r) => try { r.close() } catch (_: Exception) { () }
+            case None => ()
+        }
+        match (stmt) {
+            case Some(s) => try { s.close() } catch (_: Exception) { () }
+            case None => ()
+        }
     }
 }

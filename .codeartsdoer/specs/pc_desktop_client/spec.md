@@ -26,7 +26,7 @@
 4. **runtime 进程状态事件**：runtime 启动/停止/崩溃状态变更通知
 5. **runtime RESTful API 响应**：健康检查、配置读写等 API 响应
 6. **PostgreSQL 二进制分发包**：预置在安装包中的 PostgreSQL 可执行文件（initdb、pg_ctl、postgres、pg_dump、pg_restore 等）
-7. **数据库初始化 SQL 脚本**：uctoo 数据库 Schema 和初始数据（uctoov4InitData.sql）
+7. **数据库初始化 SQL 脚本**：uctoo 数据库 Schema 和初始数据（uctooDB.sql）
 8. **web-admin 构建产物**：web-admin/web 的 Vue 3 构建输出，由 PC 客户端内置 HTTP 服务器托管
 9. **web-admin .env 配置**：web-admin 前端应用的运行时环境变量配置
 10. **web-admin 登录状态事件**：iframe 中 web-admin 通过 postMessage 发送的登录状态变更通知（access_token、用户信息、权限信息）
@@ -200,7 +200,7 @@ web-admin 使用 Pinia ORM + @pinia-orm/axios 实现 UMI 全栈模型同构。
 : runtime `.env` 文件中的数据库连接串配置项，格式为 PostgreSQL 连接串。
 : 备注：PC 客户端在 PostgreSQL 初始化或配置完成后自动更新此配置项。
 
-**uctoov4InitData.sql**
+**uctooDB.sql**
 : uctoo 数据库的初始化 SQL 脚本，包含 Schema 定义和初始数据。
 : 备注：首次启动时由 PC 客户端自动导入到内置 PostgreSQL。
 
@@ -570,7 +570,7 @@ main -> ui : 显示主界面（首页加载 aibuilder）
 
 3. **数据库配置**：用户进入配置向导 Step 3 时，选择数据库部署方式：
    - **内置 PostgreSQL（默认推荐）**：PC 客户端自动管理 PostgreSQL 实例，用户无需额外操作
-     - 自动初始化：initdb → 修改配置（监听地址、端口）→ createdb uctoo → 导入 uctoov4InitData.sql
+     - 自动初始化：initdb → 修改配置（监听地址、端口）→ createdb uctoo → 导入 uctooDB.sql
      - 默认端口：5432
      - 默认用户：uctoo
      - 默认密码：自动生成并存储在本地配置中
@@ -690,7 +690,7 @@ main -> runtime : 启动 runtime
    - **Step 2 - 修改配置**：修改 `postgresql.conf`，设置 `listen_addresses = '127.0.0.1'`、`port = 5432`；修改 `pg_hba.conf`，配置本地访问权限
    - **Step 3 - 启动 PostgreSQL**：执行 `pg_ctl start -D <data_dir> -l <log_file>`
    - **Step 4 - createdb**：执行 `createdb -h 127.0.0.1 -p 5432 -U uctoo uctoo`，创建 uctoo 数据库
-   - **Step 5 - 导入初始数据**：执行 `psql -h 127.0.0.1 -p 5432 -U uctoo -d uctoo -f <uctoov4InitData.sql>`，导入 Schema 和初始数据
+   - **Step 5 - 导入初始数据**：执行 `psql -h 127.0.0.1 -p 5432 -U uctoo -d uctoo -f <uctooDB.sql>`，导入 Schema 和初始数据
    - **Step 6 - 设置默认密码**：为 uctoo 用户设置密码并存储到客户端配置中
    a. 验收条件：[首次启动选择内置 PostgreSQL] → [自动完成 initdb → 配置 → 启动 → createdb → 导入 SQL 全流程]
    b. 验收条件：[初始化完成后] → [uctoo 数据库存在，包含完整的 Schema 和初始数据]
@@ -759,7 +759,7 @@ main -> pg : pg_ctl start
 pg --> main : PostgreSQL 启动成功
 main -> pg : createdb uctoo
 pg --> main : 数据库创建成功
-main -> pg : psql 导入 uctoov4InitData.sql
+main -> pg : psql 导入 uctooDB.sql
 pg --> main : 数据导入完成
 main -> main : 更新 runtime .env（orm_connectionUrl）
 main -> runtime : 启动 runtime
@@ -801,7 +801,7 @@ main -> main : 退出进程
    c. 用户感知：PostgreSQL 正常启动，使用自动分配的端口
 
 3. **SQL 导入失败**
-   a. 触发条件：uctoov4InitData.sql 文件损坏或 SQL 语句执行错误
+   a. 触发条件：uctooDB.sql 文件损坏或 SQL 语句执行错误
    b. 系统行为：显示导入失败步骤和错误信息，提供重新导入选项
    c. 用户感知：显示"数据导入失败：[SQL 错误信息]"提示 + 重试按钮
 
@@ -1927,7 +1927,7 @@ PC 客户端负责生成和更新 web-admin .env 文件，关键配置项：
 | Vue 前端构建产物 | ~5-10MB | asar 打包 |
 | runtime 发布版压缩包 | ~380MB | agentskills-runtime-win-x64.tar.gz（解压后约 1.27GB） |
 | PostgreSQL 二进制分发包 | ~50MB | initdb/pg_ctl/postgres/pg_dump 等 |
-| SQL 初始化脚本 | ~5MB | uctoov4InitData.sql |
+| SQL 初始化脚本 | ~5MB | uctooDB.sql |
 | 默认配置和资源 | ~5MB | .env.default + 图标 |
 | web-admin 构建产物 | ~5-10MB | Vue 3 构建输出 |
 | OpenSSL DLL | ~5-10MB | libssl/libcrypto 等 |

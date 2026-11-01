@@ -1,0 +1,18 @@
+name: feedback
+version: 1.0.0
+mode: sync
+className: magic.plugins.feedback.FeedbackPlugin
+routeClass: magic.plugins.feedback.FeedbackRoute
+description: feedback 表 CRUD 技能插件（plugingen 生成）
+enabled: true
+order: 4
+entry: magic.plugins.feedback.FeedbackPlugin
+dependencies: ""
+dylib: libskill_feedback.so
+tables:
+  - feedback
+skills:
+  - SKILL.md
+routes:
+  - magic.plugins.feedback.FeedbackRoute
+platform: all

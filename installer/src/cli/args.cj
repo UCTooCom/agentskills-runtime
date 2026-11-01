@@ -21,6 +21,9 @@ public class CliArgs {
     public var version: Bool = false
     // T011：`--no-serve` 元操作（C-D1）：执行子命令时不监听任何端口。
     public var noServe: Bool = false
+    // T-03（PcClientInstallProvisioning）：空壳安装模式。install 仅备环境 + 空集群 + runtime 部署 + .env，
+    // 跳过「建管理员(S5)」与「启动 runtime(S6)」；schema/seed/建号改由首次运行 seed-init 承接。
+    public var noData: Bool = false
     // 进度输出形态（T053）：空 = 不启用；"ndjson" = 逐事件流式。
     public var progress: String = ""
     // 取值参数
@@ -30,7 +33,11 @@ public class CliArgs {
     public var db: String = "uctoo"
     public var user: String = ""
     public var password: String = ""
-    // 子命令 token（如 ["devkit","install"] / ["db","export"] / ["seed","apply"]）
+    // seed-init：自助建号字段（口令走 stdin，绝不进参数）。
+    public var email: String = ""
+    public var username: String = ""
+    public var name: String = ""
+    // 子命令 token（如 ["devkit","install"] / ["db","export"] / ["seed","apply"] / ["seed-init"]）
     public var command: ArrayList<String> = ArrayList<String>()
     // 解析错误（未知参数等）；非空即表示解析失败
     public var parseError: String = ""
@@ -88,6 +95,9 @@ func applyOption(parsed: CliArgs, args: Array<String>, idx: Int64): Int64 {
     } else if (a == "--no-serve") {
         // T011（C-D1）：执行子命令时全程不监听端口。
         parsed.noServe = true
+    } else if (a == "--no-data") {
+        // T-03（PcClientInstallProvisioning）：install 空壳安装，跳过建管理员与启动 runtime。
+        parsed.noData = true
     } else if (a.startsWith("--progress=")) {
         // T053：`--progress=ndjson`。用 replace 取值而非下标切片 —— 前缀是纯 ASCII，
         // 但切片下标写错会在非字符边界抛异常，replace 没有这个隐患。
@@ -135,6 +145,24 @@ func applyOption(parsed: CliArgs, args: Array<String>, idx: Int64): Int64 {
             return next + 1
         }
         parsed.parseError = "缺少 --password 的值"
+    } else if (a == "--email") {
+        if (hasValue(args, idx)) {
+            parsed.email = args[next]
+            return next + 1
+        }
+        parsed.parseError = "缺少 --email 的值"
+    } else if (a == "--username") {
+        if (hasValue(args, idx)) {
+            parsed.username = args[next]
+            return next + 1
+        }
+        parsed.parseError = "缺少 --username 的值"
+    } else if (a == "--name") {
+        if (hasValue(args, idx)) {
+            parsed.name = args[next]
+            return next + 1
+        }
+        parsed.parseError = "缺少 --name 的值"
     } else {
         parsed.parseError = "未知参数: ${a}（可用 --help 查看用法）"
     }

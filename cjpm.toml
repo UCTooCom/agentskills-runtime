@@ -4,10 +4,10 @@
   # cjc 默认无优化，且 --int-overflow 默认 throwing（每次整数运算插入溢出检查分支）。
   # bcrypt 单次校验约 6800 万次整数运算，在关闭优化 + 溢出检查下被放大到 7~22 秒，
   # 超过前端 15s 超时，浏览器提前取消后统一显示成「帐号密码错误」。
-  # 解决：bcrypt 所在的 blowfish 依赖单独开 -O2 --int-overflow=wrapping（见 dependencies），
-  # 因此宿主源码（本 package）可安全保持关闭优化，以获得最快的本地增量编译；
-  # 发布构建由 build-release.bat 临时把本处切回 -O2（启用 lto）后再 build，结束后自动还原。
-  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std -O0 --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=curl\""
+  # 解决：bcrypt 所在的 blowfish 依赖单独开 -O2 --int-overflow=wrapping（见 dependencies）。
+  # 2026-10-20 起宿主源码本行亦固定为 -O2（全量优化发布，无「开发/发布」切换）；
+  # 原 build-release.bat（临时切 -O2 再还原）已删除；注意 lto 在 Windows 上不生效。
+  compile-option = "-Woff all -Woff unused -Woff parser -Woff deprecated --dy-std -O2 --cfg \"faiss=disable,sqlite=disable,llamacpp=disable,http=cj\""
   description = "AgentSkills Runtime - A Cangjie implementation of the AgentSkills open standard"
   link-option = "--allow-multiple-definition"
   name = "magic"

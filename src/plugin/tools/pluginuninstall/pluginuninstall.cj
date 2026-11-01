@@ -25,7 +25,7 @@ import std.fs.{Path, File, exists, Directory, remove}
  *   pluginuninstall --name entity --config ./plugins.yaml
  *
  *   # L3 进程轨：自动从 skills/<name>/plugin.yaml 的 `mode: process` 识别，
- *   # --purge 会清理 skills/<name>/（源码+target/）与发布态 bin/skills/<name>/、bin/plugins/<name>/
+ *   # --purge 会清理 skills/<name>/（源码+target/）与发布态 bin/skills/<name>/；（bin/plugins/<name>/ 为旧版 PS-T016 遗留目录，新包不再生成，仍在此清理以保证旧安装可卸载干净）
  *   pluginuninstall --name long-running-task --purge --force
  *
  *   pluginuninstall --help
@@ -34,7 +34,7 @@ import std.fs.{Path, File, exists, Directory, remove}
  *   进程插件的可执行文件与随包资源**不在 plugins/<name> 下**，而是：
  *     - 开发态：skills/<name>/target/release/bin/skill_<name>.exe
  *     - 发布态：bin/skills/<name>/target/release/bin/skill_<name>.exe（+ scripts/ 等随包资源）
- *     - 清单副本：bin/plugins/<name>/（plugin.yaml + SKILL.md）
+ *     - 清单副本（旧版遗留，新包不再生成）：bin/plugins/<name>/（plugin.yaml + SKILL.md，PS-T016 已废弃）
  *   因此 process 轨的 --purge 走独立清理路径（见 purgeProcessPlugin），
  *   且因涉及源码递归删除，必须显式追加 --force 才会真正执行。
  */
@@ -196,7 +196,8 @@ main(args: Array<String>) {
 
     // Step 3: 可选删除插件目录
     // sync/dylib 轨产物在 plugins/<name>/；L3 进程轨产物在 skills/<name>/ 与发布态
-    // bin/skills/<name>/、bin/plugins/<name>/，走独立清理路径（PS-T030）。
+    // bin/skills/<name>/（融合机制权威目录）；bin/plugins/<name>/ 为旧版 PS-T016 遗留，
+    // 新包不再生成，仍在此清理以保证旧安装可卸载干净（PS-T030）。
     if (purge) {
         if (mode == "process") {
             purgeProcessPlugin(pluginName, skillsRoot, binRoot, force)
@@ -223,7 +224,7 @@ main(args: Array<String>) {
  * 与 sync 轨不同，进程插件的可执行文件与随包资源**不在 plugins/<name> 下**：
  *   - skills/<name>/      源码 + target/release/bin/skill_<name>.exe（开发态）
  *   - bin/skills/<name>/  发布态 exe + scripts/ 等随包资源（package_release 的 PS-T029 / PS-LRT-01）
- *   - bin/plugins/<name>/ 发布态清单副本（plugin.yaml + SKILL.md，PS-T016）
+ *   - bin/plugins/<name>/ 发布态清单副本（plugin.yaml + SKILL.md，PS-T016 旧版遗留，新包不再生成，仍清理）
  *
  * 这三者都可能是一整棵含源码的目录树，故默认只列计划，须 --force 才真正删除。
  */
@@ -538,7 +539,7 @@ func printHelp(): Unit {
     println("                          缺省时自动从 <skills-root>/<插件名>/plugin.yaml 的 mode 识别")
     println("  --purge                  同时删除插件目录")
     println("                            sync/dylib 轨: plugins/<name>/")
-    println("                            process 轨  : skills/<name>/ + bin/skills/<name>/ + bin/plugins/<name>/")
+    println("                            process 轨  : skills/<name>/ + bin/skills/<name>/（bin/plugins/<name>/ 为旧版遗留，仍清理）")
     println("  --force                  允许 --purge 真正执行 process 轨的递归删除（否则只列计划）")
     println("  --config <路径>          plugins.yaml 路径（默认: ./plugins.yaml）")
     println("  --plugins-root <路径>    插件根目录，sync/dylib 轨用（默认: ./plugins）")

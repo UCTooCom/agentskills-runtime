@@ -355,6 +355,10 @@ public struct SanitizePolicy {
     public let r4: R4DropTableRule
     /// 原样保留清单（**只对 R2 生效**，见 `keepVerbatimAppliesToR1`）。
     public let keepVerbatim: ArrayList<KeepVerbatim>
+    /// 脱敏豁免列（`table.column`）：命中则 R1/R2 都不触碰，原样保留。
+    /// 用于永久外部 URL（如 `agent_skills.source_url`），否则 R2 会把 http(s):// 值
+    /// 归一成 `{{env:url}}`，而导入器不解析该占位符 → 种子里留下坏链接。
+    public let keepColumns: ArrayList<String>
     public let scanPatterns: ArrayList<String>
     /// `is_sensitive` 回填目标。
     public let backfillTable: String
@@ -362,6 +366,7 @@ public struct SanitizePolicy {
 
     public init(schema: String, r1: R1SecretRule, r2: R2EnvRule, r3: R3KeepRule,
                 r4: R4DropTableRule, keepVerbatim: ArrayList<KeepVerbatim>,
+                keepColumns: ArrayList<String>,
                 scanPatterns: ArrayList<String>, backfillTable: String, backfillColumn: String) {
         this.schema = schema
         this.r1 = r1
@@ -369,6 +374,7 @@ public struct SanitizePolicy {
         this.r3 = r3
         this.r4 = r4
         this.keepVerbatim = keepVerbatim
+        this.keepColumns = keepColumns
         this.scanPatterns = scanPatterns
         this.backfillTable = backfillTable
         this.backfillColumn = backfillColumn
@@ -437,7 +443,6 @@ public class LoadedPolicy {
 public func syncDerivedTables(): ArrayList<String> {
     let a = ArrayList<String>()
     a.add("agents")
-    a.add("agent_skills")
     a.add("db_connection")
     a.add("db_info")
     return a
@@ -644,6 +649,7 @@ private func buildSanitize(root: JsonObject): SanitizePolicy {
         jsonStr(root, "schema", ""),
         readR1(rules), readR2(rules), readR3(rules), readR4(rules),
         readKeepVerbatim(root),
+        jsonStrList(root, "keepColumns"),
         jsonStrList(root, "scanPatterns"),
         jsonStr(bf, "table", ""), jsonStr(bf, "column", ""))
 }

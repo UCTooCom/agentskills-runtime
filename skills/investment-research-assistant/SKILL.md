@@ -4,17 +4,6 @@ description: 智能投研助理（Investment Research Assistant）—— 实现�
 license: MIT
 version: "1.1.0"
 compatibility: 需要 runtime 内置工具支持（cli_execute/file_read/file_write/http_request/web_fetch），脚本执行需 Node.js ≥22.6（推荐 v23.10+）（推荐 TypeScript 版本）或 Python 3.8+ + requests 库（降级备选，落库模式需 psycopg2-binary）
-
-## 脚本运行说明
-
-本技能的脚本提供 TypeScript 和 Python 两个版本，**优先使用 TypeScript 版本**以减少对 Python 运行环境的依赖。
-
-- **TypeScript 版本（推荐）**：`scripts/*.ts`（fetch_market_data, clean_market_data, extract_factors, generate_report, save_report_to_db）
-  - 运行方式：`node --experimental-strip-types scripts/<script>.ts [参数]`
-  - 依赖：Node.js ≥22.6（推荐 v23.10+），无需额外 npm 包
-- **Python 版本（降级备选）**：`scripts/*.py`
-  - 运行方式：`python scripts/<script>.py [参数]`
-  - 仅在 TypeScript 版本运行出错时降级使用
 metadata:
   author: UCToo Team
   version: "1.1.0"
@@ -78,6 +67,17 @@ decision-points:
 ---
 
 # 智能投研助理（Investment Research Assistant）
+
+## 脚本运行说明
+
+本技能的脚本提供 TypeScript 和 Python 两个版本，**优先使用 TypeScript 版本**以减少对 Python 运行环境的依赖。
+
+- **TypeScript 版本（推荐）**：`scripts/*.ts`（fetch_market_data, clean_market_data, extract_factors, generate_report, save_report_to_db）
+  - 运行方式：`node --experimental-strip-types scripts/<script>.ts [参数]`
+  - 依赖：Node.js ≥22.6（推荐 v23.10+），无需额外 npm 包
+- **Python 版本（降级备选）**：`scripts/*.py`
+  - 运行方式：`python scripts/<script>.py [参数]`
+  - 仅在 TypeScript 版本运行出错时降级使用
 
 ## 概述
 

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 框架架构与部署方式横向对比分析报告 — Claude Code / OpenClaw / Hermes / DeepSeek Harness / agentskills-runtime</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1a1d24; --ink-2:#4b5563; --ink-3:#8b93a1;
+    --line:#e3e6ec; --line-2:#eef0f4;
+    --cc:#e11d48; --oc:#0ea5a4; --hm:#b45309; --dsh:#4D6BFE; --asr:#7c3aed;
+    --ok:#15803d; --warn:#b45309; --bad:#b91c1c; --neutral:#6b7280;
+    --code-bg:#f2f4f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1200px;margin:0 auto;padding:32px 24px 80px}
+  header.hero{background:linear-gradient(135deg,#1e2330 0%,#2d3446 60%,#3a4260 100%);
+    color:#fff;border-radius:14px;padding:38px 40px;margin-bottom:28px}
+  header.hero h1{margin:0 0 10px;font-size:27px;line-height:1.35;font-weight:650;letter-spacing:.2px}
+  header.hero .sub{color:#c3c9d6;font-size:14.5px;line-height:1.7}
+  header.hero .meta{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px}
+  header.hero .meta span{background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.16);
+    padding:4px 11px;border-radius:20px;font-size:12.5px;color:#e2e6ef}
+  h2{font-size:21px;margin:44px 0 14px;padding-bottom:9px;border-bottom:2px solid var(--line);font-weight:650}
+  h3{font-size:17px;margin:28px 0 10px;font-weight:640;color:#22262f}
+  h4{font-size:15px;margin:18px 0 8px;font-weight:640;color:#333844}
+  p{margin:10px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:22px 24px;margin:16px 0}
+  .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:13px}
+  .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  @media(max-width:1000px){.grid5{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:640px){.grid5,.grid2{grid-template-columns:1fr}}
+  .proj{border:1px solid var(--line);border-radius:10px;padding:16px 17px;background:#fff;border-top:4px solid var(--neutral)}
+  .proj.cc{border-top-color:var(--cc)} .proj.oc{border-top-color:var(--oc)}
+  .proj.hm{border-top-color:var(--hm)} .proj.dsh{border-top-color:var(--dsh)} .proj.asr{border-top-color:var(--asr)}
+  .proj .nm{font-weight:680;font-size:14.5px;margin-bottom:3px}
+  .proj .tag{font-size:11px;color:#fff;display:inline-block;padding:1px 8px;border-radius:4px;margin-bottom:9px}
+  .proj.cc .tag{background:var(--cc)} .proj.oc .tag{background:var(--oc)}
+  .proj.hm .tag{background:var(--hm)} .proj.dsh .tag{background:var(--dsh)} .proj.asr .tag{background:var(--asr)}
+  .proj dl{margin:0;font-size:12.5px;line-height:1.6}
+  .proj dt{color:var(--ink-3);font-size:11px;margin-top:7px}
+  .proj dd{margin:0;color:var(--ink-2)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;margin:12px 0}
+  caption{caption-side:top;text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:7px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#f0f2f6;font-weight:640;font-size:13px;white-space:nowrap}
+  td.dim{font-weight:640;background:#fafbfc;width:150px}
+  tbody tr:nth-child(even) td{background:#fcfcfd}
+  code{background:var(--code-bg);padding:1px 5px;border-radius:4px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-word}
+  pre{background:#1e2330;color:#dfe4ee;padding:14px 16px;border-radius:8px;overflow-x:auto;
+    font-size:12.5px;line-height:1.65;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre code{background:none;color:inherit;padding:0}
+  .ev{font-size:11.5px;color:var(--ink-3);font-style:normal}
+  .ev code{font-size:11px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:11px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .p-ok{background:#e6f6ea;color:var(--ok)} .p-warn{background:#fdf3e3;color:var(--warn)}
+  .p-bad{background:#fdeaea;color:var(--bad)} .p-neu{background:#eef0f4;color:var(--neutral)}
+  .bar{display:flex;align-items:center;gap:8px;margin:5px 0}
+  .bar .lb{width:96px;font-size:12px;color:var(--ink-2);flex-shrink:0}
+  .bar .tr{display:block;flex:1;background:#eef0f4;height:15px;border-radius:8px;overflow:hidden}
+  .bar .fl{display:block;height:100%;border-radius:8px}
+  .bar .vl{width:30px;font-size:11.5px;color:var(--ink-3);text-align:right;flex-shrink:0}
+  .note{border-left:3px solid var(--dsh);background:#f4f6ff;padding:11px 15px;margin:14px 0;
+    border-radius:0 7px 7px 0;font-size:13.5px;color:#333844}
+  .note.w{border-left-color:var(--warn);background:#fdf8ef}
+  .note.g{border-left-color:var(--ok);background:#f2f9f4}
+  .note.r{border-left-color:var(--bad);background:#fdf2f2}
+  .note.cc{border-left-color:var(--cc);background:#fdf0f3}
+  .note.asr{border-left-color:var(--asr);background:#f6f1fe}
+  ul,ol{margin:9px 0;padding-left:22px} li{margin:5px 0}
+  .small{font-size:13px;color:var(--ink-2)}
+  .ctr{text-align:center}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);
+    font-size:12.5px;color:var(--ink-3);line-height:1.8}
+  .tocbox{background:#fff;border:1px solid var(--line);border-radius:11px;padding:16px 22px;margin:18px 0}
+  .tocbox ol{columns:2;column-gap:34px;margin:6px 0}
+  @media(max-width:700px){.tocbox ol{columns:1}}
+  a{color:var(--dsh)}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--ink-2);margin:8px 0}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .hl-cc{color:var(--cc);font-weight:640} .hl-asr{color:var(--asr);font-weight:640}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Agent 框架架构与部署方式横向对比分析报告</h1>
+  <div class="sub">
+    对 <strong>Claude Code</strong>、<strong>OpenClaw</strong>、<strong>Hermes Agent</strong>、<strong>DeepSeek Harness</strong>、
+    <strong>agentskills-runtime（ASR）</strong> 五个项目的<strong>架构范式</strong>与<strong>部署方式</strong>做对照，
+    核心回答一个问题：<strong>它们到底是不是服务端架构？能否像 ASR 一样部署到云、配独立域名与 SSL、让 web/PC 客户端远程连接 runtime？</strong>
+  </div>
+  <div class="meta">
+    <span>报告日期：2026-10-31</span>
+    <span>分析方法：公开文档 / 社区报告 + ASR 源码实证</span>
+    <span>对比维度：A1–A10 共 10 项</span>
+    <span>证据粒度：文档级(B) / 源码级(A·仅 ASR)</span>
+  </div>
+</header>
+
+<div class="tocbox">
+  <strong>目录</strong>
+  <ol>
+    <li><a href="#s1">评估方法与公平性声明</a></li>
+    <li><a href="#s2">五项目画像速览</a></li>
+    <li><a href="#s3">十维度对比总矩阵（A1–A10）</a></li>
+    <li><a href="#s4">分维度深度剖析</a></li>
+    <li><a href="#s5">Claude Code：唯一的纯客户端 outlier</a></li>
+    <li><a href="#s6">服务端三家（OC/HM/DSH）的真实边界</a></li>
+    <li><a href="#s7">ASR 的企业级 B/S 站位</a></li>
+    <li><a href="#s8">服务端就绪度评分</a></li>
+    <li><a href="#s9">对 GOAI 参赛叙事的战略含义</a></li>
+    <li><a href="#s10">附录：证据索引与缩写约定</a></li>
+  </ol>
+</div>
+
+<!-- ============ 1 ============ -->
+<h2 id="s1">1. 评估方法与公平性声明</h2>
+
+<div class="card">
+<h3>1.1 本报告回答的核心问题</h3>
+<p>上一轮研究中，我们确认了 <strong>AGENTS.md 在 ASR 中不是热加载的</strong>——这引出一个更上层的架构定位问题：
+ASR 是作为<strong>长期运行的后端服务（类 Spring Boot 企业级框架）</strong>设计的，web-admin 与 PC 客户端通过 API/CLI 调用 runtime；
+而业界其他智能体项目，究竟是<strong>客户端架构</strong>还是<strong>服务端架构</strong>？是否支持像 ASR 一样
+<strong>配置独立域名 + SSL 证书、部署到云服务器、让 web/PC 客户端远程连接 runtime 端</strong>？</p>
+
+<h3>1.2 证据等级</h3>
+<table>
+  <thead><tr><th>等级</th><th>含义</th><th>本报告中的用法</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill p-ok">A · 源码确证</span></td><td>直接读到实现代码 / 配置 / 常量</td><td><strong>仅 ASR</strong>（后端地址链、运行时加载、权限分层均源码实证）</td></tr>
+    <tr><td><span class="pill p-warn">B · 文档确证</span></td><td>官方 README / 部署文档 / 社区报告明确陈述</td><td>Claude Code / OpenClaw / Hermes / DSH 的架构与部署形态</td></tr>
+    <tr><td><span class="pill p-neu">C · 推断</span></td><td>由产品定位推断，未直接验证</td><td>仅用于次要描述，会显式标注</td></tr>
+  </tbody>
+</table>
+
+<div class="note cc">
+<strong>重要前提：</strong>Claude Code / OpenClaw / Hermes / DSH 四家的内部实现我无法逐行读源码实证
+（除 DSH 的 <code>dsh web</code> 绑定地址等少量可从文档确认的点），其架构/部署结论均基于<strong>公开文档与社区报告的 B 级证据</strong>；
+ASR 部分则有 <strong>A 级源码实证</strong>。结论以「是否服务端、能否自托管部署」为判定主轴的，差异足够显著，不依赖字节级精度。
+</div>
+
+<h3>1.3 缩写约定</h3>
+<ul>
+  <li><strong>CC</strong> = Claude Code；<strong>OC</strong> = OpenClaw；<strong>HM</strong> = Hermes Agent；<strong>DSH</strong> = DeepSeek Harness；<strong>ASR</strong> = agentskills-runtime。</li>
+  <li><strong>B/S</strong> = Browser/Client–Server（浏览器/客户端–服务器）；<strong>CLI</strong> = 命令行界面；<strong>WS</strong> = WebSocket；<strong>gRPC</strong> = Google 远程过程调用框架。</li>
+</ul>
+</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="s2">2. 五项目画像速览</h2>
+
+<div class="grid5">
+  <div class="proj cc">
+    <div class="tag">Claude Code（CC）</div>
+    <div class="nm">纯客户端 CLI</div>
+    <dl>
+      <dt>架构范式</dt><dd>本地 CLI（agent 循环 + 工具全在本地）</dd>
+      <dt>语言 / 运行时</dt><dd>TypeScript · Node（本地进程）</dd>
+      <dt>长驻服务端</dt><dd>❌ 无；云能力=Anthropic 托管临时 VM</dd>
+      <dt>远程客户端</dt><dd>❌ Remote Control 为出站镜像</dd>
+      <dt>核心特征</dt><dd>本地优先、prompt-caching、会话级加载</dd>
+    </dl>
+  </div>
+  <div class="proj oc">
+    <div class="tag">OpenClaw（OC）</div>
+    <div class="nm">客户端-服务端网关</div>
+    <dl>
+      <dt>架构范式</dt><dd>Gateway 守护进程 + WS/HTTP API + Web UI</dd>
+      <dt>语言 / 运行时</dt><dd>TypeScript · Node（含 Rust crates）</dd>
+      <dt>长驻服务端</dt><dd>✅ Gateway 守护（默认 127.0.0.1:18789）</dd>
+      <dt>远程客户端</dt><dd>✅ Web UI + CLI + 移动节点经 WS</dd>
+      <dt>核心特征</dt><dd>个人助理定位；远程走隧道/反代</dd>
+    </dl>
+  </div>
+  <div class="proj hm">
+    <div class="tag">Hermes Agent（HM）</div>
+    <div class="nm">服务端守护 + 记忆层</div>
+    <dl>
+      <dt>架构范式</dt><dd>API 网关 + Worker 守护 + 记忆层</dd>
+      <dt>语言 / 运行时</dt><dd>Python（+ Electron 桌面端）</dd>
+      <dt>长驻服务端</dt><dd>✅ 面向 always-on；内置消息网关</dd>
+      <dt>远程客户端</dt><dd>✅ Web UI + 消息渠道 + API</dd>
+      <dt>核心特征</dt><dd>私有绑定；文档建议反代+认证</dd>
+    </dl>
+  </div>
+  <div class="proj dsh">
+    <div class="tag">DeepSeek Harness（DSH）</div>
+    <div class="nm">Harness + 独立服务</div>
+    <dl>
+      <dt>架构范式</dt><dd>可库嵌入 or 独立服务（HTTP/gRPC）</dd>
+      <dt>语言 / 运行时</dt><dd>TypeScript · Node</dd>
+      <dt>长驻服务端</dt><dd>✅ Service Mode 长驻、多租户（设计文档）</dd>
+      <dt>远程客户端</dt><dd>✅ Web UI；ACP 对接自动化客户端</dd>
+      <dt>核心特征</dt><dd>dsh web 绑 127.0.0.1:3080；域名走反代</dd>
+    </dl>
+  </div>
+  <div class="proj asr">
+    <div class="tag">agentskills-runtime（ASR）</div>
+    <div class="nm">企业级 B/S 多客户端</div>
+    <dl>
+      <dt>架构范式</dt><dd>runtime 长驻后端（类 Spring Boot）+ 一等客户端</dd>
+      <dt>语言 / 运行时</dt><dd>仓颉（Cangjie）· 原生二进制</dd>
+      <dt>长驻服务端</dt><dd>✅ runtime 即长驻后端服务</dd>
+      <dt>远程客户端</dt><dd>✅ web-admin + PC 客户端 + 任意 HTTP 客户端</dd>
+      <dt>核心特征</dt><dd>域名/SSL/多客户端为架构起点</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="note">
+<strong>先说容易误判的点：</strong>OC / HM / DSH 三家<strong>都「服务端化」了</strong>——都有长驻守护进程、HTTP/WS API、Web UI，且文档都讲「部署到 VPS/云、远程客户端连接」。
+所以你问的「能否部署到云、远程连接」——<strong>对这三家是成立的，Claude Code 不成立</strong>。
+真正的差异点在下一个判据：<strong>「独立域名 + SSL」是不是 runtime 的一等公民配置项</strong>，这正是 ASR 的站位区隔所在（见 §7）。
+</div>
+
+<!-- ============ 3 ============ -->
+<h2 id="s3">3. 十维度对比总矩阵（A1–A10）</h2>
+
+<div class="card">
+<p class="small">读法：每格先给结论，<span class="ev">斜体灰字</span>为证据来源（A=源码 / B=文档 / C=推断）。A1–A10 详见 <a href="#s4">第 4 节</a>。</p>
+<table>
+  <thead>
+    <tr><th style="width:140px">维度</th><th>Claude Code</th><th>OpenClaw</th><th>Hermes Agent</th><th>DeepSeek Harness</th><th>agentskills-runtime</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="dim">A1 架构范式</td>
+      <td>纯客户端 CLI（本地 agent 循环 + 本地工具）<span class="ev"><br>B · Anthropic 文档：本地运行</span></td>
+      <td>客户端-服务端（Gateway 守护 + WS/HTTP + Web UI）<span class="ev"><br>B · gateway 架构图</span></td>
+      <td>服务端守护（API 网关 + Worker 守护 + 记忆层）<span class="ev"><br>B · 部署文档</span></td>
+      <td>Harness 可库嵌入 <strong>或</strong> 独立服务（HTTP/gRPC）<span class="ev"><br>B · Service Mode 设计文档</span></td>
+      <td>企业级 B/S（runtime 长驻后端 + web/PC 一等客户端）<span class="ev"><br>A · runtime-config.ts 四级地址链</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A2 长驻服务端进程</td>
+      <td><span class="pill p-bad">❌ 无</span>；云能力 = Anthropic 托管临时 VM（闲置即回收）<span class="ev"><br>B · 云会话为 ephemeral</span></td>
+      <td><span class="pill p-ok">✅</span> Gateway 长驻守护（默认 127.0.0.1:18789）<span class="ev"><br>B · 启动文档</span></td>
+      <td><span class="pill p-ok">✅</span> 面向 always-on；内置消息网关<span class="ev"><br>B · always-on 设计</span></td>
+      <td><span class="pill p-ok">✅</span> Service Mode 长驻、多租户<span class="ev"><br>B · Service Mode 文档</span></td>
+      <td><span class="pill p-ok">✅</span> runtime 即长驻后端（类 Spring Boot）<span class="ev"><br>A · main.cj 启动期 loadFromDirs</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A3 云 / VPS 可部署</td>
+      <td><span class="pill p-warn">⚠️ 受限</span> 仅「SSH 进机器跑 CLI」或 Anthropic 云；<strong>不能自托管服务端</strong><span class="ev"><br>B · 无自托管服务端模式</span></td>
+      <td><span class="pill p-ok">✅</span> 官方文档「VPS / Remote 用于 24/7 生产」<span class="ev"><br>B · 部署指南</span></td>
+      <td><span class="pill p-ok">✅</span> VPS / Docker / K8s(OpenShift) / HPC<span class="ev"><br>B · 部署矩阵</span></td>
+      <td><span class="pill p-ok">✅</span> 文档给 K8s Deployment 清单<span class="ev"><br>B · k8s 示例</span></td>
+      <td><span class="pill p-ok">✅</span> 云 / VPS 部署；后端地址四级链自适应<span class="ev"><br>A · runtime-config.ts</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A4 独立域名 + SSL 一等公民</td>
+      <td><span class="pill p-bad">❌ 不适用</span> 不能自部署，域名/SSL 无意义<span class="ev"><br>B</span></td>
+      <td><span class="pill p-warn">⚠️ 反代 DIY</span> 默认 loopback；域名/SSL 归用户架反向代理（nginx/Caddy）<span class="ev"><br>B · 远程访问文档</span></td>
+      <td><span class="pill p-warn">⚠️ 反代 DIY</span> 网关私有绑定；文档「别暴露公网，用反代+认证」<span class="ev"><br>B · 安全建议</span></td>
+      <td><span class="pill p-warn">⚠️ 反代 DIY</span> dsh web 绑 127.0.0.1；域名/SSL 归反代<span class="ev"><br>B · web 绑定文档</span></td>
+      <td><span class="pill p-ok">✅ 架构起点</span> 域名/SSL/多客户端是内置设计，非 DIY 附加项<span class="ev"><br>A · config.json.backend.url 派生</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A5 远程 web/PC 客户端接入</td>
+      <td><span class="pill p-bad">❌</span> Remote Control 是<strong>出站镜像</strong>（经 Anthropic rendezvous，不开入站端口）<span class="ev"><br>B · remote 文档</span></td>
+      <td><span class="pill p-ok">✅</span> Web UI + CLI + 移动节点经 WS<span class="ev"><br>B · 客户端矩阵</span></td>
+      <td><span class="pill p-ok">✅</span> Web UI + 消息渠道 + API<span class="ev"><br>B</span></td>
+      <td><span class="pill p-ok">✅</span> Web UI；ACP 对接自动化客户端<span class="ev"><br>B</span></td>
+      <td><span class="pill p-ok">✅</span> web-admin + PC 客户端 + 任意 HTTP 客户端（API 派生）<span class="ev"><br>A · web-admin/src/utils/runtime-config.ts</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A6 多租户</td>
+      <td><span class="pill p-bad">❌</span> 单用户本地<span class="ev"><br>C</span></td>
+      <td><span class="pill p-warn">⚠️ 单操作员</span> 自我定位「personal assistant — not a multi-tenant system」<span class="ev"><br>B · 定位声明</span></td>
+      <td><span class="pill p-warn">⚠️ 个人向</span> 靠 OpenShift 文章才显企业野心<span class="ev"><br>B</span></td>
+      <td><span class="pill p-ok">✅</span> Service Mode 多租户（资源配额/凭证隔离，设计文档）<span class="ev"><br>B · 多租户设计</span></td>
+      <td><span class="pill p-ok">✅</span> RBAC 两层（API + 菜单）+ 超管/普通分层<span class="ev"><br>A · RequirePermissionMiddleware / getUserMenuTree</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A7 通信协议</td>
+      <td>CLI / stdin-stdout + Anthropic API（出站）<span class="ev"><br>B</span></td>
+      <td>WS + HTTP（gateway-protocol）<span class="ev"><br>B</span></td>
+      <td>HTTP API + 消息协议<span class="ev"><br>B</span></td>
+      <td>HTTP / gRPC（Service Mode）<span class="ev"><br>B</span></td>
+      <td>HTTP REST + WS + stdio（L3 插件 RPC）<span class="ev"><br>A · cordis_host_manager.cj</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A8 入站暴露默认策略</td>
+      <td>无入站<span class="ev"><br>B</span></td>
+      <td>loopback；远程走 Tailscale/VPN/SSH 隧道；WS 可选 TLS<span class="ev"><br>B</span></td>
+      <td>私有绑定；反代 + 认证<span class="ev"><br>B</span></td>
+      <td>127.0.0.1；反代<span class="ev"><br>B</span></td>
+      <td>可配公网监听 + 反向代理 + SSL 终止（设计支持）<span class="ev"><br>A · runtime-config 四级链</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A9 状态持久化</td>
+      <td>本地文件系统（~/.claude）<span class="ev"><br>B</span></td>
+      <td>本地存储 + 远程节点状态<span class="ev"><br>B</span></td>
+      <td>记忆层 + DB<span class="ev"><br>B</span></td>
+      <td>Service Mode 后端 DB<span class="ev"><br>B</span></td>
+      <td>PostgreSQL（db_info / 权限 / 会话 / 种子）<span class="ev"><br>A · installer + sql/uctooDB.sql</span></td>
+    </tr>
+    <tr>
+      <td class="dim">A10 配置独立域名难度</td>
+      <td><span class="pill p-bad">不适用</span> 无法自托管<span class="ev"><br>B</span></td>
+      <td><span class="pill p-warn">中</span> 需自架反代 + 隧道<span class="ev"><br>B</span></td>
+      <td><span class="pill p-warn">中</span> 反代 + 认证<span class="ev"><br>B</span></td>
+      <td><span class="pill p-warn">中</span> 反代；Service Mode 文档化<span class="ev"><br>B</span></td>
+      <td><span class="pill p-ok">低</span> 内置后端地址链，改 config 即生效<span class="ev"><br>A · config.json.backend.url</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============ 4 ============ -->
+<h2 id="s4">4. 分维度深度剖析</h2>
+
+<h3>4.1 A1 架构范式：四种形态，一条光谱</h3>
+<p>把五个项目排在「客户端 ←→ 服务端」光谱上：</p>
+<ul>
+  <li><span class="hl-cc">Claude Code（极左·纯客户端）</span>：agent 循环、工具执行、上下文全在<strong>用户本地机器</strong>的一个 Node 进程里。所谓「云」，是 Anthropic 托管的<strong>临时 VM</strong>——用完即弃、闲置回收，不是你能部署、配域名、长期运行的服务端。</li>
+  <li>OpenClaw / Hermes / DSH（中段·服务端守护）</span>：三者都把核心逻辑放进一个<strong>长驻守护进程</strong>，对外暴露 HTTP/WS API 与 Web UI。差异只在「默认绑定地址」与「是否内建多租户」。</li>
+  <li><span class="hl-asr">ASR（极右·企业级 B/S）</span>：runtime 从第一天就被设计成<strong>可独立部署的后端服务</strong>，web-admin 与 PC 客户端是<strong>一等公民客户端</strong>，后端连接地址有完整的四级来源链（见 §7）。</li>
+</ul>
+
+<h3>4.2 A4 域名 + SSL：真正的分水岭</h3>
+<p>这是本报告最关键的一维。OC / HM / DSH 三家虽然「能部署到云」，却<strong>都默认 loopback / 私有绑定</strong>，把「公网域名 + SSL」当作「你自己架反向代理（nginx/Caddy）」的事，而非 runtime 的内置配置项：</p>
+<ul>
+  <li>OpenClaw：默认 <code>127.0.0.1:18789</code>，远程访问走 Tailscale/VPN/SSH 隧道；WS 可选 TLS。</li>
+  <li>Hermes：网关私有绑定，文档明确「别把 8642 暴露公网，用反向代理 + 认证」。</li>
+  <li>DSH：发布的 <code>dsh web</code> 绑 <code>127.0.0.1:3080</code>；Service Mode 的 HTTP/gRPC 多租户是设计文档描述，域名/SSL 归你的反代。</li>
+</ul>
+<div class="note asr">
+<strong>ASR 的不同：</strong>后端地址四级链 <code>__APP_ENV__（宿主注入，PC 取 config.json.backend.url）&gt; localStorage &gt; VITE_BACKEND_URL &gt; 127.0.0.1:8080</code>，
+WS/MCP/AgentRoot 一律由 API 根派生。这意味着<strong>「runtime 部署到云、配独立域名、多客户端远程连」是架构起点</strong>，
+不是 DIY 附加项——PC 端改一个 <code>config.json.backend.url</code> 即切到公网 runtime，本机回环 https 还会强制降 http。
+</div>
+
+<h3>4.3 A6 多租户：DSH 与 ASR 领先，其余偏单操作员</h3>
+<p>Claude Code 是单用户本地；OpenClaw 自我定位「personal assistant，不是 multi-tenant system」；Hermes 个人向、靠 OpenShift 文章才显企业野心。
+DSH 的 Service Mode 在设计文档里就给了<strong>多租户、资源配额、凭证隔离</strong>的 K8s 部署形态；
+ASR 则通过 <strong>RBAC 两层（API 层 <code>RequirePermissionMiddleware</code> 超管持 <code>*</code>、菜单层 <code>getUserMenuTree</code>）</strong> 实现多用户隔离——
+两者在「多租户」这一维上最接近企业级，但 ASR 是<strong>源码实证</strong>，DSH 是<strong>设计文档描述</strong>。</p>
+
+<!-- ============ 5 ============ -->
+<h2 id="s5">5. Claude Code：唯一的纯客户端 outlier</h2>
+
+<div class="note cc">
+<strong>结论先行：</strong>Claude Code <strong>不是服务端架构</strong>。它不满足你描述的任何一种「服务端」诉求——不能自托管、不能配自己的域名、不能让远程客户端连接你自己的 runtime。
+</div>
+
+<p>具体拆解：</p>
+<ul>
+  <li><strong>执行位置</strong>：agent 循环与工具（文件读写、命令执行）全部在<strong>本地机器</strong>执行。它不是一个「把请求发给远端服务端」的瘦客户端，它自身就是运行时。</li>
+  <li><strong>所谓「云能力」</strong>：Anthropic 提供的是<strong>临时 VM 云会话</strong>（ephemeral），用于在无本地环境的场景跑 agent，<strong>闲置即回收</strong>，不是你持久部署的服务端。</li>
+  <li><strong>Remote Control 特性</strong>：这是<strong>出站镜像</strong>——把本地 CLI 的状态同步到一个 Web 界面便于查看，<strong>不开入站端口</strong>，经 Anthropic API rendezvous 中转。它不是「web 客户端连接你的 runtime」。</li>
+  <li><strong>自托管服务端</strong>：Claude Code 没有「部署你自己的 Claude Code 服务端 + 配域名」这种模式。Anthropic 另提供 Agent SDK / 平台能力，但那不是「自托管 Claude Code runtime」。</li>
+</ul>
+<p>这反而衬托出 ASR 的站位价值：当别人把 agent 当「本地工具」或「托管在厂商云里的临时算力」时，ASR 把它当<strong>你能拥有、能部署、能配域名的企业后端</strong>。</p>
+
+<!-- ============ 6 ============ -->
+<h2 id="s6">6. 服务端三家（OC / HM / DSH）的真实边界</h2>
+
+<p>OpenClaw、Hermes、DSH 三家都「服务端化」了，但存在两个共性边界，理解它们才能看清 ASR 的差异化空间：</p>
+
+<h4>6.1 边界一：默认 loopback，域名/SSL 交给用户反代</h4>
+<p>三家都把「暴露到公网 + 配域名 + 挂 SSL」视为<strong>运维层的 DIY 动作</strong>，runtime 自身不提供「填域名、传证书即生效」的一等配置。对单操作员/个人助理足够，但对「开箱即用的企业部署」是一道额外门槛。</p>
+
+<h4>6.2 边界二：产品定位偏单操作员，多租户非默认</h4>
+<p>OpenClaw 公开声明「not a multi-tenant system」；Hermes 是个人向、靠外部文章才显企业野心；DSH 的 Service Mode 多租户在<strong>设计文档</strong>而非默认体验里。换言之，它们的「服务端」更接近<strong>「一个人远程连自己机器上的守护进程」</strong>，而非「多用户共享的企业后端」。</p>
+
+<div class="note g">
+<strong>一个佐证 ASR 理论基座的点：</strong>DSH 的核心理念恰恰是 <strong>「runtime becomes the product / runtime as a Service」</strong>（mech.app 社论），其文档直接给了多租户、资源配额、凭证隔离的 K8s 形态。
+ASR 与 DSH 在<strong>哲学血统上一致</strong>（你也早把 DSH 定为理论基石），区别是 DSH 发布的默认体验仍是 <code>127.0.0.1:3080</code> 的本地 WebUI，
+而 ASR 从第一天就把「云端部署 + 多客户端」做成了<strong>主路径</strong>。
+</div>
+
+<!-- ============ 7 ============ -->
+<h2 id="s7">7. ASR 的企业级 B/S 站位（源码实证）</h2>
+
+<p>ASR 的架构不是「客户端框架顺手加了服务端」，而是<strong>服务端优先</strong>。以下均为 A 级源码实证：</p>
+
+<h4>7.1 runtime 即长驻后端</h4>
+<p><code>src/app/main.cj</code> 启动期实例化 <code>AgentLoadManager</code> 并 <code>loadFromDirs</code>，把 runtime 作为<strong>长期运行的后端服务</strong>加载——这与 Spring Boot 把应用作为常驻服务的范式一致，而非 CLI 一次性执行。</p>
+
+<h4>7.2 后端地址四级链（多客户端连接的基础）</h4>
+<p><code>apps/web-admin/src/utils/runtime-config.ts</code> 定义了 ASR 区分于其他框架的关键设计：</p>
+<pre><code>后端地址唯一真相源四级优先级：
+  ① __APP_ENV__  （宿主注入，PC 端取 config.json.backend.url）
+  ② localStorage  uctoo.backend_url   （web 登录页「服务端」入口）
+  ③ 构建期 VITE_BACKEND_URL
+  ④ http://127.0.0.1:8080            （内嵌默认）
+WS / MCP / AgentRoot 一律由 API 根派生，禁止再配独立 URL；
+本机回环 https 强制降 http。</code></pre>
+<p>这条链意味着：<strong>web-admin 和 PC 客户端都是 runtime 的一等客户端</strong>，它们连接哪个 runtime（本地 / 局域网 / 公网云）完全由一处配置决定。换公网部署 = 改 <code>config.json.backend.url</code>，无需改代码。</p>
+
+<h4>7.3 持久化与权限分层（企业特征）</h4>
+<ul>
+  <li><strong>持久化</strong>：PostgreSQL 承载 <code>db_info</code>、权限、会话、种子数据；<code>installer</code> 的 <code>db export/import</code> 流水线把 schema + 种子纳入可重放的工程化体系（见 <code>sql/seed/export-policy.json</code>）。</li>
+  <li><strong>权限分层</strong>：API 层 <code>RequirePermissionMiddleware</code>（超管持 <code>*</code>）+ 菜单层 <code>getUserMenuTree</code>（缺 permissions 看不到入口非 403），构成 RBAC 两层隔离。</li>
+  <li><strong>多客户端一致</strong>：L3 插件经 stdio JSON-RPC 与 runtime 通信，宿主与插件解耦，远端部署不影响插件隔离模型。</li>
+</ul>
+
+<!-- ============ 8 ============ -->
+<h2 id="s8">8. 服务端就绪度评分</h2>
+
+<p class="small">评分口径（1–5）：5 = 业界一流 / 4 = 完整可用 / 3 = 有方案但缺口明显 / 2 = 仅雏形 / 1 = 基本缺失。CC 因「非服务端」在多数维度取 1。ASR 为源码实证，其余为文档证据。</p>
+
+<div class="card">
+<h4>8.1 长驻服务端进程</h4>
+<div class="bar"><span class="lb">Claude Code</span><span class="tr"><span class="fl" style="width:20%;background:var(--cc)"></span></span><span class="vl">1</span></div>
+<div class="bar"><span class="lb">OpenClaw</span><span class="tr"><span class="fl" style="width:80%;background:var(--oc)"></span></span><span class="vl">4</span></div>
+<div class="bar"><span class="lb">Hermes</span><span class="tr"><span class="fl" style="width:80%;background:var(--hm)"></span></span><span class="vl">4</span></div>
+<div class="bar"><span class="lb">DSH</span><span class="tr"><span class="fl" style="width:80%;background:var(--dsh)"></span></span><span class="vl">4</span></div>
+<div class="bar"><span class="lb">ASR</span><span class="tr"><span class="fl" style="width:100%;background:var(--asr)"></span></span><span class="vl">5</span></div>
+
+<h4>8.2 云 / VPS 可部署</h4>
+<div class="bar"><span class="lb">Claude Code</span><span class="tr"><span class="fl" style="width:40%;background:var(--cc)"></span></span><span class="vl">2</span></div>
+<div class="bar"><span class="lb">OpenClaw</span><span class="tr"><span class="fl" style="width:100%;background:var(--oc)"></span></span><span class="vl">5</span></div>
+<div class="bar"><span class="lb">Hermes</span><span class="tr"><span class="fl" style="width:100%;background:var(--hm)"></span></span><span class="vl">5</span></div>
+<div class="bar"><span class="lb">DSH</span><span class="tr"><span class="fl" style="width:100%;background:var(--dsh)"></span></span><span class="vl">5</span></div>
+<div class="bar"><span class="lb">ASR</span><span class="tr"><span class="fl" style="width:100%;background:var(--asr)"></span></span><span class="vl">5</span></div>
+
+<h4>8.3 独立域名 + SSL 一等公民</h4>
+<div class="bar"><span class="lb">Claude Code</span><span class="tr"><span class="fl" style="width:20%;background:var(--cc)"></span></span><span class="vl">1</span></div>
+<div class="bar"><span class="lb">OpenClaw</span><span class="tr"><span class="fl" style="width:40%;background:var(--oc)"></span></span><span class="vl">2</span></div>
+<div class="bar"><span class="lb">Hermes</span><span class="tr"><span class="fl" style="width:40%;background:var(--hm)"></span></span><span class="vl">2</span></div>
+<div class="bar"><span class="lb">DSH</span><span class="tr"><span class="fl" style="width:40%;background:var(--dsh)"></span></span><span class="vl">2</span></div>
+<div class="bar"><span class="lb">ASR</span><span class="tr"><span class="fl" style="width:100%;background:var(--asr)"></span></span><span class="vl">5</span></div>
+
+<h4>8.4 远程客户端接入</h4>
+<div class="bar"><span class="lb">Claude Code</span><span class="tr"><span class="fl" style="width:20%;background:var(--cc)"></span></span><span class="vl">1</span></div>
+<div class="bar"><span class="lb">OpenClaw</span><span class="tr"><span class="fl" style="width:80%;background:var(--oc)"></span></span><span class="vl">4</span></div>
+<div class="bar"><span class="lb">Hermes</span><span class="tr"><span class="fl" style="width:80%;background:var(--hm)"></span></span><span class="vl">4</span></div>
+<div class="bar"><span class="lb">DSH</span><span class="tr"><span class="fl" style="width:80%;background:var(--dsh)"></span></span><span class="vl">4</span></div>
+<div class="bar"><span class="lb">ASR</span><span class="tr"><span class="fl" style="width:100%;background:var(--asr)"></span></span><span class="vl">5</span></div>
+
+<h4>8.5 多租户 / 多用户隔离</h4>
+<div class="bar"><span class="lb">Claude Code</span><span class="tr"><span class="fl" style="width:20%;background:var(--cc)"></span></span><span class="vl">1</span></div>
+<div class="bar"><span class="lb">OpenClaw</span><span class="tr"><span class="fl" style="width:40%;background:var(--oc)"></span></span><span class="vl">2</span></div>
+<div class="bar"><span class="lb">Hermes</span><span class="tr"><span class="fl" style="width:40%;background:var(--hm)"></span></span><span class="vl">2</span></div>
+<div class="bar"><span class="lb">DSH</span><span class="tr"><span class="fl" style="width:80%;background:var(--dsh)"></span></span><span class="vl">4</span></div>
+<div class="bar"><span class="lb">ASR</span><span class="tr"><span class="fl" style="width:80%;background:var(--asr)"></span></span><span class="vl">4</span></div>
+</div>
+
+<div class="note asr">
+<strong>小结：</strong>在「长驻服务 / 云部署 / 远程客户端」三维度上，OC·HM·DSH·ASR 同为第一梯队；
+真正的<strong>分水岭是 A4「域名+SSL 一等公民」</strong>——只有 ASR 把这件事做成架构内置，其余三家都靠用户自架反代。
+这恰好是 ASR 在 GOAI 叙事里应单列的差异化卖点。
+</div>
+
+<!-- ============ 9 ============ -->
+<h2 id="s9">9. 对 GOAI 参赛叙事的战略含义</h2>
+
+<p>把上面的结论翻译成参赛材料里可直接用的论据：</p>
+
+<h3>9.1 差异化卖点（建议单列）</h3>
+<ul>
+  <li><strong>「Deployable Multi-Client Agent Runtime」</strong>：runtime 即企业级可部署后端，web / PC / 任意 HTTP 客户端都是一等公民——这不是大多数 agent 框架的默认形态。</li>
+  <li><strong>「Domain + SSL as First-Class Config」</strong>：区别于 OpenClaw/Hermes/DSH 的「反代 DIY」，ASR 的后端地址链让「配域名、挂证书、切公网」成为改一处配置即可生效的内置能力。</li>
+  <li><strong>「Runtime as a Service，not a local tool」</strong>：与 DSH 哲学同源（runtime becomes the product），但 ASR 把云端多客户端做成了主路径而非设计文档里的愿景。</li>
+</ul>
+
+<h3>9.2 竞品定位话术</h3>
+<table>
+  <thead><tr><th>项目</th><th>一句话定位</th><th>对 ASR 的关系</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Claude Code</strong></td><td>本地 CLI 工具 / 厂商托管临时算力</td><td>非服务端，<strong>不构成本赛道竞品</strong>（错位）</td></tr>
+    <tr><td><strong>OpenClaw</strong></td><td>个人助理式网关守护</td><td>服务端但单操作员；ASR 在企业多客户端上更彻底</td></tr>
+    <tr><td><strong>Hermes</strong></td><td>Python 服务端守护 + 记忆层</td><td>服务端但偏个人向；ASR 有原生 RBAC 分层</td></tr>
+    <tr><td><strong>DSH</strong></td><td>Harness + Service Mode 多租户</td><td><strong>理论基石同源</strong>；ASR 把云端部署做成默认体验</td></tr>
+    <tr><td><strong>ASR</strong></td><td>企业级 B/S 多客户端 runtime</td><td><strong>差异化站位</strong>：可部署 + 配域 + 多客户端是架构起点</td></tr>
+  </tbody>
+</table>
+
+<div class="note w">
+<strong>诚实边界（避免被评委挑战）：</strong>
+<ul>
+  <li>ASR 的「多租户」目前是<strong>单部署多用户 RBAC 隔离</strong>，尚未到 DSH 设计文档里「独立资源配额/凭证隔离」的硬多租户粒度——参赛时描述为「multi-user RBAC」比「multi-tenant」更严谨。</li>
+  <li>OC/HM/DSH 的部署能力为<strong>文档级证据</strong>，若评委深挖其内部实现，应明确「以官方部署文档为准」，不要编造源码细节。</li>
+  <li>Claude Code 的「非服务端」结论<strong>不影响其作为最强 agent 能力标杆</strong>——本报告的判据是「架构/部署形态」，不评价 agent 智力水平。</li>
+</ul>
+</div>
+
+<!-- ============ 10 ============ -->
+<h2 id="s10">10. 附录：证据索引与缩写约定</h2>
+
+<h3>10.1 缩写</h3>
+<ul>
+  <li><strong>CC</strong> = Claude Code；<strong>OC</strong> = OpenClaw；<strong>HM</strong> = Hermes Agent；<strong>DSH</strong> = DeepSeek Harness；<strong>ASR</strong> = agentskills-runtime。</li>
+  <li><strong>B/S</strong> = Browser/Client–Server；<strong>WS</strong> = WebSocket；<strong>gRPC</strong> = Google 远程过程调用；<strong>RBAC</strong> = 基于角色的访问控制。</li>
+</ul>
+
+<h3>10.2 证据索引（按项目）</h3>
+<table>
+  <thead><tr><th>项目</th><th>判据</th><th>证据级别</th><th>来源</th></tr></thead>
+  <tbody>
+    <tr><td>Claude Code</td><td>纯客户端 / 临时 VM / 出站 Remote</td><td>B</td><td>Anthropic 官方文档与社区报告</td></tr>
+    <tr><td>OpenClaw</td><td>Gateway 18789 / VPS 部署 / 隧道远程</td><td>B</td><td>OpenClaw 部署与远程访问文档</td></tr>
+    <tr><td>Hermes</td><td>服务端守护 / 8642 私有 / 反代建议</td><td>B</td><td>Hermes 部署文档与安全建议</td></tr>
+    <tr><td>DSH</td><td>dsh web 127.0.0.1:3080 / Service Mode 多租户</td><td>B</td><td>DeepSeek Harness 设计/部署文档</td></tr>
+    <tr><td>ASR</td><td>runtime-config 四级链 / RBAC 两层 / main.cj 启动</td><td>A</td><td>agentskills-runtime 源码（见 §7 引用路径）</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+<strong>与既有研究的关系：</strong>本报告是 <code>plugin-mechanism-comparison.html</code>（插件机制横向对比）的姊妹篇，聚焦<strong>架构范式与部署形态</strong>而非插件机制。
+两篇共同的结论指向 ASR 的独特定位：在「<strong>三轨插件 + Skill 融合</strong>」的扩展能力之上，叠加「<strong>可部署、配域、多客户端的企业级 B/S runtime</strong>」——
+这是多数 agent 框架未把「部署到云 + 独立域名 + 远程客户端」作为架构起点的真实差异化。
+</div>
+
+<footer>
+  Agent 框架架构与部署方式横向对比分析报告 · 生成于 2026-10-31 ·
+  方法：公开文档/社区报告（B 级）+ ASR 源码实证（A 级）· 维度：A1–A10 · 仅 ASR 部分含逐行源码证据。
+   同类报告：<code>plugin-mechanism-comparison.html</code>（插件机制对比）。
+</footer>
+
+</div>
+</body>
+</html>

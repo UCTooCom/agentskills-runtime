@@ -1086,7 +1086,7 @@ endif
 :执行 createdb -h 127.0.0.1 -p 5432 -U uctoo uctoo;
 
 == Step 7: 导入初始数据 ==
-:执行 psql -h 127.0.0.1 -p 5432 -U uctoo -d uctoo\n-f uctoov4InitData.sql;
+:执行 psql -h 127.0.0.1 -p 5432 -U uctoo -d uctoo\n-f uctooDB.sql;
 
 == Step 8: 停止 PostgreSQL ==
 :执行 pg_ctl stop -D <dataDir>;
@@ -1932,7 +1932,7 @@ agentskills-runtime-pc/
 │   │   ├── lib/                    # PostgreSQL 库文件
 │   │   └── share/                  # PostgreSQL 共享文件（locale 等）
 │   ├── sql/                        # SQL 初始化脚本（v2.1 保留）
-│   │   └── uctoov4InitData.sql     # uctoo 数据库 Schema + 初始数据
+│   │   └── uctooDB.sql     # uctoo 数据库 Schema + 初始数据
 │   ├── defaults/
 │   │   └── default-config.json     # 默认配置模板
 │   ├── web-admin/                  # web-admin 构建产物（v2.2 新增）
@@ -2421,7 +2421,7 @@ async function ensureWebAdminRunning() {
 | runtime 发布版压缩包 | ~380MB | agentskills-runtime-win-x64.tar.gz（解压后约 1.27GB）（v2.5 新增） |
 | PostgreSQL 二进制分发包 | ~50MB | initdb/pg_ctl/postgres/pg_dump 等 |
 | OpenSSL DLL | ~5-10MB | libssl-3-x64.dll、libcrypto-3-x64.dll |
-| SQL 初始化脚本 | ~5MB | uctoov4InitData.sql |
+| SQL 初始化脚本 | ~5MB | uctooDB.sql |
 | 默认配置和资源 | ~5MB | .env.default + 图标 |
 | **安装包总计（压缩前）** | **~535-575MB** | 含 runtime 压缩包 |
 | **安装包总计（electron-builder maximum 压缩后）** | **~600-800MB** | NSIS 安装包实际体积 |

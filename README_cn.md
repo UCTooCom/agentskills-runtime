@@ -998,8 +998,7 @@ release/
 ├── bin/                    # 可执行文件和所有 DLL
 │   ├── agentskills-runtime.exe  # 主入口程序
 │   ├── *.dll               # 所有依赖库
-│   ├── plugins/            # 插件清单（见下）
-│   └── skills/             # 内置进程技能的完整运行形态（见下）
+│   └── skills/             # 技能与插件融合目录（技能 = SKILL.md + plugin.yaml + 可执行文件，同住此目录；无独立 plugins/ 顶层目录）
 ├── magic/                  # 运行时模块
 ├── commonmark4cj/          # Markdown 解析器
 ├── yaml4cj/                # YAML 解析器
@@ -1007,14 +1006,18 @@ release/
 └── .env.example            # 配置模板
 ```
 
-#### 内置技能的发布形态
+#### 内置技能与插件的发布形态（技能-插件融合）
 
-`skills/` 下的技能随 runtime 一同发布，按形态分两类打包：
+本项目采用**技能-插件融合机制**（`specs/plugin-system` 的 REQ-PS-007 技能+插件融合 / REQ-PS-016 去中心化自动发现）：一个插件 = `SKILL.md`（AI 行为）+ `plugin.yaml`（确定性能力清单与配置）+ 可执行文件，**三者同住在 `skills/{name}/` 目录**；运行时经 `PluginDiscoveryService` **扫描 `skills/` 自动发现 `plugin.yaml`**，**不存在独立的 `plugins/` 顶层目录**。
 
-| 技能形态 | 判定依据 | 发布包落点 | 内容 |
+因此发布包内**只有 `bin/skills/{name}/`**，按形态分两类打包：
+
+| 技能/插件形态 | 判定依据 | 发布包落点 | 内容 |
 |---|---|---|---|
-| **进程隔离轨插件**（L3） | 含 `plugin.yaml` 且 `mode: process` | `bin/plugins/{name}/` + `bin/skills/{name}/` | `plugin.yaml` + `SKILL.md`；编译产物 `target/release/bin/skill_{name}.exe`；**技能自带资源**（`scripts/` 降级脚本、`COMPOSITION.yaml`、`DATA_CONTRACT.yaml`、`OPS.md` 等） |
-| 纯 SKILL.md 技能 | 只有 `SKILL.md` | 不在发布包内 | 需安装后单独部署到 `plugins/{name}/SKILL.md` |
+| **进程隔离轨插件**（L3） | 含 `plugin.yaml` 且 `mode: process` | `bin/skills/{name}/` | `plugin.yaml` + `SKILL.md`；编译产物 `target/release/bin/skill_{name}.exe`；**技能自带资源**（`scripts/` 降级脚本、`COMPOSITION.yaml`、`DATA_CONTRACT.yaml`、`OPS.md` 等） |
+| 纯 SKILL.md 技能 | 只有 `SKILL.md`（无 `plugin.yaml`） | `bin/skills/{name}/` | `SKILL.md` + 技能资产 |
+
+> ⚠️ **历史遗留：`bin/plugins/` 是错误产物，必须移除**。早期打包脚本（`src/scripts/package_release/main.cj` 的 PS-T016 段落）曾把 `skills/{name}/` 里的 `plugin.yaml`+`SKILL.md` 又抄一份到 `bin/plugins/{name}/` 并写一份 `plugin_manifest.json`。它与 `bin/skills/{name}/` 内容重叠、**运行时从不读取**，违反融合机制。该段落已废弃，新版本发布包不应再出现 `bin/plugins/` 目录（对应清理任务与布局约束见 `specs/PcClientInstallProvisioning` 与 `specs/RuntimeNativeInstaller`）。
 
 关键点：**进程插件的 Python 脚本和编排文件与 exe 同根**（都在 `bin/skills/{name}/`）。
 例如 `long-running-task` 的 D 层降级后端（`cli_execute` / `llm` / `template`）依赖

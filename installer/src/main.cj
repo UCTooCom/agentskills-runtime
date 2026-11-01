@@ -9,7 +9,7 @@ import uc_installer.util.{jobj, jstr}
 import uc_installer.cli.{parseArgs, CliArgs}
 import uc_installer.cli.{Report, emitReport, failureReport, EXIT_OK, EXIT_ARGS, EXIT_MANUAL}
 import uc_installer.cli.runDbExport
-import uc_installer.cli.{runSeedApply, runSeedVerify}
+import uc_installer.cli.{runSeedApply, runSeedVerify, runSeedInit}
 import uc_installer.cli.runCheckEnvironment
 import uc_installer.cli.{progressRequested, progressConflict, emitStart,
     emitReportEvents, emitDiagnosticsStderr, emitFinal}
@@ -22,6 +22,7 @@ import uc_installer.http.runBootstrap
 func knownHead(head: String): Bool {
     return head == "check-environment" || head == "install" || head == "devkit"
         || head == "db" || head == "seed" || head == "rollback" || head == "uninstall"
+        || head == "seed-init"
 }
 
 /// 多 token 子命令拼接为报告 command 字段（如 "devkit install"）。
@@ -53,7 +54,7 @@ func unknownCommand(command: String): Report {
         command,
         "command",
         "未知命令: ${command}",
-        "合法子命令：check-environment / install / devkit install / db export / seed apply / seed verify / rollback / uninstall",
+        "合法子命令：check-environment / install / devkit install / db export / seed apply / seed verify / seed-init / rollback / uninstall",
         "ucInstaller.exe --help 查看用法",
         EXIT_ARGS)
 }
@@ -137,6 +138,10 @@ func dispatch(parsed: CliArgs): Report {
     if (parsed.command.size >= 2 && parsed.command[0] == "seed" && parsed.command[1] == "verify") {
         return runSeedVerify(parsed)
     }
+    // seed-init：首次运行自助建号 + 整库种子导入（T-01，design.md §3.2）。
+    if (parsed.command.size >= 1 && parsed.command[0] == "seed-init") {
+        return runSeedInit(parsed)
+    }
     return notImplemented(joinCommand(parsed.command), head)
 }
 
@@ -159,14 +164,17 @@ func printUsage(): Unit {
     println("  db export           导出数据库")
     println("  seed apply          应用种子数据")
     println("  seed verify         校验种子数据")
+    println("  seed-init          首次运行自助建立管理员账号并导入整库种子")
     println("  rollback            回滚到上一版本")
     println("  uninstall           卸载（需 --force 才真正删除）")
     println("")
     println("全局开关: --json --truthful --offline --force --rollback --with-devkit")
     println("          --devkit-only --auto-exit --system-env --manage")
-    println("          --version --no-serve")
+    println("          --version --no-serve --no-data")
+    println("          （--no-data：install 仅备空壳，跳过建管理员与启动 runtime，")
+    println("            由首次运行 seed-init 承接 schema/seed/建号）")
     println("取值开关: --port <n> --sdk-path <dir> --source-dir <dir> --db <name>")
-    println("          --user <u> --password <p>")
+    println("          --user <u> --password <p> --email <e> --username <u> --name <n>")
     println("")
     println("说明: 上列子命令均已接入实现；未识别或未接入的组合")
     println("      以 exitCode 6（需人工介入 / 待实现）如实报告，不冒充成功。")

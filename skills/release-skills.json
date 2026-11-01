@@ -1,0 +1,50 @@
+{
+  "description": "随 agentskills-runtime 发布包一同打包的技能白名单。package_release 读取本文件，把 skills/{name} 中「运行时必需」的部分复制到发布包的 bin/skills/{name} 与 skills/{name}。\n关键规则（依据 specs/plugin-system 三轨设计与 pluginuninstall.cj 发布态布局）：\n- L3 进程隔离轨（plugin.yaml mode=process）的编译产物在 skills/{name}/target/release/bin/，内含 skill_<name>.exe 与被复制进来的 libcangjie-*/libstdx-*.dll 运行时依赖——【必须随包】；\n- src/、cjpm.toml 等是编译期输入，运行时不需要——【排除】；\n- target/ 下除 release/bin 外的构建缓存（.cjpm-history/.dep-cache/.build-logs）【排除】；\n- excludeFiles 列出的依赖 example 泄漏产物（jsonvalue.examples.basic.*）【排除】；\n- 所有 .cjo 中间对象文件运行时不需要，打包时一并剔除。\n新增/移除随包技能只改 skills 数组。",
+  "excludeDirs": [
+    "src",
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".idea",
+    ".vscode",
+    "dist",
+    "build",
+    ".cjpm-history",
+    ".dep-cache",
+    ".build-logs"
+  ],
+  "excludeFiles": [
+    "jsonvalue.examples.basic.exe",
+    "jsonvalue.examples.basic.cjo"
+  ],
+  "skills": [
+    "beichen-finance-matching",
+    "beichen-policy-assistant",
+    "cangjie-coder",
+    "CangjieSkills",
+    "codelabs",
+    "crud-generator",
+    "due_diligence_agent",
+    "entity",
+    "feedback",
+    "find-skills",
+    "investment-research-assistant",
+    "llm_channel_tokendance",
+    "loaddbinfo",
+    "long-running-task",
+    "multi-search-engine",
+    "opentiny-next-app-integration",
+    "personalization",
+    "rsi",
+    "sdd",
+    "skill-creator",
+    "tiny-robot-skill",
+    "tiny-vue-skill",
+    "uctoo-dev-manual",
+    "uctoo-doc",
+    "webmcp-cli-skill",
+    "webmcp-sdk-skill",
+    "yuanbao-policy",
+    "yuanbao-search"
+  ]
+}

@@ -72,6 +72,11 @@ public func sanitizeCell(sp: SanitizePolicy, table: String, column: String,
     }
 
     // 非 config 表：列通配命中即脱敏。
+    // keepColumns 豁免：显式列出的 `table.column` 原样保留（如 agent_skills.source_url
+    // 这类永久外部 URL），避免被 R2 归一成导入器不解析的 `{{env:url}}` 坏链接。
+    if (isKeepColumn(sp, table, column)) {
+        return SanitizeOutcome(value, SanitizeRule.None, false, "")
+    }
     if (anyColumnMatches(sp.r1.columns, table, column)) {
         let kind = deriveSecretKind(column)
         return SanitizeOutcome("{{secret:${kind}}}", SanitizeRule.R1Secret, true, kind)
@@ -81,6 +86,17 @@ public func sanitizeCell(sp: SanitizePolicy, table: String, column: String,
         return SanitizeOutcome(ph, SanitizeRule.R2Env, false, kind)
     }
     return SanitizeOutcome(value, SanitizeRule.None, false, "")
+}
+
+/// 列是否命中脱敏豁免清单（sanitize-policy.json 的 `keepColumns`，`table.column` 形态）。
+/// 命中则 R1/R2 都不触碰，原样保留（用于永久外部 URL 等不应被归一化的列）。
+private func isKeepColumn(sp: SanitizePolicy, table: String, column: String): Bool {
+    for (c in sp.keepColumns) {
+        if (c == "${table}.${column}") {
+            return true
+        }
+    }
+    return false
 }
 
 /// config 表的脱敏：keepVerbatim 优先，其次 R1（按 configValuePredicate），再次 R2。

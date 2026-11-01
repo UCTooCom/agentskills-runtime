@@ -70,16 +70,22 @@ public struct StepDef {
     public let title: String
     /// 闸口未过时是否允许直接跳过（仅 S2 在 openssl 缺失且已降级时为 true）。
     public let skippable: Bool
+    /// T-03（PcClientInstallProvisioning）：`install --no-data` 空壳安装时是否跳过本步。
+    /// 用于 S5（建管理员）与 S6（启动 runtime）—— 这两项在空壳模式下不做，
+    /// 由首次运行 seed-init + PC 编排承接（design §5.1 / §11.1）。
+    public let skipWhenNoData: Bool
     public let gate: (AppContext) -> GateResult
     public let run: (AppContext) -> StepResult
 
     // gate/run 是函数类型参数，调用点一律用 `gate:` / `run:` 前缀传入（9 处调用均如此），
     // 故三者全声明为命名参数；位置参数必须排在命名参数之前，故 id/title 保持位置。
     public init(id: String, title: String, gate!: (AppContext) -> GateResult,
-                run!: (AppContext) -> StepResult, skippable!: Bool = false) {
+                run!: (AppContext) -> StepResult, skippable!: Bool = false,
+                skipWhenNoData!: Bool = false) {
         this.id = id
         this.title = title
         this.skippable = skippable
+        this.skipWhenNoData = skipWhenNoData
         this.gate = gate
         this.run = run
     }
@@ -611,8 +617,8 @@ public func stepTable(): ArrayList<StepDef> {
     table.add(StepDef("S2", "SSL 证书", skippable: true, gate: gateS2, run: runS2))
     table.add(StepDef("S3", "安装介质", gate: gateS3, run: runS3))
     table.add(StepDef("S4", "写入 .env", gate: gateS4, run: runS4))
-    table.add(StepDef("S5", "建管理员", gate: gateS5, run: runS5))
-    table.add(StepDef("S6", "启动 runtime", gate: gateS6, run: runS6))
+    table.add(StepDef("S5", "建管理员", gate: gateS5, run: runS5, skipWhenNoData: true))
+    table.add(StepDef("S6", "启动 runtime", gate: gateS6, run: runS6, skipWhenNoData: true))
     table.add(StepDef("S7", "DevKit 组件", skippable: true, gate: gateS7, run: runS7))
     table.add(StepDef("S8", "开发环境初始化", skippable: true, gate: gateS8, run: runS8))
     return table
@@ -674,6 +680,17 @@ public func resume(ctx: AppContext, force: Bool): OrchestratorReport {
 
         // 已完成且非强制 ⇒ 跳过，不重复执行（AC-123）
         if (!force && cur == STEP_DONE) {
+            report.skipped.add(step.id)
+            continue
+        }
+
+        // T-03（PcClientInstallProvisioning）：`install --no-data` 空壳安装。
+        // 跳过「建管理员(S5)」与「启动 runtime(S6)」—— 这两项在空壳模式下不做，
+        // schema/seed/建号改由首次运行 seed-init 承接（design §5.1 / §11.1）。
+        // 置于 DONE 检查之后：即便此前完整安装已 DONE 这两步，no-data 仍要求它们
+        // 在本轮记为 skip，保证最终状态一致（空壳 = 未建号、未起服务）。
+        if (ctx.args.noData && step.skipWhenNoData) {
+            markSkipped(ctx, step.id, "no-data 模式：空壳安装跳过「${step.title}」")
             report.skipped.add(step.id)
             continue
         }

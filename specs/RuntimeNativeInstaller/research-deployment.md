@@ -16,7 +16,7 @@
 | 除此之外还要别的形态吗？ | 需要**两条补充轨道**：D2 独立 zip（给纯开发者二开场景，配合 DK-3 clone）、D3 免 Cinema：直接从 D1 分发。三条轨道**同一份二进制**，不重复编译 | §2.3 |
 | **谁消费、怎么消费？** | 三类消费方、三种接口：**人**（HTTP 静态向导，契约不变）、**脚本/CI**（CLI 子命令 + `--json` + 退出码）、**宿主进程**（PC Electron，流式 stdout JSON 进度，**本章新增的能力，当前设计未覆盖**） | §3 |
 | **PC 客户端能否复用？** | **能，且应该复用，但不是全盘替换**。PC 保留"壳"（NSIS/更新器/托盘/内嵌 PG 进程管理），把**数据正确性**相关环节（seed 导入、身份绑定、超管+主 agent 二元组、RBAC 补种、`.env` 生成、SSL）交给安装器 | §4.3 |
-| PC 复用最紧迫的理由是什么？ | PC 当前导入的 `uctoov4InitData.sql`（2026-04-01）里，**本机超管 uuid `505cf909…` 出现 123 次**、本机超管角色 uuid 出现 2 次，而**主 agent uuid 出现 0 次**。也就是说：**现在每装出一台 PC 客户端，都得到一个"创建者全是 Patrick 本机账号"、且没有主 agent 账号的库** —— 这正是 Seed Identity Contract 要根治的问题，且是危害面最大的一处 | §4.2 |
+| PC 复用最紧迫的理由是什么？ | PC 当前导入的 `uctooDB.sql`（2026-04-01）里，**本机超管 uuid `505cf909…` 出现 123 次**、本机超管角色 uuid 出现 2 次，而**主 agent uuid 出现 0 次**。也就是说：**现在每装出一台 PC 客户端，都得到一个"创建者全是 Patrick 本机账号"、且没有主 agent 账号的库** —— 这正是 Seed Identity Contract 要根治的问题，且是危害面最大的一处 | §4.2 |
 | **能否完全替代 nestJs？** | **能替代其"安装引导"职责，但不能原地消失**。`nestJs/INSTALL_README.md:20-22` 说"安装完成后 NestJS 可以停止"，**这句话与实际不符**：`src/views/setup.vue` 是常驻的系统管理页（环境检测/配置管理/服务监控/日志查看四个 Tab + 重启/停止服务按钮），它通过 `/api/setup/*` 长期依赖 `:3000`。安装器自退役后若无人接手，这四个管理面板会一起失效 | §5.2 |
 | 那怎么办？ | 三条路线：**M1** 安装器常驻管理（等价于换壳的 nestJs，**不推荐**）；**M2** runtime 原生承接 `/setup/*`（最干净，但触不触碰冻结的 `src/app/` 需用户拍板）；**M3** 安装期自退役 + 运维期按需拉起管理后端（**推荐**，最小改动、保留"零常驻"卖点） | §5.3 |
 
@@ -226,7 +226,7 @@ ucInstaller.exe install --install-root <dir> --no-serve --progress=ndjson
 
 ### 4.2 ⚠️ 关键发现 N-2：PC 当前装出来的库，创建者是本项目作者的本地账号
 
-PC 导入的是 `apps/pc-client/resources/sql/uctoov4InitData.sql`（**715,793 B / 2026-04-01**）。实测：
+PC 导入的是 `apps/pc-client/resources/sql/uctooDB.sql`（**715,793 B / 2026-04-01**）。实测：
 
 | 项 | 实测值 |
 |---|---|
@@ -259,7 +259,7 @@ PC 导入的是 `apps/pc-client/resources/sql/uctoov4InitData.sql`（**715,793 B
 | **依赖检测**（Node/Redis 等） | **交给安装器**（统一一份），PC 的 `dep-manager.ts` 降级为"调用安装器 API 渲染结果" | 避免两套检测规则对不上；这也是 `research.md` 17 端点的既有职责 |
 | **`.env` 生成**（`env-generator.ts`） | **交给安装器**（`design.md` §4.8.3 已有行级 in-place 更新实现） | 消重：同一份语义当前存在两份实现（PC 的 `env-generator.ts` 与安装器的 `.env` 写入），规则容易对不上 |
 | **SSL/证书** | **交给安装器** | 同属 `setup.controller.ts` 17 端点职责 |
-| **数据库结构 + seed 导入（身份绑定）** | **交给安装器**（替换 `pgsql.ts:178-200` 的 `psql -f uctoov4InitData.sql`） | **这是 N-2 的直接修复点** |
+| **数据库结构 + seed 导入（身份绑定）** | **交给安装器**（替换 `pgsql.ts:178-200` 的 `psql -f uctooDB.sql`） | **这是 N-2 的直接修复点** |
 | **超管 + 主 agent 二元组建立与 RBAC 补种** | **交给安装器**（A1~A6） | PC **当前完全没做**（`setup.ts` 只有数据库 + AI 两步），是 N-2 第二条缺陷 |
 
 一句话：**外壳不动，数据全交给安装器。**
@@ -542,9 +542,9 @@ T055 的落地范围据此调整为：
 | PC 打包配置 | `apps/pc-client/electron-builder.json` | `:71-83` win nsis+portable / `:18-63` extraResources / `:100-104` publish |
 | PC runtime 集成 | `…/electron/modules/runtime-integrator.ts` | `:99-160` 解压 / `:162-186` SDK 下载兜底 / `:58` 就绪判据 |
 | PC 向导服务 | `…/electron/modules/setup.ts` | `:20-99` database / `:101-118` AI / `:120-132` completeSetup |
-| PC 数据库初始化 | `…/electron/modules/pgsql.ts` | `:178-200` `psql -f uctoov4InitData.sql` |
+| PC 数据库初始化 | `…/electron/modules/pgsql.ts` | `:178-200` `psql -f uctooDB.sql` |
 | PC 向导 UI | `…/src/views/setup/SetupView.vue` | `:5-6` totalSteps=4 / `:271-274` 四步标签 |
-| PC 内置种子数据（**病灶**） | `…/resources/sql/uctoov4InitData.sql` | 715,793 B / Apr 1 2026；0 CREATE TABLE；`505cf909…` ×123；`8803ed58…` ×0 |
+| PC 内置种子数据（**病灶**） | `…/resources/sql/uctooDB.sql` | 715,793 B / Apr 1 2026；0 CREATE TABLE；`505cf909…` ×123；`8803ed58…` ×0 |
 | PC 设计（v2.5） | `.codeartsdoer/specs/pc_desktop_client/design.md` | `:9` v2.5 变更说明 / `:2366-2440` 构建与发布 / `:2379` 手工 cp |
 | 旧安装器端点 | `apps/web-admin/nestJs/src/setup/setup.controller.ts` | 17 个映射（含重复注册的 `create-admin`） |
 | 旧安装器退场声明 | `apps/web-admin/nestJs/INSTALL_README.md` | `:20-22` "NestJS 后端服务器可以停止"（**与实际不符**） |

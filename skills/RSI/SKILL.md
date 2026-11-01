@@ -1,11 +1,9 @@
 ---
-name: RSI
+name: rsi
 description: >
-  ASR 自进化系统（Recursive Self-Improvement）技能——把《人工智能软件工程方法论》从理论到实践落地的
-  方法论执行中枢。它**综合编排** ASR 既有基础设施（确定性代码生成工具 loaddbinfo/crudgen/crudweb/plugingen/
-  pluginuninstall、SDD 规范驱动开发流水线、多技能并行 src/skill/parallel、LRT 长程任务、一切皆技能插件机制、
-  UMI 数据架构），驱动"代码 + 技能 + 数据库"三大数字基础设施的闭环自进化。
-  核心铁律 RSI-0：框架级确定性优先由确定性代码生成工具保障，以系统工程的确定性消解 LLM 在框架级变更中的不确定性；LLM 仍在需要的流程与位置生成代码（胶水逻辑、非标准实现等），只是不再让其概率性输出单独承担框架级结构正确性。
+  ASR 自进化系统（Recursive Self-Improvement，RSI）技能——把《人工智能软件工程方法论》落地为可执行的闭环：
+  以确定性代码生成工具（loaddbinfo/crudgen/crudweb/plugingen）保障框架级结构正确性，LLM 仅在胶水逻辑等非标准处生成代码，
+  驱动"代码+技能+数据库"三大基础设施闭环自进化；综合编排 SDD 流水线、多技能并行、LRT 长程任务与一切皆技能插件机制。
   触发词："自进化"、"RSI"、"递归自改进"、"框架自我演进"、"让框架自己进化"、"代码+技能+数据库闭环"、
   "AI 驱动开发框架自主进化"、"按方法论做一次演进"。
 license: MIT

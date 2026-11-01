@@ -6,7 +6,7 @@ package magic.scripts.package_release
 import std.fs.*
 import std.process.{launch, ProcessRedirect, SubProcess}
 import std.convert.*
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashSet}
 import std.env.getVariable
 import std.time.DateTime
 import std.unicode.*
@@ -17,6 +17,7 @@ import std.io.InputStream
 // SHA256 标准实现位于扩展标准库 stdx（官方文档："SHA-256 的实现来自扩展标准库"）。
 import stdx.crypto.digest.*
 import stdx.encoding.hex.*
+import stdx.encoding.json.{JsonValue, JsonObject, JsonKind}
 
 // ===== OQ-D3: 生成 SHA256SUMS 包完整性清单 =====
 // 遍历 target/release 下所有常规文件，计算 SHA256，写出 Debian 风格清单
@@ -256,134 +257,286 @@ func safeCopy(from: String, to: String, overwrite: Bool): Bool {
     }
 }
 
-// ===== PS-T016: 插件清单打包适配 =====
 
-/**
- * PluginInfo - plugin.yaml 元信息（plugin_manifest.json 数据载体）
- */
-class PluginInfo {
-    var name: String = ""
-    var version: String = ""
-    var description: String = ""
-    var entry: String = ""
-    var dependencies: String = ""
-    var tables: ArrayList<String> = ArrayList<String>()
-    var routes: ArrayList<String> = ArrayList<String>()
+// ===== PS-SEED-00: 打包前自动重新导出数据库种子（db export）=====
+// 让发布包里的 sql/uctooDB.sql 永远来自 installer 统一机制（export-policy.json /
+// sanitize-policy.json 驱动），而不是手搓或过期的文件。
+//
+// 前置：
+//   ① installer 须已构建（installer/target/release/bin/main.exe；本脚本也会把它收为
+//      release/bin/ucInstaller.exe）。db export 由该二进制承担，与 runtime 本体构建无关。
+//   ② 仓库根 .env 须含 DATABASE_URL，指向一台可连接的源库（dev uctoo，含 entity /
+//      agent_skills 等种子数据）。
+//
+// 行为：
+//   - 调 installer db export（cwd = 仓库根，故从仓库根 .env 读 DATABASE_URL，写 sql/uctooDB.sql，
+//     与手动 `cjpm run db export` 行为完全一致）。
+//   - 成功则把种子双拷进 target/release/sql/ 与 target/release/bin/sql/（seed-init 以 cwd 解析
+//     sql/uctooDB.sql，独立发布包从 release 根启动 cwd=release 根，与 AGENTS.md 双拷贝策略一致）。
+//   - 任一环节失败 → 返回 false，调用方中止打包，避免把"缺种子 / 过期种子"打进发布包。
+func runSeedExportStep(rootPath: Path): Bool {
+    println("")
+    println("[STEP] Auto-exporting database seed via installer (db export)...")
+
+    let installerExe = Path("${rootPath}/installer/target/release/bin/main.exe")
+    if (!exists(installerExe)) {
+        println("  [ERROR] installer not built: ${installerExe}")
+        println("         `db export` 依赖 installer 二进制；请先 `cd installer && cjpm build`，")
+        println("         再重跑 package_release。已中止打包，避免产出缺种子的发布包。")
+        return false
+    }
+
+    let args = ArrayList<String>()
+    args.add("db")
+    args.add("export")
+    // cwd = 仓库根：db export 从 cwd 读 .env 的 DATABASE_URL，并写 sql/uctooDB.sql。
+    try {
+        let proc = launch(installerExe.toString(), args, workingDirectory: Some(rootPath))
+        let exitCode = proc.wait()
+        if (exitCode != 0) {
+            println("  [ERROR] `uc_installer db export` 退出码 ${exitCode.toString()}，种子导出失败。")
+            println("         请确认：① 仓库根 .env 含可用 DATABASE_URL；② 源库（dev uctoo）可连接且含数据。")
+            println("         已中止打包，避免把过期/缺失的种子打进发布包。")
+            return false
+        }
+    } catch (e: Exception) {
+        println("  [ERROR] 执行 installer db export 异常: ${e.message}")
+        return false
+    }
+
+    let srcSql = Path("${rootPath}/sql/uctooDB.sql")
+    if (!exists(srcSql)) {
+        println("  [ERROR] db export 声称成功，但 ${srcSql} 不存在；中止打包。")
+        return false
+    }
+
+    // 拷进发布包：release 根与 bin 各一份。
+    let okRoot = safeCopy(srcSql.toString(), Path("${rootPath}/target/release/sql/uctooDB.sql").toString(), true)
+    let okBin = safeCopy(srcSql.toString(), Path("${rootPath}/target/release/bin/sql/uctooDB.sql").toString(), true)
+    if (okRoot && okBin) {
+        println("  [OK] 种子已自动导出并打进发布包 -> release/sql/uctooDB.sql + release/bin/sql/uctooDB.sql")
+        return true
+    }
+    println("  [ERROR] 种子文件已导出，但拷入发布包失败；中止打包。")
+    return false
 }
 
-/// JSON 字符串转义（引号/反斜杠/控制字符）
-func jsonEscape(s: String): String {
-    var result = s.replace("\\", "\\\\")
-    result = result.replace("\"", "\\\"")
-    result = result.replace("\n", "\\n")
-    result = result.replace("\r", "\\r")
-    result = result.replace("\t", "\\t")
-    return result
+/// 解析 skills/release-skills.json：返回 (技能名列表, 排除目录集合, 排除文件集合)。
+/// 解析失败或字段缺失时返回空集合，由调用方决定是否中止打包。
+func parseReleaseSkillsJson(text: String): (ArrayList<String>, HashSet<String>, HashSet<String>) {
+    let skills = ArrayList<String>()
+    let exclude = HashSet<String>()
+    let excludeFiles = HashSet<String>()
+    try {
+        let v = JsonValue.fromStr(text)
+        match (v.kind()) {
+            case JsonKind.JsObject =>
+                let obj = v.asObject()
+                match (obj.get("skills")) {
+                    case Some(sv) =>
+                        match (sv.kind()) {
+                            case JsonKind.JsArray =>
+                                for (item in sv.asArray().getItems()) {
+                                    match (item.kind()) {
+                                        case JsonKind.JsString => skills.add(item.asString().getValue())
+                                        case _ => ()
+                                    }
+                                }
+                            case _ => ()
+                        }
+                    case None => ()
+                }
+                match (obj.get("excludeDirs")) {
+                    case Some(ev) =>
+                        match (ev.kind()) {
+                            case JsonKind.JsArray =>
+                                for (item in ev.asArray().getItems()) {
+                                    match (item.kind()) {
+                                        case JsonKind.JsString => exclude.add(item.asString().getValue())
+                                        case _ => ()
+                                    }
+                                }
+                            case _ => ()
+                        }
+                    case None => ()
+                }
+                match (obj.get("excludeFiles")) {
+                    case Some(fv) =>
+                        match (fv.kind()) {
+                            case JsonKind.JsArray =>
+                                for (item in fv.asArray().getItems()) {
+                                    match (item.kind()) {
+                                        case JsonKind.JsString => excludeFiles.add(item.asString().getValue())
+                                        case _ => ()
+                                    }
+                                }
+                            case _ => ()
+                        }
+                    case None => ()
+                }
+            case _ => ()
+        }
+    } catch (_: Exception) {
+        return (skills, exclude, excludeFiles)
+    }
+    return (skills, exclude, excludeFiles)
 }
 
-/// 去除标量值两端成对的单/双引号
-func stripPairedQuotes(s: String): String {
-    if (s.size >= 2) {
-        if ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'"))) {
-            return s[1..s.size - 1]
+/// 判断相对路径 rel 是否应被排除（不随包）。
+/// 规则优先级：
+///   1. target 目录：仅保留 target/release/bin（L3 进程轨编译产物 + 运行时依赖 DLL），
+///      target 的其余部分（.cjpm-history/.dep-cache/.build-logs 等构建缓存）一律排除；
+///   2. 文件名精确命中 excludeFiles（依赖 example 泄漏产物等）；
+///   3. 所有 .cjo 中间对象文件（exe 已自包含，运行时不需要）；
+///   4. 任一路径段命中 exclude 目录名（src / .git / node_modules ...）。
+func isExcludedBy(rel: String, exclude: HashSet<String>, excludeFiles: HashSet<String>): Bool {
+    let norm = rel.replace("\\", "/")
+    var r = norm
+    while (r.startsWith("\\") || r.startsWith("/")) {
+        r = r[1..]
+    }
+    // 规则 1：target 仅放行 target/release/bin
+    if (r.startsWith("target/") && !r.startsWith("target/release/bin/")) {
+        return true
+    }
+    let parts = r.split("/")
+    let base = parts[parts.size - 1]
+    // 规则 2：文件名精确排除
+    if (excludeFiles.contains(base)) {
+        return true
+    }
+    // 规则 3：.cjo 中间对象文件
+    if (base.endsWith(".cjo")) {
+        return true
+    }
+    // 规则 3.5：日志文件永不随包（运行/构建产物，非资产）
+    if (base.endsWith(".log")) {
+        return true
+    }
+    // 规则 4：目录名段排除
+    for (p in parts) {
+        if (exclude.contains(p)) {
+            return true
         }
     }
-    return s
+    return false
 }
 
-/// 从 plugin.yaml 文本解析插件元信息（轻量行级解析，避免链接 yaml4cj；name 缺失返回 None）
-func parsePluginYaml(content: String): Option<PluginInfo> {
-    let info = PluginInfo()
-    // 当前行归属的块列表：0=无 1=tables 2=routes（skills 等其他列表不采集）
-    var listTarget = 0
-    for (rawLine in content.split("\n")) {
-        let line = rawLine.trim()
-        if (line.size == 0 || line.startsWith("#")) {
-            continue
-        }
-        if (line.startsWith("- ")) {
-            let item = stripPairedQuotes(line["- ".size..].trim())
-            if (item.size > 0 && listTarget == 1) {
-                info.tables.add(item)
-            } else if (item.size > 0 && listTarget == 2) {
-                info.routes.add(item)
+/// 递归复制技能目录到 destDir，跳过 exclude 中的目录与 excludeFiles 中的文件
+/// （src / .git / node_modules / 构建缓存，以及 target 下除 release/bin 外的部分，
+/// 还有依赖 example 泄漏产物与 .cjo 中间对象）。
+/// 复用 safeCopy（自动创建父目录、失败仅告警），返回复制的文件数。
+func copySkillDir(srcDir: Path, destDir: Path, exclude: HashSet<String>, excludeFiles: HashSet<String>): Int64 {
+    let count = [0]
+    let srcStr = srcDir.toString()
+    Directory.walk(srcDir.toString()) { fileInfo =>
+        if (!fileInfo.isDirectory()) {
+            let full = fileInfo.path.toString()
+            var rel = full
+            if (full.startsWith(srcStr)) {
+                rel = full.replace(srcStr, "")
             }
-            continue
-        }
-        let colonIdx = line.indexOf(":")
-        if (colonIdx.isNone()) {
-            listTarget = 0
-            continue
-        }
-        let idx = colonIdx.getOrThrow()
-        let key = line[0..idx].trim()
-        let valueRaw = if (idx + 1 < line.size) { line[idx + 1..line.size] } else { "" }
-        let value = stripPairedQuotes(valueRaw.trim())
-        if (key == "name") {
-            info.name = value
-            listTarget = 0
-        } else if (key == "version") {
-            info.version = value
-            listTarget = 0
-        } else if (key == "description") {
-            info.description = value
-            listTarget = 0
-        } else if (key == "entry") {
-            info.entry = value
-            listTarget = 0
-        } else if (key == "dependencies") {
-            info.dependencies = value
-            listTarget = 0
-        } else if (key == "tables") {
-            listTarget = 1
-        } else if (key == "routes") {
-            listTarget = 2
-        } else {
-            listTarget = 0
+            while (rel.startsWith("\\") || rel.startsWith("/")) {
+                rel = rel[1..]
+            }
+            if (!isExcludedBy(rel, exclude, excludeFiles)) {
+                let dest = Path("${destDir}/${rel}")
+                if (safeCopy(full, dest.toString(), true)) {
+                    count[0] = count[0] + 1
+                }
+            }
         }
     }
-    if (info.name.isEmpty()) {
-        return None<PluginInfo>
-    }
-    return Some(info)
+    return count[0]
 }
 
-/// JSON 字符串数组序列化（["a","b"]）
-func jsonStringArray(items: ArrayList<String>): String {
-    let sb = StringBuilder()
-    sb.append("[")
-    for (i in 0..items.size) {
-        if (i > 0) {
-            sb.append(",")
-        }
-        sb.append("\"${jsonEscape(items[i])}\"")
+/// PS-SKILLS: 按 skills/release-skills.json 白名单，把开发目录 skills/{name} 整目录
+/// 复制到发布包 bin/skills/{name} 与 skills/{name}（cwd-from-root 兜底，与 AGENTS.md 双拷贝一致）。
+/// 该文件是技能随包发布的唯一真相源；缺失或为空则中止打包，避免发布不完整的技能目录。
+func runSkillCopyStep(rootPath: Path): Bool {
+    println("")
+    println("[STEP] Packaging allowlisted skills (skills/release-skills.json -> bin/skills/ + skills/)...")
+    let configPath = Path("${rootPath}/skills/release-skills.json")
+    if (!exists(configPath)) {
+        println("  [ERROR] 未找到 skills/release-skills.json（随 runtime 发布的技能白名单配置文件）。")
+        println("          该文件是技能随包发布的唯一真相源；缺失则中止打包，避免发布不完整的技能目录。")
+        return false
     }
-    sb.append("]")
-    return sb.toString()
-}
-
-/// 生成 plugin_manifest.json 内容（记录所有已打包插件的元信息）
-func buildPluginManifestJson(infos: ArrayList<PluginInfo>): String {
-    let sb = StringBuilder()
-    sb.append("[\n")
-    for (i in 0..infos.size) {
-        let info = infos[i]
-        sb.append("  {\n")
-        sb.append("    \"name\": \"${jsonEscape(info.name)}\",\n")
-        sb.append("    \"version\": \"${jsonEscape(info.version)}\",\n")
-        sb.append("    \"description\": \"${jsonEscape(info.description)}\",\n")
-        sb.append("    \"entry\": \"${jsonEscape(info.entry)}\",\n")
-        sb.append("    \"dependencies\": \"${jsonEscape(info.dependencies)}\",\n")
-        sb.append("    \"tables\": ${jsonStringArray(info.tables)},\n")
-        sb.append("    \"routes\": ${jsonStringArray(info.routes)}\n")
-        sb.append("  }")
-        if (i < infos.size - 1) {
-            sb.append(",")
-        }
-        sb.append("\n")
+    let text = String.fromUtf8(File.readFrom(configPath))
+    let (skills, exclude, excludeFiles) = parseReleaseSkillsJson(text)
+    if (skills.isEmpty()) {
+        println("  [ERROR] release-skills.json 中 skills 列表为空或解析失败，中止打包。")
+        return false
     }
-    sb.append("]\n")
-    return sb.toString()
+    if (exclude.isEmpty()) {
+        // 缺省排除：编译期输入(src) + 版本控制/依赖缓存 + 构建缓存。
+        // 注意：target 不在默认排除中——L3 进程轨的 target/release/bin 是运行时产品，必须随包；
+        // 其下的构建缓存由 isExcludedBy 的 target 专有规则单独剔除。
+        exclude.add("src")
+        exclude.add(".git")
+        exclude.add("node_modules")
+        exclude.add("__pycache__")
+        exclude.add(".idea")
+        exclude.add(".vscode")
+        exclude.add("dist")
+        exclude.add("build")
+        exclude.add(".cjpm-history")
+        exclude.add(".dep-cache")
+        exclude.add(".build-logs")
+    }
+    if (excludeFiles.isEmpty()) {
+        excludeFiles.add("jsonvalue.examples.basic.exe")
+        excludeFiles.add("jsonvalue.examples.basic.cjo")
+    }
+    let targetDir = Path("${rootPath}/target/release")
+    let binDir = Path("${targetDir}/bin")
+    let binSkills = Path("${binDir}/skills")
+    let rootSkills = Path("${targetDir}/skills")
+    if (!exists(binSkills)) {
+        Directory.create(binSkills, recursive: true)
+    }
+    if (!exists(rootSkills)) {
+        Directory.create(rootSkills, recursive: true)
+    }
+    var copiedSkills = 0
+    var missingSkills = 0
+    var totalFiles = 0
+    for (name in skills) {
+        let srcDir = Path("${rootPath}/skills/${name}")
+        if (!exists(srcDir)) {
+            println("  [WARN] 白名单技能 '${name}' 在 skills/ 下不存在，跳过。")
+            missingSkills = missingSkills + 1
+            continue
+        }
+        let n1 = copySkillDir(srcDir, Path("${binSkills}/${name}"), exclude, excludeFiles)
+        let n2 = copySkillDir(srcDir, Path("${rootSkills}/${name}"), exclude, excludeFiles)
+        copiedSkills = copiedSkills + 1
+        totalFiles = totalFiles + n1 + n2
+        println("  [OK] ${name}: bin/skills + skills 各 ${n1.toString()} 文件")
+    }
+    var exclStr = ""
+    var firstExcl = true
+    for (x in exclude) {
+        if (!firstExcl) {
+            exclStr = exclStr + ", "
+        }
+        exclStr = exclStr + x
+        firstExcl = false
+    }
+    var fileStr = ""
+    var firstFile = true
+    for (x in excludeFiles) {
+        if (!firstFile) {
+            fileStr = fileStr + ", "
+        }
+        fileStr = fileStr + x
+        firstFile = false
+    }
+    println("  [INFO] 共发布 ${copiedSkills.toString()} 个技能（缺失 ${missingSkills.toString()}），复制文件 ${totalFiles.toString()} 个")
+    println("  [INFO] 排除目录：${exclStr}")
+    println("  [INFO] 排除文件：${fileStr}")
+    println("  [INFO] 排除目录：${exclStr}")
+    return true
 }
 
 main(args: Array<String>): Unit {
@@ -420,7 +573,14 @@ main(args: Array<String>): Unit {
         println("Please run 'cjpm build' first from the project root directory.")
         return
     }
-    
+
+    // ===== PS-SEED-00: 打包前自动重新导出数据库种子（db export）=====
+    // 失败即中止，避免把过期/缺失的种子打进发布包（详见 runSeedExportStep 注释）。
+    // 置于最早，fail-fast：installer 未构建 / 源库不可连时直接退出，不浪费后续 DLL 拷贝。
+    if (!runSeedExportStep(rootPath)) {
+        return
+    }
+
     if (!exists(releaseDir)) {
         Directory.create(releaseDir, recursive: true)
         println("[INFO] Created release directory: ${releaseDir}")
@@ -1190,18 +1350,11 @@ Then copy the certificates to this directory:
         println("  [INFO] No plugin artifacts (magic/plugins/ not found, L1 plugin code is statically linked)")
     }
 
-    // ===== PS-T016: 插件清单打包（skills/*/plugin.yaml -> bin/plugins/{name}/）=====
+    // ===== PS-LRT-01: 技能随包资源打包（skills/* -> bin/skills/{name}/，融合机制权威目录）=====
     println("")
-    println("[STEP] Packaging plugin manifests (skills/ -> bin/plugins/)...")
+    println("[STEP] Packaging skill assets into bin/skills/ (fusion layout)...")
     let skillsDir = Path("${rootPath}/skills")
-    let pluginsBinDir = Path("${binDir}/plugins")
-    let packagedPlugins = ArrayList<PluginInfo>()
     if (exists(skillsDir)) {
-        // 目录存在时跳过创建，避免重复打包时抛 "The path of directory exists" 异常
-        if (!exists(pluginsBinDir)) {
-            Directory.create(pluginsBinDir, recursive: true)
-        }
-
         // 发现含 plugin.yaml 的技能插件目录（skills/{name}/plugin.yaml）
         let pluginNames = ArrayList<String>()
         let skillsRootNorm = skillsDir.toString().replace("\\", "/")
@@ -1221,32 +1374,9 @@ Then copy the certificates to this directory:
         }
 
         if (pluginNames.size == 0) {
-            println("  [INFO] No plugin manifests found under skills/")
+            println("  [INFO] No plugins (skills with plugin.yaml) found under skills/")
         } else {
             for (pluginName in pluginNames) {
-                // 复制 plugin.yaml（插件静态元数据，按需启用/禁用的载体）
-                let yamlSrc = Path("${rootPath}/skills/${pluginName}/plugin.yaml")
-                let yamlDest = Path("${pluginsBinDir}/${pluginName}/plugin.yaml")
-                if (safeCopy(yamlSrc.toString(), yamlDest.toString(), true)) {
-                    // 解析元信息登记 manifest
-                    try {
-                        let yamlContent = String.fromUtf8(File.readFrom(yamlSrc))
-                        match (parsePluginYaml(yamlContent)) {
-                            case Some(info) => packagedPlugins.add(info)
-                            case None => println("  [WARN] plugin.yaml missing 'name', skipped from manifest: ${pluginName}")
-                        }
-                    } catch (e: Exception) {
-                        println("  [WARN] Failed to read ${yamlSrc.toString()}: ${e.message}")
-                    }
-                }
-
-                // 复制 SKILL.md（SkillBridge 运行时扫描 plugins/<name>/SKILL.md）
-                let skillSrc = Path("${rootPath}/skills/${pluginName}/SKILL.md")
-                if (exists(skillSrc)) {
-                    let skillDest = Path("${pluginsBinDir}/${pluginName}/SKILL.md")
-                    safeCopy(skillSrc.toString(), skillDest.toString(), true)
-                }
-
                 // ===== PS-LRT-01: 技能随包资源（scripts/ + 技能资产）=====
                 // L3 进程插件 exe 落在 bin/skills/{name}/（见 PS-T029）。
                 // 进程插件的函数体虽已静态链接进 exe，但外层 Python 脚本（D 层降级后端）
@@ -1289,10 +1419,10 @@ Then copy the certificates to this directory:
                     println("  [OK] Packaged ${skillAssetCount[0].toString()} skill asset file(s) for '${pluginName}' to bin/skills/")
                 }
             }
-            println("  [OK] Packaged ${packagedPlugins.size.toString()} plugin manifest(s) to bin/plugins/")
+            println("  [OK] Copied skill assets for ${pluginNames.size.toString()} plugin(s) into bin/skills/")
         }
     } else {
-        println("  [INFO] skills/ directory not found, skip plugin manifests")
+        println("  [INFO] skills/ directory not found, skip skill assets")
     }
 
     // ===== PS-T029: L3 进程插件可执行文件打包 =====
@@ -1348,6 +1478,11 @@ Then copy the certificates to this directory:
         println("  [INFO] skills/ directory not found, skip L3 process plugin executables")
     }
 
+    // ===== PS-SKILLS: 按白名单打包技能（置于 L3 步骤之后、清理/校验之前）=====
+    if (!runSkillCopyStep(rootPath)) {
+        return
+    }
+
     // ===== PS-T029: cordis-cj 依赖库 DLL 打包 =====
     // cordis-cj 的传递依赖（jsonvalue、jsonrpc）和 cordis-cj 本身的产物
     // 需要被打包到 bin/ 下，以便进程插件运行时能找到这些 DLL
@@ -1388,21 +1523,8 @@ Then copy the certificates to this directory:
         }
     }
 
-    // ===== PS-T016: 生成 plugin_manifest.json =====
-    println("")
-    println("[STEP] Generating plugin_manifest.json...")
-    let manifestPath = Path("${pluginsBinDir}/plugin_manifest.json")
-    if (packagedPlugins.size > 0) {
-        try {
-            File.writeTo(manifestPath, buildPluginManifestJson(packagedPlugins).toArray())
-            println("  [OK] Wrote ${packagedPlugins.size.toString()} plugin entries to ${manifestPath.toString()}")
-        } catch (e: Exception) {
-            println("  [WARN] Failed to write plugin_manifest.json: ${e.message}")
-        }
-    } else {
-        println("  [INFO] No packaged plugins, plugin_manifest.json not generated")
-    }
-    
+    // PS-T016 已废弃：不再生成 bin/plugins/ 与 plugin_manifest.json（融合机制仅 bin/skills/{name}/）。
+
     println("")
     println("[STEP] Creating entry point...")
     
@@ -1459,6 +1581,47 @@ Then copy the certificates to this directory:
     println("  [INFO] .env file will NOT be packaged (contains sensitive information)")
     println("  [INFO] Users should create .env from .env.example after extraction")
     
+    // ===== PS-LRT-03: 打包运行时根级资源（AGENTS.md + prompts/）=====
+    // 运行时以 cwd（release 根或 bin）为基，启动时加载：
+    //   - ${currentDir}/AGENTS.md       主 agent 定义（agent_type: main），缺失则 WARN 并退回 DB 兜底
+    //   - ${currentDir}/prompts/        全局提示词模板（会话压缩 / 工具结果摘要），PROMPTS_DIR 默认 ./prompts
+    // 此前这两类根级资源从没被收进 target/release ⇒ 已发布实例里"改 AGENTS.md 生效"这条文件化
+    // 编辑路径是断的，且会话压缩 / 工具摘要会丢掉项目定制模板。
+    // 同时拷到 release 根与 bin/ 两处：PC 端 cwd=release 根（runtime.ts:248），独立发布包从 bin 启动时
+    // cwd=bin，两处都放才能覆盖两种启动方式（与 .env.example 的双拷贝策略一致）。
+    println("")
+    println("[STEP] Packaging runtime root resources (AGENTS.md, prompts/)...")
+
+    let agentsMdSrc = Path("${rootPath}/AGENTS.md")
+    if (exists(agentsMdSrc)) {
+        safeCopy(agentsMdSrc.toString(), Path("${targetDir}/AGENTS.md").toString(), true)
+        safeCopy(agentsMdSrc.toString(), Path("${binDir}/AGENTS.md").toString(), true)
+        println("  [OK] Copied AGENTS.md -> release/AGENTS.md + release/bin/AGENTS.md")
+    } else {
+        println("  [WARN] AGENTS.md not found at ${agentsMdSrc}, main agent will fall back to DB/cfg")
+    }
+
+    let promptsSrcDir = Path("${rootPath}/prompts")
+    if (exists(promptsSrcDir)) {
+        let promptsCopied = [0]
+        let promptsRootNorm = promptsSrcDir.toString().replace("\\", "/")
+        Directory.walk(promptsSrcDir.toString()) { pInfo =>
+            if (!pInfo.isDirectory()) {
+                let pNorm = pInfo.path.toString().replace("\\", "/")
+                let rel = pNorm[promptsRootNorm.size + 1..]
+                safeCopy(pInfo.path.toString(), "${targetDir}/prompts/${rel}", true)
+                safeCopy(pInfo.path.toString(), "${binDir}/prompts/${rel}", true)
+                promptsCopied[0] = promptsCopied[0] + 1
+            }
+            true
+        }
+        if (promptsCopied[0] > 0) {
+            println("  [OK] Copied ${promptsCopied[0].toString()} prompt file(s) -> release/prompts/ + release/bin/prompts/")
+        }
+    } else {
+        println("  [INFO] prompts/ not found at ${promptsSrcDir}, skip global prompt templates")
+    }
+
     // ===== PS-LRT-02: 写 VERSION 文件 =====
     // README「发布包目录结构」声明 release 根含 VERSION；此前脚本只在收尾打印里写到它，
     // 从不落盘，导致解压后没有版本标识别，现场排查版本只能靠包文件名。
@@ -1560,7 +1723,6 @@ Then copy the certificates to this directory:
     println("Build Date: ${buildDate}")
     println("Total DLLs copied: ${totalDlls.size.toString()}")
     println("Total CJOs copied: ${cjoCount.size.toString()}")
-    println("Plugin manifests packaged: ${packagedPlugins.size.toString()}")
     println("L3 process plugin executables: ${processPluginCount.size.toString()}")
     if (excludedDlls.size > 0) {
         println("Excluded DLLs: ${excludedDlls.size.toString()}")
@@ -1568,9 +1730,9 @@ Then copy the certificates to this directory:
     println("")
     println("Directory structure in archive:")
     println("  release/")
-    println("    bin/              - Executables, ALL DLLs, ALL CJOs, .env.example, ssl/, logs/, plugins/")
-    println("    bin/plugins/      - Plugin manifests ({name}/plugin.yaml + {name}/SKILL.md, plugin_manifest.json)")
-    println("    bin/skills/       - L3 process plugin executables (skills/{name}/target/release/bin/skill_{name}.exe)")
+    println("    bin/              - Executables, ALL DLLs, ALL CJOs, .env.example, ssl/, logs/")
+    println("    bin/skills/       - 技能-插件融合权威目录：每个技能/插件同住 bin/skills/{name}/，")
+    println("                      含 SKILL.md + plugin.yaml + 随包资源(scripts/、COMPOSITION.yaml 等) + L3 exe")
     println("    magic/            - Runtime modules")
     println("    commonmark4cj/    - Markdown parser")
     println("    yaml4cj/          - YAML parser")
@@ -1599,6 +1761,9 @@ Then copy the certificates to this directory:
     println("    logs/             - Log output directory")
     println("    VERSION           - Version info")
     println("    .env.example      - Configuration template (users create .env from this)")
+    println("    AGENTS.md         - Main agent definition (agent_type: main)")
+    println("    prompts/          - Global prompt templates (conversation/tool-summary)")
+    println("    sql/              - Database seed (uctooDB.sql, auto-exported via `db export` before packaging)")
     println("")
     println("Setup Instructions:")
     println("  1. Extract the archive to your desired location")

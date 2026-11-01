@@ -4,7 +4,7 @@ agent_type: main
 description: 主 Agent，负责任务分解、技能编排和子 Agent 协调，以技能为一等公民优先使用技能组合解决用户需求
 version: 2.0.0
 author: System
-model: arcbench:deepseek-v4-flash
+model: deepseek:deepseek-flash
 # 当前模型能力声明（供 agent / 技能 / 系统提示词读取，避免「模型其实多模态却误判纯文本」）
 # 运行时侧见 Config.modelCapabilities（环境变量 MODEL_CAPABILITIES 可覆盖）。
 model_capabilities:

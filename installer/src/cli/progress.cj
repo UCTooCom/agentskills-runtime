@@ -55,8 +55,14 @@ private func eventLine(kind: String, id: String, status: String, message: String
 }
 
 /// 命令开始事件（**实时**吐出，不等命令结束）。
+///
+/// ⚠️ 必须带 `flush: true`：installer 的 stdout 在管道（非 TTY）下是**块缓冲**的，
+/// 仅 `println` 不会立即冲刷。若进程在后续步骤里卡死再被宿主 SIGTERM 杀掉，
+/// 缓冲里的事件会随进程一起丢失——宿主只得 `events=0` / `exitCode=-1`，
+/// 用户只看到一个「安装失败（退出码 -1）」却无任何进度（正是本次卡死复现的根因之一）。
+/// 每行事件都 flush，宿主才能拿到实时的 start / final（及其真实退出码）。
 public func emitStart(command: String): Unit {
-    println(eventLine(EV_START, command, STATUS_PASS, "命令开始"))
+    print(eventLine(EV_START, command, STATUS_PASS, "命令开始") + "\n", flush: true)
 }
 
 /// 末行：最终退出码 + 终态摘要（AC-264）。消费方缺此行即判"未正常结束"。
@@ -70,16 +76,16 @@ public func emitFinal(report: Report): Unit {
     o.put("steps", JsonInt(report.steps.size))
     o.put("items", JsonInt(report.items.size))
     o.put("ts", JsonString(nowText()))
-    println(o.toJsonString())
+    print(o.toJsonString() + "\n", flush: true)
 }
 
 /// 把报告的 steps / items 按发生顺序回放为事件行（step 先于 item）。
 public func emitReportEvents(report: Report): Unit {
     for (st in report.steps) {
-        println(eventLine(EV_STEP, st.id, st.status, st.actual))
+        print(eventLine(EV_STEP, st.id, st.status, st.actual) + "\n", flush: true)
     }
     for (it in report.items) {
-        println(eventLine(EV_ITEM, it.id, it.status, it.actual))
+        print(eventLine(EV_ITEM, it.id, it.status, it.actual) + "\n", flush: true)
     }
 }
 

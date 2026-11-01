@@ -66,6 +66,21 @@ export interface SkillListResponse {
   skills: Skill[];
 }
 
+/**
+ * 技能完整内容（对应 `GET /skills/:name/content`）。
+ * 正文字段是 `instructions`，不是 `content`。
+ */
+export interface SkillContent {
+  name: string;
+  description: string;
+  license?: string;
+  compatibility?: string;
+  allowed_tools?: string;
+  skill_path: string;
+  instructions: string;
+  metadata?: Record<string, string>;
+}
+
 export interface SkillInstallOptions {
   source: string;
   validate?: boolean;
@@ -172,6 +187,18 @@ export interface RuntimeOptions {
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8080/api/v1/uctoo';
 const API_PREFIX = '/api/v1/uctoo';
 const DEFAULT_TIMEOUT = 30000;
+
+/**
+ * 提示语：本 SDK 里被标注 @unavailable 的方法，对应后端路由尚未注册。
+ * 2026-10-31 源码实读（SkillRoutes.cj）确认：技能域当前只有 8 条注册路由 ——
+ * GET /skills、GET /skills/:id、GET /skills/:name/content、
+ * POST /skills/{add,edit,del,execute,search}。
+ * 明确抛错，避免调用方把 404 误判成自己的 bug。
+ */
+function NOT_IMPLEMENTED_HINT(endpoint: string): string {
+  return `该能力后端尚未提供：${endpoint} 未在 runtime 注册路由（SkillRoutes.cj）。` +
+    `请勿调用；如需该能力请先补后端路由并重新编译 runtime。`;
+}
 const GITHUB_REPO = 'UCTooCom/agentskills-runtime';
 const ATOMGIT_REPO = 'uctoo/agentskills-runtime';
 
@@ -546,26 +573,57 @@ export class SkillsClient {
     return response.data;
   }
 
+  /**
+   * 安装技能。
+   *
+   * 路径说明（2026-10-31 源码实读修正）：runtime 实际注册的是 `POST /skills/add`
+   * （`src/app/routes/skill/SkillRoutes.cj:83`）。`POST /skills/install` 从未注册，
+   * 仅出现在启动日志（HTTPServer.cj:468）、权限常量与 MCP 文档里 —— 按它调用必 404。
+   * 后端按 source 是否以 http(s) 开头自动分流 git 安装 / 本地路径安装，无需传 sourceType。
+   */
   async installSkill(options: SkillInstallOptions): Promise<SkillInstallResponse> {
-    const response = await this.client.post('/skills/install', options);
+    const response = await this.client.post('/skills/add', options);
     return response.data;
   }
-  
+
   async installSkillFromMultiRepo(source: string, skillPath: string, options: Omit<SkillInstallOptions, 'source'> = {}): Promise<SkillInstallResponse> {
-    const response = await this.client.post('/skills/install', {
+    const response = await this.client.post('/skills/add', {
       source,
       skill_subpath: skillPath,
       ...options
     });
     return response.data;
   }
-  
+
   isMultiSkillRepoResponse(response: SkillInstallResponse): response is MultiSkillRepoResponse {
     return response.status === 'multi_skill_repo' && response.available_skills !== undefined;
   }
 
+  /**
+   * 卸载技能。
+   *
+   * 响应体说明（2026-10-31 源码实读修正）：runtime 返回的是 `{desc:"删除成功"}`
+   * （SkillRoutes.cj:442），并没有 `success` / `message` 字段。
+   * 这里归一化成约定的 `{success,message}`，否则调用方拿到的 success 恒为 undefined。
+   */
   async uninstallSkill(skillId: string): Promise<{ success: boolean; message: string }> {
     const response = await this.client.post('/skills/del', { id: skillId });
+    const data = response.data || {};
+    return {
+      success: data.success !== undefined ? Boolean(data.success) : true,
+      message: data.message || data.desc || 'Uninstalled'
+    };
+  }
+
+  /**
+   * 读取技能完整内容（SKILL.md 正文 + 元数据）。
+   *
+   * 真实响应字段：`{name, description, license?, compatibility?, allowed_tools?,
+   * skill_path, instructions, metadata}`。注意**没有**名为 `content` 的顶层字段，
+   * 正文在 `instructions` 里。
+   */
+  async getSkillContent(skillName: string): Promise<SkillContent> {
+    const response = await this.client.get(`/skills/${encodeURIComponent(skillName)}/content`);
     return response.data;
   }
 
@@ -577,9 +635,13 @@ export class SkillsClient {
     return response.data;
   }
 
-  async executeSkillTool(skillId: string, toolName: string, args: Record<string, unknown> = {}): Promise<SkillExecutionResult> {
-    const response = await this.client.post(`/skills/${skillId}/tools/${toolName}/run`, { args });
-    return response.data;
+  /**
+   * @unavailable 后端未注册该路由。
+   * `POST /skills/:id/tools/:tool/run` 在 SkillRoutes.cj 中不存在，调用只会被当成
+   * 未知路径。这里直接抛错，好过让调用方收到一个无从下手的 404。
+   */
+  async executeSkillTool(_skillId: string, _toolName: string, _args: Record<string, unknown> = {}): Promise<SkillExecutionResult> {
+    throw new Error(NOT_IMPLEMENTED_HINT('POST /skills/:id/tools/:toolName/run'));
   }
 
   async searchSkills(options: { query: string; source?: string; limit?: number } | string): Promise<SkillSearchResult> {
@@ -599,19 +661,26 @@ export class SkillsClient {
     return response.data;
   }
 
-  async getSkillConfig(skillId: string): Promise<Record<string, unknown>> {
-    const response = await this.client.get(`/skills/${skillId}/config`);
-    return response.data;
+  /**
+   * @unavailable 后端未注册该路由（`GET /skills/:id/config` 不存在）。
+   */
+  async getSkillConfig(_skillId: string): Promise<Record<string, unknown>> {
+    throw new Error(NOT_IMPLEMENTED_HINT('GET /skills/:id/config'));
   }
 
-  async setSkillConfig(skillId: string, config: Record<string, unknown>): Promise<{ success: boolean; message: string }> {
-    const response = await this.client.post(`/skills/${skillId}/config`, config);
-    return response.data;
+  /**
+   * @unavailable 后端未注册该路由（`POST /skills/:id/config` 不存在）。
+   */
+  async setSkillConfig(_skillId: string, _config: Record<string, unknown>): Promise<{ success: boolean; message: string }> {
+    throw new Error(NOT_IMPLEMENTED_HINT('POST /skills/:id/config'));
   }
 
-  async listSkillTools(skillId: string): Promise<ToolDefinition[]> {
-    const response = await this.client.get(`/skills/${skillId}/tools`);
-    return response.data;
+  /**
+   * @unavailable 后端未注册该路由（`GET /skills/:id/tools` 不存在）。
+   * 若只是要列出 runtime 已加载的工具，请改用后端 `GET /api/v1/tools/list`。
+   */
+  async listSkillTools(_skillId: string): Promise<ToolDefinition[]> {
+    throw new Error(NOT_IMPLEMENTED_HINT('GET /skills/:id/tools'));
   }
 }
 

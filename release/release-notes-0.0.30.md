@@ -4,6 +4,7 @@
 **版本**: 0.0.30
 **代号**: Recursive Self-Improvement · Native Multimodal（递归自进化 · 原生多模态）
 **平台**: Windows x64, Linux x64, macOS x64/ARM64
+**补丁**: 0.0.30-p1（2026-10-23）—— 安装链路，见文末「补丁记录」
 
 > 本版是 0.0.29（Sub-Agent Orchestration）之后的一次大型迭代。主线两条：**① RSI 递归自进化系统从方法论落地为可运行能力**，配套大模型通道管理体系；**② 多模态原生对话 v2**，把文档解析外置为可独立装卸的 L2/L3 插件。同时完成了原生安装器（RuntimeNativeInstaller）的代码闭环、PC 客户端对接、以及 monorepo 开发主目录的奠基。本周期还用 SDD 工程化方法在 `specs/` 下新建/推进了 16 个工程目录（约 80 份文档），并回补修订了 `.codeartsdoer/specs` 中的 6 个目录（22 份文档，含 3 份特性规范）；该目录合计 66 个工程目录为跨 9 个月的历史累积归档，非本周期产出。
 
@@ -356,6 +357,55 @@ set CORDIS_SKIP_PROCESS_PLUGINS=sdd
 - **会话过期与日志滚动**：把 `login_health_check` 软删与保留策略产品化。
 - **SDD 规范资产转化**：把 `.codeartsdoer/specs` 中已评审的特性规范（agent-intelligence / skill-evolution / concurrent-skills / profile / memory-provider 等）逐步推进到代码实现。
 - **OpenTiny 依赖跟随官方发行线**；`tiny-robot` 维持 0.5.1 直至官方 catalog 放开。
+
+---
+
+## 补丁记录
+
+### 0.0.30-p1（2026-10-23）：安装链路
+
+只解决「安装跑不完」，不含功能变更。
+
+| # | 问题 | 修复 | 位置 |
+|---|---|---|---|
+| 1 | 内嵌 PG 的 initdb 口令文件被写进 `dataDir`，违反 initdb「`-D` 目录必须为空」，PG 从未启动（表现为提交报 exit 3） | 口令文件改写到临时目录 | `pc-client/electron/modules/pgsql.ts` |
+| 2 | 提交参数把子命令放在全局选项之前，installer 解析不到选项（exit 2） | 统一由 `buildArgs()` 按「选项在前、子命令在后」拼装 | `pc-client/electron/modules/installer-bridge.ts` |
+| 3 | `seed-init` 缺 `.env`（动态端口）与 seed 素材目录 | 新增 `seed-stage.ts`，用真实端口/口令搭临时源目录 | `pc-client/electron/modules/seed-stage.ts` |
+| 4 | `ucInstaller.exe` 在设置页之后才解压，探测时恒缺失 | 解压前移到 `ensureRuntimeProvisioned()`，并做并发去重 | `pc-client/electron/main/index.ts`、`runtime-integrator.ts` |
+| 5 | 任务栏/窗口用默认图标 | 共享 `loadAppIcon()`，窗口传 `icon`，打包带 `icon.png` | `pc-client/electron/utils/app-icon.ts`、`window.ts`、`tray.ts` |
+| 6 | **AC-214 双向指针复核误报**：旧实现把两个天然不同的 UUID（`uctoo_user.agent_id` 与 `agents.user_id`）互相比较 ⇒ 恒定失败 ⇒ 安装被一条纯复核挡住 | ① 判据改为「各自等于本轮解析出的对端 id」；② **降级为非阻断**，现场值写进 `steps`（action=`warn`） | `installer/src/services/seed/rbac.cj` |
+| 7 | 失败报告丢失 `diagnostics`（`failureReport` 返回全新报告），界面写着「见 diagnostics」却恒为空 | 构造新报告后把累积 diagnostics 搬过去 | `installer/src/cli/seed_init.cj` |
+
+**为什么第 6 条敢降级**：AC-214 是**复核**不是创建。A2 建号 / A6 建实体 / A6b 回填任一失败都会在前置步骤以 error 阻断，身份根本走不到这一步；而最坏情况（指针真的不一致）也只导致「主 agent 无法自动登录」，该失败已被设计成不阻断人类登录。
+
+### 0.0.30-p2（2026-10-24）：seed-init 事务毒化（installer 退出码 1）
+
+**现象**：`applySeed 校验/补种失败：1 条错误`，seed-init 退出码 1，PC 首次运行设置页建号失败。
+界面只能看到那 1 条错误，真正的元凶藏在 stderr 的 note 里。
+
+**复现与诊断**（临时 PG 集群 + 真实 `ucInstaller.exe` 端到端跑通，stderr 抓到完整链路）：
+
+```
+diagnostic: applySeed.error: 写入表 agent_executors 失败：ERROR: current transaction
+            is aborted, commands ignored until end of transaction block (SQLSTATE 25P02)
+diagnostic: applySeed.note: 结构语句未执行（多半已存在）：
+            CREATE INDEX "idx_agent_approvals_agent" ... :: ERROR: relation
+            "idx_agent_approvals_agent" already exists (SQLSTATE 42P07)
+```
+
+**根因**：`runImport` 先 `BEGIN` 开事务（AC-205 要原子性），而 `importOther` 对
+「约束/索引已存在」这类**可容忍**的失败只记 note 就继续。但 PostgreSQL 的规则是
+**事务内任意一条语句失败后，整个事务即进入 aborted 状态**，此后所有语句都返回 25P02。
+于是第一条 42P07 就把后面全部毒化 —— 第一个 INSERT 成了唯一的 error，
+元凶只是一条 note。
+
+| # | 修复 | 位置 |
+|---|---|---|
+| 1 | 新增 `execWithSavepoint()`：每条结构语句套 `SAVEPOINT`，失败即 `ROLLBACK TO SAVEPOINT`，事务保持可用；`SAVEPOINT` 不可用（BEGIN 失败退化为自动提交）时退回原文执行 | `installer/src/services/seed/importer.cj` |
+| 2 | `importOther()` 改走该辅助函数（注释写明「为什么不能裸 seedExec」） | 同上 |
+
+**判据**：同一次事务里 `BEGIN`/`COMMIT` 本来就是经 `seedExec(prepareStatement.update)` 发出的，
+且实测证明事务确实生效（25P02 级联只在事务块内出现）⇒ `SAVEPOINT` 同族可用。
 
 ---
 

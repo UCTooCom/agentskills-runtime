@@ -12,7 +12,8 @@ package uc_installer.services.seed
 //        {{principal:<ref>}} → 目标环境 uctoo_user.id
 //        {{agent:<ref>}}     → 目标环境 agents.id
 //        {{secret:…}} / {{env:…}}  **绝不解析、绝不猜值**，原样入库（AC-254）
-//        {{ts:epoch}}       → 1970-01-01 00:00:00+00（确定性纪元值，见 TS_EPOCH_LITERAL）
+//        {{ts:epoch}}       → 1970-01-01 00:00:00+00（确定性纪元值，见 TS_EPOCH_LITERAL）；
+//                                    软删除标记列（deleted_at）例外——落成 SQL NULL，避免种子行被当成已删除。
 //        裸 uuid 落在身份列 → 孤儿，按 orphanDefault 处置（默认 fail）
 //
 // 为什么是字符串级替换而不是导入后 UPDATE：一次扫描完成，不产生几百次 UPDATE；
@@ -20,7 +21,8 @@ package uc_installer.services.seed
 //
 // 红线：
 //   - 安装器/运行时生成的表（uctoo_user / user_has_roles / user_has_group / agents）
-//     与同步派生表（agent_skills / db_connection / db_info）**不导入数据行**——
+//     与同步派生表（db_connection / db_info）**不导入数据行**——agent_skills 现已改为
+//     bootstrap 档（完整保留种子数据），会正常导入数据行。
 //     前者的归属由 rbac.cj 按 A1~A6 建立，塞进去会造成重复账号（AC-215/216）；
 //   - 重复执行幂等：已有数据的表整体跳过并报告「复用」（AC-197）；
 //   - 全流程包在一个事务里，任一步失败即 ROLLBACK（AC-205）。
@@ -46,6 +48,9 @@ let PH_SUFFIX = "}}"
 /// 因此导入期必须还原成一个**确定性**的值，而不能用 CURRENT_TIMESTAMP —— 后者会让每次安装
 /// 产出的种子数据都不同，破坏"种子可复现"这个前提。
 /// "epoch" 的字面含义即 Unix 纪元，故取 1970-01-01 00:00:00+00。
+///
+/// 例外：软删除标记列（deleted_at）不落成纪元值，而是在 rewriteRow 中特判为 SQL NULL，
+/// 否则种子行会被列表默认视图（WHERE deleted_at IS NULL）误判为「已删除」而整体隐藏。
 let TS_EPOCH_LITERAL = "1970-01-01 00:00:00+00"
 
 // ===================== 数据模型 =====================
@@ -130,6 +135,8 @@ class ImportSink {
     let skipped: ArrayList<String> = ArrayList<String>()
     /// 出现致命错误后立即停止后续写入（等待回滚）。
     var fatal: Bool = false
+    /// 进度日志节流：累计执行语句数达到该阈值才再印一条 stderr 心跳（eprintln 默认 flush）。
+    var lastLog: Int64 = 0
 
     init(rep: ImportReport, db: Connection, policy: ExportPolicy, refs: RefTable, dryRun: Bool) {
         this.rep = rep
@@ -272,7 +279,45 @@ func buildRefTable(db: Connection, policy: ExportPolicy, setup: IdentitySetup,
     rep.principals.add("{{agent:main}} → ${setup.agentId}")
 }
 
+/// 在事务内**带保存点**地执行一条语句：失败即回滚到保存点，事务保持可用。
+///
+/// 为什么必须有这一层（2026-10-24 实测事故，改动前请务必读完）：
+/// `runImport` 会先 `BEGIN` 开事务，而 `importOther` 对「约束/索引已存在」这类
+/// **可容忍**的失败只记一条 note 就继续。但 PostgreSQL 的规则是：
+/// **事务内任意一条语句失败后，整个事务立即进入 aborted 状态**，此后任何语句都返回
+/// `current transaction is aborted, commands ignored until end of transaction block`
+/// （SQLSTATE 25P02）。
+///
+/// 于是第一条因对象已存在而失败的 DDL（42P07）就把**后面所有语句全部毒化**：
+/// 首个 INSERT 以 25P02 报错 ⇒ applySeed 报「1 条错误」⇒ seed-init 退出码 1
+/// ⇒ PC 客户端首次运行设置页建号失败。而真正的元凶只躺在一条 note 里，极难定位。
+///
+/// 修法：每条语句套一个 SAVEPOINT，失败即 ROLLBACK TO SAVEPOINT，事务保持可用。
+/// 若 SAVEPOINT 本身不可用（BEGIN 失败、退化为自动提交），则退回原文执行。
+func execWithSavepoint(db: Connection, sql: String, sp: String): String {
+    let spErr = seedExec(db, "SAVEPOINT ${sp}")
+    if (!spErr.isEmpty()) {
+        return seedExec(db, sql)
+    }
+    let err = seedExec(db, sql)
+    if (err.isEmpty()) {
+        seedExec(db, "RELEASE SAVEPOINT ${sp}")
+        return ""
+    }
+    let rbErr = seedExec(db, "ROLLBACK TO SAVEPOINT ${sp}")
+    if (!rbErr.isEmpty()) {
+        // 连回滚都失败 ⇒ 事务已不可救，如实回传原始错误交由上层决策
+        return err
+    }
+    seedExec(db, "RELEASE SAVEPOINT ${sp}")
+    return err
+}
+
 /// 非 INSERT 语句（DDL / COMMENT / 约束 / 索引）：原文执行。
+///
+/// ⚠️ 必须走 `execWithSavepoint` 而不是裸 `seedExec`：本函数运行在 `runImport`
+/// 开启的事务里，而它对「已存在」这类失败是**记 note 继续**的，裸执行会让
+/// 一条失败把整个事务毒化（详见 execWithSavepoint 的注释）。
 func importOther(sink: ImportSink, text: String): Unit {
     if (sink.fatal) {
         return
@@ -284,9 +329,10 @@ func importOther(sink: ImportSink, text: String): Unit {
         sink.rep.ddlStatements += 1
         return
     }
-    let err = seedExec(sink.db, text)
+    let err = execWithSavepoint(sink.db, text, "sp_seed_ddl")
     if (err.isEmpty()) {
         sink.rep.ddlStatements += 1
+        logSeedProgress(sink)
         return
     }
     // 重复导入时约束/索引已存在属正常：记为提示，不判失败（否则幂等性不成立）。
@@ -330,6 +376,7 @@ func importInsert(sink: ImportSink, ins: InsertStatement): Unit {
     }
     rep.insertStatements += 1
     rep.rowsInserted += rows.size
+    logSeedProgress(sink)
     if (sink.dryRun) {
         return
     }
@@ -338,6 +385,21 @@ func importInsert(sink: ImportSink, ins: InsertStatement): Unit {
     if (!err.isEmpty()) {
         rep.errors.add("写入表 ${ins.table} 失败：${trimTo(err, 200)}（语句：${trimTo(sql, 120)}）")
         sink.fatal = true
+    }
+}
+
+/// 节流式 stderr 进度心跳：每累计 100 条已执行语句打印一次。
+///
+/// 走 `eprintln`（默认 flush:true，不进 stdout 事件流），让宿主/日志在**长导入过程中**
+/// 也能看到真实进展，而不是只有最后回放的 step 事件。若导入再次卡住，这里的时间戳
+/// 能直接定位卡在哪一段（与 progress.cj 的「step 事件回放」限制互补）。
+func logSeedProgress(sink: ImportSink): Unit {
+    let total = sink.rep.ddlStatements + sink.rep.insertStatements
+    if (total - sink.lastLog >= 100) {
+        sink.lastLog = total
+        eprintln("seed-import 进度：已执行 ${total} 条语句" +
+            "（DDL ${sink.rep.ddlStatements} / INSERT ${sink.rep.insertStatements}，" +
+            "已写 ${sink.rep.rowsInserted} 行）")
     }
 }
 
@@ -403,6 +465,13 @@ func rewriteRow(sink: ImportSink, ins: InsertStatement, schemaCols: ArrayList<St
                         "当前只识别 {{ts:epoch}}")
                     return None<ArrayList<SqlCell>>
                 }
+                // 软删除标记列（deleted_at）特判：种子行必须是「活动态」，落成 SQL NULL，
+                // 绝不写成 epoch 0 字面量——否则会被列表默认视图（WHERE deleted_at IS NULL）
+                // 当成「已软删除」而整体隐藏，导致种子数据在 CRUD 界面不可见。
+                if (isSoftDeleteColumn(col)) {
+                    out.add(SqlCell(None<String>, LiteralKind.SqlNull, "NULL"))
+                    continue
+                }
                 sink.rep.timestampCells += 1
                 out.add(SqlCell(Some(TS_EPOCH_LITERAL), LiteralKind.Quoted, TS_EPOCH_LITERAL))
                 continue
@@ -422,6 +491,12 @@ func rewriteRow(sink: ImportSink, ins: InsertStatement, schemaCols: ArrayList<St
         out.add(cell)
     }
     return Some(out)
+}
+
+/// 软删除标记列判定：种子数据不应携带「已删除」语义，导入期须落成 SQL NULL。
+private func isSoftDeleteColumn(col: String): Bool {
+    let c = col.toAsciiLower()
+    return c == "deleted_at" || c == "deletedat"
 }
 
 /// 孤儿处置三选一（默认 fail）。

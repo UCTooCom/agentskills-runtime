@@ -1,6 +1,6 @@
 ---
 name: uctoo-dev-manual
-description: UCToo 开发手册技能。需要了解 agentskills-runtime 内置开发工具（crudgen、crudweb、plugingen、loaddbinfo、pluginuninstall）用法、V4 API 规范、数据库与模块开发规范、权限体系、插件系统三轨架构、长程任务系统（D-P-H-E 分层、6 步 SOP、降级链、数据契约）、技能内置提示词机制、接入新大模型通道（必改 model_manager.cj + ModelController.cj + .env，含出站 IPv6 坑、cron 6 段铁律、接入前先验证 function calling）时使用。
+description: 对当前运行的 agentskills-runtime（UCToo V4）框架进行二次开发时使用的开发手册技能。当用户要扩展系统功能、变更数据库表结构、开发插件、接入新大模型通道、排查开发或构建问题、编写或修改仓颉（Cangjie）代码、处理长程任务或技能提示词时参考。覆盖内置代码生成工具（crudgen/crudweb/plugingen/loaddbinfo/pluginuninstall）、V4 API 与数据库/模块/权限规范、插件三轨架构、长程任务系统、技能内置提示词机制。
 ---
 
 # UCToo 开发手册技能

@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentSkills Runtime 功能介绍 · Web 管理端全界面图解</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --bg-soft: #111823;
+    --card: #131a22;
+    --border: #1f2a35;
+    --text: #dbe3ec;
+    --text-dim: #8b9aab;
+    --blue: #4a9eff;
+    --green: #2ec27e;
+    --amber: #e8a33d;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    overflow-wrap: break-word;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 24px) 80px; }
+
+  /* Hero */
+  .hero {
+    padding: clamp(44px, 11vw, 72px) clamp(16px, 5vw, 24px) clamp(34px, 9vw, 56px);
+    text-align: center;
+    background: radial-gradient(1000px 400px at 50% -10%, rgba(74,158,255,.16), transparent 70%);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: clamp(36px, 9vw, 48px);
+  }
+  .hero .badge {
+    display: inline-block; padding: 5px 14px; border: 1px solid var(--border);
+    border-radius: 999px; font-size: clamp(11px, 3vw, 13px); color: var(--text-dim);
+    background: var(--bg-soft); margin-bottom: 22px;
+  }
+  .hero h1 { margin: 0 0 14px; font-size: clamp(27px, 7.5vw, 40px); letter-spacing: -.5px; font-weight: 800; line-height: 1.18; }
+  /* ASR 字样还原官网 logo：蓝→青→绿对角渐变（粗圆体、扁平，与 logo.png 一致） */
+  .hero h1 .asr-logo {
+    background: linear-gradient(135deg, #4a9eff 0%, #1fc8c0 48%, #2ec27e 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .hero .sub { font-size: clamp(15px, 4vw, 18px); color: var(--text-dim); margin: 0 0 22px; }
+  .hero .desc {
+    max-width: 680px; margin: 0 auto 26px; color: var(--text-dim); font-size: clamp(13px, 3.6vw, 15px);
+  }
+  .tags { display: flex; gap: clamp(7px, 2vw, 10px); justify-content: center; flex-wrap: wrap; }
+  .tags span {
+    padding: 5px 13px; border-radius: 999px; font-size: clamp(11.5px, 3vw, 13px);
+    background: rgba(74,158,255,.1); color: var(--blue); border: 1px solid rgba(74,158,255,.25);
+  }
+
+  /* 章节 */
+  section { margin-bottom: clamp(40px, 10vw, 64px); scroll-margin-top: 20px; }
+  .sec-head { display: flex; align-items: center; gap: clamp(10px, 3vw, 14px); margin-bottom: 8px; flex-wrap: wrap; }
+  .sec-num {
+    flex: none; width: clamp(28px, 7vw, 34px); height: clamp(28px, 7vw, 34px); border-radius: 9px;
+    background: linear-gradient(135deg, var(--blue), var(--green));
+    color: #08111a; font-weight: 700; font-size: clamp(13px, 3.5vw, 15px);
+    display: flex; align-items: center; justify-content: center;
+  }
+  h2 { margin: 0; font-size: clamp(19px, 5.2vw, 25px); line-height: 1.3; }
+  .sec-intro { color: var(--text-dim); margin: 0 0 clamp(20px, 5vw, 30px); font-size: clamp(13.5px, 3.6vw, 15px); }
+
+  /* 图 */
+  figure {
+    margin: 0 0 clamp(22px, 6vw, 34px); background: var(--card);
+    border: 1px solid var(--border); border-radius: clamp(8px, 2vw, 12px); overflow: hidden;
+  }
+  figure img { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--border); }
+  figcaption { padding: clamp(12px, 3vw, 16px) clamp(14px, 4vw, 20px); font-size: clamp(13px, 3.5vw, 14.5px); }
+  figcaption b { color: var(--blue); display: block; margin-bottom: 5px; font-size: clamp(14px, 3.7vw, 15.5px); }
+  figcaption .note { color: var(--text-dim); }
+
+  /* 提示框 */
+  .callout {
+    background: rgba(232,163,61,.07); border: 1px solid rgba(232,163,61,.3);
+    border-left: 3px solid var(--amber); border-radius: 8px;
+    padding: clamp(12px, 3vw, 16px) clamp(14px, 4vw, 20px); margin: 22px 0; font-size: clamp(13px, 3.5vw, 14.5px);
+  }
+  .callout b { color: var(--amber); }
+  .callout ul { margin: 10px 0 0; padding-left: clamp(16px, 5vw, 20px); }
+  .callout ul ul { padding-left: 16px; }
+  .callout li { margin-bottom: 6px; }
+
+  .meta {
+    color: var(--text-dim); font-size: clamp(12px, 3vw, 13.5px); text-align: center;
+    border-top: 1px solid var(--border); padding-top: 26px; margin-top: 60px;
+  }
+  code { background: var(--bg-soft); padding: 2px 6px; border-radius: 4px; font-size: 13px; word-break: break-word; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <span class="badge">AI 驱动开发框架 · 国产全链路技术栈</span>
+  <h1><span class="asr-logo">ASR</span> AgentSkills Runtime</h1>
+  <p class="sub">超越 Harness 的新一代开发范式</p>
+  <p class="desc">
+    采用仓颉编程语言实现的 AI 智能体运行时，一切皆技能的操作系统，
+    让 AI 原生融入每一个应用。本文以实际运行环境的真实截图，逐页说明
+    Web 管理端（web-admin）已落地的用户界面与能力。
+  </p>
+  <div class="tags">
+    <span>仓颉编程语言</span><span>一切皆技能</span><span>MCP / WebMCP</span><span>智能体互联国际</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+<section id="entry">
+  <div class="sec-head"><div class="sec-num">1</div><h2>进入系统</h2></div>
+  <p class="sec-intro">从产品官网到登录入口，是整个系统的第一印象。</p>
+
+  <figure>
+    <img src="screenshots/01-website-home.png" alt="产品官网首页">
+    <figcaption>
+      <b>产品官网首页</b>
+      <span class="note">深色主题首屏：顶部导航为「首页 / 产品 / 开源生态 / 社区 / 文档」，右上角是「控制台」入口。
+      主标语点明定位——<i>超越 Harness 的新一代开发范式</i>，并给出「下载 PC 端」「查看源码」两个主行动按钮。
+      下方四个特性标签：仓颉编程语言、一切皆技能、MCP / WebMCP、智能体互联国际。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/02-login.png" alt="登录页">
+    <figcaption>
+      <b>登录页</b>
+      <span class="note">邮箱 + 密码登录，带<strong>拼图滑块验证码</strong>（拖动滑块完成拼图后才允许提交），
+      另有「忘记密码」「注册账户」和中英文切换。底部版权：TinyPro | OpenCangjie 出品。</span>
+    </figcaption>
+  </figure>
+</section>
+
+<section id="ai">
+  <div class="sec-head"><div class="sec-num">2</div><h2>AI 中心：智能体运行时的主控台</h2></div>
+  <p class="sec-intro">
+    这是整套系统的核心。技能、对话、模型渠道、Token 成本、可观测性、选路策略，
+    都集中在「人工智能」这个菜单下。
+  </p>
+
+  <figure>
+    <img src="screenshots/03-ai-agent-skills.png" alt="智能体技能">
+    <figcaption>
+      <b>智能体技能</b>
+      <span class="note">技能以卡片墙方式陈列，可按「服务端 / 浏览器端」等维度筛选。
+      当前环境已加载的技能包括：<code>rsi</code>（ASR 自进化系统）、<code>long-running-task</code>（AI 自主规划的长程任务系统）、
+      <code>investment-research-assistant</code>（智能投研助理）、<code>code-gen-verifier</code>（代码生成验证）、
+      <code>yuanbao-search</code> / <code>yuanbao-policy</code>（元宝检索及 L3 进程隔离插件）、
+      <code>personalization</code>（SOUL / IDENTITY 个性化层）、<code>webmcp-sdk-skill</code> 等。
+      这正是「一切皆技能」的产品主张在界面上的落点。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/04-multiModelMessage.png" alt="悬浮 AI 对话窗">
+    <figcaption>
+      <b>AI 对话（悬浮助手窗）</b>
+      <span class="note">对话不在某个固定页面里进行，而是点<strong>右下角的悬浮图标</strong>随时唤出的助手窗口——
+      无论你在看板、还是在某个数据表的详情页，都可以原地发问，不必跳走再跳回来。
+      窗口标题是「UCTOO 智能助手」，右上角依次是<strong>新建对话、历史记录、投屏、全屏、关闭</strong>。
+      输入框上方挂着<strong>办公助手、开发支持、项目管理</strong>三个场景标签，点一下就带着对应语境开场。
+      需要说明的是：<strong>必须先登录</strong>，登录成功拿到会话凭证后才具备与 Agent 对话的权限，未登录状态下不会建立会话通道。
+
+      输入区底部从左到右是四件事。最左侧是<strong>「扩展」</strong>按钮：带插件图标，右侧的蓝色数字是当前<strong>已启用的插件数量</strong>；
+      点开是 MCP 面板，分<strong>「MCP 市场」</strong>与<strong>「已添加 MCP 服务」</strong>两栏——可以按整个服务开关，
+      也能展开后逐个勾选具体工具。市场里现成挂着的包括 <code>12306-mcp</code>（车票搜索）、
+      <code>markdown2pdf-mcp</code>、<code>docx-mcp</code>、<code>excel-mcp</code>、<code>doc-tools-mcp</code>，
+      也可以填入自己的 MCP 服务地址手动接入。
+      往右是<strong>模型选择器</strong>（截图挂载的是 DeepSeek，下拉即可切换到其它已接入的通道），
+      再到<strong>附件上传</strong>——除图片外还支持 pdf / ppt / doc / xls / txt / md / csv / json 等常见文档；
+      截图里正是上传了一张图后问「请描述这个图片中的内容」。
+      输入框右下角标注 <code>0/20000</code> 的字数上限，最右是发送按钮。
+      同一会话里保留多轮上下文，回复支持 Markdown 渲染。<br><br>
+
+      <strong>流式输出</strong>：回答是逐字吐出来的，不用干等模型想完。背后的链路值得一说——
+      它不是把一轮对话绑死在单条连接上，而是走 runtime 自带的<strong>可重连事件端点</strong>：
+      服务端为每个会话维护带序号的事件缓冲，网络中断后拿着最后收到的序号自动续传，
+      已经生成的内容不会丢，长任务跑一半掉线也不用从头再来。<br><br>
+
+      <strong>思维链</strong>：模型若有推理过程，界面把它渲染成可折叠的「思考过程」面板，默认收起，
+      点开可见完整推理原文。执行 ReAct 循环时<strong>每一轮各占一条独立消息</strong>，
+      所以多步推理的中间过程是分得清的，不会被糊成一坨。<br><br>
+
+      <strong>工具调用过程</strong>：用到 MCP 工具时，调用过程直接摊开——调了哪个工具、入参是什么、
+      执行状态与返回结果，都以卡片形式留在对话里。你能看清它是怎么得出这个答案的，而不是只拿到一个结论。</span>
+    </figcaption>
+  </figure>
+
+  <div class="callout">
+    <b>技能是怎么被唤起的</b>
+    <ul>
+      <li><strong>技能原文打包注入</strong>：前端 <code>src/skills/</code> 下的每个技能目录（<code>uctoo-operator</code>、
+          <code>entity-operator</code>、<code>crontab-operator</code>、<code>tiny-pro-operator</code>、
+          <code>code-generation</code>、<code>data-analysis</code>、<code>document-writing</code>）
+          都通过 <code>import.meta.glob(..., '?raw')</code> 以<b>原文</b>形式导入并传给助手窗，
+          再由框架抽取每个 SKILL.md 的元数据，拼成一段「可用技能」清单放进系统提示词。</li>
+
+      <li><strong>自然语言触发，按需加载</strong>：每个技能都用 SKILL.md 的 <code>description</code> 写清楚自己的触发场景——
+          例如 <code>uctoo-operator</code> 写的是「当用户需要操作后台管理系统的任何功能（菜单、权限、角色、用户、
+          Entity、Crontab）时触发」。你用大白话提需求，模型据此判断该用哪个技能，
+          再调用 <code>get_skill_content</code> <b>按需把该技能的正文加载进来</b>。
+          这样做的好处是：不必一上来就把七个技能的全文全塞进上下文，用到哪一个才读哪一个。</li>
+
+      <li><strong>服务端另有一层自动匹配兜底</strong>：runtime 侧的 <code>SkillAutoInjector</code> 用
+          <code>TaskMatcher</code> 对你的任务描述与技能描述做相似度计算，超过阈值才注入，并限制最多注入数量；
+          匹配策略支持关键词 / 语义 / 混合三种。中文不是按空格分词，而是切成<b>字符二元组</b>，
+          所以「帮我看看定时任务」这类话也能对上 <code>crontab-operator</code>。<br>
+          <span style="opacity:.75">（注：其中「语义」策略依赖的 embedding / LLM 通道尚未接入，
+          当前会自动降级为关键词匹配——能力位已经在框架里，等通道接上即可生效。）</span></li>
+
+      <li><strong>技能驱动的不是回答，是操作</strong>：这些技能真正厉害的地方在于，它们记录的是
+          <b>如何调用 WebMCP 工具去操作真实界面</b>——先用 <code>navigate_url</code> 跳到对应页面，
+          再用 <code>page-agent-tool</code> 读取当前界面状态，然后像真人一样 <code>click</code> 按钮、
+          <code>fill</code> 表单、<code>select</code> 下拉、翻页。
+          配合第 4 章里那些自动生成的数据表格页（每页自带的增删改查工具），
+          一句自然语言就能落到一次真实的业务操作上。</li>
+
+      <li><strong>人格与规则不写死在前端</strong>：助手的系统提示词不硬编码在代码里，
+          而是从数据库 <code>agents</code> 表中 <code>MainAgent</code> 的 <code>system_prompt</code> 读取。
+          前端刻意留了这样一条原则——<i>配置即事实，没配就是没配，不塞一份用户改不掉的兜底文案</i>。
+          想改助手的性格与约束，去后台改配置，不必动代码。</li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    <b>多格式文件解析与 L3 进程隔离轨插件</b>
+    <ul>
+      <li><strong>解析能力不在宿主里，而在 L3 插件里</strong>：上面对话窗能上传 pdf / ppt / doc / xls / txt / md / csv / json 等一众文档，
+          它们的<strong>多类型文件格式解析，是通过 L3 进程隔离轨插件实现的</strong>。每个解析插件跑在独立子进程中，
+          经 JSON-RPC over stdio 与宿主通信；这也正是 ASR「三维一体」插件约定（<code>plugin.yaml</code> + <code>SKILL.md</code> + <code>scripts/</code> 同目录）的落点——
+          插件既能提供 RPC 服务，又能自动注册成技能、教 Agent 怎么用。</li>
+
+      <li><strong>为什么是进程隔离</strong>：参照我们此前所做的
+          <a href="../ref/plugin-mechanism-comparison-wx.html" target="_blank" rel="noopener">《Agent 框架插件机制横向对比研究报告》</a>
+          （横向对比 deepseek-harness / openclaw / hermes-agent / ASR），ASR 是四家里<strong>唯一把「第三方插件默认生成为独立进程工程」</strong>的框架——
+          <code>plugingen</code> 生成的插件缺省就是 <code>--mode process</code>（L3 进程隔离轨），
+          产物是独立 cjpm 可执行文件，可脱离宿主单独编译。这带来几个实打实的好处：
+        <ul>
+          <li><strong>崩溃隔离与自愈</strong>：Process 轨下<strong>只有插件进程会崩，不会拖垮宿主主网关</strong>；
+              并在代码层预留 <code>autoRestart</code> 自动拉起，单插件故障不影响整体服务
+              （重启风暴防护等可观测性仍在按报告的建议补齐）。</li>
+          <li><strong>灵活可拓展</strong>：想支持一种新的文件格式，只需新增一个插件，<strong>不进宿主编译图</strong>
+              （存量宿主模块冻结、只减不增）；插件零 magic 包依赖、独立编译，改完等约 60 秒周期调谐或调
+              <code>plugin_refresh</code> 即生效，免重启。</li>
+          <li><strong>安全边界</strong>：插件按表级白名单（<code>tableWhitelist</code>）默认拒绝访问数据库，
+              进程外运行天然收敛了故障与越权的影响面；需要出网或取密钥时，凭证经 <code>host.secret</code> 按引用名代取，
+              <strong>进程内不落明文</strong>（与上文 API Key 加密一脉相承）。</li>
+        </ul>
+      </li>
+
+      <li><strong>差距与共建邀请</strong>：坦率讲，目前 ASR 还没有内置多种文件格式的解析插件。
+          除 PDF / DOCX / PPTX / XLSX 等<strong>通用格式会由 ASR 官方以「内置通用解析插件」形式逐步补齐</strong>外，
+          我们诚挚<strong>欢迎开发者基于 L3 轨合作共建技能插件生态</strong>。
+          更值得一提的是：得益于仓颉编程语言「二进制发布」的特性（插件是独立可执行文件，可直接分发、也可闭源），
+          具备独特业务价值的解析插件，<strong>后续可以在技能市场付费销售</strong>——把你的能力沉淀成可交易的资产。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <img src="screenshots/09-model_channel.png" alt="模型渠道">
+    <figcaption>
+      <b>模型渠道</b>
+      <span class="note">管理接入的大模型通道，是「一家供应商一行配置」的收敛点。
+      顶部统计卡：<strong>渠道总数 21 / 启用 1 / 停用 20 / 当前默认 deepseek</strong>；
+      操作区有<strong>新增渠道、刷新注册表、刷新列表、导出配置、导入配置</strong>，右侧可按<strong>编码/名称/协议</strong>搜索并筛选状态。
+      表格列：编码、显示名、协议、地址、密钥、默认模型、能力、优先级、状态、健康、操作——
+      每行可<strong>设为默认、管理模型、调试、编辑、启用</strong>。
+      能力以标签形式标出（chat / stream / tools / embedding / image / vision），密钥列标注为 env 引用并支持一键复制。
+      截图可见 OpenAI（<code>openai-chat</code> 协议、<code>https://api.openai.com/v1</code>、停用）、GMICloud（<code>https://api.gmi-serving.com/v1</code>、停用）等行。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/09-1-model_channel-apikey.png" alt="设置大模型 API Key">
+    <figcaption>
+      <b>设置大模型 API Key（加密存储，安全优先）</b>
+      <span class="note">在「模型渠道」里点开某条通道的<strong>编辑 / 管理</strong>，就能填写该通道的 <code>api_key</code>。
+      这一栏背后是 ASR「安全优先」设计理念最直观的体现——<strong>密钥以加密形式落库，绝不存明文</strong>。<br><br>
+
+      源码层面看得很清楚：<code>api_key</code> 经 <code>SecretCrypto</code> 做<strong>可逆加密</strong>
+      （Blowfish-CBC + PKCS7，纯仓颉实现、无外部 DLL 依赖），密文以 base64 写入 <code>llm_channel.api_key</code> 列，
+      解密只在 runtime 主程序内完成；主密钥来自 <code>.env</code> 的 <code>APP_ENC_KEY</code>。
+      更进一步，每一次密钥的增 / 改 / 切换都会留痕到 <code>llm_channel_audit</code> 审计表
+      （密钥以掩码记录，可回溯、不含明文）——凭证是这类系统的阿喀琉斯之踵，ASR 的默认动作是「拒绝明文、全程加密、变更可审计」。<br><br>
+
+      <strong>厂商如何对接自己的大模型？</strong> 大模型厂商或私有化部署方，可以直接在开源数据库种子文件
+      <a href="https://atomgit.com/UCToo/agentskills-runtime/blob/main/sql/uctooDB.sql" target="_blank" rel="noopener">sql/uctooDB.sql</a>
+      里把对接数据写进 <code>llm_channel</code> 表：<code>protocol</code> 填
+      <code>openai-chat</code> / <code>openai-embedding</code> / <code>openai-image</code> 等
+      <strong>OpenAI 兼容协议</strong>标识，配好 <code>base_url</code>（写到 <code>/v1</code> 级）、
+      <code>secret_ref</code>（推荐 <code>env:VAR</code> 或 <code>db:&lt;id&gt;</code>，仍不存明文）、
+      <code>capabilities</code> 能力位即可。<strong>遵循 OpenAI 兼容协议的大模型 API，无需写任何代码</strong>就能在 ASR 里用起来。<br><br>
+
+      <strong>非标准协议怎么办？</strong> 如果某家大模型走的是私有鉴权 / 响应格式（而非 OpenAI 兼容），
+      则不必改宿主代码，参考仓库里的
+      <a href="https://atomgit.com/UCToo/agentskills-runtime/tree/main/skills/llm_channel_tokendance" target="_blank" rel="noopener">skills/llm_channel_tokendance</a>
+      插件做<strong>定制化插件接入</strong>即可。它是一个 L3 进程隔离轨的「大模型通道适配器」，
+      把私有协议在插件里包成 <code>adapter.describe / chat / chatStream / probe</code> 契约；
+      宿主侧只要把 <code>llm_channel.protocol</code> 设为 <code>plugin:llm_channel_tokendance</code> 就能挂载，
+      插件独立编译、<strong>不需要重编宿主</strong>。<br><br>
+
+      <strong>支持本地部署大模型，满足强安全高合规要求。</strong> 模型渠道的 <code>base_url</code> 并不限定为公网地址，企业可将其指向内网或本地机房部署的大模型推理服务——无论是 vLLM、Ollama、TGI 这类 OpenAI 兼容推理网关，还是运行在国产 AI 算力上的私有推理服务，只要遵循 OpenAI 兼容协议，就能像接入公有云一样、一行配置完成对接。
+      在这种部署形态下，全部对话、知识库检索与工具调用产生的数据，都在企业本地域内闭环流转：<strong>不联网、不出本地域</strong>，天然满足金融、政务、军工等高监管行业对数据主权与隐私合规的强安全要求——把大模型能力用起来，也不再意味着要把数据交出去。<br><br>
+
+      <strong>面向全链路自主可控的 AI 原生数字系统。</strong> 在本地化通道这一层之上，配合国产 AI 算力、国产大模型、国产操作系统与国产数据库，ASR 可以构成一条从底层算力、模型推理、操作系统、数据存储直到上层智能体编排的<strong>全链路国产自主可控技术栈</strong>。对于推进关键技术自主、规避外部供应链风险的政企客户而言，这是一套可落地、可审计、AI 原生的智能数字系统整体解决方案。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/12-ai-route-rule.png" alt="路由规则">
+    <figcaption>
+      <b>路由规则</b>
+      <span class="note">决定「一次请求该走哪个模型」。支持<strong>新增规则</strong>与<strong>选路试算</strong>。
+      表格列：作用域、策略、候选链、回退链、能力要求、优先级、影子流量、状态、更新时间。
+      页面右上角写明了匹配原则：<i>具体作用域（agent/task）优先于 global；同作用域按 priority 从高到低匹配</i>。
+      未配置规则时，选路回退为「按优先级 + 默认通道」。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/13-ai-shadow-compare.png" alt="影子对比">
+    <figcaption>
+      <b>影子对比</b>
+      <span class="note">用于新旧通道的灰度评估：影子请求<strong>不改变主结果</strong>，只并排记录对比指标。
+      表格按「通道 / 角色（主或影）/ 请求数 / 失败数 / 失败率 / 平均延迟 / 对比（影-主）」呈现。
+      需注意页面注明：指标为进程内统计，重启后清零。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/06-agent_monitor.png" alt="智能体监控">
+    <figcaption>
+      <b>智能体监控</b>
+      <span class="note">副标题即定位：<i>实时监控 Agent 运行状态、任务执行与资源消耗</i>，右上角有<strong>自动刷新开关</strong>。
+      四张统计卡：<strong>活跃 Agent 1</strong>、<strong>执行任务 615</strong>、<strong>记忆条目 371</strong>（标注「全量可回溯」）、<strong>总 Token 184.22M</strong>。
+      两张饼图：<strong>Agent 类型分布</strong>（MAIN 为主、SUB 少量）、<strong>任务状态分布</strong>（按状态码 0–5 分色）。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/10-observability_timeline.png" alt="可观测时间线">
+    <figcaption>
+      <b>可观测时间线</b>
+      <span class="note">标题即定义：<i>追踪 Agent 执行全链路事件——任务、LLM 调用、记忆、上下文、错误</i>，右上角有<strong>自动刷新开关</strong>。
+      四张统计卡：<strong>事件总数 986</strong>（近 24 小时）、<strong>活跃 Agent 1</strong>（运行中）、<strong>LLM 调用 184.2K</strong>（近 24 小时）、<strong>错误数 0</strong>（错误率 0.0%）。
+      下方「近 7 天事件趋势」折线图同时绘制事件曲线与错误标记，可按<strong>事件类型</strong>（任务执行、LLM 调用、记忆写入、上下文更新、错误、Agent 结果）与 Agent 维度筛选。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/11-ai-data-flow.png" alt="数据流">
+    <figcaption>
+      <b>数据流可视化</b>
+      <span class="note">把数据链路画成图：文件系统（AGENTS.md / SKILL.md）→ SyncManager 双向同步引擎 →
+      PostgreSQL（agents / agent_skills 表）→ REST API → Vue 前端（pinia-orm CRUD）。
+      含「同步流 / 数据资产 / Agent 执行流」三个标签页，以及已同步、待同步、同步失败、健康状态四项统计。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/05-token_dashboard.png" alt="Token 用量看板">
+    <figcaption>
+      <b>Token 用量看板</b>
+      <span class="note">成本侧的总览。四张统计卡：<strong>总 Token 消耗 184.22M</strong>（输入 181.16M / 输出 3.06M）、
+      <strong>总调用次数 4.5K</strong>（LLM API 调用）、<strong>总费用 ¥0.00</strong>（按模型计算）、<strong>平均每次 Token 40.7K</strong>。
+      左侧「Token 消耗趋势」可切换<strong>近 7 / 30 / 90 天</strong>；右侧「模型 Token 分布」为饼图，
+      按模型拆分占比（截图可见 deepseek-v4-pro、deepseek-v4-flash、mimo-v2.5、step-3 等）。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/08-billing_report.png" alt="计费报表">
+    <figcaption>
+      <b>计费报表</b>
+      <span class="note">副标题：<i>LLM 调用费用日报/月报与导出</i>，可在<strong>日报 / 月报</strong>间切换，支持<strong>导出 CSV</strong>。
+      四张统计卡：<strong>总 Token 184.22M</strong>（输入 161.5M / 输出 3.03M）、<strong>总费用 ¥0.00</strong>、<strong>总调用 4.5K</strong>、<strong>平均每次费用 ¥0.00</strong>。
+      左侧「Token 消耗趋势」面积图分输入（紫）与输出（绿）双线，右侧「费用趋势」图。
+      底部日报明细表按时间列出输入 / 输出 / 合计 Token、费用与调用次数，截图可见 2026-10-25（204.8K、37 次）与 2026-10-03（778.3K、42 次）两行。</span>
+    </figcaption>
+  </figure>
+
+</section>
+
+<section id="system">
+  <div class="sec-head"><div class="sec-num">3</div><h2>系统管理：权限、配置与多语言</h2></div>
+  <p class="sec-intro">多租户后台的治理能力，包含权限、用户、角色、菜单、配置项与国际化词条。</p>
+
+  <figure>
+    <img src="screenshots/14-sys-permission.png" alt="权限管理">
+    <figcaption>
+      <b>权限管理</b>
+      <span class="note">权限被分成四类标签页：<strong>菜单 / 按钮 / API / 工具</strong>。
+      支持按「权限名称 + 包含/等于」组合条件筛选，可<strong>添加权限</strong>与<strong>刷新 API</strong>（把后端端点同步进权限表）。
+      表格列：权限名称、ID、父级 ID、路径、组件、图标、方法、排序、国际化、操作。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/15-sys-user.png" alt="用户管理">
+    <figcaption><b>用户管理</b><span class="note">系统用户的统一查看与维护入口，配合角色与权限完成账号治理。</span></figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/16-sys-role.png" alt="角色管理">
+    <figcaption><b>角色管理</b><span class="note">维护角色并与权限绑定（RBAC），是权限分配给用户的中间层。</span></figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/17-sys-menu.png" alt="菜单管理">
+    <figcaption>
+      <b>菜单管理</b>
+      <span class="note">管理后台左侧菜单树。值得注意：本系统大量后台页面是由<strong>后端菜单数据动态注入</strong>的，
+      新增界面必须在此登记，否则用户看不到入口。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/18-sys-config.png" alt="系统配置">
+    <figcaption>
+      <b>系统配置</b>
+      <span class="note">按分组管理运行时配置，共 11 个标签：日志、环境、数据库、SSL、模型、API 密钥、技能、邮件、存储、Token、其他。
+      顶部提供配置的<strong>导入 / 导出</strong>，便于环境迁移与备份。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/19-sys-locale.png" alt="国际化">
+    <figcaption>
+      <b>国际化管理</b>
+      <span class="note">界面文案的多语言词条表（ID / key / content / lang），支持<strong>添加词条、批量删除、导出</strong>，
+      并可按 key、content、lang 排序检索。系统要支持中英文切换，词条就维护在这里。</span>
+    </figcaption>
+  </figure>
+</section>
+
+<section id="dbgen">
+  <div class="sec-head"><div class="sec-num">4</div><h2>数据库管理：从表结构确定性生成多端代码</h2></div>
+  <p class="sec-intro">
+    这一章是整套「AI 驱动开发框架」里最能说明问题的地方：
+    <strong>同一份数据库表结构，可以同时长出服务端模块、Web 页面和插件</strong>——不是靠提示词让模型猜，而是确定性生成。
+  </p>
+
+  <figure>
+    <img src="screenshots/29-database-management.png" alt="数据库管理">
+    <figcaption>
+      <b>数据库管理</b>
+      <span class="note">从顶部的<strong>数据库下拉框</strong>选择要操作的库（截图为 <code>uctoo</code>），
+      点<strong>「加载数据库信息」</strong>把整库的表结构载入系统的元数据表
+      （接口 <code>POST /api/v1/uctoo/db_info/load-db-info</code>，由 <code>DbInfoController.loadDbInfo</code> 处理）——
+      这一步之后，代码生成才有据可依。
+
+      随后每张表一行，行首可展开查看字段明细：字段名、数据类型、是否可空、默认值、注释、位置、长度。
+      真正的关键在每行末尾的<strong>操作列</strong>，四个按钮对应三条已经打通的生成轨道，
+      外加一个预留位（下面分述）。<br><br>
+
+      <strong>① 生成 API —— 服务端五层模块（crudgen）</strong><br>
+      按表结构确定性生成 runtime 宿主的完整模块代码，一次落五个文件，分层清晰：
+      <code>src/app/models/{库}/{类}PO.cj</code>（数据模型）、
+      <code>src/app/dao/{库}/{类}DAO.cj</code>（数据访问）、
+      <code>src/app/services/{库}/{类}Service.cj</code>（业务服务）、
+      <code>src/app/controllers/{库}/{表}/{类}Controller.cj</code>（控制器）、
+      <code>src/app/routes/{库}/{表}/{类}Route.cj</code>（路由注册）。
+      生成过程还会做一项容易被忽略但很要紧的处理：<strong>自动规避 70 个仓颉语言保留字</strong>，
+      以及排除 <code>role_has_permission</code> 这类没有自增主键的中间表。<br><br>
+
+      <strong>② 生成 Web —— 前端标准表格页（crudweb）</strong><br>
+      生成 <code>views/database/{库}/{表}/</code> 下的一整套 Vue 页面：入口 <code>index.vue</code>
+      加 <code>add-*.vue</code>（新增）、<code>edit-form.vue</code>（编辑表单）、<code>*-table.vue</code>（表格主体）。
+      下一张图就是它的产物。<br><br>
+
+      <strong>③ 生成插件 —— L3 进程隔离轨插件（plugingen）</strong><br>
+      产出 <code>skills/{插件名}/</code> 下的插件工程。它会<strong>先弹表单</strong>再生成，原因是参数的自由度更高：
+      插件名与表名是解耦的（例如 <code>long-running-task</code> 这个插件并不存在同名表），需要单独命名；
+      <strong>加载轨</strong>可选 <code>process</code>（L3 进程隔离轨）、<code>sync</code>（随宿主编译）、<code>dylib</code>（动态库轨）；
+      生成形态可选<strong>表驱动 CRUD</strong>、<strong>空白骨架</strong>（只有 SKILL.md + plugin.yaml + 入口）、
+      或<strong>仅数据契约</strong>（<code>DATA_CONTRACT.yaml</code>）。
+      其中数据契约正是「多端一致互联」的保障：服务端、Web 端、插件端引用同一份契约，字段语义不会走偏。<br><br>
+
+      <strong>④ 生成 APP —— 预留待开发</strong><br>
+      按钮已经在界面上占位，但对应的能力尚未实现：runtime 源码里没有执行 APP 端生成的任何代码。
+      这里如实说明，避免误解为已可用。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/30-database-table-entity.png" alt="标准 CRUD 数据表格页">
+    <figcaption>
+      <b>标准 CRUD 数据表格页（以 <code>entity</code> 表为例）</b>
+      <span class="note">这是「生成 Web」按钮的实际产物——<code>views/database/uctoo/entity/</code>。
+      左侧「数据库」菜单下挂着库里的每一张表，点一张就出一页同构的表格，无一例外。<br><br>
+
+      <strong>顶部操作栏</strong>：<strong>添加</strong>、<strong>批量删除</strong>、<strong>导出</strong>，
+      右侧是<strong>回收站开关</strong>——打开后列表切换到已软删除的数据，可以对它们<strong>批量恢复</strong>、
+      <strong>彻底删除</strong>或<strong>清空回收站</strong>。删除默认走软删除，误删能找回。<br><br>
+
+      <strong>多条件筛选搜索栏</strong>：点「+ 添加筛选条件」可不断追加条件行，每行是
+      <i>字段 + 操作符 + 值</i> 三元组。字段下拉自动带上表的全部列（<code>entity</code> 表就有 21 个），
+      操作符提供 14 种——等于 / 不等于 / 小于 / 小于等于 / 大于 / 大于等于 / 包含 / 开头是 / 结尾是 /
+      在列表中 / 不在列表中 / 已设置 / 在区间内 / 不在区间内，配 <strong>重置</strong> 与 <strong>搜索</strong>。<br><br>
+
+      <strong>表格主体</strong>：首列复选框支持单选与跨页多选；数据列按字段全量铺开
+      （ID、link、privacy_level、stars、description、group_id、price、owner、status、city、creator、
+      created_at、updated_at、picture 等）；每行末尾是<strong>编辑、查看、删除</strong>三个操作。
+      底部<strong>分页</strong>可选每页 10 / 20 / 50 / 100 条并显示总数。<br><br>
+
+      <strong>一个容易被忽略、但很重要的事实</strong>：这类页面在挂载时会向浏览器注册 5 个 WebMCP 工具——
+      <code>query-entity-list</code>、<code>create-entity</code>、<code>edit-entity</code>、<code>delete-entity</code>、
+      <code>restore-entity</code>。也就是说这张表的增删改查恢复，<strong>同时对 AI 开放</strong>：
+      你在第 2 章看到的那个悬浮助手窗里的「扩展」面板，其工具来源就包括这些页面注册出来的能力。
+      界面与 AI 能力是同一份代码长出来的，不需要各自实现一遍。</span>
+    </figcaption>
+  </figure>
+</section>
+
+<section id="builder">
+  <div class="sec-head"><div class="sec-num">5</div><h2>AI Builder：任务协作与组织社区</h2></div>
+  <p class="sec-intro">
+    独立于管理控制台的业务应用，定位是「连接组织与个人，让每个任务都找到合适的人」。
+  </p>
+
+  <figure>
+    <img src="screenshots/20-ab-home.png" alt="AI Builder 首页">
+    <figcaption>
+      <b>AI Builder 首页</b>
+      <span class="note">导航为「首页 / 任务广场 / 组织」。首屏横幅给出三项统计：<strong>2 个开放任务、10 个入驻组织、21 位参与者</strong>。
+      下方是「热门任务」与「热门组织」两个板块：任务卡片直接标出积分、发布组织、标题、任务类型（申请型）与截止时间，
+      例如「cijm 包管理器依赖解析性能优化 18,000 积分/人」「仓颉开源社区官网首页 UI 设计 8,000 积分/人」。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/21-ab-tasks.png" alt="任务广场">
+    <figcaption>
+      <b>任务广场</b>
+      <span class="note">分「发现任务」与「我参与的」两个标签，支持搜索任务与<strong>新建任务</strong>。
+      列表里是真实任务，例如「每日投资简报 - 宁德时代（300750）」这类由智能体产出的内容型任务。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/22-ab-orgs.png" alt="组织">
+    <figcaption><b>组织</b><span class="note">入驻组织的列表与详情入口，任务是按组织归口发布的。</span></figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/23-ab-profile.png" alt="个人中心">
+    <figcaption><b>个人中心</b><span class="note">当前账号（UCTooApp）的资料与相关信息维护。</span></figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/24-ab-messages.png" alt="消息">
+    <figcaption><b>消息</b><span class="note">任务申请、审核、协作过程中的站内消息通知。</span></figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/25-ab-follows.png" alt="我的关注">
+    <figcaption><b>我的关注</b><span class="note">关注的任务或组织，便于持续跟踪进展。</span></figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/26-ab-my-tasks.png" alt="我的任务">
+    <figcaption><b>我的任务</b><span class="note">与自己相关的任务视图：已承接、已申请、进行中的任务汇总。</span></figcaption>
+  </figure>
+</section>
+
+<section id="pc-client">
+  <div class="sec-head"><div class="sec-num">6</div><h2>PC 客户端：一键安装的桌面智能体</h2></div>
+  <p class="sec-intro">把完整的本地智能体栈（runtime 后端 + web-admin 控制台 + 内嵌 PostgreSQL）打包成一个桌面应用，让普通用户无需搭环境、一行命令都不用敲，就能在本地跑起来。本章介绍 PC 客户端的定位、背后的安装器流水线，以及客户端各界面的功能。</p>
+
+  <div class="callout">
+    <b>PC 客户端定位</b>
+    <ul>
+      <li><strong>一键安装、降低门槛</strong>：将 runtime、web-admin、内嵌数据库与第三方依赖整体打包，由安装向导引导完成，用户拿到的是开箱即用的本地智能体桌面应用，大幅降低使用门槛。</li>
+      <li><strong>与开源项目完全一致</strong>：PC 客户端内嵌的应用，与独立的 <code>agentskills-runtime</code> 与 <code>web-admin</code> 开源项目<strong>完全一致</strong>——不是裁剪版、也不是另一套实现；PC 只是把它们封装进一个 Electron 外壳并托管其进程。</li>
+      <li><strong>标准化发布安装流水线</strong>：PC 客户端与 runtime 中的原生安装器 <code>ucInstaller</code> 对接集成，形成了一套<strong>标准化、可复用的仓颉应用发布安装流水线</strong>。工程设计与职责划分详见仓库内的
+        <a href="https://atomgit.com/UCToo/agentskills-runtime/tree/main/specs/PcClientInstallProvisioning" target="_blank" rel="noopener">specs/PcClientInstallProvisioning</a>
+        与
+        <a href="https://atomgit.com/UCToo/agentskills-runtime/tree/main/specs/PcClientInstallerIntegration" target="_blank" rel="noopener">specs/PcClientInstallerIntegration</a>。</li>
+    </ul>
+  </div>
+
+  <p class="sec-intro">安装器（<code>ucInstaller</code>）是这条流水线的核心。它承担 runtime 运行所需的关键准备与初始化工作，主要职责包括：</p>
+
+  <div class="callout">
+    <b>安装器（ucInstaller）的主要功能</b>
+    <ul>
+      <li><strong>集成 runtime 运行所需的数据库</strong>：内置内嵌 PostgreSQL 的初始化与启停（initdb、空集群准备），并支持切换为外部 PostgreSQL；安装期只备好空壳，首次运行时再按用户录入自助建库、建号、初始化。</li>
+      <li><strong>集成运行时所需的第三方库与资源</strong>：随安装包分发 runtime 发行包（含 <code>ucInstaller</code> 自身）、OpenSSL 等第三方库与 <code>web-admin</code> 前端资源，统一解压落盘到用户机器，消除手工复制带来的版本漂移；安装包与 runtime 发行包之间以 SHA256 校验保证同源。</li>
+      <li><strong>从数据库提取种子数据</strong>：提供 <code>db export</code> / <code>seed apply</code> / <code>seed verify</code> 等子命令，将 <code>sql/uctooDB.sql</code> 的 schema 与 <code>sql/seed/*.json</code> 的种子数据（公司、任务、角色、权限、菜单等）导入内嵌库；首次运行还会以用户创建的管理员账号为 principal，完成权限与菜单的绑定。</li>
+      <li><strong>管理员账号创建与密码安全</strong>：首次启动的设置页让用户输入 email / 账号名 / 昵称 / 密码，安装器现场计算 bcrypt 哈希落库；密码明文仅经 stdin 瞬时传入、哈希后即丢弃，绝不写入日志或磁盘明文。</li>
+      <li><strong>可观测的安装过程</strong>：安装与初始化以 NDJSON 流式进度回传（<code>--progress=ndjson</code>），失败按退出码（0 成功 / 2 参数错误 / 6 需人工介入）如实呈现，不静默降级为「成功」。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <img src="screenshots/31-pc-initAdmin.png" alt="首次启动创建管理员账号">
+    <figcaption>
+      <b>首次启动：创建本地管理员账号</b>
+      <span class="note">全新安装或覆盖安装后首次打开客户端，会进入设置页（兼具欢迎页语义）。
+      页面以醒目文案提示：<strong>创建的是本机本地管理员账号，仅用于登录本机 PC 客户端与本地 runtime，不是网络 / 云端账号，不会同步到任何远程服务器</strong>。
+      用户录入邮箱、账号名、昵称与密码；密码框带强度进度条（弱 / 中 / 强）但不强制——弱口令也可提交（风险自担）。
+      点击「创建并初始化」后，安装器执行建库、建号并导入种子数据，完成后设置页不再出现。
+      覆盖安装时若选择「保留已有数据」，则跳过此页、直接复用原账号。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/32-pc-homepage.png" alt="PC 客户端首页">
+    <figcaption>
+      <b>客户端首页（内嵌 AI Builder 控制台）</b>
+      <span class="note">左侧深色侧边栏是 PC 客户端的本地导航：<strong>首页 / 技能 / 智能体</strong> 三个入口，以及 <strong>Runtime</strong>、<strong>数据库</strong> 两个带健康状态点的运行时监控项，底部为 <strong>设置 / 关于</strong>。
+      主区域即 web-admin 的 AI Builder 页面（任务广场、组织社区、热门任务 / 组织），右下角悬浮着 UCTOO 智能助手聊天窗。
+      这直观说明了 PC 客户端只是把开源的 web-admin 控制台<strong>原样内嵌</strong>进桌面壳，用户通过本地端口（runtime 默认 8080）访问，与在浏览器里打开开源项目得到的能力完全一致。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/33-pc-database-config.png" alt="PostgreSQL 管理">
+    <figcaption>
+      <b>PostgreSQL 管理（数据库配置）</b>
+      <span class="note">管理内嵌数据库的生命周期与连接形态。状态卡只读展示：<strong>状态（运行中）、模式（内置）、端口（5433）、数据目录、连接数</strong>。
+      用户可在「内置 PostgreSQL」与「外部 PostgreSQL」之间切换——后者用于把数据托管到本机已有的独立 PG 实例。
+      操作按钮覆盖 <strong>初始化 / 启动 / 停止 / 刷新</strong>，并提供「备份恢复」「连接测试」两个工具页，方便本地运维。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/34-pc-system-config.png" alt="系统设置">
+    <figcaption>
+      <b>系统设置</b>
+      <span class="note">集中配置本机智能体栈的运行参数，分三块：
+      <strong>① Runtime 配置</strong>——监听地址（127.0.0.1）、端口（8080）、是否自动启动，以及 web 控制台使用的后端 API 地址；
+      <strong>② 数据库配置</strong>——内置 / 外部 PostgreSQL 切换，数据库状态与初始化 / 启停 / 备份操作；
+      <strong>③ AI 模型配置</strong>——本地大模型通道与默认模型的选型（呼应第 2 章的模型渠道）。
+      这些设置经安装器与本地 <code>.env</code> 联动，重启客户端后生效。</span>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/35-pc-system-info.png" alt="关于 / 系统信息">
+    <figcaption>
+      <b>关于 / 系统信息</b>
+      <span class="note">展示客户端自身的发布信息与技术栈：应用名 <code>agentskills-runtime-pc</code>、版本、平台（win32 x64）、打包模式（生产）；
+      更新检查入口；技术栈标注为 <strong>Electron + Vue 3 + TypeScript + Vite + Pinia + PostgreSQL</strong>——即「仓颉 runtime 宿主 + Electron 桌面壳 + 内嵌 PG」的组合；
+      并提供 GitHub 仓库、问题反馈、使用文档等链接。客户端<strong>支持在线版本更新</strong>：通过更新检查入口可拉取新版本并完成增量升级，无需用户手动重装，
+      使分发的桌面应用始终保持与开源主线同步、可审计、可追溯版本与依赖来源。</span>
+    </figcaption>
+  </figure>
+</section>
+
+<section id="notes">
+  <div class="sec-head"><div class="sec-num">7</div><h2>阅读说明</h2></div>
+  <p class="sec-intro">关于本文的取材范围，说明如下。</p>
+
+  <div class="callout">
+    <b>关于本文的取材范围</b>
+    <ul>
+      <li>所有截图均来自<strong>实际运行环境</strong>（web-admin 开发服务器 + runtime 后端），以超级管理员账号登录后在浏览器中真实渲染并截取。
+          统计类页面（模型渠道、Agent 监控、可观测时间线、计费报表、Token 看板）为<strong>人工登录后台截取</strong>，
+          展示的是数据库中真实累积的业务数据。</li>
+      <li><strong>database 目录下各表的标准 CRUD 页面不逐表罗列</strong>——它们由代码生成器按同一模板批量产出、结构完全同构，
+          因此第 4 章以 <code>entity</code> 表作为<strong>代表性示例</strong>说明其通用能力，其余各表页面与之相同。</li>
+      <li>统计类页面与本章两张图为<strong>人工登录后台截取</strong>，展示数据库中真实累积的业务数据。</li>
+      <li>「看板（board）」下的页面<strong>未纳入</strong>：其为 UI 模板内置的演示页（含「新员工之家」「学员辅导」等示例数据与图表），
+          不代表本产品功能，放进介绍文章会造成误导。</li>
+      <li>第 6 章 PC 客户端相关截图（<code>31</code> ~ <code>35</code> 开头）为<strong>在已安装运行的 PC 客户端本机界面上直接截取</strong>，
+          用于展示桌面应用自身的设置页、首页、数据库管理与系统信息；其内嵌的 web-admin 内容与第 2~5 章同源。</li>
+    </ul>
+  </div>
+
+</section>
+
+<p class="meta">
+  取材日期：2026-10-29 ~ 10-30 · 运行环境：web-admin(3031) + runtime(443) · 账号：超级管理员<br>
+  页面底部版权：TinyPro | OpenCangjie 出品
+</p>
+
+</div>
+</body>
+</html>

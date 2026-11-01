@@ -52,10 +52,16 @@ private struct ColumnDef {
 private struct IndexDef {
     let name: String
     let columns: ArrayList<String>
+    /// 部分索引谓词；`None` 表示普通（非部分）索引。
+    /// 修复：旧实现只抓列清单，漏掉 `WHERE <predicate>`，导致部分唯一索引
+    /// （如 `uk_llm_channel_is_default WHERE is_default = true`）被降级成全列唯一索引，
+    /// 在 21 行 `is_default` 仅有 true/false 两值时 `CREATE UNIQUE INDEX` 直接失败。
+    let predicate: Option<String>
 
-    init(name!: String, columns!: ArrayList<String>) {
+    init(name!: String, columns!: ArrayList<String>, predicate!: Option<String>) {
         this.name = name
         this.columns = columns
+        this.predicate = predicate
     }
 }
 
@@ -373,6 +379,29 @@ private func introspectPk(conn: Connection, table: String): ArrayList<String> {
     return out
 }
 
+/// 把一列索引列名归并进 `groups`，并捕获部分索引谓词进 `preds`。
+/// 合并为单函数是为了让 `introspectIndexes` 的 `case` 分支体是单一表达式调用，
+/// 避开仓颉 `case X => { ... }` 被解析成 lambda 的歧义，以及多语句分支体的解析问题。
+private func recordIndexRow(groups: HashMap<String, ArrayList<String>>, preds: HashMap<String, String>, cname: String, c: String, predOpt: Option<String>) {
+    match (groups.get(cname)) {
+        case Some(list) => list.add(c)
+        case None =>
+            let list = ArrayList<String>()
+            list.add(c)
+            groups.add(cname, list)
+    }
+    // 捕获部分索引谓词：`indpred` 为 NULL（非部分索引）时 pg_get_expr 返回 NULL。
+    // 同一索引多行谓词一致，仅在尚无记录时写入——用 match 判存在，避开 HashMap contains 歧义。
+    match (predOpt) {
+        case Some(p) =>
+            match (preds.get(cname)) {
+                case Some(_) => ()
+                case None => if (!p.isEmpty()) { preds.add(cname, p) }
+            }
+        case None => ()
+    }
+}
+
 /// 读索引：唯一（`uniqueWanted=true`）或非唯一。
 ///
 /// 不把 `i.indisunique = ?` 当参数传——用字面量 `AND i.indisunique` / `AND NOT i.indisunique`
@@ -384,13 +413,13 @@ private func introspectIndexes(conn: Connection, table: String, uniqueWanted: Bo
     // 生成的 DDL 把全部普通 CREATE INDEX 漏掉。唯一索引也改读索引 relname，
     // 行为与「约束名」一致且额外覆盖「无约束的裸 CREATE UNIQUE INDEX」。
     let sql = if (uniqueWanted) {
-        "SELECT c2.relname, k.attname FROM pg_index i " +
+        "SELECT c2.relname, k.attname, pg_get_expr(i.indpred, i.indrelid) FROM pg_index i " +
         "JOIN pg_class c2 ON c2.oid = i.indexrelid " +
         "JOIN pg_attribute k ON k.attrelid = i.indrelid AND k.attnum = ANY(i.indkey) " +
         "WHERE i.indrelid = (?::regclass) AND i.indisunique AND NOT i.indisprimary " +
         "ORDER BY c2.relname, k.attnum"
     } else {
-        "SELECT c2.relname, k.attname FROM pg_index i " +
+        "SELECT c2.relname, k.attname, pg_get_expr(i.indpred, i.indrelid) FROM pg_index i " +
         "JOIN pg_class c2 ON c2.oid = i.indexrelid " +
         "JOIN pg_attribute k ON k.attrelid = i.indrelid AND k.attnum = ANY(i.indkey) " +
         "WHERE i.indrelid = (?::regclass) AND NOT i.indisunique AND NOT i.indisprimary " +
@@ -400,25 +429,22 @@ private func introspectIndexes(conn: Connection, table: String, uniqueWanted: Bo
     stmt.set<String>(0, table)
     let rs = stmt.query()
     let groups = HashMap<String, ArrayList<String>>()
+    let preds = HashMap<String, String>()
     while (rs.next()) {
         match (rs.getOrNull<String>(0)) {
-            case Some(cname) => match (rs.getOrNull<String>(1)) {
-                case Some(c) =>
-                    match (groups.get(cname)) {
-                        case Some(list) => list.add(c)
-                        case None =>
-                            let list = ArrayList<String>()
-                            list.add(c)
-                            groups.add(cname, list)
-                    }
-                case None => ()
-            }
+            case Some(cname) =>
+                match (rs.getOrNull<String>(1)) {
+                    case Some(c) =>
+                        recordIndexRow(groups, preds, cname, c, rs.getOrNull<String>(2))
+                    case None => ()
+                }
             case None => ()
         }
     }
     let out = ArrayList<IndexDef>()
     for ((name, cols) in groups) {
-        out.add(IndexDef(name: name, columns: cols))
+        // preds.get(name) 直接返回 Option<String>，无需二次 match 重建（重建会让编译器把 None 推成 Option<Any>）
+        out.add(IndexDef(name: name, columns: cols, predicate: preds.get(name)))
     }
     return out
 }
@@ -595,7 +621,12 @@ private func buildTableDDL(schema: TableSchema): String {
         sb.append(schema.name)
         sb.append("\" (")
         sb.append(joinQuoted(idx.columns))
-        sb.append(");\n")
+        sb.append(")")
+        match (idx.predicate) {
+            case Some(p) => sb.append(" WHERE " + p)
+            case None => ()
+        }
+        sb.append(";\n")
     }
     for (idx in schema.indexes) {
         if (emittedIdx.contains(idx.name)) {
@@ -608,7 +639,12 @@ private func buildTableDDL(schema: TableSchema): String {
         sb.append(schema.name)
         sb.append("\" (")
         sb.append(joinQuoted(idx.columns))
-        sb.append(");\n")
+        sb.append(")")
+        match (idx.predicate) {
+            case Some(p) => sb.append(" WHERE " + p)
+            case None => ()
+        }
+        sb.append(";\n")
     }
     sb.append("\n")
     return sb.toString()
@@ -769,6 +805,15 @@ private func exportTableData(conn: Connection, policy: ExportPolicy, sp: Sanitiz
         let sqlVals = ArrayList<String>()
         for (i in 0..cols.size) {
             let col = cols[i]
+            // R5 软删除列特判（design §4.10.5 E4.5 补）：种子行必须是「活动态」，
+            // deleted_at 一律落成 SQL NULL，绝不写成 `{{ts:epoch}}` 哨兵。
+            // 否则导入期（rawImportSchema 把 `{{ts:epoch}}` 还原成非空纪元字面量，
+            // applySeed 又因表已有数据而跳过幂等复用）会让种子行被列表默认视图
+            // （WHERE deleted_at IS NULL）当成「已软删除」整体隐藏。
+            if (col.name.toAsciiLower() == "deleted_at") {
+                sqlVals.add("NULL")
+                continue
+            }
             match (rs.getOrNull<String>(i)) {
                 case Some(_) =>
                     // config 表：本行被 R1 命中 → 强制 is_sensitive 列为 TRUE（design E4.5 回填）。

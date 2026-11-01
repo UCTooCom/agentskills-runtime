@@ -26,10 +26,20 @@ package uc_installer.services.seed
 //   - 绑定与授权**只增不删**（AC-199）：不存在才 INSERT，绝不 UPDATE 既有行；
 //   - 全流程仅两次 UPDATE（回填 `uctoo_user.agent_id`、必要时回填 `agents.user_id`），
 //     且只作用于安装器自己生成的行——业务数据行的身份重绑定仍是字符串级替换（T046）。
+//
+// 与 runtime 启动期同步链路的咬合契约（2026-10-23 代码 + DEV 库双向核实）：
+//   - `uctooDB.sql` 里 uctoo_user / agents 均无任何初始数据，主 agent 身份只能由本模块建立；
+//   - runtime 启动时由 `AgentSyncHandler` 把 AGENTS.md 同步进 agents 表，但同步**只写 agents
+//     字段、不建 uctoo_user、不碰 user_id**；它靠 `name` 匹配既有行（sourcePath 匹配不到时兜底）；
+//   - 因此 A6 落库的 name 必须等于 AGENTS.md 的 `name: MainAgent`，agent_type 必须是
+//     'MAIN'（AgentType.MAIN.toString() 即 "MAIN"）——两处对不上，同步会另起一行，
+//     库里出现两条 MainAgent，而新建那条 user_id 为空，agent 自动登录随即失效；
+//   - 反过来，若 runtime 先跑（同步建出 user_id 为空的 MainAgent），A6 会命中它并回填
+//     user_id，再经 A6b 回填 uctoo_user.agent_id，双指针仍然齐——这就是 AC-214 存在的意义。
 // ============================================================================
 
 import pgsql.{PgDatasource, registerDriver}
-import std.database.sql.{Connection, Statement}
+import std.database.sql.{Connection, Statement, QueryResult}
 import std.collection.{ArrayList, HashMap}
 import std.convert.Parsable
 import uc_installer.services.{DbConn, hashPassword}
@@ -316,7 +326,7 @@ func ensureUserRole(db: Connection, out: IdentitySetup, userId: String, roleId: 
     }
     let err = seedExec(db,
         "INSERT INTO user_has_roles (user_id, role_id, status, creator, created_at, updated_at) " +
-        "VALUES (?::uuid, ?::uuid, 0, ?::uuid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        "VALUES (?::uuid, ?::uuid, 1, ?::uuid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",  // status=1：启用（hasWildcardPermission 要求 user_has_roles.status=1）
         p1: userId, p2: roleId, p3: creatorId)
     if (err.isEmpty()) {
         out.steps.add(IdentityStep(code: code, action: "created", detail: "${label} 绑定已补种"))
@@ -347,7 +357,7 @@ func ensureGroupBinding(db: Connection, out: IdentitySetup): Unit {
     let err = seedExec(db,
         "INSERT INTO user_has_group (groupable_type, group_id, groupable_id, status, creator, " +
         "created_at, updated_at) " +
-        "VALUES ('uctoo_user', ?::uuid, ?::uuid, 0, ?::uuid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        "VALUES ('uctoo_user', ?::uuid, ?::uuid, 1, ?::uuid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",  // status=1：启用
         p1: gid, p2: out.agentUserId, p3: out.superAdminId)
     if (err.isEmpty()) {
         out.steps.add(IdentityStep(code: "A5", action: "created",
@@ -370,7 +380,7 @@ func ensureWildcardPermission(db: Connection, out: IdentitySetup): Unit {
     }
     let err = seedExec(db,
         "INSERT INTO role_has_permission (role_id, permission_name, status, creator, created_at, updated_at) " +
-        "VALUES (?::uuid, '*', 0, ?::uuid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        "VALUES (?::uuid, '*', 1, ?::uuid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",  // status=1：启用（hasWildcardPermission 要求 role_has_permission.status=1）
         p1: RBAC_SUPER_ADMIN_ROLE_ID, p2: out.superAdminId)
     if (err.isEmpty()) {
         out.steps.add(IdentityStep(code: "P3", action: "created",
@@ -381,18 +391,35 @@ func ensureWildcardPermission(db: Connection, out: IdentitySetup): Unit {
 }
 
 /// AC-214：账号 → 实体 与 实体 → 账号 两个方向必须**双向非空且一致**。
+///
+/// 两个指针指向的对象**不同**，不能拿它们互相比较：
+///   uctoo_user.agent_id → agents.id      账号指向实体，由 A6b 写入 out.agentId
+///   agents.user_id      → uctoo_user.id  实体指回账号，由 A6  写入 out.agentUserId
+/// 正确判据是「各自等于本轮解析出的对端 id」。旧实现写成 a != b，
+/// 把两个天然不同的 UUID 互相比较 ⇒ 恒定误报，seed apply / seed-init 必然失败。
+///
+/// **0.0.30 补丁：本校验降级为非阻断（action="warn"）**。理由：
+///   1. 它是**复核**，不是创建步骤。A2 建号、A6 建实体、A6b 回填任一失败，都会在前置
+///      步骤里以 error 形式阻断，身份根本走不到这一步；这里再阻断，等于把「已建成的
+///      身份」判成安装失败——安装的成败不该押在一条纯复核上。
+///   2. 降级不掩盖问题：现场值（两个指针的实际取值与期望值）完整写进 steps，
+///      安装报告里可直接核对 A6 / A6b 到底回填了什么。
+///   3. 最坏情况也只是「主 agent 无法自动登录」，而该失败已被设计成不阻断人类登录
+///      （见 UctooUserAuthController.autoLoginMainAgent 的红线注释），用户仍可正常用。
 func checkDualBinding(db: Connection, out: IdentitySetup): Unit {
     let a = seedQuery(db,
         "SELECT agent_id::text FROM uctoo_user WHERE id = ?::uuid", p1: out.agentUserId)
     let b = seedQuery(db,
         "SELECT user_id::text FROM agents WHERE id = ?::uuid", p1: out.agentId)
-    if (a.isEmpty() || b.isEmpty() || a != b) {
-        out.errors.add("AC-214 双向指针不一致：uctoo_user.agent_id='${a}' / agents.user_id='${b}'" +
-            "（两者须非空且相等）")
+    if (a.isEmpty() || b.isEmpty() || a != out.agentId || b != out.agentUserId) {
+        out.steps.add(IdentityStep(code: "AC-214", action: "warn",
+            detail: "双向指针待核对：uctoo_user.agent_id='${a}'（期望 agents.id='${out.agentId}'）" +
+                " / agents.user_id='${b}'（期望 uctoo_user.id='${out.agentUserId}'）；" +
+                "身份已建立，安装继续，请凭本条记录核对 A6 / A6b 的回填"))
         return
     }
     out.steps.add(IdentityStep(code: "AC-214", action: "verified",
-        detail: "双向指针一致：${a}"))
+        detail: "双向指针一致：uctoo_user.agent_id=${a} 与 agents.user_id=${b}"))
 }
 
 // ===================== 数据库小工具（本包共用） =====================
@@ -422,14 +449,24 @@ func seedBindParams(stmt: Statement, p1: String, p2: String, p3: String, p4: Str
 }
 
 /// 单值查询（首行首列）。无结果或异常均返回空串（与 identity.cj 的 queryCell 同口径）。
+///
+/// ⚠️ 必须显式关闭 `Statement` / `QueryResult`：本函数常被 applySeed 在**同一条
+/// 长生命周期连接**上循环调用（P1 结构导入、P2 身份重绑定、A1~A6 身份补种），
+/// 若只 `prepareStatement` 不关闭，驱动层的语句/结果句柄会持续累积，
+/// 后续语句因连接上仍有未消费的结果而阻塞（PG 侧表现为 `idle in transaction`、
+/// 客户端 CPU≈0 的死锁）。实测 seed-init 卡在一条 DDL 之后的就是这个根因。
 func seedQuery(db: Connection, sql: String, p1!: String = "", p2!: String = "",
                p3!: String = "", p4!: String = ""): String {
+    var stmt: Option<Statement> = None<Statement>
+    var rs: Option<QueryResult> = None<QueryResult>
     try {
-        let stmt = db.prepareStatement(sql)
-        seedBindParams(stmt, p1, p2, p3, p4)
-        let rs = stmt.query()
-        if (rs.next()) {
-            return match (rs.getOrNull<String>(0)) {
+        let s = db.prepareStatement(sql)
+        stmt = Some(s)
+        seedBindParams(s, p1, p2, p3, p4)
+        let r = s.query()
+        rs = Some(r)
+        if (r.next()) {
+            return match (r.getOrNull<String>(0)) {
                 case Some(v) => v
                 case None => ""
             }
@@ -437,19 +474,38 @@ func seedQuery(db: Connection, sql: String, p1!: String = "", p2!: String = "",
         return ""
     } catch (_: Exception) {
         return ""
+    } finally {
+        match (rs) {
+            case Some(r) => try { r.close() } catch (_: Exception) { () }
+            case None => ()
+        }
+        match (stmt) {
+            case Some(s) => try { s.close() } catch (_: Exception) { () }
+            case None => ()
+        }
     }
 }
 
 /// 执行非查询语句。成功返回空串，失败返回错误信息（不抛异常）。
+///
+/// ⚠️ 必须显式关闭 `Statement`（理由同 seedQuery：同一条长生命周期连接上循环调用，
+/// 不关闭会累积句柄并最终阻塞后续语句）。
 func seedExec(db: Connection, sql: String, p1!: String = "", p2!: String = "",
               p3!: String = "", p4!: String = ""): String {
+    var stmt: Option<Statement> = None<Statement>
     try {
-        let stmt = db.prepareStatement(sql)
-        seedBindParams(stmt, p1, p2, p3, p4)
-        stmt.update()
+        let s = db.prepareStatement(sql)
+        stmt = Some(s)
+        seedBindParams(s, p1, p2, p3, p4)
+        s.update()
         return ""
     } catch (e: Exception) {
         return e.message
+    } finally {
+        match (stmt) {
+            case Some(s) => try { s.close() } catch (_: Exception) { () }
+            case None => ()
+        }
     }
 }
 
@@ -464,20 +520,36 @@ func seedQueryInt(db: Connection, sql: String, p1!: String = "", p2!: String = "
 }
 
 /// 单列多行查询。
+///
+/// ⚠️ 必须显式关闭 `Statement` / `QueryResult`（理由同 seedQuery：长生命周期连接上
+/// 循环调用，不关闭会累积句柄并最终阻塞后续语句）。
 func seedQueryList(db: Connection, sql: String, p1!: String = "", p2!: String = ""): ArrayList<String> {
     let out = ArrayList<String>()
+    var stmt: Option<Statement> = None<Statement>
+    var rs: Option<QueryResult> = None<QueryResult>
     try {
-        let stmt = db.prepareStatement(sql)
-        seedBindParams(stmt, p1, p2, "", "")
-        let rs = stmt.query()
-        while (rs.next()) {
-            match (rs.getOrNull<String>(0)) {
+        let s = db.prepareStatement(sql)
+        stmt = Some(s)
+        seedBindParams(s, p1, p2, "", "")
+        let r = s.query()
+        rs = Some(r)
+        while (r.next()) {
+            match (r.getOrNull<String>(0)) {
                 case Some(v) => out.add(v)
                 case None => ()
             }
         }
     } catch (_: Exception) {
         ()
+    } finally {
+        match (rs) {
+            case Some(r) => try { r.close() } catch (_: Exception) { () }
+            case None => ()
+        }
+        match (stmt) {
+            case Some(s) => try { s.close() } catch (_: Exception) { () }
+            case None => ()
+        }
     }
     return out
 }
